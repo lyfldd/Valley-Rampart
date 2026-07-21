@@ -1,0 +1,3 @@
+游戏全局状态，控制启动流程和系统行为
+所有的系统的启动依靠GameState
+GameStateManager里面提供了方法去修改GameState

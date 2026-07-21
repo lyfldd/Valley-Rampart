@@ -5,12 +5,19 @@ using UnityEngine;
 /// </summary>
 public enum GameState
 {
-    Booting,     // 启动中，初始化管理器
-    Loading,     // 加载数据中
-    Ready,       // 数据就绪，准备初始化场景
-    Playing,     // 游戏运行中
-    Paused,      // 暂停
-    GameOver     // 游戏结束
+    // ===== 菜单流程（MainMenuScene）=====
+    Booting,            // 引擎初始化
+    Splash,             // 过场动画
+    MainMenu,           // 主菜单
+    CharacterCreation,  // 角色创建
+    SaveSlotSelect,     // 存档槽选择
+
+    // ===== 游戏内流程（GameScene）=====
+    Loading,            // 加载静态配置
+    Ready,              // 配置就绪，等待初始化
+    Playing,            // 游戏运行中
+    Paused,             // 暂停
+    GameOver            // 游戏结束
 }
 
 /// <summary>

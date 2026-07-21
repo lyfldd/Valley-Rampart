@@ -384,7 +384,9 @@ public class NewGameConfig
 
 #### 存档元数据读取
 
-进入 SaveSlotSelect 时，调用 `SaveManager.GetSaveMeta("slot_1")` / `("slot_2")` / `("slot_3")`，从 JSON 读取 `saveTime`、`rulerName`、`time.currentDay` 等元数据用于显示。**不加载完整存档，只读头部信息。**
+进入 SaveSlotSelect 时，调用 `SaveManager.GetSaveMeta("slot_1")` / `("slot_2")` / `("slot_3")`，从 JSON 读取 `saveTime`、`summary.rulerName`、`summary.currentDay`、`summary.currentSeason`、`summary.difficulty` 等元数据用于显示。**不加载完整存档，只读 `GameSaveRoot.summary` 头部信息。**
+
+> ⚠️ **已知 bug（P1-2 · 待修）**：`GameSaveSummary` 结构已定义、`GameSaveRoot.summary` 字段已加，但 `SaveManager.Save` **没有填充 summary 的逻辑**——存档写盘时 summary 全是默认空值，存档槽 UI 调 `GetSaveMeta` 读到的是 `rulerName=null, currentDay=0, currentSeason=0, difficulty=0`，所有存档槽看起来都是空的。修复方案见第 8 节 #9。
 
 #### 4.5.1 自动存档设置子面板
 
@@ -648,6 +650,21 @@ Ready
 | 6 | **暂停菜单保存**：暂停时保存需要选槽位（3选1）。如果玩家想覆盖已有存档，需要二次确认。 | 需确认是否需要此功能 |
 | 7 | **加载超时处理**：Loading 阶段如果 30 秒没完成，需要有降级方案（显示错误 + 返回主菜单按钮）。 | 已设计，实施时注意 |
 | 8 | **ESC 在非 Playing 状态的行为**：在 MainMenu 按 ESC 是否退出游戏？在 CharacterCreation 按 ESC 是返回 MainMenu？需要统一的返回逻辑。 | 建议：CharacterCreation/SaveSlotSelect 按 ESC = 返回上一级；MainMenu 按 ESC = 无事发生或退出确认 |
+| 9 | **P1-2 summary 填充 bug（P0 级，待修）**：`GameSaveSummary` 结构已定义、`GameSaveRoot.summary` 字段已加，但 `SaveManager.Save` **没有填充 summary 的逻辑**。存档槽 UI 调 `GetSaveMeta` 读到的全是空值（`rulerName=null, currentDay=0`），所有存档槽显示为空。 | 待修 |
+
+**P1-2 修复方案**：`SaveManager.Save` 中遍历完 modules 后，从各 Manager 抓取关键字段填入 `root.summary`：
+
+```csharp
+root.summary = new GameSaveSummary
+{
+    rulerName     = RulerController.Instance.RulerName,
+    currentDay    = TimeManager.Instance.CurrentDay,
+    currentSeason = (int)TimeManager.Instance.CurrentSeason,
+    difficulty    = WorldManager.Instance.Difficulty
+};
+```
+
+修复后存档槽 UI 即可正常显示存档摘要（统治者名字、第几天、季节、难度）。
 
 ---
 

@@ -213,6 +213,9 @@ public class SaveManager : Singleton<SaveManager>
                 slotName = slotId
             };
 
+            // 先填充 summary（修复 P1-2：存档槽 UI 读不到摘要）
+            root.summary = BuildSummary();
+
             // 遍历所有注册对象，收集状态。SaveManager 不关心每个模块存了什么。
             foreach (var kvp in _saveables)
             {
@@ -362,6 +365,20 @@ public class SaveManager : Singleton<SaveManager>
 
     public bool HasSave(string slotId) => File.Exists(GetSavePath(slotId));
 
+    /// <summary>检查任意槽位是否有存档（主菜单"继续游戏"按钮启用判断）。</summary>
+    public bool HasAnySave(params string[] slotIds)
+    {
+        if (slotIds == null || slotIds.Length == 0)
+        {
+            slotIds = new[] { "slot_1", "slot_2", "slot_3" };
+        }
+        foreach (var id in slotIds)
+        {
+            if (HasSave(id)) return true;
+        }
+        return false;
+    }
+
     /// <summary>读取存档元数据（用于存档列表 UI，不触发 LoadState）。</summary>
     public GameSaveRoot GetSaveMeta(string slotId)
     {
@@ -372,6 +389,44 @@ public class SaveManager : Singleton<SaveManager>
             return JsonUtility.FromJson<GameSaveRoot>(File.ReadAllText(path));
         }
         catch { return null; }
+    }
+
+    // ===== 摘要生成 =====
+
+    /// <summary>从当前游戏状态构造存档摘要。任意字段不可用时给默认值，不抛异常。</summary>
+    private GameSaveSummary BuildSummary()
+    {
+        var summary = new GameSaveSummary();
+
+        try
+        {
+            if (RulerController.Instance != null)
+            {
+                summary.rulerName = RulerController.Instance.RulerName;
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (TimeManager.Instance != null)
+            {
+                summary.currentDay = TimeManager.Instance.CurrentDay;
+                summary.currentSeason = (int)TimeManager.Instance.CurrentSeason;
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (WorldManager.Instance != null)
+            {
+                summary.difficulty = WorldManager.Instance.Difficulty;
+            }
+        }
+        catch { }
+
+        return summary;
     }
 
     private string GetSavePath(string slotId)

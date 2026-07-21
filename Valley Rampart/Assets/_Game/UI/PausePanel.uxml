@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="pause-root" class="pause-root">
+        <ui:VisualElement name="pause-panel" class="pause-panel">
+            <ui:Label text="游戏暂停" class="pause-title" />
+            <ui:Button name="resume-button" text="继续游戏" class="pause-button pause-button--primary" />
+            <ui:Button name="save-button" text="保存游戏" class="pause-button" />
+            <ui:Button name="quit-button" text="退出游戏" class="pause-button pause-button--danger" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

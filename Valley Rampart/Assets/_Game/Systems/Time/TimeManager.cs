@@ -218,6 +218,16 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         daysPerSeason = Mathf.Max(1, days);
     }
 
+    /// <summary>NewGame 路径：批量应用初始时间配置。仅在 InitializeScene 时调用一次。</summary>
+    public void ApplyConfig(int totalDays, int secondsPerDay = -1, int daysPerSeason = -1)
+    {
+        if (totalDays > 0) SetTotalDays(totalDays);
+        if (secondsPerDay > 0) SetSecondsPerDay(secondsPerDay);
+        if (daysPerSeason > 0) SetDaysPerSeason(daysPerSeason);
+
+        Debug.Log($"[TimeManager] ApplyConfig: totalDays={this.totalDays}, secondsPerDay={this.secondsPerDay}, daysPerSeason={this.daysPerSeason}");
+    }
+
     // ===== ISaveable 实现 =====
 
     public SavePayload SaveState()

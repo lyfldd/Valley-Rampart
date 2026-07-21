@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="splash-root" class="splash-root">
+        <ui:VisualElement class="splash-content">
+            <ui:Label name="splash-logo" text="河谷防线" class="splash-logo" />
+            <ui:Label name="splash-subtitle" text="Valley Rampart" class="splash-subtitle" />
+            <ui:VisualElement class="splash-spacer" />
+            <ui:Label name="splash-hint" text="按任意键继续" class="splash-hint" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

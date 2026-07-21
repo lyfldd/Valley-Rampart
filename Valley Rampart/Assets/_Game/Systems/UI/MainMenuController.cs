@@ -3,28 +3,35 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 主菜单控制器。挂载到 MainMenuScene 的根 GameObject 上。
-/// 负责协调主菜单、存档槽面板、角色创建面板的显示/隐藏，
-/// 并处理三个入口（继续游戏 / 新建游戏 / 退出）。
+/// 负责协调 4 个面板（Splash、MainMenu、SaveSlots、CharacterCreation）的显示，
+/// 并处理 Booting → Splash → MainMenu 状态推进。
 /// </summary>
 public class MainMenuController : MonoBehaviour
 {
     public enum Panel
     {
-        MainMenu,        // 主菜单
-        SaveSlots,       // 存档槽选择
-        CharacterCreation // 角色创建
+        Splash,             // 过场
+        MainMenu,           // 主菜单
+        SaveSlots,          // 存档槽选择
+        CharacterCreation   // 角色创建
     }
 
     [Header("面板根节点（拖入场景里对应的 UIDocument 根）")]
+    [SerializeField] private GameObject splashRoot;
     [SerializeField] private GameObject mainMenuRoot;
     [SerializeField] private GameObject saveSlotsRoot;
     [SerializeField] private GameObject characterCreationRoot;
 
-    private Panel _currentPanel = Panel.MainMenu;
+    [Header("游戏场景名（点击开始游戏/读档后切到该场景）")]
+    [SerializeField] private string gameSceneName = "SampleScene";
+
+    private Panel _currentPanel = Panel.Splash;
 
     private void Start()
     {
-        ShowPanel(Panel.MainMenu);
+        // 启动 → Booting → 自动切到 Splash
+        GameStateManager.Instance.SetState(GameState.Splash);
+        ShowPanel(Panel.Splash);
     }
 
     // ===== 面板切换 =====
@@ -32,32 +39,50 @@ public class MainMenuController : MonoBehaviour
     public void ShowPanel(Panel panel)
     {
         _currentPanel = panel;
+        if (splashRoot != null) splashRoot.SetActive(panel == Panel.Splash);
         if (mainMenuRoot != null) mainMenuRoot.SetActive(panel == Panel.MainMenu);
         if (saveSlotsRoot != null) saveSlotsRoot.SetActive(panel == Panel.SaveSlots);
         if (characterCreationRoot != null) characterCreationRoot.SetActive(panel == Panel.CharacterCreation);
+
+        // 同步 GameState
+        switch (panel)
+        {
+            case Panel.Splash: GameStateManager.Instance.SetState(GameState.Splash); break;
+            case Panel.MainMenu: GameStateManager.Instance.SetState(GameState.MainMenu); break;
+            case Panel.SaveSlots: GameStateManager.Instance.SetState(GameState.SaveSlotSelect); break;
+            case Panel.CharacterCreation: GameStateManager.Instance.SetState(GameState.CharacterCreation); break;
+        }
     }
 
-    // ===== 主菜单按钮回调（由 UI Button.onClick 绑定）=====
+    /// <summary>Splash 结束（由 SplashPanel 调用）。</summary>
+    public void OnSplashCompleted()
+    {
+        ShowPanel(Panel.MainMenu);
+    }
 
-    /// <summary>主菜单 → 继续游戏（跳到存档槽选择）。</summary>
+    // ===== 主菜单按钮回调 =====
+
     public void OnContinueClicked()
     {
         ShowPanel(Panel.SaveSlots);
     }
 
-    /// <summary>主菜单 → 新建游戏（跳到角色创建）。</summary>
     public void OnNewGameClicked()
     {
+        // 检查是否有空槽位
+        if (SaveManager.Instance.HasAnySave("slot_1", "slot_2", "slot_3")
+            && !HasEmptySlot())
+        {
+            Debug.LogWarning("[MainMenu] 三个槽位都被占用，请先删除一个。");
+            return;
+        }
         ShowPanel(Panel.CharacterCreation);
     }
 
-    /// <summary>主菜单 → 退出游戏。</summary>
     public void OnQuitClicked()
     {
         Debug.Log("[MainMenu] 退出游戏");
         Application.Quit();
-
-        // 编辑器里 Application.Quit 不生效，额外打 log
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #endif
@@ -65,7 +90,6 @@ public class MainMenuController : MonoBehaviour
 
     // ===== 存档槽选择回调 =====
 
-    /// <summary>存档槽面板 → 玩家选了一个槽位，开始读档。</summary>
     public void OnSaveSlotSelected(string slotId)
     {
         if (!SaveManager.Instance.HasSave(slotId))
@@ -74,15 +98,11 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        // 设置跨场景参数
-        GameBootstrap.IsLoadingSave = true;
-        GameBootstrap.SaveSlotToLoad = slotId;
-
+        GameSceneEntrance.SetContinue(slotId);
         Debug.Log($"[MainMenu] 读档: {slotId}");
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+        LoadGameScene();
     }
 
-    /// <summary>存档槽面板 → 返回主菜单。</summary>
     public void OnSaveSlotsBackClicked()
     {
         ShowPanel(Panel.MainMenu);
@@ -90,7 +110,6 @@ public class MainMenuController : MonoBehaviour
 
     // ===== 角色创建回调 =====
 
-    /// <summary>角色创建面板 → 玩家确认创建，开始新游戏。</summary>
     public void OnCharacterCreateConfirmed(NewGameConfig config)
     {
         if (config == null)
@@ -99,17 +118,30 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        // 设置跨场景参数
-        GameBootstrap.IsLoadingSave = false;
-        GameBootstrap.NewGameConfig = config;
-
+        GameSceneEntrance.SetNewGame(config);
         Debug.Log($"[MainMenu] 新建游戏: ruler={config.rulerName}, slot={config.selectedSlotId}");
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+        LoadGameScene();
     }
 
-    /// <summary>角色创建面板 → 返回主菜单。</summary>
     public void OnCharacterCreationBackClicked()
     {
         ShowPanel(Panel.MainMenu);
+    }
+
+    // ===== 工具 =====
+
+    private void LoadGameScene()
+    {
+        // 切场景前禁用输入防止遗留
+        InputManager.Instance.DisableInput();
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(gameSceneName);
+    }
+
+    private bool HasEmptySlot()
+    {
+        return !SaveManager.Instance.HasSave("slot_1")
+            || !SaveManager.Instance.HasSave("slot_2")
+            || !SaveManager.Instance.HasSave("slot_3");
     }
 }

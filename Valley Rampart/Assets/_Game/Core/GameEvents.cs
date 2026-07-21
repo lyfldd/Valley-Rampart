@@ -238,3 +238,16 @@ public readonly struct GameLoadedEvent
         IsSuccess = isSuccess;
     }
 }
+
+// ===== 全局输入事件 =====
+
+/// <summary>玩家按下 ESC 键。由 InputManager 发布，UI 系统订阅以弹出/关闭暂停菜单等。</summary>
+public readonly struct EscapePressedEvent
+{
+    public readonly GameState CurrentState;
+
+    public EscapePressedEvent(GameState currentState)
+    {
+        CurrentState = currentState;
+    }
+}

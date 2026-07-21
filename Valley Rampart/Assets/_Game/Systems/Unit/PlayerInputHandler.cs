@@ -30,7 +30,6 @@ public class PlayerInputHandler : MonoBehaviour
         // 有移动输入时驱动 UnitController
         if (moveInput.sqrMagnitude > 0.01f)
         {
-            Debug.Log($"[PlayerInputHandler] Move: input={moveInput}, run={run}, unit={_unit != null}, data={_unit?.Data != null}");
             _unit.Move(moveInput, run);
         }
     }

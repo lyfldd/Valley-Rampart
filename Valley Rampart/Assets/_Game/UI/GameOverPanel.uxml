@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="gameover-root" class="gameover-root">
+        <ui:VisualElement name="gameover-panel" class="gameover-panel">
+            <ui:Label name="gameover-title" text="河谷失守" class="gameover-title" />
+            <ui:VisualElement name="gameover-stats" class="gameover-stats">
+                <ui:VisualElement class="gameover-stat-row">
+                    <ui:Label text="存活天数" class="gameover-stat-label" />
+                    <ui:Label name="stat-days" text="0 天" class="gameover-stat-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="gameover-stat-row">
+                    <ui:Label text="最终资源" class="gameover-stat-label" />
+                    <ui:Label name="stat-resources" text="--" class="gameover-stat-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="gameover-stat-row">
+                    <ui:Label text="统治者" class="gameover-stat-label" />
+                    <ui:Label name="stat-ruler" text="--" class="gameover-stat-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button name="back-to-menu-button" text="返回主菜单" class="pause-button pause-button--primary" style="width: 240px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

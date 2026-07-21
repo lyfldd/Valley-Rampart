@@ -1,0 +1,209 @@
+{
+  "main": {
+    "id": "67fe5ba48d664f76",
+    "type": "split",
+    "children": [
+      {
+        "id": "d8d662193ed5dc69",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ae150ef5d7ab8e7a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "修复记录/启动流程开发手册.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "启动流程开发手册"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "8a1dfe1865b51ff6",
+    "type": "split",
+    "children": [
+      {
+        "id": "101a3d390f5b00cf",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "707c4483276ab832",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "757fd28c4eccb2c7",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "d12ce9ebee899074",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "f338937a17c08d17",
+    "type": "split",
+    "children": [
+      {
+        "id": "b0d9050388c48c98",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "9489141570996687",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "修复记录/启动流程开发手册.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "启动流程开发手册 的反向链接列表"
+            }
+          },
+          {
+            "id": "9da4957a20c0731e",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "修复记录/启动流程开发手册.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "启动流程开发手册 的出链列表"
+            }
+          },
+          {
+            "id": "4b78ffeaedfd642a",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "0246ee24377b3369",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "f57ba00e5fe17219",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "修复记录/启动流程开发手册.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "启动流程开发手册 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "ae150ef5d7ab8e7a",
+  "lastOpenFiles": [
+    "Valley Rampart/Temp/Burst/burst-aot824w7b46.aim",
+    "Valley Rampart/Temp/Burst/burst-aotl9nsvlpb.gmy",
+    "Valley Rampart/Temp/Burst/burst-aotfxcf14uu.mhb",
+    "Valley Rampart/Temp/Burst/burst-aot9q2okwqj.kv0",
+    "Valley Rampart/Temp/Burst/burst-aotagot0ieh.0xb",
+    "Valley Rampart/Temp/Burst/burst-aotw9fufsqz.bbe",
+    "Valley Rampart/Temp/Burst/burst-aoti88y66z6.3uw",
+    "Valley Rampart/Temp/Burst/burst-aoth4x3ba01.q88",
+    "Valley Rampart/Temp/Burst/burst-aotqwdo2gja.lj3",
+    "Valley Rampart/Temp/Burst/burst-aotmibtn7fx.xf8",
+    "Valley Rampart/Temp/Burst/burst-aotbg9joo1d.mnn",
+    "修复记录/审查_加载与数据传递链.md",
+    "开发引导书/主菜单初始化引导.md",
+    "修复记录/启动流程开发手册.md",
+    "修复记录/全流程审查_场景切换与内存泄漏.md",
+    "开发引导书/GameStateManager.md",
+    "开发引导书/WorldManager.md",
+    "开发引导书/SaveManager.md",
+    "开发引导书/InputManager.md",
+    "未命名.md"
+  ]
+}

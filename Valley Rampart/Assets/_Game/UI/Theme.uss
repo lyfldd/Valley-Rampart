@@ -298,6 +298,189 @@
 }
 
 /* ===== 通用 ===== */
+.is-hidden {
+    display: none;
+}
+
+/* ===== Splash 屏（黑底+Logo+按任意键提示） ===== */
+.splash-root {
+    flex-grow: 1;
+    background-color: rgb(0, 0, 0);
+    align-items: center;
+    justify-content: center;
+}
+
+.splash-content {
+    align-items: center;
+}
+
+.splash-logo {
+    font-size: 80px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    letter-spacing: 8px;
+}
+
+.splash-subtitle {
+    font-size: 24px;
+    color: rgb(180, 180, 180);
+    -unity-font-style: italic;
+    letter-spacing: 4px;
+    margin-top: 8px;
+}
+
+.splash-spacer {
+    height: 80px;
+}
+
+.splash-hint {
+    font-size: 18px;
+    color: rgb(140, 140, 140);
+    -unity-font-style: italic;
+}
+
+/* ===== 暂停面板 ===== */
+.pause-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.6);
+    flex-direction: row;
+}
+
+.pause-panel {
+    width: 320px;
+    background-color: var(--color-bg-panel);
+    padding: 24px;
+    align-items: stretch;
+    border-right-width: 2px;
+    border-right-color: var(--color-accent);
+}
+
+.pause-title {
+    font-size: 28px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-bottom: 32px;
+    -unity-text-align: middle-center;
+}
+
+.pause-button {
+    height: 50px;
+    margin: 6px 0;
+    font-size: 18px;
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 6px;
+    border-width: 0;
+}
+
+.pause-button:hover {
+    background-color: var(--color-button-hover);
+}
+
+.pause-button--primary {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.pause-button--danger {
+    background-color: rgb(80, 40, 40);
+}
+
+.pause-button--danger:hover {
+    background-color: var(--color-danger);
+}
+
+/* ===== GameOver 面板 ===== */
+.gameover-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.85);
+    align-items: center;
+    justify-content: center;
+}
+
+.gameover-panel {
+    width: 520px;
+    background-color: var(--color-bg-panel);
+    border-radius: 12px;
+    padding: 40px;
+    align-items: center;
+    border-width: 2px;
+    border-color: var(--color-danger);
+}
+
+.gameover-title {
+    font-size: 48px;
+    color: var(--color-danger);
+    -unity-font-style: bold;
+    margin-bottom: 24px;
+}
+
+.gameover-stats {
+    width: 100%;
+    align-items: stretch;
+    margin-bottom: 32px;
+}
+
+.gameover-stat-row {
+    flex-direction: row;
+    justify-content: space-between;
+    height: 32px;
+    align-items: center;
+    padding: 0 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 70);
+}
+
+.gameover-stat-label {
+    font-size: 16px;
+    color: var(--color-text-muted);
+}
+
+.gameover-stat-value {
+    font-size: 18px;
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+}
+
+/* ===== Loading 面板 ===== */
+.loading-root {
+    flex-grow: 1;
+    background-color: var(--color-bg-dark);
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-content {
+    align-items: center;
+}
+
+.loading-text {
+    font-size: 24px;
+    color: var(--color-text-primary);
+    margin-bottom: 20px;
+}
+
+.loading-progress {
+    width: 400px;
+    height: 8px;
+    background-color: rgb(60, 60, 70);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.loading-progress-fill {
+    height: 100%;
+    background-color: var(--color-accent);
+    width: 0%;
+    transition-property: width;
+    transition-duration: 0.3s;
+}
+
+.loading-hint {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    margin-top: 16px;
+}
 .spacer {
     height: 20px;
 }

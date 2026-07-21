@@ -454,6 +454,16 @@ public class RulerController : Singleton<RulerController>, ISaveable
         if (!string.IsNullOrEmpty(name)) RulerName = name;
     }
 
+    /// <summary>新建游戏时设置起始国家资源（覆盖 RulerData 资产里的初始值）。</summary>
+    public void ApplyStartResources(int gold, int stone, int wood, int food)
+    {
+        Gold = Mathf.Max(0, gold);
+        Stone = Mathf.Max(0, stone);
+        Wood = Mathf.Max(0, wood);
+        Food = Mathf.Max(0, food);
+        Debug.Log($"[RulerController] 应用起始资源: Gold={Gold}, Stone={Stone}, Wood={Wood}, Food={Food}");
+    }
+
     // ===== ISaveable 实现 =====
 
     public SavePayload SaveState()
