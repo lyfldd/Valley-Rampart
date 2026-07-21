@@ -25,7 +25,8 @@ public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
 
                 if (_instance == null)
                 {
-                    Debug.Log($"[{typeof(T).Name}] 自动创建实例...");
+                    // R1: 隐式自动创建是潜在风险源头，用 Warning 提示开发者
+                    Debug.LogWarning($"[{typeof(T).Name}] 场景中未找到实例，自动创建。建议在场景中显式放置以避免隐式分离。");
                     GameObject go = new GameObject($"[Singleton] {typeof(T).Name}");
                     _instance = go.AddComponent<T>();
                     DontDestroyOnLoad(go);

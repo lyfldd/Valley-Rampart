@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="main-menu-root" class="screen-root">
+        <ui:VisualElement name="title-container" class="title-container">
+            <ui:Label name="title-label" text="河谷防线" class="title-text" />
+            <ui:Label name="subtitle-label" text="Valley Rampart" class="subtitle-text" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="button-container" class="button-container">
+            <ui:Button name="continue-button" text="继续游戏" class="menu-button" />
+            <ui:Button name="new-game-button" text="新建游戏" class="menu-button" />
+            <ui:Button name="settings-button" text="设置" class="menu-button" />
+            <ui:Button name="quit-button" text="退出游戏" class="menu-button menu-button--danger" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="footer" class="footer">
+            <ui:Label name="version-label" text="v0.1.0" class="footer-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,310 @@
+/* ===== 基础变量 ===== */
+:root {
+    --color-bg-dark: rgb(20, 20, 28);
+    --color-bg-panel: rgb(35, 35, 50);
+    --color-text-primary: rgb(230, 230, 230);
+    --color-text-muted: rgb(150, 150, 160);
+    --color-accent: rgb(220, 170, 80);
+    --color-accent-hover: rgb(240, 200, 120);
+    --color-button: rgb(60, 60, 80);
+    --color-button-hover: rgb(85, 85, 110);
+    --color-danger: rgb(180, 70, 70);
+    --color-disabled: rgb(60, 60, 60);
+
+    --font-size-title: 64px;
+    --font-size-subtitle: 20px;
+    --font-size-button: 22px;
+    --font-size-label: 16px;
+    --font-size-small: 14px;
+}
+
+/* ===== 屏幕根容器（深色背景全屏） ===== */
+.screen-root {
+    flex-grow: 1;
+    background-color: var(--color-bg-dark);
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+/* ===== 标题区 ===== */
+.title-container {
+    align-items: center;
+    margin-bottom: 80px;
+}
+
+.title-text {
+    font-size: var(--font-size-title);
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+}
+
+.subtitle-text {
+    font-size: var(--font-size-subtitle);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+}
+
+/* ===== 按钮容器 ===== */
+.button-container {
+    align-items: stretch;
+    width: 320px;
+}
+
+.menu-button {
+    height: 56px;
+    margin: 6px 0;
+    font-size: var(--font-size-button);
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 6px;
+    border-width: 0;
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.menu-button:hover {
+    background-color: var(--color-button-hover);
+}
+
+.menu-button:active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.menu-button:disabled {
+    background-color: var(--color-disabled);
+    color: rgb(100, 100, 100);
+}
+
+.menu-button--danger:hover {
+    background-color: var(--color-danger);
+}
+
+/* ===== 页脚 ===== */
+.footer {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+}
+
+.footer-text {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+}
+
+/* ===== 存档槽面板 ===== */
+.slots-container {
+    align-items: center;
+    width: 100%;
+    max-width: 900px;
+    padding: 20px;
+}
+
+.slots-title {
+    font-size: 32px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-bottom: 24px;
+}
+
+.slots-list {
+    width: 100%;
+    align-items: stretch;
+}
+
+.slot-card {
+    background-color: var(--color-bg-panel);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 8px 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.slot-card--empty {
+    background-color: rgb(28, 28, 38);
+    border-color: var(--color-disabled);
+}
+
+.slot-card--finished {
+    background-color: rgb(50, 35, 35);
+    border-color: var(--color-danger);
+}
+
+.slot-info {
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.slot-title {
+    font-size: 20px;
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.slot-meta {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+}
+
+.slot-status {
+    font-size: var(--font-size-label);
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-right: 12px;
+}
+
+.slot-status--finished {
+    color: var(--color-danger);
+}
+
+.slot-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.slot-button {
+    height: 40px;
+    min-width: 80px;
+    margin: 0 4px;
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 4px;
+    border-width: 0;
+}
+
+.slot-button:hover {
+    background-color: var(--color-button-hover);
+}
+
+.slot-button--delete {
+    background-color: rgb(80, 40, 40);
+}
+
+.slot-button--delete:hover {
+    background-color: var(--color-danger);
+}
+
+.slot-button--primary {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.slot-button--primary:hover {
+    background-color: var(--color-accent-hover);
+}
+
+/* ===== 角色创建面板 ===== */
+.creation-container {
+    align-items: center;
+    width: 100%;
+    max-width: 600px;
+    padding: 20px;
+}
+
+.creation-title {
+    font-size: 32px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-bottom: 32px;
+}
+
+.creation-form {
+    width: 100%;
+    align-items: stretch;
+}
+
+.form-row {
+    flex-direction: column;
+    margin-bottom: 20px;
+}
+
+.form-label {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+}
+
+.form-input {
+    height: 44px;
+    font-size: 18px;
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-panel);
+    border-width: 1px;
+    border-color: rgb(70, 70, 90);
+    border-radius: 4px;
+    padding: 0 12px;
+}
+
+.form-input:focus {
+    border-color: var(--color-accent);
+}
+
+.form-radio-group {
+    flex-direction: row;
+    height: 44px;
+    align-items: center;
+}
+
+.form-radio {
+    flex-grow: 1;
+    height: 100%;
+    margin: 0 4px;
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 4px;
+    -unity-text-align: middle-center;
+}
+
+.form-radio:checked {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.form-actions {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: 32px;
+}
+
+.form-button {
+    flex-grow: 1;
+    height: 50px;
+    margin: 0 6px;
+    font-size: 18px;
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 6px;
+    border-width: 0;
+}
+
+.form-button:hover {
+    background-color: var(--color-button-hover);
+}
+
+.form-button--primary {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.form-button--primary:hover {
+    background-color: var(--color-accent-hover);
+}
+
+/* ===== 通用 ===== */
+.spacer {
+    height: 20px;
+}
+
+.hint-text {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    margin-top: 4px;
+}

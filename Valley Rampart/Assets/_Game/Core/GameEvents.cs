@@ -212,3 +212,29 @@ public readonly struct SeasonChangedEvent
         NewSeason = newSeason;
     }
 }
+
+// ===== 存档系统事件 =====
+
+public readonly struct GameSavedEvent
+{
+    public readonly string SlotId;
+    public readonly bool IsSuccess;
+
+    public GameSavedEvent(string slotId, bool isSuccess)
+    {
+        SlotId = slotId;
+        IsSuccess = isSuccess;
+    }
+}
+
+public readonly struct GameLoadedEvent
+{
+    public readonly string SlotId;
+    public readonly bool IsSuccess;
+
+    public GameLoadedEvent(string slotId, bool isSuccess)
+    {
+        SlotId = slotId;
+        IsSuccess = isSuccess;
+    }
+}

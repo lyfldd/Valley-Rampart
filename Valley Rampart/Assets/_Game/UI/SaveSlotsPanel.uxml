@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="save-slots-root" class="screen-root">
+        <ui:VisualElement class="slots-container">
+            <ui:Label text="选择存档槽" class="slots-title" />
+            <ui:VisualElement name="slots-list" class="slots-list" />
+            <ui:VisualElement class="spacer" />
+            <ui:Button name="slots-back-button" text="返回" class="menu-button" style="width: 200px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

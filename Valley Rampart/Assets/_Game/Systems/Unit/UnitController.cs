@@ -13,8 +13,14 @@ using UnityEngine;
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(Rigidbody2D))]
-public class UnitController : MonoBehaviour
+public class UnitController : MonoBehaviour, ISaveable
 {
+    // ===== ISaveable =====
+
+    /// <summary>全局唯一存档 ID。由 Initialize 分配 GUID，读档时由 OverrideSaveId 覆盖为存档里的值。</summary>
+    public string SaveId { get; private set; }
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Scene;
+
     // ===== 运行时数据 =====
 
     public UnitData Data { get; private set; }
@@ -60,11 +66,68 @@ public class UnitController : MonoBehaviour
 
         UnitRegistry.Instance.Register(this);
 
+        // 分配唯一 SaveId 并注册为可存档对象
+        SaveId = $"Unit_{data.faction}_{data.occupation}_{System.Guid.NewGuid():N}";
+        SaveManager.Instance.RegisterSaveable(this);
+
         // 通知外界有新单位生成（UI/仇恨/存档可订阅）
         EventBus.Publish(new UnitSpawnedEvent(this));
 
         Debug.Log($"[UnitController] 初始化: {data.faction}_{data.occupation} "
             + $"(HP: {CurrentHp}/{MaxHp}, ATK: {Attack}, DEF: {Defense})");
+    }
+
+    /// <summary>
+    /// 用存档里的 SaveId 覆盖 Initialize 时分配的新 GUID。
+    /// 由 UnitFactory.SpawnFromSave 在读档时调用。
+    /// </summary>
+    public void OverrideSaveId(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+
+        // R4: 使用 SaveManager.ChangeSaveId 原子化更换，避免中间窗口
+        string oldId = SaveId;
+        SaveId = id;
+        SaveManager.Instance.ChangeSaveId(oldId, id, this);
+    }
+
+    // ===== ISaveable 实现 =====
+
+    public SavePayload SaveState()
+    {
+        var data = new UnitSaveData
+        {
+            faction = (int)Data.faction,
+            occupation = (int)Data.occupation,
+            currentHp = CurrentHp,
+            maxHp = MaxHp,
+            attack = Attack,
+            defense = Defense,
+            walkSpeed = WalkSpeed,
+            runSpeed = RunSpeed,
+            posX = transform.position.x,
+            posY = transform.position.y
+        };
+        return new SavePayload
+        {
+            typeName = typeof(UnitSaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(UnitSaveData).AssemblyQualifiedName) return;
+
+        var data = JsonUtility.FromJson<UnitSaveData>(payload.json);
+        CurrentHp = data.currentHp;
+        MaxHp = data.maxHp;
+        Attack = data.attack;
+        Defense = data.defense;
+        WalkSpeed = data.walkSpeed;
+        RunSpeed = data.runSpeed;
+        // 位置已在 SpawnFromSave 时由 UnitFactory.SpawnUnit 设置
     }
 
     // ===== 战斗系统 =====
@@ -203,6 +266,9 @@ public class UnitController : MonoBehaviour
     {
         Debug.Log($"[UnitController] {Data?.faction}_{Data?.occupation} 死亡。");
 
+        // 先注销 ISaveable，再销毁对象，防止 SaveManager 抓到已销毁实例
+        SaveManager.Instance.UnregisterSaveable(this);
+
         // 先发布事件，订阅者仍可访问 this
         EventBus.Publish(new UnitDiedEvent(this));
 
@@ -262,4 +328,19 @@ public class UnitController : MonoBehaviour
         else if (direction.x > 0.01f)
             _renderer.flipX = false;
     }
+}
+
+[System.Serializable]
+public class UnitSaveData
+{
+    public int faction;
+    public int occupation;
+    public int currentHp;
+    public int maxHp;
+    public int attack;
+    public int defense;
+    public float walkSpeed;
+    public float runSpeed;
+    public float posX;
+    public float posY;
 }

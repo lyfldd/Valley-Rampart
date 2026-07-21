@@ -18,8 +18,10 @@ using UnityEngine;
 /// 难度系统可通过 SetSecondsPerDay / SetTotalDays / SetDaysPerSeason 在游戏开始前配置。
 /// 场景中需挂载此脚本（建议挂在空物体 "TimeManager" 上）。
 /// </summary>
-public class TimeManager : Singleton<TimeManager>
+public class TimeManager : Singleton<TimeManager>, ISaveable
 {
+    public string SaveId => "TimeManager";
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Global;
     [Header("时间流速")]
     [Tooltip("现实多少秒 = 游戏内一天（24小时）。默认 480 = 8分钟。")]
     [SerializeField] private float secondsPerDay = 480f;
@@ -87,6 +89,8 @@ public class TimeManager : Singleton<TimeManager>
 
         Debug.Log($"[TimeManager] 初始化: 第{CurrentDay}天 {CurrentTimeOfDay:0.0}点 "
             + $"季节={CurrentSeason} 时段={CurrentPhase} ({secondsPerDay}s/天, {daysPerSeason}天/季)");
+
+        SaveManager.Instance.RegisterSaveable(this);
     }
 
     private void Update()
@@ -213,4 +217,62 @@ public class TimeManager : Singleton<TimeManager>
     {
         daysPerSeason = Mathf.Max(1, days);
     }
+
+    // ===== ISaveable 实现 =====
+
+    public SavePayload SaveState()
+    {
+        var data = new TimeSaveData
+        {
+            currentDay = CurrentDay,
+            currentTimeOfDay = CurrentTimeOfDay,
+            currentSeason = (int)CurrentSeason,
+            currentPhase = (int)CurrentPhase,
+            secondsPerDay = SecondsPerDay,
+            totalDays = TotalDays,
+            daysPerSeason = DaysPerSeason
+        };
+        return new SavePayload
+        {
+            typeName = typeof(TimeSaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(TimeSaveData).AssemblyQualifiedName)
+        {
+            Debug.LogWarning("[TimeManager] 存档类型不匹配，跳过。");
+            return;
+        }
+
+        var data = JsonUtility.FromJson<TimeSaveData>(payload.json);
+
+        // 先配置再状态，防止 AdvanceDay 误触发
+        SetSecondsPerDay(data.secondsPerDay);
+        SetTotalDays(data.totalDays);
+        SetDaysPerSeason(data.daysPerSeason);
+
+        // 直接赋值，不发事件
+        CurrentDay = data.currentDay;
+        CurrentTimeOfDay = data.currentTimeOfDay;
+        CurrentSeason = (Season)data.currentSeason;
+        CurrentPhase = (TimePhase)data.currentPhase;
+        CurrentHour = Mathf.Clamp(Mathf.FloorToInt(CurrentTimeOfDay), 0, 23);
+        _dayTimer = (CurrentTimeOfDay / 24f) * secondsPerDay;
+    }
+}
+
+[System.Serializable]
+public class TimeSaveData
+{
+    public int currentDay;
+    public float currentTimeOfDay;
+    public int currentSeason;
+    public int currentPhase;
+    public float secondsPerDay;
+    public int totalDays;
+    public int daysPerSeason;
 }

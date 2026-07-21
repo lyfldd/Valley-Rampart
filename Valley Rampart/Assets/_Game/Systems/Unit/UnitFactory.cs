@@ -5,8 +5,10 @@ using UnityEngine;
 /// 单位工厂。预加载 Prefab 并按需实例化。
 /// Prefab 存放在 Resources/UnitPrefabs/ 下，按 "{faction}_{occupation}" 命名。
 /// </summary>
-public class UnitFactory : Singleton<UnitFactory>
+public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
 {
+    public string SaveIdPrefix => "Unit_";
+
     private readonly Dictionary<string, GameObject> _prefabCache = new Dictionary<string, GameObject>();
 
     /// <summary>
@@ -74,5 +76,39 @@ public class UnitFactory : Singleton<UnitFactory>
     {
         UnitData data = UnitDataManager.Instance.GetData(faction, occupation);
         return SpawnUnit(data, position);
+    }
+
+    // ===== ISaveableSpawner 实现 =====
+
+    public void SpawnFromSave(ModuleSaveEntry entry)
+    {
+        if (entry.typeName != typeof(UnitSaveData).AssemblyQualifiedName) return;
+
+        // R3: 去重检查——如果该 SaveId 已存在（可能是上次读档残留），跳过创建
+        if (SaveManager.Instance.HasSaveable(entry.saveId))
+        {
+            Debug.LogWarning($"[UnitFactory] SaveId '{entry.saveId}' 已存在，跳过重复创建。");
+            return;
+        }
+
+        var data = JsonUtility.FromJson<UnitSaveData>(entry.json);
+        var faction = (Faction)data.faction;
+        var occupation = (Occupation)data.occupation;
+
+        UnitData config = UnitDataManager.Instance.GetData(faction, occupation);
+        if (config == null)
+        {
+            Debug.LogError($"[UnitFactory] 找不到配置: {faction}_{occupation}，跳过。");
+            return;
+        }
+
+        Vector2 pos = new Vector2(data.posX, data.posY);
+        GameObject go = SpawnUnit(config, pos);  // 触发 Initialize → 注册 ISaveable（新 GUID）
+
+        if (go != null)
+        {
+            var controller = go.GetComponent<UnitController>();
+            controller.OverrideSaveId(entry.saveId);  // 覆盖为存档里的 SaveId
+        }
     }
 }
