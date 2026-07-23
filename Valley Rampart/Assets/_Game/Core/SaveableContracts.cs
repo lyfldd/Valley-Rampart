@@ -79,3 +79,20 @@ public interface ISaveableSpawner
     /// </summary>
     void SpawnFromSave(ModuleSaveEntry entry);
 }
+
+// ===== 世界系统存档数据契约 =====
+
+/// <summary>难度系统存档数据。</summary>
+[Serializable]
+public class DifficultySaveData
+{
+    public int currentDifficulty;   // 1/2/3
+    public float currentFactor;     // 当前难度系数
+}
+
+/// <summary>世界系统存档数据（预留跨子管理器的世界级状态）。</summary>
+[Serializable]
+public class WorldSystemSaveData
+{
+    // 预留：跨子管理器的世界级状态
+}

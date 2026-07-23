@@ -10,13 +10,20 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
     public string SaveIdPrefix => "Unit_";
 
     private readonly Dictionary<string, GameObject> _prefabCache = new Dictionary<string, GameObject>();
+    private bool _isPreloaded = false;
 
     /// <summary>
-    /// 同步预加载所有单位 Prefab。
-    /// 在 GameBootstrap 初始化阶段调用一次。
+    /// 同步预加载所有单位 Prefab。幂等：重复调用只加载一次。
+    /// 由 LoadManager 阶段1 显式调用。
     /// </summary>
     public void PreloadAll()
     {
+        if (_isPreloaded)
+        {
+            Debug.Log("[UnitFactory] 已预加载过，跳过。");
+            return;
+        }
+
         Debug.Log("[UnitFactory] 预加载单位 Prefab...");
 
         GameObject[] prefabs = Resources.LoadAll<GameObject>("UnitPrefabs");
@@ -34,7 +41,19 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
             }
         }
 
+        _isPreloaded = true;
         Debug.Log($"[UnitFactory] 预加载完成，共 {_prefabCache.Count} 个 Prefab。");
+    }
+
+    /// <summary>获取缓存的 Prefab（供 LoadManager 门面转发）。</summary>
+    public GameObject GetPrefab(string key)
+    {
+        if (_prefabCache.TryGetValue(key, out var prefab))
+        {
+            return prefab;
+        }
+        Debug.LogError($"[UnitFactory] 找不到 Prefab: {key}。可用: {string.Join(", ", _prefabCache.Keys)}");
+        return null;
     }
 
     /// <summary>

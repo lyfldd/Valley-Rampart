@@ -77,7 +77,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
         TryLoadRulerData();
 
         // 订阅事件（仅真正的单例订阅）
-        EventBus.Subscribe<UnitDataLoadedEvent>(OnUnitDataLoaded);
+        // 注：UnitDataLoadedEvent 已废弃（LoadManager 改发 ConfigsLoadedEvent），
+        // 君主数据在 SpawnMonarch 时由 LoadManager.GetUnitData 获取，不依赖事件。
         EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
 
         SaveManager.Instance.RegisterSaveable(this);
@@ -87,7 +88,6 @@ public class RulerController : Singleton<RulerController>, ISaveable
         // 只有真正的单例才做了订阅和注册，重复副本跳过清理
         if (!_isRealSingleton) return;
 
-        EventBus.Unsubscribe<UnitDataLoadedEvent>(OnUnitDataLoaded);
         EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
     }
 
@@ -103,10 +103,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
             return;
         }
 
-        // UnitDataManager 可能还没创建，访问 Instance 会触发 Singleton 自动创建
+        // UnitDataManager 可能还没初始化（LoadManager 阶段1 还没跑）
         if (!UnitDataManager.Instance.IsInitialized)
         {
-            Debug.Log("[RulerController] UnitDataManager 尚未初始化，等待数据加载完成事件...");
+            Debug.Log("[RulerController] UnitDataManager 尚未初始化，等待 SpawnMonarch 时由 LoadManager 获取...");
             return;
         }
 
@@ -116,7 +116,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     private void FetchRulerDataFromManager()
     {
-        UnitData data = UnitDataManager.Instance.GetData(Faction.Human_Player, Occupation.Ruler);
+        UnitData data = LoadManager.Instance.GetUnitData(Faction.Human_Player, Occupation.Ruler);
         rulerData = data as RulerData;
 
         if (rulerData != null)
@@ -150,18 +150,6 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
         Debug.Log($"[RulerController] 已从资产同步国家资源: "
             + $"Gold={Gold}, Stone={Stone}, Wood={Wood}, Food={Food}");
-    }
-
-    // UnitDataManager 加载完成的回调。如果此时还没有君主数据，补取一次。
-    private void OnUnitDataLoaded(UnitDataLoadedEvent evt)
-    {
-        if (!evt.IsSuccess) return;
-
-        if (rulerData == null)
-        {
-            Debug.Log("[RulerController] 收到数据加载完成事件，尝试获取君主数据...");
-            FetchRulerDataFromManager();
-        }
     }
 
     //在出生位置创建君主单位，场景上没有君主时代码兜底
@@ -220,10 +208,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
         }
 
         // Step 4: 场景中确实没有君主，代码兜底创建
+        // Prefab 已由 LoadManager 阶段1 预加载，无需再 PreloadAll
         Debug.Log("[RulerController] 场景中未找到君主，通过 UnitFactory 创建...");
-        UnitFactory.Instance.PreloadAll();
-
-        GameObject rulerGo = UnitFactory.Instance.SpawnUnit(rulerData, spawnPosition);
+        GameObject rulerGo = LoadManager.Instance.SpawnUnit(rulerData, spawnPosition);
         if (rulerGo != null)
         {
             monarchUnit = rulerGo.GetComponent<UnitController>();
@@ -454,14 +441,21 @@ public class RulerController : Singleton<RulerController>, ISaveable
         if (!string.IsNullOrEmpty(name)) RulerName = name;
     }
 
-    /// <summary>新建游戏时设置起始国家资源（覆盖 RulerData 资产里的初始值）。</summary>
-    public void ApplyStartResources(int gold, int stone, int wood, int food)
+    /// <summary>新建游戏时按当前难度应用初始国家资源（覆盖 RulerData 资产默认值）。
+    /// 由 WorldSystem.InitializeWorld 在 DifficultyManager.Initialize 之后调用。</summary>
+    public void ApplyInitialResourcesFromDifficulty()
     {
-        Gold = Mathf.Max(0, gold);
-        Stone = Mathf.Max(0, stone);
-        Wood = Mathf.Max(0, wood);
-        Food = Mathf.Max(0, food);
-        Debug.Log($"[RulerController] 应用起始资源: Gold={Gold}, Stone={Stone}, Wood={Wood}, Food={Food}");
+        if (DifficultyManager.Instance == null)
+        {
+            Debug.LogWarning("[RulerController] DifficultyManager 不可用，保留 RulerData 默认资源。");
+            return;
+        }
+        var res = DifficultyManager.Instance.GetInitialResources();
+        Gold = Mathf.Max(0, res.gold);
+        Stone = Mathf.Max(0, res.stone);
+        Wood = Mathf.Max(0, res.wood);
+        Food = Mathf.Max(0, res.food);
+        Debug.Log($"[RulerController] 按难度应用初始资源: Gold={Gold}, Stone={Stone}, Wood={Wood}, Food={Food}");
     }
 
     // ===== ISaveable 实现 =====

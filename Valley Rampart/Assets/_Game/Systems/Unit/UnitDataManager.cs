@@ -14,14 +14,22 @@ public class UnitDataManager : Singleton<UnitDataManager>
     protected override void Awake()
     {
         base.Awake();
-        LoadAll();
+        // 不再 Awake 自动 LoadAll —— 改由 LoadManager.LoadStaticConfigs() 显式调
+        // 也不再发 UnitDataLoadedEvent —— 改由 LoadManager 发 ConfigsLoadedEvent
     }
 
     /// <summary>
     /// 同步加载 Resources/UnitData/ 下所有 UnitData 资产。
+    /// 由 LoadManager 阶段1 显式调用。
     /// </summary>
     public void LoadAll()
     {
+        if (IsInitialized)
+        {
+            Debug.Log("[UnitDataManager] 已加载过，跳过。");
+            return;
+        }
+
         Debug.Log("[UnitDataManager] 开始加载单位数据...");
 
         UnitData[] allData = Resources.LoadAll<UnitData>("UnitData");
@@ -43,8 +51,6 @@ public class UnitDataManager : Singleton<UnitDataManager>
 
         IsInitialized = true;
         Debug.Log($"[UnitDataManager] 加载完成，共 {_dataCache.Count} 个单位配置。");
-
-        EventBus.Publish(new UnitDataLoadedEvent(true, _dataCache.Count));
     }
 
     /// <summary>

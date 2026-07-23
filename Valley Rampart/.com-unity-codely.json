@@ -1,10 +1,10 @@
 {
-  "unity_port": 54605,
-  "stream_port": 54634,
+  "unity_port": 60256,
+  "stream_port": 60805,
   "created_date": "2026-05-18T04:59:02.0740379Z",
   "project_path": "D:/Valley Rampart/Valley Rampart/Assets",
   "reloading": false,
   "reason": "ready",
   "seq": 1,
-  "last_heartbeat": "2026-07-21T15:19:32.5511965Z"
+  "last_heartbeat": "2026-07-23T10:52:50.5088436Z"
 }

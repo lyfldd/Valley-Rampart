@@ -1,10 +1,12 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 游戏场景引导器。GameScene 挂这个，MainMenuScene 挂 MainMenuBootstrap。
-/// 用 DefaultExecutionOrder(-100) 保证在业务系统之后、CoreBootstrap 之前执行。
+/// 游戏场景引导器。GameScene 挂这个；MainMenuScene 挂的是 MainMenuController（不是 Bootstrap 类）。
+/// 用 DefaultExecutionOrder(-100) 保证在业务系统之后执行。
 /// 状态驱动：Booting → Loading → Ready → Playing
+///
+/// 加载协调已移交 LoadManager：GameBootstrap 只负责"触发阶段1"和"阶段1完成后按模式分叉"。
+/// 静态配置加载、新建/读档恢复的时序由 LoadManager 管控。
 /// </summary>
 [DefaultExecutionOrder(-100)]
 public class GameBootstrap : MonoBehaviour
@@ -16,41 +18,34 @@ public class GameBootstrap : MonoBehaviour
         Debug.Log("[GameBootstrap] 游戏场景启动");
 
         // R6: 跨场景清理——清除上一场景残留的已销毁引用
-        // （玩家从 GameScene 退回主菜单再进入时，旧场景单位已被 Unity 销毁，
-        //   但 _saveables / _aliveUnits 仍持有 C# 引用，会导致内存泄漏与幽灵引用）
         UnitRegistry.Instance.Clear();
         SaveManager.Instance.CleanupDestroyedSaveables();
 
         // 注册场景对象重建器
         SaveManager.Instance.RegisterSpawner(UnitFactory.Instance);
 
-        // 订阅数据加载完成事件
-        EventBus.Subscribe<UnitDataLoadedEvent>(OnDataLoaded);
+        // 订阅静态配置加载完成事件（替代旧的 UnitDataLoadedEvent）
+        EventBus.Subscribe<ConfigsLoadedEvent>(OnConfigsLoaded);
     }
 
     private void Start()
     {
-        // 启动数据加载
+        // 触发阶段1：LoadManager 加载静态配置
         GameStateManager.Instance.SetState(GameState.Loading);
-
-        // UnitDataManager.Awake 已经自动触发 LoadAll
-        // 如果数据是同步加载的，此时已经就绪
-        if (UnitDataManager.Instance.IsInitialized)
-        {
-            OnDataLoaded(new UnitDataLoadedEvent(true, UnitDataManager.Instance.Count));
-        }
+        LoadManager.Instance.LoadStaticConfigs();
     }
 
     private void OnDestroy()
     {
-        EventBus.Unsubscribe<UnitDataLoadedEvent>(OnDataLoaded);
+        EventBus.Unsubscribe<ConfigsLoadedEvent>(OnConfigsLoaded);
     }
 
-    private void OnDataLoaded(UnitDataLoadedEvent evt)
+    // 阶段1完成回调 → 进阶段2
+    private void OnConfigsLoaded(ConfigsLoadedEvent evt)
     {
         if (!evt.IsSuccess)
         {
-            Debug.LogError("[GameBootstrap] 数据加载失败，游戏无法继续。");
+            Debug.LogError("[GameBootstrap] 静态配置加载失败，游戏无法继续。");
             return;
         }
 
@@ -61,18 +56,9 @@ public class GameBootstrap : MonoBehaviour
         }
         _sceneInitialized = true;
 
-        Debug.Log($"[GameBootstrap] 数据就绪（{evt.TotalCount} 个配置），开始初始化场景。");
-
         GameStateManager.Instance.SetState(GameState.Ready);
-        InitializeScene();
-    }
 
-    private void InitializeScene()
-    {
-        // 1. 预加载单位 Prefab
-        UnitFactory.Instance.PreloadAll();
-
-        // 2. 读取 GameSceneEntrance，按模式分叉
+        // 按 GameSceneEntrance 模式分叉
         if (GameSceneEntrance.CurrentMode == GameSceneEntrance.Mode.ContinueGame)
         {
             ContinueFromSave();
@@ -82,19 +68,20 @@ public class GameBootstrap : MonoBehaviour
             StartNewGame();
         }
 
-        // 3. 时间系统就绪
+        // 时间系统就绪日志
         var timeManager = TimeManager.Instance;
-        Debug.Log($"[GameBootstrap] 时间系统就绪: 第{timeManager.CurrentDay}天 "
-            + $"{timeManager.CurrentTimeOfDay:0.0}点 {timeManager.CurrentSeason}/{timeManager.CurrentPhase}");
+        if (timeManager != null)
+        {
+            Debug.Log($"[GameBootstrap] 时间系统就绪: 第{timeManager.CurrentDay}天 "
+                + $"{timeManager.CurrentTimeOfDay:0.0}点 {timeManager.CurrentSeason}/{timeManager.CurrentPhase}");
+        }
 
-        // 4. 启用输入
+        // 启用输入
         InputManager.Instance.EnableInput();
 
-        // 5. 进入游戏
-        GameStateManager.Instance.SetState(GameState.Playing);
         Debug.Log("[GameBootstrap] 游戏开始！");
 
-        // 6. 清理跨场景参数
+        // 清理跨场景参数
         GameSceneEntrance.Clear();
     }
 
@@ -102,28 +89,19 @@ public class GameBootstrap : MonoBehaviour
     {
         var config = GameSceneEntrance.NewGameConfig;
 
-        // 1. 应用世界配置（地图种子 + 难度 + 总天数）
         if (config != null)
         {
-            WorldManager.Instance.ApplyConfig(config.mapSeed, config.difficulty, config.totalDays);
-            RulerController.Instance.SetRulerName(config.rulerName);
-            RulerController.Instance.ApplyStartResources(
-                config.startGold, config.startStone, config.startWood, config.startFood);
-            TimeManager.Instance.ApplyConfig(config.totalDays);
-
+            // 阶段2a：LoadManager 统一协调世界初始化 + 君主生成 + 进入 Playing
+            LoadManager.Instance.InitializeNewGame(config);
             Debug.Log($"[GameBootstrap] 已应用新建游戏配置: "
-                + $"ruler={config.rulerName}, seed={config.mapSeed}, "
-                + $"difficulty={config.difficulty}, totalDays={config.totalDays}");
-        }
+                + $"ruler={config.rulerName}, seed={config.mapSeed}, difficulty={config.difficulty}");
 
-        // 2. 创建君主
-        RulerController.Instance.SpawnMonarch();
-
-        // 3. 自动存初始档
-        string slotId = config?.selectedSlotId ?? "slot_1";
-        if (!SaveManager.Instance.HasSave(slotId))
-        {
-            SaveManager.Instance.Save(slotId);
+            // 新建后自动存初始档
+            string slotId = config.selectedSlotId;
+            if (!string.IsNullOrEmpty(slotId) && !SaveManager.Instance.HasSave(slotId))
+            {
+                SaveManager.Instance.Save(slotId);
+            }
         }
     }
 
@@ -133,11 +111,10 @@ public class GameBootstrap : MonoBehaviour
         Debug.Log($"[GameBootstrap] 读档: {slotId}");
 
         // ① 读档前清理场景中所有预置单位（防止读档后双份）
-        //    场景里手动放的 ruler/单位会被销毁，由 SpawnFromSave 重建
         RulerController.Instance.DestroyAllSceneUnits();
 
-        // ② 从存档恢复唯一的君主（内部三阶段：Global LoadState → SpawnFromSave → Scene LoadState）
-        SaveManager.Instance.Load(slotId);
+        // ② 阶段2b：LoadManager 读档恢复（SaveManager.Load + 进入 Playing）
+        LoadManager.Instance.LoadSave(slotId);
 
         // ③ 读档后绑定到恢复的君主单位
         RulerController.Instance.BindExistingMonarch();

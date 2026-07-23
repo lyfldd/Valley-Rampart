@@ -2,12 +2,13 @@ using UnityEngine;
 
 /// <summary>
 /// 引擎层引导器。两个场景（MainMenuScene / GameScene）都挂。
-/// 负责创建 Core 层单例：GameStateManager、EventBus、InputManager、SaveManager 等。
+/// 负责创建 Core 层单例：GameStateManager、InputManager、SaveManager、WorldManager。
+/// （EventBus 是 static class，无需创建，进程启动即可用。）
 /// 不做任何业务初始化（不加载 UnitDataManager、不创建单位、不挂业务系统）。
 ///
 /// 执行顺序：
 ///   - [-200] CoreBootstrap.Awake  → 创建单例 → SetState(Booting)
-///   - 业务层（GameBootstrap / MainMenuBootstrap）从 Booting 继续推进
+///   - 业务层（GameBootstrap / MainMenuController）从 Booting 继续推进
 ///
 /// GameState 转换：Booting → (各场景自己的) Splash / Loading / MainMenu / ...
 /// </summary>

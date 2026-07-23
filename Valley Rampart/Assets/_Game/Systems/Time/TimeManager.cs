@@ -9,37 +9,30 @@ using UnityEngine;
 ///   - 时段 Night→Dawn→Day→Dusk→Night 由「当天时刻 + 季节昼夜比例」动态计算。
 ///   - 季节影响日出/日落：夏白天最长(15h)，冬最短(10h)。
 ///
+/// 配置来源：WorldSystem.Config.time（TimeConfig）。所有时间规则不再硬编码。
+/// secondsPerDay 会被 DifficultyManager.Initialize 按档位覆盖（Easy 慢/Hard 快）。
+///
 /// 发布的事件（仅这三种，小时变化不发事件）：
 ///   - TimePhaseChangedEvent 时段切换时发布
 ///   - TimeDayChangedEvent   新一天发布
 ///   - SeasonChangedEvent    季节切换时发布
 ///
 /// 仅在 GameState.Playing 时推进。
-/// 难度系统可通过 SetSecondsPerDay / SetTotalDays / SetDaysPerSeason 在游戏开始前配置。
 /// 场景中需挂载此脚本（建议挂在空物体 "TimeManager" 上）。
 /// </summary>
 public class TimeManager : Singleton<TimeManager>, ISaveable
 {
     public string SaveId => "TimeManager";
     public SaveLoadPhase LoadPhase => SaveLoadPhase.Global;
-    [Header("时间流速")]
-    [Tooltip("现实多少秒 = 游戏内一天（24小时）。默认 480 = 8分钟。")]
-    [SerializeField] private float secondsPerDay = 480f;
 
-    [Header("起始时间")]
-    [Tooltip("游戏开始时是第几天（从1开始）。")]
-    [SerializeField] private int startDay = 1;
+    // ===== 时间规则（运行时从 WorldConfig.time 读取，不再 SerializeField 硬编码）=====
 
-    [Tooltip("游戏开始当天的起始时刻（0-24）。默认 6 = 早上6点。")]
-    [SerializeField] private float startHour = 6f;
-
-    [Header("天数与难度")]
-    [Tooltip("游戏总目标天数（可由难度系统设置，作为胜利条件之一）。0 = 无上限。")]
-    [SerializeField] private int totalDays = 0;
-
-    [Header("季节")]
-    [Tooltip("一个季节持续多少天。默认 10 天。")]
-    [SerializeField] private int daysPerSeason = 10;
+    private float secondsPerDay = 480f;     // 现实秒/天
+    private int startDay = 1;               // 起始天
+    private float startHour = 6f;           // 起始时刻
+    private int daysPerSeason = 10;         // 每季天数
+    private float dawnDuration = 1f;        // 黎明时长（小时）
+    private float duskDuration = 1f;        // 黄昏时长（小时）
 
     // ===== 运行时状态 =====
 
@@ -61,10 +54,9 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     public Season CurrentSeason { get; private set; }
 
     /// <summary>当天进度 0~1。</summary>
-    public float DayProgress => _dayTimer / secondsPerDay;
+    public float DayProgress => secondsPerDay > 0f ? _dayTimer / secondsPerDay : 0f;
 
     public float SecondsPerDay => secondsPerDay;
-    public int TotalDays => totalDays;
     public int DaysPerSeason => daysPerSeason;
 
     /// <summary>当前季节的日出时刻。</summary>
@@ -73,12 +65,12 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>当前季节的日落时刻。</summary>
     public float SunsetHour => GetSunset(CurrentSeason);
 
-    private const float DawnDuration = 1f;  // 黎明过渡时长（小时）
-    private const float DuskDuration = 1f;  // 黄昏过渡时长（小时）
-
     protected override void Awake()
     {
         base.Awake();
+
+        // 从 WorldConfig 读时间规则（替代硬编码）
+        LoadConfigFromWorld();
 
         CurrentDay = Mathf.Max(1, startDay);
         CurrentSeason = CalculateSeason(CurrentDay);
@@ -91,6 +83,23 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
             + $"季节={CurrentSeason} 时段={CurrentPhase} ({secondsPerDay}s/天, {daysPerSeason}天/季)");
 
         SaveManager.Instance.RegisterSaveable(this);
+    }
+
+    /// <summary>从 WorldSystem.Config.time 读取时间规则。config 不可用时用默认值兜底。</summary>
+    private void LoadConfigFromWorld()
+    {
+        if (WorldSystem.Instance == null || WorldSystem.Instance.Config == null)
+        {
+            Debug.LogWarning("[TimeManager] WorldConfig 不可用，使用默认时间规则。");
+            return;
+        }
+        var tc = WorldSystem.Instance.Config.time;
+        secondsPerDay = tc.secondsPerDay > 0 ? tc.secondsPerDay : 480f;
+        startDay = Mathf.Max(1, tc.startDay);
+        startHour = Mathf.Clamp(tc.startHour, 0f, 24f);
+        daysPerSeason = Mathf.Max(1, tc.daysPerSeason);
+        dawnDuration = Mathf.Max(0f, tc.dawnDuration);
+        duskDuration = Mathf.Max(0f, tc.duskDuration);
     }
 
     private void Update()
@@ -166,39 +175,32 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
 
         if (timeOfDay < sunrise)
             return TimePhase.Night;                          // 前半夜
-        if (timeOfDay < sunrise + DawnDuration)
+        if (timeOfDay < sunrise + dawnDuration)
             return TimePhase.Dawn;                           // 黎明
-        if (timeOfDay < sunset - DuskDuration)
+        if (timeOfDay < sunset - duskDuration)
             return TimePhase.Day;                            // 白天
         if (timeOfDay < sunset)
             return TimePhase.Dusk;                           // 黄昏
         return TimePhase.Night;                              // 后半夜
     }
 
-    // ===== 季节昼夜比例（日出/日落时刻）=====
-    // 夏白天最长(15h)，冬最短(10h)，春秋各12h。
+    // ===== 季节昼夜比例（日出/日落时刻，从 WorldConfig.season 读）=====
 
-    private static float GetSunrise(Season season)
+    private float GetSunrise(Season season)
     {
-        switch (season)
-        {
-            case Season.Summer: return 5f;
-            case Season.Winter: return 7f;
-            default:            return 6f;  // Spring / Autumn
-        }
+        return WorldSystem.Instance != null
+            ? WorldSystem.Instance.GetSeasonSunData(season).sunriseHour
+            : 6f;
     }
 
-    private static float GetSunset(Season season)
+    private float GetSunset(Season season)
     {
-        switch (season)
-        {
-            case Season.Summer: return 20f;
-            case Season.Winter: return 17f;
-            default:            return 18f;  // Spring / Autumn
-        }
+        return WorldSystem.Instance != null
+            ? WorldSystem.Instance.GetSeasonSunData(season).sunsetHour
+            : 18f;
     }
 
-    // ===== 难度系统配置接口（游戏开始前调用）=====
+    // ===== 配置接口（由 DifficultyManager / WorldSystem 调用）=====
 
     /// <summary>设置现实秒/天。难度越高可缩短（每天更紧张）或延长。</summary>
     public void SetSecondsPerDay(float seconds)
@@ -206,26 +208,10 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         secondsPerDay = Mathf.Max(1f, seconds);
     }
 
-    /// <summary>设置总目标天数（0=无上限，作为胜利条件之一）。</summary>
-    public void SetTotalDays(int days)
-    {
-        totalDays = Mathf.Max(0, days);
-    }
-
     /// <summary>设置每季天数。</summary>
     public void SetDaysPerSeason(int days)
     {
         daysPerSeason = Mathf.Max(1, days);
-    }
-
-    /// <summary>NewGame 路径：批量应用初始时间配置。仅在 InitializeScene 时调用一次。</summary>
-    public void ApplyConfig(int totalDays, int secondsPerDay = -1, int daysPerSeason = -1)
-    {
-        if (totalDays > 0) SetTotalDays(totalDays);
-        if (secondsPerDay > 0) SetSecondsPerDay(secondsPerDay);
-        if (daysPerSeason > 0) SetDaysPerSeason(daysPerSeason);
-
-        Debug.Log($"[TimeManager] ApplyConfig: totalDays={this.totalDays}, secondsPerDay={this.secondsPerDay}, daysPerSeason={this.daysPerSeason}");
     }
 
     // ===== ISaveable 实现 =====
@@ -239,7 +225,6 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
             currentSeason = (int)CurrentSeason,
             currentPhase = (int)CurrentPhase,
             secondsPerDay = SecondsPerDay,
-            totalDays = TotalDays,
             daysPerSeason = DaysPerSeason
         };
         return new SavePayload
@@ -261,9 +246,8 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         var data = JsonUtility.FromJson<TimeSaveData>(payload.json);
 
         // 先配置再状态，防止 AdvanceDay 误触发
-        SetSecondsPerDay(data.secondsPerDay);
-        SetTotalDays(data.totalDays);
-        SetDaysPerSeason(data.daysPerSeason);
+        if (data.secondsPerDay > 0) SetSecondsPerDay(data.secondsPerDay);
+        if (data.daysPerSeason > 0) SetDaysPerSeason(data.daysPerSeason);
 
         // 直接赋值，不发事件
         CurrentDay = data.currentDay;
@@ -283,6 +267,5 @@ public class TimeSaveData
     public int currentSeason;
     public int currentPhase;
     public float secondsPerDay;
-    public int totalDays;
     public int daysPerSeason;
 }

@@ -213,6 +213,19 @@ public readonly struct SeasonChangedEvent
     }
 }
 
+/// <summary>难度系数变化事件。每过一季由 DifficultyManager 发布，供 WaveManager/战斗系统消费。</summary>
+public readonly struct DifficultyChangedEvent
+{
+    public readonly float OldFactor;
+    public readonly float NewFactor;
+
+    public DifficultyChangedEvent(float oldFactor, float newFactor)
+    {
+        OldFactor = oldFactor;
+        NewFactor = newFactor;
+    }
+}
+
 // ===== 存档系统事件 =====
 
 public readonly struct GameSavedEvent
@@ -237,6 +250,15 @@ public readonly struct GameLoadedEvent
         SlotId = slotId;
         IsSuccess = isSuccess;
     }
+}
+
+// ===== 加载系统事件 =====
+
+/// <summary>静态配置加载完成事件（阶段1 结束）。由 LoadManager 发布。</summary>
+public readonly struct ConfigsLoadedEvent
+{
+    public readonly bool IsSuccess;
+    public ConfigsLoadedEvent(bool isSuccess) { IsSuccess = isSuccess; }
 }
 
 // ===== 全局输入事件 =====

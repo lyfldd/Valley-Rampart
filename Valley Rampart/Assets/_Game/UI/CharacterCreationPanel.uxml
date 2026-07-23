@@ -12,29 +12,13 @@
                     <ui:TextField name="ruler-name-input" value="无名君主" max-length="12" class="form-input" />
                 </ui:VisualElement>
 
-                <!-- 难度 -->
+                <!-- 难度（档位 1/2/3 = Easy/Normal/Hard） -->
                 <ui:VisualElement class="form-row">
                     <ui:Label text="难度" class="form-label" />
                     <ui:RadioButtonGroup name="difficulty-group" class="form-radio-group">
-                        <ui:RadioButton name="diff-easy" text="简单" value="0" />
-                        <ui:RadioButton name="diff-normal" text="普通" value="1" />
-                        <ui:RadioButton name="diff-hard" text="困难" value="2" />
-                    </ui:RadioButtonGroup>
-                </ui:VisualElement>
-
-                <!-- 目标天数 -->
-                <ui:VisualElement class="form-row">
-                    <ui:Label name="total-days-label" text="目标天数: 30" class="form-label" />
-                    <ui:SliderInt name="total-days-slider" low-value="10" high-value="100" value="30" show-input-field="false" />
-                </ui:VisualElement>
-
-                <!-- 存档槽 -->
-                <ui:VisualElement class="form-row">
-                    <ui:Label text="存档槽" class="form-label" />
-                    <ui:RadioButtonGroup name="slot-group" class="form-radio-group">
-                        <ui:RadioButton text="槽 1" value="0" />
-                        <ui:RadioButton text="槽 2" value="1" />
-                        <ui:RadioButton text="槽 3" value="2" />
+                        <ui:RadioButton name="diff-easy" text="简单" value="1" />
+                        <ui:RadioButton name="diff-normal" text="普通" value="2" />
+                        <ui:RadioButton name="diff-hard" text="困难" value="3" />
                     </ui:RadioButtonGroup>
                 </ui:VisualElement>
             </ui:VisualElement>

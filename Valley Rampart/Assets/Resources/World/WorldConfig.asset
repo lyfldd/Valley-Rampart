@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c40c4a6548cd7c04db1fd67ddd6ed30c, type: 3}
+  m_Name: WorldConfig
+  m_EditorClassIdentifier: 
+  time:
+    secondsPerDay: 480
+    startDay: 1
+    startHour: 6
+    daysPerSeason: 10
+    dawnDuration: 1
+    duskDuration: 1
+  difficulty:
+    presets:
+    - name: Easy
+      difficultyValue: 1
+      secondsPerDay: 600
+    - name: Normal
+      difficultyValue: 2
+      secondsPerDay: 480
+    - name: Hard
+      difficultyValue: 3
+      secondsPerDay: 360
+    baseGold: 200
+    baseStone: 200
+    baseWood: 200
+    baseFood: 200
+    factorGrowthPerSeason: 0.25
+  season:
+    seasons:
+    - season: 0
+      sunriseHour: 6
+      sunsetHour: 18
+    - season: 1
+      sunriseHour: 5
+      sunsetHour: 20
+    - season: 2
+      sunriseHour: 6
+      sunsetHour: 18
+    - season: 3
+      sunriseHour: 7
+      sunsetHour: 17
+  save:
+    autoSaveIntervalDays: 3
