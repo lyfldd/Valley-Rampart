@@ -226,43 +226,78 @@
 
 .form-label {
     font-size: var(--font-size-label);
-    color: var(--color-text-muted);
+    color: var(--color-text-primary);
     margin-bottom: 6px;
 }
 
 .form-input {
     height: 44px;
     font-size: 18px;
-    color: var(--color-text-primary);
+    color: rgb(240, 240, 240);
     background-color: var(--color-bg-panel);
     border-width: 1px;
     border-color: rgb(70, 70, 90);
     border-radius: 4px;
     padding: 0 12px;
+    -unity-text-align: middle-left;
+}
+
+/* TextField 内部文字颜色（针对 Unity UI Toolkit 内部结构） */
+.form-input TextInput,
+.form-input .unity-text-input {
+    color: rgb(240, 240, 240) !important;
+    background-color: var(--color-bg-panel);
+}
+
+.form-input TextInput:focus,
+.form-input .unity-text-input:focus {
+    color: rgb(255, 255, 255) !important;
 }
 
 .form-input:focus {
     border-color: var(--color-accent);
 }
 
-.form-radio-group {
-    flex-direction: row;
+/* 下拉选择框样式 */
+.form-select {
     height: 44px;
-    align-items: center;
-}
-
-.form-radio {
-    flex-grow: 1;
-    height: 100%;
-    margin: 0 4px;
     font-size: var(--font-size-label);
     color: var(--color-text-primary);
     background-color: var(--color-button);
+    border-width: 1px;
+    border-color: rgb(70, 70, 90);
     border-radius: 4px;
-    -unity-text-align: middle-center;
+    padding: 0 12px;
 }
 
-.form-radio:checked {
+.form-select .unity-base-field__input {
+    color: var(--color-text-primary);
+}
+
+.form-select .unity-popup-field__input {
+    color: var(--color-text-primary);
+}
+
+.form-select .unity-base-field__label {
+    color: var(--color-text-primary);
+}
+
+/* 下拉选项列表样式 */
+.form-select .unity-base-popup-field__choices {
+    background-color: var(--color-bg-panel);
+    border-color: rgb(70, 70, 90);
+}
+
+.form-select .unity-base-popup-field__choices .unity-base-list-view__item {
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+}
+
+.form-select .unity-base-popup-field__choices .unity-base-list-view__item:hover {
+    background-color: var(--color-button-hover);
+}
+
+.form-select .unity-base-popup-field__choices .unity-base-list-view__item--selected {
     background-color: var(--color-accent);
     color: var(--color-bg-dark);
 }

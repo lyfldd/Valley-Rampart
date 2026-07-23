@@ -14,7 +14,7 @@ public class CharacterCreationPanel : MonoBehaviour
 
     private MainMenuController _controller;
     private TextField _nameInput;
-    private RadioButtonGroup _difficultyGroup;
+    private DropdownField _difficultySelect;
 
     private bool _buttonsBound;
 
@@ -31,10 +31,13 @@ public class CharacterCreationPanel : MonoBehaviour
         }
 
         _nameInput = root.Q<TextField>("ruler-name-input");
-        _difficultyGroup = root.Q<RadioButtonGroup>("difficulty-group");
+        _difficultySelect = root.Q<DropdownField>("difficulty-select");
 
-        // 默认值：难度索引 1 = Normal（档位 2）
-        _difficultyGroup.value = 1;
+        // 默认值：索引 1 = "普通"（档位 2）
+        if (_difficultySelect != null)
+        {
+            _difficultySelect.value = "普通";
+        }
 
         // 按钮（仅首次绑定时注册，OnDisable 里退订）
         if (!_buttonsBound)
@@ -70,6 +73,17 @@ public class CharacterCreationPanel : MonoBehaviour
         return null;
     }
 
+    /// <summary>将难度文字映射为档位数字（1=简单, 2=普通, 3=困难）</summary>
+    private int DifficultyTextToValue(string text)
+    {
+        return text switch
+        {
+            "简单" => 1,
+            "困难" => 3,
+            _ => 2  // 默认"普通"
+        };
+    }
+
     private void OnConfirmClicked()
     {
         // 自动分配第一个空存档槽（进入本面板前 MainMenuController 已校验有空槽）
@@ -81,8 +95,8 @@ public class CharacterCreationPanel : MonoBehaviour
         }
 
         string name = string.IsNullOrEmpty(_nameInput.value) ? "无名君主" : _nameInput.value;
-        // RadioButtonGroup.value 是选中索引（0/1/2），转为难度档位 1/2/3
-        int difficulty = _difficultyGroup.value + 1;
+        // PopupField 返回选中的文字，转为难度档位 1/2/3
+        int difficulty = DifficultyTextToValue(_difficultySelect?.value ?? "普通");
 
         var config = new NewGameConfig
         {
