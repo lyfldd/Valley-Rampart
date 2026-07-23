@@ -336,6 +336,12 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 销毁场景中所有手动放置的单位（不仅限于君主）。
     // 用于读档前清理，避免场景预置单位与存档恢复的单位重复（引导书 R2 规则）。
     // 同时清除 monarchUnit 引用，由后续流程重新赋值。
+    //
+    // 注意：RulerController 单例挂在君主 Prefab 上（与 UnitController 同 GameObject）。
+    // 如果直接 Destroy(gameObject) 会把 RulerController 一起销毁，导致：
+    //   - SaveManager 里的 ISaveable 注册指向已销毁对象，LoadState 数据丢失
+    //   - 后续自动创建的空壳 RulerController 因 SaveId 重复被拒绝注册
+    // 因此遇到 RulerController 所在的 GameObject 时，只剥离单位组件，保留单例存活。
     public void DestroyAllSceneUnits()
     {
         var allUnits = FindObjectsOfType<UnitController>();
@@ -346,10 +352,20 @@ public class RulerController : Singleton<RulerController>, ISaveable
             if (unit == null || unit.gameObject == null) continue;
 
             Debug.Log($"[RulerController] 读档前销毁场景单位: {unit.name} (SaveId={unit.SaveId})");
-            // SaveId 可能为 null（未初始化），UnregisterSaveable 内部已做防御
             SaveManager.Instance.UnregisterSaveable(unit);
             UnitRegistry.Instance.Unregister(unit);
-            Destroy(unit.gameObject);
+
+            var ruler = unit.GetComponent<RulerController>();
+            if (ruler != null)
+            {
+                // 保留 RulerController 单例，只销毁单位级组件
+                StripUnitComponents(unit);
+                monarchUnit = null;
+            }
+            else
+            {
+                Destroy(unit.gameObject);
+            }
             destroyed++;
         }
 
@@ -358,8 +374,34 @@ public class RulerController : Singleton<RulerController>, ISaveable
             Debug.Log($"[RulerController] 共清理 {destroyed} 个场景单位（为读档做准备）");
         }
 
-        // 清除引用，由后续流程重新赋值
         monarchUnit = null;
+    }
+
+    /// <summary>
+    /// 返回主菜单前销毁君主单位，但保留 RulerController 单例。
+    /// 防止 DontDestroyOnLoad 的旧君主被带入下一局新游戏。
+    /// </summary>
+    public void DestroyMonarchForMenuReturn()
+    {
+        if (monarchUnit == null || monarchUnit.gameObject == null) return;
+
+        Debug.Log($"[RulerController] 返回主菜单，清理君主单位: {monarchUnit.name}");
+        SaveManager.Instance.UnregisterSaveable(monarchUnit);
+        UnitRegistry.Instance.Unregister(monarchUnit);
+        StripUnitComponents(monarchUnit);
+        monarchUnit = null;
+    }
+
+    /// <summary>剥离单位级组件（UnitController/PlayerInputHandler/SpriteRenderer/Rigidbody2D），保留 GameObject。</summary>
+    private void StripUnitComponents(UnitController unit)
+    {
+        var input = unit.GetComponent<PlayerInputHandler>();
+        var sr = unit.GetComponent<SpriteRenderer>();
+        var rb = unit.GetComponent<Rigidbody2D>();
+        Destroy(unit);
+        if (input != null) Destroy(input);
+        if (sr != null) Destroy(sr);
+        if (rb != null) Destroy(rb);
     }
 
     // 读档完成后调用：在场景中查找已恢复的君主单位并绑定。

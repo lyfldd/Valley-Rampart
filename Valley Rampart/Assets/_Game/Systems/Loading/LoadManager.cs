@@ -76,6 +76,12 @@ public class LoadManager : Singleton<LoadManager>
         CurrentPhase = LoadPhase.WorldInit;
         Debug.Log("[LoadManager] 阶段2a：新建游戏初始化...");
 
+        if (_worldSystem == null)
+        {
+            Debug.LogError("[LoadManager] WorldSystem 不可用，无法初始化世界！请确保场景中已放置 WorldSystem。");
+            return;
+        }
+
         _worldSystem.InitializeWorld(config);
         RulerController.Instance.SpawnMonarch();   // 君主生成（阶段2a 内）
 
@@ -88,18 +94,23 @@ public class LoadManager : Singleton<LoadManager>
     /// <summary>
     /// 读档：存档恢复。由 GameBootstrap 在 Ready 状态、读档模式时调。
     /// 读档前的场景清理与读档后的君主绑定由 GameBootstrap 负责（场景相关）。
+    /// 返回 false 表示读档失败（存档不存在 / 已标记结束 / 反序列化异常）。
     /// </summary>
-    public void LoadSave(string slotId)
+    public bool LoadSave(string slotId)
     {
         CurrentPhase = LoadPhase.SaveRestore;
         Debug.Log($"[LoadManager] 阶段2b：读档恢复 slot={slotId}...");
 
-        _saveLoader.Load(slotId);
-        // WorldSystem.LoadState 会通过 ISaveable 自动恢复
-        // 并调 ApplyTimeConfig + DifficultyManager.SyncConfigFromWorld
+        bool success = _saveLoader.Load(slotId);
+        if (!success)
+        {
+            Debug.LogError($"[LoadManager] 读档失败: {slotId}，不进入 Playing。");
+            return false;
+        }
 
         Debug.Log("[LoadManager] 读档恢复完成");
         EnterPlaying();
+        return true;
     }
 
     // ===== 阶段3：进入运行时 =====

@@ -126,6 +126,9 @@ public class PausePanel : MonoBehaviour
         string slotId = SaveManager.Instance.CurrentSlotId ?? "slot_1";
         SaveManager.Instance.Save(slotId);
         Time.timeScale = 1f;
+        // 清理 DontDestroyOnLoad 的君主单位，防止旧君主被带入下一局
+        if (RulerController.Instance != null)
+            RulerController.Instance.DestroyMonarchForMenuReturn();
         // 退回主菜单前禁用输入，避免主菜单里残留的输入触发多余事件
         InputManager.Instance.DisableInput();
         SceneManager.LoadScene(mainMenuSceneName);

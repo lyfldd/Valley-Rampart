@@ -10,6 +10,12 @@ public static class EventBus
 {
     private static readonly Dictionary<Type, Delegate> _subscribers = new Dictionary<Type, Delegate>();
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        _subscribers.Clear();
+    }
+
     public static void Subscribe<T>(Action<T> handler) where T : struct
     {
         if (handler == null) return;

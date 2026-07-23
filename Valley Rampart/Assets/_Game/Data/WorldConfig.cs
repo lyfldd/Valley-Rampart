@@ -66,7 +66,9 @@ public struct DifficultyConfig
     /// <summary>按档位值获取预设（档位 1/2/3 → 索引 0/1/2）。</summary>
     public DifficultyPreset GetPreset(int difficultyValue)
     {
-        int index = Mathf.Clamp(difficultyValue - 1, 0, presets == null ? 0 : presets.Length - 1);
+        if (presets == null || presets.Length == 0)
+            return new DifficultyPreset { name = "Default", difficultyValue = 2, secondsPerDay = 480f };
+        int index = Mathf.Clamp(difficultyValue - 1, 0, presets.Length - 1);
         return presets[index];
     }
 
@@ -103,7 +105,9 @@ public struct SeasonConfig
 
     public SeasonSunData GetSeason(Season season)
     {
-        int index = Mathf.Clamp((int)season, 0, seasons == null ? 0 : seasons.Length - 1);
+        if (seasons == null || seasons.Length == 0)
+            return new SeasonSunData { sunriseHour = 6f, sunsetHour = 18f };
+        int index = Mathf.Clamp((int)season, 0, seasons.Length - 1);
         return seasons[index];
     }
 }

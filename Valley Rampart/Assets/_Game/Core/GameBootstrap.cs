@@ -139,7 +139,13 @@ public class GameBootstrap : MonoBehaviour
         //   1. SaveManager.Load 恢复所有 ISaveable 状态
         //   2. UnitFactory.SpawnFromSave 重建存档中的单位
         //   3. GameStateManager.SetState(Playing)
-        LoadManager.Instance.LoadSave(slotId);
+        bool success = LoadManager.Instance.LoadSave(slotId);
+        if (!success)
+        {
+            Debug.LogError($"[GameBootstrap] 读档失败: {slotId}，游戏无法继续。");
+            GameStateManager.Instance.SetState(GameState.GameOver);
+            return;
+        }
 
         // 读档完成后，在场景中查找已恢复的君主单位并绑定到 RulerController
         // 新建模式不需要此步骤（SpawnMonarch 中已完成绑定）

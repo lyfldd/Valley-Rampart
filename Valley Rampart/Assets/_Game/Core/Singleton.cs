@@ -9,6 +9,15 @@ public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
     protected static T _instance;
     private static bool _isQuitting = false;
 
+    // Editor 关闭 Domain Reload 后静态字段不会自动归零，
+    // SubsystemRegistration 在每次进入 Play Mode 时最早执行，确保干净起步。
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        _instance = null;
+        _isQuitting = false;
+    }
+
     public static T Instance
     {
         get

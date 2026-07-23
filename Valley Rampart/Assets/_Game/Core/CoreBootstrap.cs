@@ -50,4 +50,10 @@ public class CoreBootstrap : MonoBehaviour
 
     // 标记是否是首次执行 CoreBootstrap.Awake（跨场景 DontDestroyOnLoad 的 Singleton 不重置）
     private static bool _isFirstCoreBootstrap = true;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        _isFirstCoreBootstrap = true;
+    }
 }
