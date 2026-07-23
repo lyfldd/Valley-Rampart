@@ -46,6 +46,16 @@ public class DifficultyManager : Singleton<DifficultyManager>, ISaveable
         EventBus.Unsubscribe<SeasonChangedEvent>(OnSeasonChanged);
     }
 
+    // ===== 状态重置（由 TeardownManager 返回主菜单时调用）=====
+
+    /// <summary>重置到默认值。InitializeWorld 也会覆盖，但重置兜底防残留。</summary>
+    public void ResetState()
+    {
+        CurrentDifficulty = 1;
+        CurrentFactor = 1f;
+        Debug.Log("[DifficultyManager] ResetState: 档位=1, 系数=1");
+    }
+
     /// <summary>新建游戏初始化。</summary>
     public void Initialize(int difficulty)
     {

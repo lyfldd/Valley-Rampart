@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *)",
+      "Bash(tasklist *)",
+      "Bash(findstr *)",
+      "Bash(try *)",
+      "Bash(write-host *)",
+      "Read(C:\\Users\\Administrator\\.qwen/**)",
+      "Bash(qwen *)"
+    ]
+  },
+  "$version": 4
+}

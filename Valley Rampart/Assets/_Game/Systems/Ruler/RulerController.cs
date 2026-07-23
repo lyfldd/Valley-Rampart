@@ -6,9 +6,7 @@ using UnityEngine;
 // 职责：管理玩家君主单位的生命周期、国家资源和游戏结束条件。
 //
 // 核心设计（引导书第 5 节）：
-//   - 单例模式：全局唯一，挂载在君主 Prefab（Human_Player_Ruler.prefab）上。
-//   - 重复实例处理：不销毁整个 GameObject（因为同 GameObject 上还有 UnitController 等必需组件），
-//     只移除多余的 RulerController 组件自身。
+//   - 单例模式：全局唯一，挂在 MainMenuScene 的独立 GameObject 上，DontDestroyOnLoad 跟随场景。
 //   - 资源管理：通过 ModifyResource 统一入口修改资源，每次修改发布 RulerResourceChangedEvent。
 //   - 君主死亡：订阅 UnitDiedEvent 检测君主阵亡，触发 GameState.GameOver。
 //   - 存档集成：实现 ISaveable 接口，SaveManager 在 Global 阶段保存/恢复君主国家资源。
@@ -65,36 +63,19 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 统治者名字（新建游戏时玩家输入，存档恢复时从 RulerSaveData 读取）
     public string RulerName { get; private set; } = "无名君主";
 
-    // 标记当前实例是否为真正的单例（非重复副本）。
-    // 用于 OnDestroy 判断是否需要执行反订阅/反注册等清理逻辑。
-    private bool _isRealSingleton;
-
     // 战斗属性（Attack/Defense/WalkSpeed/RunSpeed/Hp）已移至 UnitController
     // 访问方式：RulerController.Instance.MonarchUnit.Attack 等
 
     protected override void Awake()
     {
-        // 不直接调用 base.Awake()，因为 Singleton 基类的 duplicate 检测会 Destroy(gameObject)
-        // 但 RulerController 被挂在单位 Prefab 上（Human_Player_Ruler.prefab），
-        // 同一 GameObject 上还有 UnitController、PlayerInputHandler 等运行时必需的组件。
-        // 当 Prefab 被 UnitFactory 实例化时，如果已存在 RulerController 单例，
-        // 只应移除 RulerController 自身，而不能销毁整个 GameObject。
-        if (_instance != null && _instance != this)
-        {
-            Debug.Log($"[RulerController] 检测到重复实例（GameObject='{gameObject.name}'），移除自身组件保留单位。");
-            Destroy(this);
-            return;  // _isRealSingleton 保持 false，OnDestroy 不会做多余清理
-        }
-
-        _instance = this;
-        _isRealSingleton = true;
-        DontDestroyOnLoad(gameObject);
+        base.Awake();
+        if (_instance != this) return;  // 重复实例，base 已销毁 gameObject
 
         // 尝试加载君主数据并应用（Inspector 优先，其次 UnitDataManager）
         // 所有属性在 ApplyRulerData() 中从资产同步，无需 initial* 兜底字段
         TryLoadRulerData();
 
-        // 订阅事件（仅真正的单例订阅）
+        // 订阅事件
         // 注：UnitDataLoadedEvent 已废弃（LoadManager 改发 ConfigsLoadedEvent），
         // 君主数据在 SpawnMonarch 时由 LoadManager.GetUnitData 获取，不依赖事件。
         EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
@@ -104,8 +85,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     private void OnDestroy()
     {
-        // 只有真正的单例才做了订阅和注册，重复副本跳过清理
-        if (!_isRealSingleton) return;
+        if (_instance != this) return;  // 不是当前单例，跳过清理
 
         EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
     }
@@ -331,77 +311,26 @@ public class RulerController : Singleton<RulerController>, ISaveable
         return removed;
     }
 
-    // ===== 读档相关：清理 + 绑定 =====
-
-    // 销毁场景中所有手动放置的单位（不仅限于君主）。
-    // 用于读档前清理，避免场景预置单位与存档恢复的单位重复（引导书 R2 规则）。
-    // 同时清除 monarchUnit 引用，由后续流程重新赋值。
-    //
-    // 注意：RulerController 单例挂在君主 Prefab 上（与 UnitController 同 GameObject）。
-    // 如果直接 Destroy(gameObject) 会把 RulerController 一起销毁，导致：
-    //   - SaveManager 里的 ISaveable 注册指向已销毁对象，LoadState 数据丢失
-    //   - 后续自动创建的空壳 RulerController 因 SaveId 重复被拒绝注册
-    // 因此遇到 RulerController 所在的 GameObject 时，只剥离单位组件，保留单例存活。
-    public void DestroyAllSceneUnits()
-    {
-        var allUnits = FindObjectsOfType<UnitController>();
-        int destroyed = 0;
-
-        foreach (var unit in allUnits)
-        {
-            if (unit == null || unit.gameObject == null) continue;
-
-            Debug.Log($"[RulerController] 读档前销毁场景单位: {unit.name} (SaveId={unit.SaveId})");
-            SaveManager.Instance.UnregisterSaveable(unit);
-            UnitRegistry.Instance.Unregister(unit);
-
-            var ruler = unit.GetComponent<RulerController>();
-            if (ruler != null)
-            {
-                // 保留 RulerController 单例，只销毁单位级组件
-                StripUnitComponents(unit);
-                monarchUnit = null;
-            }
-            else
-            {
-                Destroy(unit.gameObject);
-            }
-            destroyed++;
-        }
-
-        if (destroyed > 0)
-        {
-            Debug.Log($"[RulerController] 共清理 {destroyed} 个场景单位（为读档做准备）");
-        }
-
-        monarchUnit = null;
-    }
+    // ===== 状态重置（由 TeardownManager 返回主菜单时调用）=====
 
     /// <summary>
-    /// 返回主菜单前销毁君主单位，但保留 RulerController 单例。
-    /// 防止 DontDestroyOnLoad 的旧君主被带入下一局新游戏。
+    /// 重置运行时状态到默认值。不反订阅、不反注册 ISaveable（Manager 保留，订阅和注册继续用）。
     /// </summary>
-    public void DestroyMonarchForMenuReturn()
+    public void ResetState()
     {
-        if (monarchUnit == null || monarchUnit.gameObject == null) return;
-
-        Debug.Log($"[RulerController] 返回主菜单，清理君主单位: {monarchUnit.name}");
-        SaveManager.Instance.UnregisterSaveable(monarchUnit);
-        UnitRegistry.Instance.Unregister(monarchUnit);
-        StripUnitComponents(monarchUnit);
         monarchUnit = null;
+        RulerName = "无名君主";
+        Gold = 0;
+        Stone = 0;
+        Wood = 0;
+        Food = 0;
+        Debug.Log("[RulerController] ResetState: 引用已清除，资源归零");
     }
 
-    /// <summary>剥离单位级组件（UnitController/PlayerInputHandler/SpriteRenderer/Rigidbody2D），保留 GameObject。</summary>
-    private void StripUnitComponents(UnitController unit)
+    /// <summary>清除君主引用（单位已在外部销毁时使用，如 TeardownManager.TeardownScene）。</summary>
+    public void ClearMonarchReference()
     {
-        var input = unit.GetComponent<PlayerInputHandler>();
-        var sr = unit.GetComponent<SpriteRenderer>();
-        var rb = unit.GetComponent<Rigidbody2D>();
-        Destroy(unit);
-        if (input != null) Destroy(input);
-        if (sr != null) Destroy(sr);
-        if (rb != null) Destroy(rb);
+        monarchUnit = null;
     }
 
     // 读档完成后调用：在场景中查找已恢复的君主单位并绑定。

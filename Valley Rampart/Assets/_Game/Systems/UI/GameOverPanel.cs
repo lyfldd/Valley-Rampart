@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 /// <summary>
@@ -9,8 +8,6 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(UIDocument))]
 public class GameOverPanel : MonoBehaviour
 {
-    [SerializeField] private string mainMenuSceneName = "MainMenuScene";
-
     private bool _buttonBound;
 
     private void OnEnable()
@@ -92,12 +89,7 @@ public class GameOverPanel : MonoBehaviour
 
     private void OnBackToMenuClicked()
     {
-        Time.timeScale = 1f;
-        // 清理 DontDestroyOnLoad 的君主单位，防止旧君主被带入下一局
-        if (RulerController.Instance != null)
-            RulerController.Instance.DestroyMonarchForMenuReturn();
-        InputManager.Instance.DisableInput();
-        SceneManager.LoadScene(mainMenuSceneName);
+        TeardownManager.Instance.TeardownForReturnToMenu(saveBeforeTeardown: false);
     }
 
     private void SetPanelVisible(bool visible)

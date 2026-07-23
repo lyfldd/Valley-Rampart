@@ -200,6 +200,27 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
             : 18f;
     }
 
+    // ===== 状态重置（由 TeardownManager 返回主菜单时调用）=====
+
+    /// <summary>
+    /// 彻底重置运行时状态到初始值。
+    /// InitializeWorld 不覆盖 CurrentDay/CurrentSeason/CurrentTimeOfDay 等字段，
+    /// Singleton 不重走 Awake，所以必须由 TeardownManager 显式重置。
+    /// secondsPerDay / daysPerSeason 不重置（InitializeWorld 会覆盖）。
+    /// </summary>
+    public void ResetState()
+    {
+        CurrentDay = Mathf.Max(1, startDay);
+        CurrentSeason = CalculateSeason(CurrentDay);
+        CurrentTimeOfDay = Mathf.Clamp(startHour, 0f, 24f);
+        CurrentHour = Mathf.Clamp(Mathf.FloorToInt(CurrentTimeOfDay), 0, 23);
+        _dayTimer = (CurrentTimeOfDay / 24f) * secondsPerDay;
+        CurrentPhase = CalculatePhase(CurrentTimeOfDay, CurrentSeason);
+
+        Debug.Log($"[TimeManager] ResetState: 第{CurrentDay}天 {CurrentTimeOfDay:0.0}点 "
+            + $"季节={CurrentSeason} 时段={CurrentPhase}");
+    }
+
     // ===== 配置接口（由 DifficultyManager / WorldSystem 调用）=====
 
     /// <summary>设置现实秒/天。难度越高可缩短（每天更紧张）或延长。</summary>

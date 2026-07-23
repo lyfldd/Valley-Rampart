@@ -113,6 +113,12 @@ public class SaveManager : Singleton<SaveManager>
         }
     }
 
+    /// <summary>重置自动存档计数器（新建游戏时调用，防止上一局的计数残留）。</summary>
+    public void ResetAutoSaveCounter()
+    {
+        _daysSinceLastAutoSave = 0;
+    }
+
     // ===== 注册 / 注销 =====
 
     public void RegisterSaveable(ISaveable saveable)

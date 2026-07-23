@@ -112,6 +112,7 @@ public class GameBootstrap : MonoBehaviour
             //   3. RulerController.SpawnMonarch 创建君主
             //   4. GameStateManager.SetState(Playing)
             LoadManager.Instance.InitializeNewGame(config);
+            SaveManager.Instance.ResetAutoSaveCounter();
             Debug.Log($"[GameBootstrap] 应用新建游戏配置: "
                 + $"ruler={config.rulerName}, seed={config.mapSeed}, difficulty={config.difficulty}");
 
@@ -131,9 +132,9 @@ public class GameBootstrap : MonoBehaviour
         string slotId = GameSceneEntrance.LoadSlotId;
         Debug.Log($"[GameBootstrap] 读档: {slotId}");
 
-        // 读档前先销毁场景中所有手动放置的单位，避免与存档恢复的单位重复
+        // 读档前先销毁场景中所有运行时单位，避免与存档恢复的单位重复
         // 这是 R2 规则：场景预置单位仅用于编辑期调试，读档时必须清理
-        RulerController.Instance.DestroyAllSceneUnits();
+        TeardownManager.Instance.TeardownScene();
 
         // 阶段2b：LoadManager.LoadSave 内部完成——
         //   1. SaveManager.Load 恢复所有 ISaveable 状态
