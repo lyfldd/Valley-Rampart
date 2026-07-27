@@ -55,6 +55,20 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         // GenerateWorld(MapSeed);
         Debug.Log($"[WorldManager] 从存档恢复: seed={MapSeed}, difficulty={Difficulty}");
     }
+
+    // ===== 状态重置（由 TeardownManager 返回主菜单时调用）=====
+
+    /// <summary>
+    /// 重置运行时状态到默认值。
+    /// 重新进入游戏时 ApplyConfig（新建）/ LoadState（读档）会覆盖，
+    /// 但显式重置兜底防止上一局地图种子残留，调试时也便于观察状态边界。
+    /// </summary>
+    public void ResetState()
+    {
+        MapSeed = 0;
+        Difficulty = 0;
+        Debug.Log("[WorldManager] ResetState: seed=0, difficulty=0");
+    }
 }
 
 [System.Serializable]

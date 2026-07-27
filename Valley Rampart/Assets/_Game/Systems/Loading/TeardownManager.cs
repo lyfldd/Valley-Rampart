@@ -105,12 +105,20 @@ public class TeardownManager : Singleton<TeardownManager>
         TeardownScene();
 
         // ⑤ 业务 Manager 重置运行时状态（不反订阅、不反注册 ISaveable）
+        // 顺序：依赖方先重置 → 被依赖方后重置 → 会话级状态最后清
+        //   Time/Difficulty/Ruler 是运行时业务状态
+        //   WorldManager 持有地图种子（被 WorldSystem 依赖，放后面）
+        //   SaveManager.ResetSessionState 清槽位/计数器（保存已在 ③ 完成，放最后）
         if (TimeManager.Instance != null)
             TimeManager.Instance.ResetState();
         if (DifficultyManager.Instance != null)
             DifficultyManager.Instance.ResetState();
         if (RulerController.Instance != null)
             RulerController.Instance.ResetState();
+        if (WorldManager.Instance != null)
+            WorldManager.Instance.ResetState();
+        if (SaveManager.Instance != null)
+            SaveManager.Instance.ResetSessionState();
         CurrentPhase = TeardownPhase.ManagerReset;
 
         // ⑥ 清空单位注册表

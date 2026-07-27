@@ -119,6 +119,20 @@ public class SaveManager : Singleton<SaveManager>
         _daysSinceLastAutoSave = 0;
     }
 
+    /// <summary>
+    /// 重置会话级状态（返回主菜单时由 TeardownManager 调用）。
+    /// CurrentSlotId 和自动存档计数器在重新进入游戏时会被 Save/Load 覆盖，
+    /// 但显式重置可防止跨局槽位污染，调试时也便于定位状态来源。
+    /// 注意：不清空 _saveables / _spawners 注册表——Manager 是 DontDestroyOnLoad 的，
+    /// ISaveable 注册在 Awake 完成，跨场景保留；场景级单位由 CleanupDestroyedSaveables 清理。
+    /// </summary>
+    public void ResetSessionState()
+    {
+        CurrentSlotId = null;
+        _daysSinceLastAutoSave = 0;
+        Debug.Log("[SaveManager] ResetSessionState: 槽位已清空，自动存档计数器归零");
+    }
+
     // ===== 注册 / 注销 =====
 
     public void RegisterSaveable(ISaveable saveable)
