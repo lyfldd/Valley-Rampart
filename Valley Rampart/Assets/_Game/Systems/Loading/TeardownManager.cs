@@ -53,8 +53,12 @@ public class TeardownManager : Singleton<TeardownManager>
         {
             if (unit == null || unit.gameObject == null) continue;
 
-            SaveManager.Instance.UnregisterSaveable(unit);
-            UnitRegistry.Instance.Unregister(unit);
+            // 退出时 OnApplicationQuit 顺序不确定，其他单例的 _isQuitting 可能已置 true
+            // 导致 Instance getter 返回 null，这里必须 null 检查（跳过清理是安全的，Unity 会回收）
+            if (SaveManager.Instance != null)
+                SaveManager.Instance.UnregisterSaveable(unit);
+            if (UnitRegistry.Instance != null)
+                UnitRegistry.Instance.Unregister(unit);
             Destroy(unit.gameObject);
             destroyed++;
         }
@@ -70,8 +74,9 @@ public class TeardownManager : Singleton<TeardownManager>
             RulerController.Instance.ClearMonarchReference();
         }
 
-        // ③ 兜底清理已销毁对象的 ISaveable 残留
-        SaveManager.Instance.CleanupDestroyedSaveables();
+        // ③ 兜底清理已销毁对象的 ISaveable 残留（退出时 SaveManager 可能已 _isQuitting）
+        if (SaveManager.Instance != null)
+            SaveManager.Instance.CleanupDestroyedSaveables();
 
         CurrentPhase = TeardownPhase.UnitsDestroyed;
     }
