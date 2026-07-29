@@ -72,11 +72,21 @@ public static class BuildingFactory
     /// <summary>把单个 BuildingPlaceholder 转为 Building 实例。</summary>
     static bool CreateBuilding(BuildingPlaceholder ph, Region region)
     {
+        if (ph == null)
+        {
+            Debug.LogWarning("[BuildingFactory] 跳过 null placeholder (regionIdx=" + (region != null ? region.regionIndex.ToString() : "?") + ")");
+            return false;
+        }
         var table = GetMappingTable();
+        if (table == null)
+        {
+            Debug.LogWarning("[BuildingFactory] 映射表缺失，跳过 placeholder=" + ph.type);
+            return false;
+        }
         var def = table.Get(ph.type);
         if (def == null)
         {
-            Debug.LogWarning($"[BuildingFactory] BuildingType={ph.type} 未在映射表中配置，跳过");
+            Debug.LogWarning($"[BuildingFactory] BuildingType={ph.type} 未在映射表中配置（regionIdx={region.regionIndex}, localCellX={ph.localCellX}），跳过");
             return false;
         }
 
@@ -102,24 +112,88 @@ public static class BuildingFactory
             go.transform.position = worldPos;
         }
 
-        // 确保有 Building 组件
+        // 确保有 Building 组件（注意：Building 没有 [RequireComponent]，因为 Collider2D 是抽象类，Unity 不能自动补）
         var b = go.GetComponent<Building>();
-        if (b == null) b = go.AddComponent<Building>();
+        if (b == null)
+        {
+            b = go.AddComponent<Building>();
+            if (b == null)
+            {
+                Debug.LogError($"[BuildingFactory] 添加 Building 组件失败！type={ph.type}, go={go.name}");
+                Object.DestroyImmediate(go);
+                return false;
+            }
+        }
 
-        b.InitFromPlaceholder(def, ph, coord);
+        // 直接内联初始化 Building 字段（避免 InitFromPlaceholder 内部 NRE 或 getter/回调链上的单例时序问题）
+        try
+        {
+            // 1. 基础字段
+            b.def = def;
+            b.coord = coord;
+            b.isPlayerBuilt = false;           // 地图预置建筑 → false
+            b.sourceType = ph.type;
+            b.grade = ph.grade;
+            int phCellWidth = (ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
+            b.cellWidth = phCellWidth;
+            b.level = 1;
+
+            // 2. faction + isObstacle
+            b.faction = def.faction;
+            b.isObstacle = def.isObstacle;
+
+            // 3. HP：gradeScale 缩放 combat.maxHp；任何异常都给默认 100 不掉链子
+            int baseHp = 100;
+            try
+            {
+                if (def.combat.maxHp > 0) baseHp = def.combat.maxHp;
+                float scale = def.GetGradeScale(ph.grade);
+                baseHp = Mathf.Max(1, Mathf.RoundToInt(baseHp * Mathf.Max(0.1f, scale)));
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[BuildingFactory] HP计算降级为默认 100（def={def.id}, grade={ph.grade}）: {ex.Message}");
+                baseHp = 100;
+            }
+            b.maxHp = baseHp;
+            b.hp = baseHp;
+        }
+        catch (System.Exception ex)
+        {
+            // 走到这里说明 Building 某个字段赋值访问了非预期东西
+            Debug.LogError($"[BuildingFactory] Building基础字段内联初始化失败：type={ph.type}, def={def.id}, regionIdx={region.regionIndex}, err={ex}");
+            Object.DestroyImmediate(go);
+            return false;
+        }
 
         // 确保有 Collider2D（InteractionManager OverlapPoint 需要）
         if (go.GetComponent<Collider2D>() == null)
         {
             float cellSize = GridSystem.Instance != null ? GridSystem.Instance.Config.cellSize : 32f;
             var col = go.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(cellSize * b.cellWidth, cellSize);
+            col.size = new Vector2(cellSize * Mathf.Max(1, b.cellWidth), cellSize);
         }
 
-        // 注册占用 + 注册表 + 事件
-        GridSystem.Instance?.MarkOccupiedFootprint(coord, b.cellWidth, b);
-        BuildingRegistry.Instance?.Register(b);
-        EventBus.Publish(new BuildingPlacedEvent(b));
+        // 注册占用 + 注册表 + 事件（防御性：单例不存在时只打一条 Warning，不抛异常）
+        try
+        {
+            if (GridSystem.Instance != null)
+                GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, b.cellWidth), b);
+        }
+        catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] MarkOccupiedFootprint 失败: " + ex.Message); }
+
+        try
+        {
+            if (BuildingRegistry.Instance != null)
+                BuildingRegistry.Instance.Register(b);
+        }
+        catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Registry.Register 失败: " + ex.Message); }
+
+        try
+        {
+            EventBus.Publish(new BuildingPlacedEvent(b));
+        }
+        catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
 
         return true;
     }

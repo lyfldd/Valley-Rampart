@@ -7,7 +7,6 @@ using UnityEngine;
 /// 地图预置建筑（树/矿/裂隙/主城）由 BuildingFactory 实例化，isPlayerBuilt=false；
 /// 玩家建造由 BuildController 实例化，isPlayerBuilt=true。
 /// </summary>
-[RequireComponent(typeof(Collider2D))]
 public class Building : MonoBehaviour, IInteractable
 {
     // ===== 占位 =====
@@ -54,15 +53,28 @@ public class Building : MonoBehaviour, IInteractable
         ApplyDef();
     }
 
-    /// <summary>地图预置建筑初始化（由 BuildingFactory 调）。</summary>
+    /// <summary>地图预置建筑初始化（由 BuildingFactory 调）。保留以兼容手动调用；CreateBuilding 当前走内联初始化，不使用此方法。</summary>
     public void InitFromPlaceholder(BuildingDef def, BuildingPlaceholder ph, GridCoord coord)
     {
+        if (def == null)
+        {
+            this.def = null;
+            this.coord = coord;
+            this.isPlayerBuilt = false;
+            this.sourceType = ph != null ? ph.type : BuildingType.None;
+            this.grade = ResourceGrade.Normal;
+            this.cellWidth = ph != null && ph.cellWidth > 0 ? ph.cellWidth : 1;
+            this.level = 1;
+            this.maxHp = 100;
+            this.hp = 100;
+            return;
+        }
         this.def = def;
         this.coord = coord;
         this.isPlayerBuilt = false;
-        this.sourceType = ph.type;
-        this.grade = ph.grade;
-        this.cellWidth = ph.cellWidth;
+        this.sourceType = ph != null ? ph.type : BuildingType.None;
+        this.grade = ph != null ? ph.grade : ResourceGrade.Normal;
+        this.cellWidth = (ph != null && ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
         this.level = 1;
 
         ApplyDef();
@@ -77,8 +89,11 @@ public class Building : MonoBehaviour, IInteractable
         isObstacle = def.isObstacle;
 
         // HP：有 combat（maxHp>0）用 combat.maxHp × gradeScale，否则默认 100
-        float scale = def.GetGradeScale(grade);
-        maxHp = def.combat.maxHp > 0 ? Mathf.RoundToInt(def.combat.maxHp * scale) : 100;
+        float scale;
+        try { scale = def.GetGradeScale(grade); }
+        catch { scale = 1f; }
+        int baseHp = def.combat.maxHp > 0 ? def.combat.maxHp : 100;
+        maxHp = Mathf.Max(1, Mathf.RoundToInt(baseHp * Mathf.Max(0.1f, scale)));
         hp = maxHp;
     }
 
@@ -86,8 +101,8 @@ public class Building : MonoBehaviour, IInteractable
 
     public InteractionResult Interact(Interactor ctx)
     {
-        // 打开 BuildingPanel（首版用单例，后期可改为注入模式）
-        var panel = BuildingPanel.Instance;
+        // 打开 BuildingPanel（首版用 FindObjectOfType 找场景面板，后期可改为注入）
+        var panel = FindObjectOfType<BuildingPanel>();
         if (panel != null)
         {
             panel.SetTarget(this);

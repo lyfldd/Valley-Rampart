@@ -1,87 +1,253 @@
 using UnityEngine;
+using UnityEngine.UIElements;
 
 /// <summary>
-/// 建筑面板（3.3 第七节）。IUIPanel 实现，显示建筑信息 + 升级/拆除按钮。
-/// 首版用 OnGUI 临时实现（IMGUI），后续替换为正式 UGUI/UXML。
-/// 由 Building.Interact → SetTarget(this) → ShowUI(this) 触发打开。
+/// 建筑面板（3.3 第七节）。挂在 SampleScene 的 BuildingPanel GameObject 上（UIDocument）。
+/// 实现 IUIPanel，由 InteractionManager 通过 UIManager 打开。
+/// 显示：名称/等级/HP/攻防/产能/描述 + 升级/拆除按钮（按字段条件渲染，无则隐藏）。
 /// </summary>
-public class BuildingPanel : Singleton<BuildingPanel>, IUIPanel
+[RequireComponent(typeof(UIDocument))]
+public class BuildingPanel : MonoBehaviour, IUIPanel
 {
     private Building _target;
-    private bool _isOpen;
-    private Rect _windowRect = new Rect(20, 20, 280, 240);
+    private bool _buttonsBound;
 
-    /// <summary>设置当前面板目标建筑。</summary>
-    public void SetTarget(Building b) { _target = b; }
+    // ===== UI 元素引用 =====
+    private Label _nameLabel;
+    private Label _levelLabel;
+    private VisualElement _hpFill;
+    private Label _hpText;
+    private VisualElement _descBlock;
+    private Label _descLabel;
+    private VisualElement _combatRow;
+    private Label _attackValue;
+    private Label _defenseValue;
+    private Label _rangeValue;
+    private VisualElement _producerRow;
+    private Label _producerRate;
+    private Label _producerCap;
+    private Label _footprintValue;
+    private Label _factionValue;
+    private Label _obstacleValue;
+    private Button _upgradeButton;
+    private Button _demolishButton;
+    private Button _closeButton;
 
     // ===== IUIPanel =====
 
-    public void Open(Interactor ctx) { _isOpen = true; }
-    public void Close() { _isOpen = false; _target = null; }
-    public void Refresh() { /* OnGUI 每帧重绘，无需特殊刷新 */ }
-
-    // ===== OnGUI 临时实现 =====
-
-    void OnGUI()
+    public void Open(Interactor ctx)
     {
-        if (!_isOpen || _target == null || _target.def == null) return;
+        if (!_buttonsBound) BindButtons();
+        Refresh();
+        SetVisible(true);
+    }
+
+    public void Close()
+    {
+        SetVisible(false);
+        _target = null;
+    }
+
+    public void Refresh()
+    {
+        if (_target == null || _target.def == null) return;
 
         var def = _target.def;
-        _windowRect = GUI.Window(0, _windowRect, (id) =>
+
+        // 标题
+        if (_nameLabel != null) _nameLabel.text = def.displayName;
+        if (_levelLabel != null) _levelLabel.text = $"Lv.{_target.level}";
+
+        // HP
+        float hpRatio = _target.maxHp > 0 ? (float)_target.hp / _target.maxHp : 0f;
+        if (_hpFill != null) _hpFill.style.width = new StyleLength(new Length(Mathf.Clamp01(hpRatio) * 100, LengthUnit.Percent));
+        if (_hpText != null) _hpText.text = $"{_target.hp}/{_target.maxHp}";
+
+        // 描述（条件渲染）
+        bool hasDesc = !string.IsNullOrEmpty(def.description);
+        if (_descBlock != null) _descBlock.style.display = hasDesc ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_descLabel != null && hasDesc) _descLabel.text = def.description;
+
+        // 攻防行（条件渲染：有 combat.attack 或 combat.defense 或 combat.range）
+        bool hasCombat = def.combat.attack > 0 || def.combat.defense > 0 || def.combat.range > 0f;
+        if (_combatRow != null) _combatRow.style.display = hasCombat ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_attackValue != null) _attackValue.text = def.combat.attack > 0 ? def.combat.attack.ToString() : "-";
+        if (_defenseValue != null) _defenseValue.text = def.combat.defense > 0 ? def.combat.defense.ToString() : "-";
+        if (_rangeValue != null) _rangeValue.text = def.combat.range > 0f ? def.combat.range.ToString("F1") : "-";
+
+        // 产能行（条件渲染）
+        bool hasProducer = def.producer.rate > 0f || def.producer.capacity > 0;
+        if (_producerRow != null) _producerRow.style.display = hasProducer ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_producerRate != null) _producerRate.text = def.producer.rate > 0f ? $"{def.producer.rate:F1}/s" : "-";
+        if (_producerCap != null) _producerCap.text = def.producer.capacity > 0 ? def.producer.capacity.ToString() : "-";
+
+        // 基础信息
+        if (_footprintValue != null) _footprintValue.text = $"{_target.cellWidth}格";
+        if (_factionValue != null) _factionValue.text = FactionDisplayName(def.faction);
+        if (_obstacleValue != null) _obstacleValue.text = _target.isObstacle ? "是" : "否";
+
+        // 升级按钮（条件渲染：玩家建造 + 有 levels + 未满级）
+        bool canUpgrade = _target.isPlayerBuilt
+                          && def.levels != null
+                          && def.levels.Length > 0
+                          && _target.level - 1 < def.levels.Length;
+        if (_upgradeButton != null)
         {
-            GUILayout.Label($"<b>{def.displayName}</b>  Lv.{_target.level}", new GUIStyle(GUI.skin.label) { richText = true });
-            if (!string.IsNullOrEmpty(def.description))
-                GUILayout.Label(def.description);
-            GUILayout.Space(5);
-
-            GUILayout.Label($"HP: {_target.hp}/{_target.maxHp}");
-            if (def.combat.maxHp > 0)
-                GUILayout.Label($"攻 {def.combat.attack}  防 {def.combat.defense}  射程 {def.combat.range}");
-            if (def.producer.rate > 0)
-                GUILayout.Label($"产能 {def.producer.rate}/s  上限 {def.producer.capacity}");
-            GUILayout.Label($"占地 {_target.cellWidth}格  障碍 {_target.isObstacle}  阵营 {def.faction}");
-
-            GUILayout.Space(10);
-
-            // 升级按钮
-            if (_target.isPlayerBuilt && def.levels != null && def.levels.Length > 0 &&
-                _target.level - 1 < def.levels.Length)
+            _upgradeButton.style.display = canUpgrade ? DisplayStyle.Flex : DisplayStyle.None;
+            if (canUpgrade)
             {
                 var lvCost = def.levels[_target.level - 1].upgradeCost;
-                string costStr = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food})";
-                if (GUILayout.Button(costStr))
-                {
-                    if (RulerController.Instance != null && RulerController.Instance.CanAfford(lvCost))
-                    {
-                        RulerController.Instance.Spend(lvCost);
-                        _target.TryUpgrade();
-                    }
-                    else
-                    {
-                        Debug.Log("[BuildingPanel] 资源不足，无法升级");
-                    }
-                }
+                _upgradeButton.text = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food})";
+                _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(lvCost));
             }
+        }
 
-            // 拆除按钮（仅玩家建筑 + 可拆）
-            if (_target.isPlayerBuilt && def.isDestructible)
-            {
-                if (GUILayout.Button("拆除 (退50%资源)"))
-                {
-                    RulerController.Instance?.Refund(def.cost, 0.5f);
-                    int maxHp = _target.maxHp;
-                    _target.TakeDamage(maxHp); // 触发 Die → Free + Unregister + Destroy
-                    Close();
-                }
-            }
+        // 拆除按钮（条件渲染：玩家建造 + 可拆）
+        bool canDemolish = _target.isPlayerBuilt && def.isDestructible;
+        if (_demolishButton != null)
+            _demolishButton.style.display = canDemolish ? DisplayStyle.Flex : DisplayStyle.None;
+    }
 
-            // 关闭按钮
-            if (GUILayout.Button("关闭"))
-            {
-                UIManager.Instance?.CloseCurrent();
-            }
+    // ===== 对外 API（由 Building.Interact → InteractionManager 调用 SetTarget → Open）=====
 
-            GUI.DragWindow();
-        }, "建筑面板");
+    /// <summary>设置面板目标建筑。由 InteractionManager 在打开面板前调用。</summary>
+    public void SetTarget(Building b)
+    {
+        _target = b;
+    }
+
+    /// <summary>当前目标（用于调试/扩展）。</summary>
+    public Building CurrentTarget => _target;
+
+    // ===== Unity 生命周期 =====
+
+    private void OnEnable()
+    {
+        EventBus.Subscribe<BuildingUpgradedEvent>(OnBuildingUpgraded);
+        EventBus.Subscribe<BuildingDestroyedEvent>(OnBuildingDestroyed);
+        if (!_buttonsBound) BindButtons();
+        SetVisible(false);
+    }
+
+    private void OnDisable()
+    {
+        EventBus.Unsubscribe<BuildingUpgradedEvent>(OnBuildingUpgraded);
+        EventBus.Unsubscribe<BuildingDestroyedEvent>(OnBuildingDestroyed);
+        UnbindButtons();
+    }
+
+    private void Start()
+    {
+        if (!_buttonsBound) BindButtons();
+    }
+
+    // ===== 按钮绑定 =====
+
+    private void BindButtons()
+    {
+        var doc = GetComponent<UIDocument>();
+        if (doc == null || doc.rootVisualElement == null) return;
+        var root = doc.rootVisualElement;
+
+        _nameLabel = root.Q<Label>("building-name");
+        _levelLabel = root.Q<Label>("building-level");
+        _hpFill = root.Q<VisualElement>("hp-bar-fill");
+        _hpText = root.Q<Label>("hp-text");
+        _descBlock = root.Q<VisualElement>("desc-block");
+        _descLabel = root.Q<Label>("building-desc");
+        _combatRow = root.Q<VisualElement>("combat-row");
+        _attackValue = root.Q<Label>("attack-value");
+        _defenseValue = root.Q<Label>("defense-value");
+        _rangeValue = root.Q<Label>("range-value");
+        _producerRow = root.Q<VisualElement>("producer-row");
+        _producerRate = root.Q<Label>("producer-rate");
+        _producerCap = root.Q<Label>("producer-cap");
+        _footprintValue = root.Q<Label>("footprint-value");
+        _factionValue = root.Q<Label>("faction-value");
+        _obstacleValue = root.Q<Label>("obstacle-value");
+
+        _upgradeButton = root.Q<Button>("upgrade-button");
+        _demolishButton = root.Q<Button>("demolish-button");
+        _closeButton = root.Q<Button>("close-button");
+
+        if (_upgradeButton != null) _upgradeButton.clicked += OnUpgradeClicked;
+        if (_demolishButton != null) _demolishButton.clicked += OnDemolishClicked;
+        if (_closeButton != null) _closeButton.clicked += OnCloseClicked;
+
+        _buttonsBound = true;
+    }
+
+    private void UnbindButtons()
+    {
+        if (!_buttonsBound) return;
+        if (_upgradeButton != null) _upgradeButton.clicked -= OnUpgradeClicked;
+        if (_demolishButton != null) _demolishButton.clicked -= OnDemolishClicked;
+        if (_closeButton != null) _closeButton.clicked -= OnCloseClicked;
+        _buttonsBound = false;
+    }
+
+    // ===== 事件回调 =====
+
+    private void OnBuildingUpgraded(BuildingUpgradedEvent evt)
+    {
+        if (evt.Building == _target) Refresh();
+    }
+
+    private void OnBuildingDestroyed(BuildingDestroyedEvent evt)
+    {
+        if (evt.Building == _target) Close();
+    }
+
+    private void OnUpgradeClicked()
+    {
+        if (_target == null || _target.def == null) return;
+        if (!_target.isPlayerBuilt || _target.def.levels == null || _target.def.levels.Length == 0) return;
+        if (_target.level - 1 >= _target.def.levels.Length) return;
+
+        var lvCost = _target.def.levels[_target.level - 1].upgradeCost;
+        if (RulerController.Instance == null || !RulerController.Instance.CanAfford(lvCost))
+        {
+            Debug.Log("[BuildingPanel] 资源不足，无法升级");
+            return;
+        }
+
+        RulerController.Instance.Spend(lvCost);
+        _target.TryUpgrade();
+    }
+
+    private void OnDemolishClicked()
+    {
+        if (_target == null || _target.def == null) return;
+        if (!_target.isPlayerBuilt || !_target.def.isDestructible) return;
+
+        RulerController.Instance?.Refund(_target.def.cost, 0.5f);
+        int maxHp = _target.maxHp;
+        _target.TakeDamage(maxHp); // 触发 Die → Free + Unregister + Destroy
+        Close();
+    }
+
+    private void OnCloseClicked()
+    {
+        UIManager.Instance?.CloseCurrent();
+    }
+
+    // ===== 辅助 =====
+
+    private void SetVisible(bool visible)
+    {
+        var doc = GetComponent<UIDocument>();
+        if (doc == null || doc.rootVisualElement == null) return;
+        doc.rootVisualElement.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    private static string FactionDisplayName(Faction f)
+    {
+        switch (f)
+        {
+            case Faction.Human_Player: return "我方";
+            case Faction.Undead: return "亡灵";
+            case Faction.None: return "中立";
+            default: return f.ToString();
+        }
     }
 }

@@ -32,6 +32,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "togglebuildmenu",
+                    "type": "Button",
+                    "id": "b1c2d3e4-3333-4000-8000-000000000001",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -98,6 +107,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "esc",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b1c2d3e4-4444-4000-8000-000000000002",
+                    "path": "<Keyboard>/b",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "togglebuildmenu",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

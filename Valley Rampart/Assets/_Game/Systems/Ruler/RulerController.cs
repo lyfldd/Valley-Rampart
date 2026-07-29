@@ -378,6 +378,13 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     // ===== 资源包批量操作（3.3.1 P7，供 BuildController / BuildingPanel 用）=====
 
+    /// <summary>单资源是否足够（供 UI 造价行逐项高亮用）。</summary>
+    public bool HasAmount(ResourceType type, int amount)
+    {
+        if (amount <= 0) return true;
+        return GetResourceValue(type) >= amount;
+    }
+
     /// <summary>是否负担得起该资源包（四资源全部满足，原子校验）。</summary>
     public bool CanAfford(ResourcePack cost)
     {

@@ -1,0 +1,45 @@
+/* ===== ResourceHUD 右上角资源面板 ===== */
+
+.resource-hud-root {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 340px;
+    padding: 10px 16px;
+    background-color: rgba(15, 15, 25, 0.75);
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: rgba(80, 80, 100, 0.5);
+    pointer-events: none;
+}
+
+.resource-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.res-item {
+    flex-direction: row;
+    align-items: center;
+    min-width: 72px;
+}
+
+.res-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+
+.res-icon--gold { background-color: rgb(240, 200, 80); }
+.res-icon--stone { background-color: rgb(170, 170, 170); }
+.res-icon--wood { background-color: rgb(150, 100, 50); }
+.res-icon--food { background-color: rgb(160, 220, 100); }
+
+.res-value {
+    font-size: 20px;
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/BuildingMenuPanel.uss" />
+    <ui:VisualElement name="menu-root" class="menu-root">
+        <ui:VisualElement name="menu-panel" class="menu-panel">
+            <!-- 标题行 -->
+            <ui:VisualElement name="menu-header" class="menu-header">
+                <ui:Label text="建造菜单" class="menu-title" />
+                <ui:Button name="menu-close" text="×" class="menu-close" />
+            </ui:VisualElement>
+
+            <!-- 分类 Tab 行（Defense / Production / Economy / Wall / Special）-->
+            <ui:VisualElement name="category-tabs" class="category-tabs">
+                <ui:Button name="tab-defense" text="防御" class="tab-button tab-button--active" />
+                <ui:Button name="tab-production" text="产能" class="tab-button" />
+                <ui:Button name="tab-economy" text="经济" class="tab-button" />
+                <ui:Button name="tab-wall" text="城墙" class="tab-button" />
+                <ui:Button name="tab-special" text="特殊" class="tab-button" />
+            </ui:VisualElement>
+
+            <!-- 建筑条目容器（C# 动态填充）-->
+            <ui:VisualElement name="building-list" class="building-list" />
+
+            <!-- 底部提示 -->
+            <ui:VisualElement name="menu-hint-row" class="menu-hint-row">
+                <ui:Label text="左键放置 · Shift连放 · ESC退出" class="menu-hint" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb8e8a0b49b46914985bf9d49b637df7, type: 3}
+  m_Name: BuildingMappingTable
+  m_EditorClassIdentifier: 
+  entries:
+  - type: 1
+    def: {fileID: 11400000, guid: c4ee0b6f660eb1a4b81bdef095a6f307, type: 2}
+  - type: 2
+    def: {fileID: 11400000, guid: a77f5a8941e1b474692de07af80d9912, type: 2}
+  - type: 3
+    def: {fileID: 11400000, guid: dbd580c7573d0204e94605b6205c3a1b, type: 2}
+  - type: 4
+    def: {fileID: 11400000, guid: 4c708b154d0360d44b9a879ff3bf697c, type: 2}
+  - type: 5
+    def: {fileID: 11400000, guid: 546202c966c00df46817df85e231541b, type: 2}
+  - type: 6
+    def: {fileID: 11400000, guid: 33eed976b031e8c439033056860c015f, type: 2}
+  - type: 7
+    def: {fileID: 11400000, guid: 4cf205a222b91c34d9a404b969ce423b, type: 2}
+  - type: 8
+    def: {fileID: 11400000, guid: 5f0f3cef7dde9984cbbfc8305b0ef942, type: 2}
+  - type: 10
+    def: {fileID: 11400000, guid: 3625478e6de9ba740b90db1bf0111f24, type: 2}
+  - type: 11
+    def: {fileID: 11400000, guid: b0d1ffe0afa9a6644a4c18722efc0c67, type: 2}

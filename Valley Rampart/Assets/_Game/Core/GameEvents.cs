@@ -319,6 +319,15 @@ public readonly struct EscapePressedEvent
     }
 }
 
+// 玩家按下 B 键时触发。
+// 由 InputManager 发布，BuildingMenuPanel 订阅以开关建造菜单。
+// IsOpen=true 时打开菜单，IsOpen=false 时关闭，Toggle 模式下该字段为 null，由订阅方自行取反。
+public readonly struct ToggleBuildMenuPressedEvent
+{
+    public readonly bool? IsOpen;
+    public ToggleBuildMenuPressedEvent(bool? isOpen = null) { IsOpen = isOpen; }
+}
+
 // ===== 建造系统事件（3.3 / 3.2.2 对接契约）=====
 
 // 建筑放置完成事件。由 BuildController.Place（玩家建造）或 BuildingFactory.InstantiateFromMap（地图预置）发布。

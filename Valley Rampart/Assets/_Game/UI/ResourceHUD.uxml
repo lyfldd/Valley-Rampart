@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/ResourceHUD.uss" />
+    <ui:VisualElement name="resource-hud-root" class="resource-hud-root">
+        <ui:VisualElement name="resource-row" class="resource-row">
+            <ui:VisualElement name="res-gold" class="res-item">
+                <ui:VisualElement name="res-icon-gold" class="res-icon res-icon--gold" />
+                <ui:Label name="res-value-gold" text="0" class="res-value" />
+            </ui:VisualElement>
+            <ui:VisualElement name="res-stone" class="res-item">
+                <ui:VisualElement name="res-icon-stone" class="res-icon res-icon--stone" />
+                <ui:Label name="res-value-stone" text="0" class="res-value" />
+            </ui:VisualElement>
+            <ui:VisualElement name="res-wood" class="res-item">
+                <ui:VisualElement name="res-icon-wood" class="res-icon res-icon--wood" />
+                <ui:Label name="res-value-wood" text="0" class="res-value" />
+            </ui:VisualElement>
+            <ui:VisualElement name="res-food" class="res-item">
+                <ui:VisualElement name="res-icon-food" class="res-icon res-icon--food" />
+                <ui:Label name="res-value-food" text="0" class="res-value" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

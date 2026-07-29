@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/BuildingPanel.uss" />
+    <ui:VisualElement name="building-root" class="building-root">
+        <ui:VisualElement name="building-panel" class="building-panel">
+            <!-- 标题行：名称 + 等级 + 关闭按钮 -->
+            <ui:VisualElement name="header-row" class="header-row">
+                <ui:VisualElement name="title-block" class="title-block">
+                    <ui:Label name="building-name" text="建筑名称" class="building-name" />
+                    <ui:Label name="building-level" text="Lv.1" class="building-level" />
+                </ui:VisualElement>
+                <ui:Button name="close-button" text="×" class="close-button" />
+            </ui:VisualElement>
+
+            <!-- HP 条 -->
+            <ui:VisualElement name="hp-row" class="hp-row">
+                <ui:VisualElement name="hp-bar-bg" class="hp-bar-bg">
+                    <ui:VisualElement name="hp-bar-fill" class="hp-bar-fill" />
+                </ui:VisualElement>
+                <ui:Label name="hp-text" text="100/100" class="hp-text" />
+            </ui:VisualElement>
+
+            <!-- 描述（可隐藏） -->
+            <ui:VisualElement name="desc-block" class="desc-block">
+                <ui:Label name="building-desc" text="" class="building-desc" />
+            </ui:VisualElement>
+
+            <!-- 属性行：攻防（可隐藏） -->
+            <ui:VisualElement name="combat-row" class="info-row">
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="攻" class="info-label" />
+                    <ui:Label name="attack-value" text="-" class="info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="防" class="info-label" />
+                    <ui:Label name="defense-value" text="-" class="info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="射程" class="info-label" />
+                    <ui:Label name="range-value" text="-" class="info-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 产能行（可隐藏） -->
+            <ui:VisualElement name="producer-row" class="info-row">
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="产能" class="info-label" />
+                    <ui:Label name="producer-rate" text="-/s" class="info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="上限" class="info-label" />
+                    <ui:Label name="producer-cap" text="-" class="info-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 基础信息行（占地/阵营/障碍） -->
+            <ui:VisualElement name="meta-row" class="info-row">
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="占地" class="info-label" />
+                    <ui:Label name="footprint-value" text="1格" class="info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="阵营" class="info-label" />
+                    <ui:Label name="faction-value" text="-" class="info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="info-cell">
+                    <ui:Label text="障碍" class="info-label" />
+                    <ui:Label name="obstacle-value" text="否" class="info-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="spacer" />
+
+            <!-- 操作按钮区 -->
+            <ui:Button name="upgrade-button" text="升级 (金- 石- 木- 粮-)" class="action-button action-button--primary" />
+            <ui:Button name="demolish-button" text="拆除 (退50%资源)" class="action-button action-button--danger" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

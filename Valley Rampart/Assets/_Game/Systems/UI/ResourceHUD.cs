@@ -1,77 +1,75 @@
 using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
+using UnityEngine.UIElements;
 
 /// <summary>
-/// 右上角资源面板：显示国家四种资源（Gold/Stone/Wood/Food）。
-///
-/// 刷新策略：
-///   - 资源数值：事件驱动（RulerResourceChangedEvent）
-///   - 初始显示：Start 时主动从 RulerController 读一次当前值
-///
-/// 挂载位置：Canvas/ResourceHUD。
-/// Inspector 拖入对应 Text 即可，未拖入的字段不显示。
+/// 右上角资源面板（UI Toolkit 版）：显示国家四种资源（Gold/Stone/Wood/Food）。
+/// 刷新策略：事件驱动（RulerResourceChangedEvent）+ Start 时主动读一次。
+/// 挂载位置：SampleScene 右上角的 UIDocument GameObject 上。
 /// </summary>
+[RequireComponent(typeof(UIDocument))]
 public class ResourceHUD : MonoBehaviour
 {
-    [Header("资源显示")]
-    [Tooltip("金币文字。")]
-    [SerializeField] private TextMeshProUGUI goldText;
+    private Label _goldLabel;
+    private Label _stoneLabel;
+    private Label _woodLabel;
+    private Label _foodLabel;
+    private bool _labelsBound;
 
-    [Tooltip("石料文字。")]
-    [SerializeField] private TextMeshProUGUI stoneText;
-
-    [Tooltip("木材文字。")]
-    [SerializeField] private TextMeshProUGUI woodText;
-
-    [Tooltip("粮食文字。")]
-    [SerializeField] private TextMeshProUGUI foodText;
-
-    private void Awake()
+    private void OnEnable()
     {
+        if (!_labelsBound) BindLabels();
         EventBus.Subscribe<RulerResourceChangedEvent>(OnResourceChanged);
     }
 
-    private void Start()
-    {
-        RefreshAll();
-    }
-
-    private void OnDestroy()
+    private void OnDisable()
     {
         EventBus.Unsubscribe<RulerResourceChangedEvent>(OnResourceChanged);
     }
 
-    // ===== 事件驱动刷新 =====
+    private void Start()
+    {
+        if (!_labelsBound) BindLabels();
+        RefreshAll();
+    }
+
+    private void BindLabels()
+    {
+        var doc = GetComponent<UIDocument>();
+        if (doc == null || doc.rootVisualElement == null) return;
+        var root = doc.rootVisualElement;
+
+        _goldLabel = root.Q<Label>("res-value-gold");
+        _stoneLabel = root.Q<Label>("res-value-stone");
+        _woodLabel = root.Q<Label>("res-value-wood");
+        _foodLabel = root.Q<Label>("res-value-food");
+
+        _labelsBound = true;
+    }
 
     private void OnResourceChanged(RulerResourceChangedEvent evt)
     {
-        UpdateResourceText(evt.Type, evt.NewValue);
+        UpdateResourceLabel(evt.Type, evt.NewValue);
     }
-
-    // ===== 全量刷新（开局主动读一次）=====
 
     private void RefreshAll()
     {
         var ruler = RulerController.Instance;
         if (ruler == null) return;
 
-        UpdateResourceText(ResourceType.Gold, ruler.Gold);
-        UpdateResourceText(ResourceType.Stone, ruler.Stone);
-        UpdateResourceText(ResourceType.Wood, ruler.Wood);
-        UpdateResourceText(ResourceType.Food, ruler.Food);
+        UpdateResourceLabel(ResourceType.Gold, ruler.Gold);
+        UpdateResourceLabel(ResourceType.Stone, ruler.Stone);
+        UpdateResourceLabel(ResourceType.Wood, ruler.Wood);
+        UpdateResourceLabel(ResourceType.Food, ruler.Food);
     }
 
-    // ===== 单项更新 =====
-
-    private void UpdateResourceText(ResourceType type, int value)
+    private void UpdateResourceLabel(ResourceType type, int value)
     {
         var target = type switch
         {
-            ResourceType.Gold => goldText,
-            ResourceType.Stone => stoneText,
-            ResourceType.Wood => woodText,
-            ResourceType.Food => foodText,
+            ResourceType.Gold => _goldLabel,
+            ResourceType.Stone => _stoneLabel,
+            ResourceType.Wood => _woodLabel,
+            ResourceType.Food => _foodLabel,
             _ => null
         };
 
@@ -79,9 +77,6 @@ public class ResourceHUD : MonoBehaviour
             target.text = FormatValue(value);
     }
 
-    /// <summary>
-    /// 格式化资源数值，大数字用 K/M 后缀。
-    /// </summary>
     private static string FormatValue(int value)
     {
         if (value >= 1000000)

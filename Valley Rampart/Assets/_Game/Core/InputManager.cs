@@ -60,6 +60,9 @@ public class InputManager : Singleton<InputManager>
         // 绑定 ESC 键回调
         _inputActions.Player.esc.performed += OnEsc;
 
+        // 绑定 B 键（开关建造菜单）回调
+        _inputActions.Player.togglebuildmenu.performed += OnToggleBuildMenu;
+
         // 默认禁用输入，等待 GameBootstrap 在初始化完成后调用 EnableInput()
         // 这样可以避免在 Loading/Ready 阶段误触输入导致异常
         _inputActions.Disable();
@@ -139,6 +142,24 @@ public class InputManager : Singleton<InputManager>
         EventBus.Publish(new EscapePressedEvent(current));
     }
 
+    // B 键（开关建造菜单）回调
+    // Playing 状态 + Normal/Build 模式下发布 ToggleBuildMenuPressedEvent
+    // Paused 或其他状态下忽略
+    private void OnToggleBuildMenu(InputAction.CallbackContext ctx)
+    {
+        if (ctx.phase != InputActionPhase.Performed) return;
+        if (GameStateManager.Instance == null) return;
+        GameState current = GameStateManager.Instance.CurrentState;
+        if (current != GameState.Playing)
+        {
+            Debug.Log($"[InputManager] B 键忽略：当前状态={current}（仅 Playing 下允许）");
+            return;
+        }
+
+        Debug.Log("[InputManager] B 键按下：发布 ToggleBuildMenuPressedEvent");
+        EventBus.Publish(new ToggleBuildMenuPressedEvent(null)); // null = toggle
+    }
+
     protected override void OnDestroy()
     {
         base.OnDestroy();
@@ -162,6 +183,7 @@ public class InputManager : Singleton<InputManager>
         _inputActions.Player.fastmove.performed -= OnFastMove;
         _inputActions.Player.fastmove.canceled -= OnFastMove;
         _inputActions.Player.esc.performed -= OnEsc;
+        _inputActions.Player.togglebuildmenu.performed -= OnToggleBuildMenu;
         _inputActions.Disable();
         _inputActions.Dispose();
         _inputActions = null;

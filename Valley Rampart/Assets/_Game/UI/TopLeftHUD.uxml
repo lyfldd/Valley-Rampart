@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/TopLeftHUD.uss" />
+    <ui:VisualElement name="topleft-hud-root" class="topleft-hud-root">
+        <!-- 君主信息 -->
+        <ui:VisualElement name="monarch-block" class="monarch-block">
+            <ui:VisualElement name="hp-bar-bg" class="hp-bar-bg">
+                <ui:VisualElement name="hp-bar-fill" class="hp-bar-fill" />
+            </ui:VisualElement>
+            <ui:Label name="hp-text" text="100/100" class="hp-text" />
+            <ui:VisualElement name="attr-row" class="attr-row">
+                <ui:VisualElement name="atk-cell" class="attr-cell">
+                    <ui:Label name="atk-label" text="攻" class="attr-label" />
+                    <ui:Label name="atk-value" text="0" class="attr-value" />
+                </ui:VisualElement>
+                <ui:VisualElement name="def-cell" class="attr-cell">
+                    <ui:Label name="def-label" text="防" class="attr-label" />
+                    <ui:Label name="def-value" text="0" class="attr-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <!-- 时间信息 -->
+        <ui:VisualElement name="time-block" class="time-block">
+            <ui:Label name="day-text" text="第 1 天" class="day-text" />
+            <ui:Label name="time-text" text="06:00 · 黎明" class="time-text" />
+            <ui:Label name="season-text" text="春" class="season-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
