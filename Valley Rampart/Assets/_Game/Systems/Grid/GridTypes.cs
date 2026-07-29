@@ -79,6 +79,19 @@ public enum BuildingCategory
     CastleCore          // 主城
 }
 
+/// <summary>建筑玩法功能标签（3.3.1 P2 方案A）。与 BuildingCategory（来源分类）正交：
+/// BuildingCategory 描述"这栋建筑从哪来/是什么大类"（地图生成侧用），
+/// BuildingRole 描述"这栋建筑在玩法上起什么作用"（3.3 BuildingDef 用）。
+/// 两套枚举不同名不同义，避免精神分裂。</summary>
+public enum BuildingRole
+{
+    Defense,     // 防御建筑（箭塔/投石机/陷阱）
+    Production,  // 产能建筑（农场/伐木场/矿场）
+    Economy,     // 经济建筑（仓库/市场）
+    Wall,        // 城墙/障碍
+    Special      // 特殊（裂隙/主城/遗迹/宝箱）
+}
+
 /// <summary>Building 具体类型。</summary>
 public enum BuildingType
 {
@@ -124,11 +137,19 @@ public class BuildingPlaceholder
 
 // ===== 区块结构 =====
 
-/// <summary>小区块：单位堆叠最小单元。</summary>
+/// <summary>小区块：单位堆叠 + 建筑占用最小单元。</summary>
 public class GridCell
 {
     public GridCoord Coord;
     public readonly List<UnitController> Units = new List<UnitController>();
+
+    // ===== 建筑占用层（3.3.1 P1）=====
+    /// <summary>占据此格的建筑（null=空）。footprint 多格建筑会在每个格都存同一引用。</summary>
+    public Building occupant;
+    /// <summary>缓存 occupant.isObstacle，避免每次读 occupant 空检查。</summary>
+    public bool isObstacle;
+    /// <summary>此格地形（由 GridSystem.GetTerrainAt 懒填充）。</summary>
+    public TerrainType terrain;
 
     public int Count => Units.Count;
 

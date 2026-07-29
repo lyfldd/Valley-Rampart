@@ -376,6 +376,32 @@ public class RulerController : Singleton<RulerController>, ISaveable
         EventBus.Publish(new RulerResourceChangedEvent(type, oldValue, newValue));
     }
 
+    // ===== 资源包批量操作（3.3.1 P7，供 BuildController / BuildingPanel 用）=====
+
+    /// <summary>是否负担得起该资源包（四资源全部满足，原子校验）。</summary>
+    public bool CanAfford(ResourcePack cost)
+    {
+        return Gold >= cost.gold && Stone >= cost.stone && Wood >= cost.wood && Food >= cost.food;
+    }
+
+    /// <summary>扣除资源包（调用前需先 CanAfford；逐项调 ModifyResource 保证事件发布）。</summary>
+    public void Spend(ResourcePack cost)
+    {
+        if (cost.gold > 0) ModifyResource(ResourceType.Gold, false, cost.gold);
+        if (cost.stone > 0) ModifyResource(ResourceType.Stone, false, cost.stone);
+        if (cost.wood > 0) ModifyResource(ResourceType.Wood, false, cost.wood);
+        if (cost.food > 0) ModifyResource(ResourceType.Food, false, cost.food);
+    }
+
+    /// <summary>按比例退还资源包（拆除退款 ratio=0.5）。</summary>
+    public void Refund(ResourcePack cost, float ratio = 1.0f)
+    {
+        if (cost.gold > 0) ModifyResource(ResourceType.Gold, true, Mathf.RoundToInt(cost.gold * ratio));
+        if (cost.stone > 0) ModifyResource(ResourceType.Stone, true, Mathf.RoundToInt(cost.stone * ratio));
+        if (cost.wood > 0) ModifyResource(ResourceType.Wood, true, Mathf.RoundToInt(cost.wood * ratio));
+        if (cost.food > 0) ModifyResource(ResourceType.Food, true, Mathf.RoundToInt(cost.food * ratio));
+    }
+
     // 按资源类型获取当前值
     private int GetResourceValue(ResourceType type)
     {

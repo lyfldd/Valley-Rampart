@@ -318,3 +318,44 @@ public readonly struct EscapePressedEvent
         CurrentState = currentState;
     }
 }
+
+// ===== 建造系统事件（3.3 / 3.2.2 对接契约）=====
+
+// 建筑放置完成事件。由 BuildController.Place（玩家建造）或 BuildingFactory.InstantiateFromMap（地图预置）发布。
+// GridSystem 占用标记在发布前已完成；存档系统、UI、产能系统订阅此事件。
+public readonly struct BuildingPlacedEvent
+{
+    public readonly Building Building;
+    public BuildingPlacedEvent(Building building) { Building = building; }
+}
+
+// 建筑摧毁/拆除事件。由 TeardownManager 清理时发布。
+// GridSystem.Free 在发布前已完成；寻路系统订阅此事件重算障碍图。
+public readonly struct BuildingDestroyedEvent
+{
+    public readonly Building Building;
+    public BuildingDestroyedEvent(Building building) { Building = building; }
+}
+
+// 建筑升级事件。由 BuildingPanel.Upgrade 发布。UI 订阅刷新面板。
+public readonly struct BuildingUpgradedEvent
+{
+    public readonly Building Building;
+    public readonly int OldLevel;
+    public readonly int NewLevel;
+
+    public BuildingUpgradedEvent(Building building, int oldLevel, int newLevel)
+    {
+        Building = building;
+        OldLevel = oldLevel;
+        NewLevel = newLevel;
+    }
+}
+
+// 建筑产能 tick 事件。由产能系统每秒发布（3.3.2 第四节后置工作）。
+// RulerController 订阅此事件结算资源产出。
+public readonly struct BuildingProductionTickEvent
+{
+    public readonly Building Building;
+    public BuildingProductionTickEvent(Building building) { Building = building; }
+}

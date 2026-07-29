@@ -131,6 +131,87 @@ public class GridSystem : Singleton<GridSystem>
         _unitCells.Clear();
     }
 
+    // ===== 建筑占用层（3.3.1 P1）=====
+
+    /// <summary>该格是否被建筑占用。</summary>
+    public bool IsOccupied(GridCoord coord)
+    {
+        return _cells.TryGetValue(coord, out var cell) && cell.occupant != null;
+    }
+
+    /// <summary>该格是否为障碍（占用且 isObstacle=true）。</summary>
+    public bool IsObstacle(GridCoord coord)
+    {
+        return _cells.TryGetValue(coord, out var cell) && cell.isObstacle;
+    }
+
+    /// <summary>获取占据该格的建筑（null=空）。</summary>
+    public Building GetOccupant(GridCoord coord)
+    {
+        return _cells.TryGetValue(coord, out var cell) ? cell.occupant : null;
+    }
+
+    /// <summary>标记单格被建筑占用。footprint 多格建筑由调用方循环或用 MarkOccupiedFootprint。</summary>
+    public void MarkOccupied(GridCoord coord, Building building)
+    {
+        var cell = GetOrCreateCell(coord);
+        cell.occupant = building;
+        cell.isObstacle = building != null && building.isObstacle;
+    }
+
+    /// <summary>便利方法：标记 cellWidth 格（从 origin 起 x 方向）被同一建筑占用。</summary>
+    public void MarkOccupiedFootprint(GridCoord origin, int cellWidth, Building building)
+    {
+        for (int i = 0; i < cellWidth; i++)
+        {
+            MarkOccupied(new GridCoord(origin.x + i, origin.y), building);
+        }
+    }
+
+    /// <summary>释放单格占用。</summary>
+    public void Free(GridCoord coord)
+    {
+        if (_cells.TryGetValue(coord, out var cell))
+        {
+            cell.occupant = null;
+            cell.isObstacle = false;
+        }
+    }
+
+    /// <summary>便利方法：释放 cellWidth 格（从 origin 起 x 方向）。</summary>
+    public void FreeFootprint(GridCoord origin, int cellWidth)
+    {
+        for (int i = 0; i < cellWidth; i++)
+        {
+            Free(new GridCoord(origin.x + i, origin.y));
+        }
+    }
+
+    // ===== 地形查询（3.3.1 P1 / C4）=====
+
+    /// <summary>查询某格地形。由 coord.x → 大区块索引 → Region.terrain。</summary>
+    public TerrainType GetTerrainAt(GridCoord coord)
+    {
+        if (_activeMap == null) return TerrainType.Plain;
+        int regionIdx = CellToRegionIndex(coord.x);
+        if (regionIdx < 0 || regionIdx >= _activeMap.regions.Count) return TerrainType.Plain;
+        var region = _activeMap.regions[regionIdx];
+
+        // 缓存到 GridCell 供后续查询
+        var cell = GetOrCreateCell(coord);
+        cell.terrain = region.terrain;
+        return region.terrain;
+    }
+
+    /// <summary>查询某格平原子状态（仅 terrain==Plain 时有效）。</summary>
+    public PlainSubState GetPlainSubStateAt(GridCoord coord)
+    {
+        if (_activeMap == null) return PlainSubState.Normal;
+        int regionIdx = CellToRegionIndex(coord.x);
+        if (regionIdx < 0 || regionIdx >= _activeMap.regions.Count) return PlainSubState.Normal;
+        return _activeMap.regions[regionIdx].plainSubState;
+    }
+
     // ===== 按当前活跃地图填充 =====
 
     /// <summary>按地图数据填充区块（跨岛切换时调）。</summary>

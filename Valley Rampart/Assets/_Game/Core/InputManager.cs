@@ -1,6 +1,14 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+/// <summary>输入模式（3.3.1 C3）。各系统通过 SetMode 切换，避免冲突输入。</summary>
+public enum InputMode
+{
+    Normal,  // 正常游戏（移动 + 交互）
+    Build,   // 建造模式（禁用移动，ghost 跟随光标）
+    Dialog   // 对话/菜单模式（禁用移动 + 交互）
+}
+
 // 全局输入管理器（InputManager）
 // 职责：封装 Unity Input System 的 Action Map，提供统一的输入读取与事件发布接口。
 //
@@ -25,6 +33,11 @@ public class InputManager : Singleton<InputManager>
 
     // 跑步键是否按住
     public bool RunHeld { get; private set; }
+
+    // 当前输入模式（3.3.1 C3）。Build/Dialog 模式下禁用移动输入。
+    public InputMode CurrentMode { get; private set; } = InputMode.Normal;
+    // 移动是否可用（仅 Normal 模式）
+    public bool IsMovementEnabled => CurrentMode == InputMode.Normal;
 
     protected override void Awake()
     {
@@ -71,10 +84,30 @@ public class InputManager : Singleton<InputManager>
         MoveInput = Vector2.zero;
     }
 
+    /// <summary>切换输入模式（3.3.1 C3）。BuildController 进入建造时调 SetMode(Build)，退出调 SetMode(Normal)。</summary>
+    public void SetMode(InputMode mode)
+    {
+        if (CurrentMode == mode) return;
+        CurrentMode = mode;
+        // 非 Normal 模式清零移动输入，避免角色继续走
+        if (mode != InputMode.Normal)
+        {
+            MoveInput = Vector2.zero;
+        }
+        Debug.Log($"[InputManager] 输入模式切换: {mode}");
+    }
+
     // 移动输入回调
-    // 仅在 Playing 状态下发布 PlayerMoveEvent，其他状态只更新 MoveInput 属性
+    // 仅在 Playing + Normal 模式下发布 PlayerMoveEvent；Build/Dialog 模式忽略移动输入
     private void OnMove(InputAction.CallbackContext ctx)
     {
+        // Build/Dialog 模式下不响应移动（3.3.1 C3）
+        if (CurrentMode != InputMode.Normal)
+        {
+            MoveInput = Vector2.zero;
+            return;
+        }
+
         MoveInput = ctx.ReadValue<Vector2>();
 
         // 只在 Playing 状态才广播移动事件，避免暂停/菜单状态下角色移动

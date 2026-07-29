@@ -137,4 +137,20 @@ public struct ResourcePack
     public int stone;
     public int wood;
     public int food;
+
+    public bool IsZero => gold == 0 && stone == 0 && wood == 0 && food == 0;
+    public static ResourcePack Zero => new ResourcePack();
+
+    public static ResourcePack operator +(ResourcePack a, ResourcePack b) => new ResourcePack
+    {
+        gold = a.gold + b.gold, stone = a.stone + b.stone,
+        wood = a.wood + b.wood, food = a.food + b.food
+    };
+
+    /// <summary>按比例缩放（拆除退款 ratio=0.5 等）。</summary>
+    public static ResourcePack operator *(ResourcePack a, float scale) => new ResourcePack
+    {
+        gold = Mathf.RoundToInt(a.gold * scale), stone = Mathf.RoundToInt(a.stone * scale),
+        wood = Mathf.RoundToInt(a.wood * scale), food = Mathf.RoundToInt(a.food * scale)
+    };
 }
