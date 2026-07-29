@@ -18,6 +18,16 @@ public class GridSystem : Singleton<GridSystem>
 
     public GridConfig Config => config;
 
+    /// <summary>当前地图总小区块数（大区块数 × regionCellCount）。用于边界校验。</summary>
+    public int MapCellCount
+    {
+        get
+        {
+            if (_activeMap == null || config == null) return 0;
+            return _activeMap.regions.Count * config.regionCellCount;
+        }
+    }
+
     protected override void Awake()
     {
         base.Awake();

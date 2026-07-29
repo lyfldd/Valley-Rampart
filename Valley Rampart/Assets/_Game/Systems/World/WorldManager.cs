@@ -106,6 +106,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             GridSystem.Instance.PopulateFromMap(playerMap);
         EventBus.Publish(new MapGeneratedEvent(0, true));
 
+        // 3.3 批次0: BuildingPlaceholder → Building 实例化（解除 3.2.2 断裂）
+        BuildingFactory.InstantiateFromMap(playerMap);
+
         Debug.Log($"[WorldManager] 世界生成完成: seed={worldSeed}, size={size}, " +
                   $"difficulty={difficulty}, 地图数={_world.maps.Count}");
     }
