@@ -42,47 +42,126 @@ public class WorldState
         var map = ActiveMap;
         if (map == null) return "{}";
 
-        var sb = new System.Text.StringBuilder();
-        sb.Append("{");
-        sb.Append("\"mapId\":").Append(map.mapId).Append(",");
-        sb.Append("\"seed\":").Append(map.seed).Append(",");
-        sb.Append("\"bigTerrain\":\"").Append(map.bigTerrain).Append("\",");
-        sb.Append("\"isPlayerHome\":").Append(map.isPlayerHome ? "true" : "false").Append(",");
-        sb.Append("\"regions\":[");
+        // 从 GridSystem 获取配置（若不可用用默认值）
+        float cellSize = 1f;
+        int cellsPerRegion = 16;
+        if (GridSystem.Instance != null && GridSystem.Instance.Config != null)
+        {
+            cellSize = GridSystem.Instance.Config.cellSize;
+            cellsPerRegion = GridSystem.Instance.Config.regionCellCount;
+        }
+
+        // 构建 MapDebugData
+        var debug = new MapDebugData
+        {
+            mapId = map.mapId,
+            seed = map.seed,
+            bigTerrain = map.bigTerrain.ToString(),
+            worldSize = worldSize.ToString(),
+            difficulty = difficulty,
+            regionCount = map.regions.Count,
+            cellSize = cellSize,
+            cellsPerRegion = cellsPerRegion,
+            regions = new RegionDebugEntry[map.regions.Count]
+        };
+
         for (int i = 0; i < map.regions.Count; i++)
         {
             var r = map.regions[i];
-            if (i > 0) sb.Append(",");
-            sb.Append("{");
-            sb.Append("\"idx\":").Append(r.regionIndex).Append(",");
-            sb.Append("\"terrain\":\"").Append(r.terrain).Append("\",");
-            sb.Append("\"plainSubState\":\"").Append(r.plainSubState).Append("\",");
-            sb.Append("\"zone\":\"").Append(r.zone).Append("\",");
-            sb.Append("\"isInner\":").Append(r.isInner ? "true" : "false").Append(",");
-            sb.Append("\"cellStartX\":").Append(r.cellStartX).Append(",");
-            sb.Append("\"cellCount\":").Append(r.cellCount).Append(",");
-            sb.Append("\"riftCellX\":").Append(r.riftCellX).Append(",");
-            sb.Append("\"resources\":[");
-            if (r.resources != null)
+            var regionDebug = new RegionDebugEntry
             {
-                for (int j = 0; j < r.resources.Count; j++)
+                idx = r.regionIndex,
+                terrain = r.terrain.ToString(),
+                plainSubState = r.plainSubState.ToString(),
+                zone = r.zone.ToString(),
+                isInner = r.isInner,
+                cellStartX = r.cellStartX,
+                cellCount = r.cellCount,
+                riftCellX = r.riftCellX,
+                cells = new CellDebugEntry[r.cellCount]
+            };
+
+            // 逐 cell 列出 buildings（含跨格建筑如 CastleCore）
+            for (int c = 0; c < r.cellCount; c++)
+            {
+                var cellDebug = new CellDebugEntry { localX = c };
+                var buildingList = new List<BuildingDebugInfo>();
+
+                if (r.resources != null)
                 {
-                    if (j > 0) sb.Append(",");
-                    var b = r.resources[j];
-                    sb.Append("{");
-                    sb.Append("\"type\":\"").Append(b.type).Append("\",");
-                    sb.Append("\"category\":\"").Append(b.category).Append("\",");
-                    sb.Append("\"localCellX\":").Append(b.localCellX).Append(",");
-                    sb.Append("\"grade\":\"").Append(b.grade).Append("\",");
-                    sb.Append("\"isConsumable\":").Append(b.isConsumable ? "true" : "false");
-                    sb.Append("}");
+                    foreach (var b in r.resources)
+                    {
+                        int width = b.cellWidth > 0 ? b.cellWidth : 1;
+                        if (c >= b.localCellX && c < b.localCellX + width)
+                        {
+                            buildingList.Add(new BuildingDebugInfo
+                            {
+                                type = b.type.ToString(),
+                                category = b.category.ToString(),
+                                grade = b.grade.ToString(),
+                                localCellX = b.localCellX,
+                                cellWidth = b.cellWidth
+                            });
+                        }
+                    }
                 }
+
+                cellDebug.buildings = buildingList.ToArray();
+                regionDebug.cells[c] = cellDebug;
             }
-            sb.Append("]");
-            sb.Append("}");
+
+            debug.regions[i] = regionDebug;
         }
-        sb.Append("]");
-        sb.Append("}");
-        return sb.ToString();
+
+        return JsonUtility.ToJson(debug, prettyPrint: true);
     }
+}
+
+// ============================================================================
+//  调试导出序列化类（3.2.1 第 6.5 节）
+// ============================================================================
+
+[System.Serializable]
+public class MapDebugData
+{
+    public int mapId;
+    public int seed;
+    public string bigTerrain;
+    public string worldSize;
+    public int difficulty;
+    public int regionCount;
+    public float cellSize;
+    public int cellsPerRegion;
+    public RegionDebugEntry[] regions;
+}
+
+[System.Serializable]
+public class RegionDebugEntry
+{
+    public int idx;
+    public string terrain;
+    public string plainSubState;
+    public string zone;
+    public bool isInner;
+    public int cellStartX;
+    public int cellCount;
+    public int riftCellX;
+    public CellDebugEntry[] cells;
+}
+
+[System.Serializable]
+public class CellDebugEntry
+{
+    public int localX;
+    public BuildingDebugInfo[] buildings;
+}
+
+[System.Serializable]
+public class BuildingDebugInfo
+{
+    public string type;
+    public string category;
+    public string grade;
+    public int localCellX;
+    public int cellWidth;
 }

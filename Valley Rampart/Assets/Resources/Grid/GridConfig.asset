@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 64974e2490e5c9a4db2ee4648463d75b, type: 3}
   m_Name: GridConfig
   m_EditorClassIdentifier: 
-  cellSize: 4
+  cellSize: 2.26
   regionCellCount: 16
   flyHeightThreshold: 5
   flyHeight: 8

@@ -32,8 +32,9 @@ public class MapGenRulesConfig : ScriptableObject
 
     // ===== 查表辅助 =====
 
-    /// <summary>判断两种地形能否直接邻接。</summary>
-    public bool CanAdjacency(TerrainType a, TerrainType b)
+    /// <summary>判断两种地形能否直接邻接（3.2.1 第 5.2 节）。</summary>
+    /// <param name="strict">true=严格模式（△ 算违规，用于区交界）；false=宽松模式（△ 算合法，用于区内）</param>
+    public bool CanAdjacency(TerrainType a, TerrainType b, bool strict = true)
     {
         if (adjacencyMatrix == null) return true;
         // 找 a 的条目
@@ -46,7 +47,15 @@ public class MapGenRulesConfig : ScriptableObject
                 if (allowed != null)
                     for (int j = 0; j < allowed.Length; j++)
                         if (allowed[j] == b) return true;
-                return false;  // 不在 allowed 里 = ❌ 或 △（区交界算违规）
+                // 宽松模式：检查 tolerable（△，仅区内允许）
+                if (!strict)
+                {
+                    var tolerable = adjacencyMatrix[i].tolerableNeighbors;
+                    if (tolerable != null)
+                        for (int j = 0; j < tolerable.Length; j++)
+                            if (tolerable[j] == b) return true;
+                }
+                return false;  // 不在 allowed/tolerable 里 = ❌
             }
         }
         return true;  // 没配 = 默认允许

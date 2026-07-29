@@ -14,22 +14,39 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   baseCounts:
   - terrain: 3
-    minCount: 6
-    maxCount: 8
+    plainSubState: 0
+    producerMin: 1
+    producerMax: 2
+    pickupMin: 4
+    pickupMax: 6
   - terrain: 4
-    minCount: 4
-    maxCount: 6
+    plainSubState: 0
+    producerMin: 1
+    producerMax: 2
+    pickupMin: 2
+    pickupMax: 4
   - terrain: 2
-    minCount: 2
-    maxCount: 4
+    plainSubState: 0
+    producerMin: 0
+    producerMax: 0
+    pickupMin: 4
+    pickupMax: 6
   - terrain: 0
-    minCount: 0
-    maxCount: 2
+    plainSubState: 0
+    producerMin: 1
+    producerMax: 1
+    pickupMin: 1
+    pickupMax: 3
+  - terrain: 0
+    plainSubState: 1
+    producerMin: 1
+    producerMax: 1
+    pickupMin: 2
+    pickupMax: 4
   densityByDifficulty:
   - 1
   - 0.8
   - 0.6
-  pickupDensityFactor: 0.8
   specialPointChance: 0.15
   gradeProbByDifficulty:
   - difficulty: 1

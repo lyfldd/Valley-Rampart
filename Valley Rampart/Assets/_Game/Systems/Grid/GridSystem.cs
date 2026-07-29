@@ -219,9 +219,16 @@ public class GridSystem : Singleton<GridSystem>
             }
         }
 
-        // 主城标记（金色方块）
-        // TODO: 画主城位置（需要 GetCastleRegionIndices，但那个在 WorldManager 里是私有的）
-        // 暂时通过 zone==Center 识别
+        // 主城标记（金色方块）-- 3.2.1 第 2.4 节
+        var (castleA, castleB) = MapGenRules.GetCastleRegionIndices(M);
+        foreach (int ci in new[] { castleA, castleB })
+        {
+            if (ci < 0 || ci >= M) continue;
+            var cr = _activeMap.regions[ci];
+            float cwx = (cr.cellStartX + cr.cellCount / 2f) * cs;
+            Gizmos.color = new Color(0.8f, 0.7f, 0.2f);
+            Gizmos.DrawCube(new Vector3(cwx, 0.5f, 0), new Vector3(cs * 2, 0.8f, 0.8f));
+        }
     }
 
     Color GetZoneColor(MapZone zone)

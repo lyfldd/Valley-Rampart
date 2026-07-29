@@ -14,9 +14,6 @@ public class ResourceGenConfig : ScriptableObject
     [Header("难度密度因子（索引 0/1/2 对应 Easy/Normal/Hard）")]
     public float[] densityByDifficulty = new float[3] { 1.0f, 0.8f, 0.6f };
 
-    [Header("一次性资源额外密度因子")]
-    public float pickupDensityFactor = 0.8f;
-
     [Header("特殊点出现概率")]
     [Range(0f, 1f)] public float specialPointChance = 0.15f;
 
@@ -36,13 +33,30 @@ public class ResourceGenConfig : ScriptableObject
         return idx >= 0 && idx < densityByDifficulty.Length ? densityByDifficulty[idx] : 1.0f;
     }
 
-    /// <summary>按地形查资源点基础数量范围。</summary>
-    public (int min, int max) GetResourceCount(TerrainType terrain)
+    /// <summary>按地形+子状态查持续性资源数量范围（3.2.1 第 6.6 节）。</summary>
+    public (int min, int max) GetProducerCount(TerrainType terrain, PlainSubState subState = PlainSubState.Normal)
     {
         if (baseCounts == null) return (0, 0);
         for (int i = 0; i < baseCounts.Length; i++)
-            if (baseCounts[i].terrain == terrain)
-                return (baseCounts[i].minCount, baseCounts[i].maxCount);
+        {
+            if (baseCounts[i].terrain != terrain) continue;
+            // 平原匹配子状态，其余地形忽略子状态
+            if (terrain == TerrainType.Plain && baseCounts[i].plainSubState != subState) continue;
+            return (baseCounts[i].producerMin, baseCounts[i].producerMax);
+        }
+        return (0, 0);
+    }
+
+    /// <summary>按地形+子状态查一次性资源数量范围（3.2.1 第 6.6 节）。</summary>
+    public (int min, int max) GetPickupCount(TerrainType terrain, PlainSubState subState = PlainSubState.Normal)
+    {
+        if (baseCounts == null) return (0, 0);
+        for (int i = 0; i < baseCounts.Length; i++)
+        {
+            if (baseCounts[i].terrain != terrain) continue;
+            if (terrain == TerrainType.Plain && baseCounts[i].plainSubState != subState) continue;
+            return (baseCounts[i].pickupMin, baseCounts[i].pickupMax);
+        }
         return (0, 0);
     }
 
@@ -64,13 +78,17 @@ public class ResourceGenConfig : ScriptableObject
     }
 }
 
-/// <summary>资源点基础数量项。</summary>
+/// <summary>资源点基础数量项（3.2.1 第 6.6 节，区分持续性/一次性）。</summary>
 [Serializable]
 public struct ResourceCountEntry
 {
     public TerrainType terrain;
-    public int minCount;
-    public int maxCount;
+    [Tooltip("平原子状态（仅 Plain 有效，其余地形忽略）")]
+    public PlainSubState plainSubState;
+    [Range(0, 10)] public int producerMin;  // 持续性资源 min（丘陵=0）
+    [Range(0, 10)] public int producerMax;  // 持续性资源 max
+    [Range(0, 10)] public int pickupMin;   // 一次性资源 min
+    [Range(0, 10)] public int pickupMax;   // 一次性资源 max
 }
 
 /// <summary>难度档位等级概率项。</summary>

@@ -39,6 +39,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         _rulesConfig = Resources.Load<MapGenRulesConfig>("Grid/MapGenRulesConfig");
         _resourceConfig = Resources.Load<ResourceGenConfig>("Grid/ResourceGenConfig");
 
+        // 注入 MapGenRules 静态工具类（3.2.1 第 2.3 节）
+        MapGenRules.SetConfig(_rulesConfig);
+
         if (_gridConfig == null) Debug.LogError("[WorldManager] GridConfig 未找到！请创建放在 Resources/Grid/ 下");
         if (_mapSizeConfig == null) Debug.LogError("[WorldManager] MapSizeConfig 未找到！");
         if (_rulesConfig == null) Debug.LogError("[WorldManager] MapGenRulesConfig 未找到！");
@@ -65,6 +68,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         if (_mapSizeConfig == null) _mapSizeConfig = Resources.Load<MapSizeConfig>("Grid/MapSizeConfig");
         if (_rulesConfig == null) _rulesConfig = Resources.Load<MapGenRulesConfig>("Grid/MapGenRulesConfig");
         if (_resourceConfig == null) _resourceConfig = Resources.Load<ResourceGenConfig>("Grid/ResourceGenConfig");
+        MapGenRules.SetConfig(_rulesConfig);
     }
 
     /// <summary>旧版兼容签名（worldSize 默认 Medium）。</summary>
@@ -134,17 +138,20 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         };
 
         // === Step 2: 5 区分配 ===
-        var (center, extreme, resource) = CalcZoneCounts(M);
-        var (castleA, castleB) = GetCastleRegionIndices(M, center, extreme, resource);
+        var (center, extreme, resource) = MapGenRules.CalcZoneCounts(M);
+        var (castleA, castleB) = MapGenRules.GetCastleRegionIndices(M, center, extreme, resource);
+
+        // 废弃城堡所在的大区块索引（正中心，只占 1 个大区块）
+        int abandonedCastleRegionIdx = castleB;
 
         // === Step 3-5: 按区分配地形 ===
         for (int i = 0; i < M; i++)
         {
-            MapZone zone = GetZone(i, M, center, extreme, resource);
+            MapZone zone = MapGenRules.GetZone(i, M, center, extreme, resource);
             TerrainType terrain = PickTerrainByZone(rng, zone, i, M, bigTerrain);
 
-            // 主城区块强制平原
-            if (i == castleA || i == castleB) terrain = TerrainType.Plain;
+            // 废弃城堡所在区块强制平原
+            if (i == abandonedCastleRegionIdx) terrain = TerrainType.Plain;
 
             var region = new Region
             {
@@ -157,18 +164,18 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
                 isEnemyTerritory = !isPlayerHome,
                 zone = zone,
                 isInner = (zone == MapZone.LeftResource || zone == MapZone.RightResource)
-                          ? IsResourceInner(i, M, zone) : false
+                          ? MapGenRules.IsResourceInner(i, M, zone) : false
             };
 
             // 平原子状态判定
             if (terrain == TerrainType.Plain)
             {
-                region.plainSubState = IsCenterEdge(i, M, center, extreme, resource)
+                region.plainSubState = MapGenRules.IsCenterEdge(i, M, center, extreme, resource)
                     && rng.NextDouble() < _rulesConfig.centerFertileChance
                     ? PlainSubState.Fertile
                     : PlainSubState.Normal;
-                // 主城强制普通平原
-                if (i == castleA || i == castleB) region.plainSubState = PlainSubState.Normal;
+                // 废弃城堡区块强制普通平原
+                if (i == abandonedCastleRegionIdx) region.plainSubState = PlainSubState.Normal;
             }
 
             map.regions.Add(region);
@@ -177,8 +184,8 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         // === Step 6-7: 资源保障 + 邻接校验（循环 2 轮）===
         for (int round = 0; round < 2; round++)
         {
-            if (isPlayerHome) EnsureResourceCoverage(rng, map.regions, M, castleA, castleB);
-            EnforceAdjacency(map.regions, M, castleA, castleB);
+            if (isPlayerHome) EnsureResourceCoverage(rng, map.regions, M, abandonedCastleRegionIdx, abandonedCastleRegionIdx);
+            EnforceAdjacency(map.regions, M, abandonedCastleRegionIdx, abandonedCastleRegionIdx);
         }
 
         // === Step 8: 二级约束 - Building 生成 ===
@@ -187,8 +194,21 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             region.resources = GenerateBuildings(rng, region, _world.difficulty, region.isInner);
         }
 
+        // === Step 8.5: 废弃城堡占位（2 格，中心区块）===
+        PlaceAbandonedCastle(map.regions, abandonedCastleRegionIdx, cellCount);
+
         // === Step 9: 出怪口/裂隙放置 ===
         PlaceRifts(map, M, bigTerrain);
+
+        // === Step 9.5: 验证（3.2.1 第十节验证清单）===
+        var issues = MapValidator.Validate(map, _rulesConfig);
+        foreach (var issue in issues)
+        {
+            if (issue.severity == MapValidator.Severity.Error)
+                Debug.LogError($"[MapValidator] {issue}");
+            else
+                Debug.LogWarning($"[MapValidator] {issue}");
+        }
 
         Debug.Log($"[WorldManager] 地图生成: mapId={mapId}, seed={seed}, " +
                   $"bigTerrain={bigTerrain}, regions={M}, " +
@@ -197,83 +217,8 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         return map;
     }
 
-    // ========================================================================
-    //  5 区结构辅助（3.2.1 第二节）
-    // ========================================================================
-
-    /// <summary>计算 5 区分配数量。</summary>
-    (int center, int extreme, int resource) CalcZoneCounts(int M)
-    {
-        float cRatio = _rulesConfig != null ? _rulesConfig.centerRatio : 0.3f;
-        float eRatio = _rulesConfig != null ? _rulesConfig.extremeRatio : 0.25f;
-
-        int center = Mathf.Max(2, EvenRound(M * cRatio));
-        int extreme = Mathf.Max(1, Mathf.FloorToInt((M - center) * eRatio));
-        int resource = (M - center - extreme * 2) / 2;
-        if (resource < 1) resource = 1;
-        return (center, extreme, resource);
-    }
-
-    /// <summary>四舍五入取偶数。</summary>
-    int EvenRound(float f)
-    {
-        int r = Mathf.RoundToInt(f);
-        return r % 2 != 0 ? r + 1 : r;  // 奇数+1变偶数
-    }
-
-    /// <summary>大区块索引 → 区分区。</summary>
-    MapZone GetZone(int idx, int M, int center, int extreme, int resource)
-    {
-        int leftExtremeEnd = extreme;
-        int leftResourceEnd = extreme + resource;
-        int centerEnd = extreme + resource + center;
-        // int rightResourceEnd = centerEnd + resource;
-
-        if (idx < leftExtremeEnd) return MapZone.LeftExtreme;
-        if (idx < leftResourceEnd) return MapZone.LeftResource;
-        if (idx < centerEnd) return MapZone.Center;
-        if (idx < centerEnd + resource) return MapZone.RightResource;
-        return MapZone.RightExtreme;
-    }
-
-    /// <summary>主城所在的大区块索引（2 个，对称）。</summary>
-    (int, int) GetCastleRegionIndices(int M, int center, int extreme, int resource)
-    {
-        int centerStart = extreme + resource;
-        int midOffset = center / 2;
-        return (centerStart + midOffset - 1, centerStart + midOffset);
-    }
-
-    /// <summary>资源区大区块是否内侧（靠中心区）。</summary>
-    bool IsResourceInner(int idx, int M, MapZone zone)
-    {
-        var (center, extreme, resource) = CalcZoneCounts(M);
-        int leftExtremeEnd = extreme;
-        int leftResourceEnd = extreme + resource;
-        int centerEnd = extreme + resource + center;
-
-        if (zone == MapZone.LeftResource)
-        {
-            // 左资源区：靠中心区的是内侧（idx 接近 leftResourceEnd）
-            int offsetFromCenter = leftResourceEnd - idx;  // 越小越靠中心
-            return offsetFromCenter <= resource / 2;
-        }
-        if (zone == MapZone.RightResource)
-        {
-            // 右资源区：靠中心区的是内侧（idx 接近 centerEnd）
-            int offsetFromCenter = idx - centerEnd;  // 越小越靠中心
-            return offsetFromCenter < resource / 2;
-        }
-        return false;
-    }
-
-    /// <summary>是否中心区边缘（靠资源区侧，可能变肥沃）。</summary>
-    bool IsCenterEdge(int idx, int M, int center, int extreme, int resource)
-    {
-        int centerStart = extreme + resource;
-        int centerEnd = centerStart + center;
-        return idx == centerStart || idx == centerEnd - 1;
-    }
+    // 5 区结构辅助（CalcZoneCounts/GetZone/GetCastleRegionIndices/IsResourceInner/IsCenterEdge）
+    // 已抽至 MapGenRules 静态类（3.2.1 第二节）
 
     // ========================================================================
     //  地形选择（3.2.1 第三 + 7.2 节）
@@ -290,7 +235,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
 
             case MapZone.LeftResource:
             case MapZone.RightResource:
-                return IsResourceInner(idx, M, zone)
+                return MapGenRules.IsResourceInner(idx, M, zone)
                     ? PickWeighted(rng, _rulesConfig.resourceInnerWeights)
                     : PickWeighted(rng, _rulesConfig.resourceOuterWeights);
 
@@ -331,21 +276,33 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     // ========================================================================
 
     /// <summary>校验 + 修复四资源完整性。缺什么补什么（不动主城）。</summary>
+    /// <remarks>
+    /// 粮 auto-satisfied：中心区 always 平原，平原 always 有农田。
+    /// 石来源仅靠矿山（丘陵不再提供持续性矿洞）。
+    /// 肥沃 = 高级产出 buff，尽量保障但不强制。
+    /// </remarks>
     void EnsureResourceCoverage(System.Random rng, List<Region> regions, int M, int castleA, int castleB)
     {
-        bool hasForest = regions.Any(r => r.terrain == TerrainType.Forest);
-        bool hasStone = regions.Any(r => r.terrain == TerrainType.Quarry || r.terrain == TerrainType.Hills);
-        bool hasFertile = regions.Any(r => r.terrain == TerrainType.Plain && r.plainSubState == PlainSubState.Fertile);
+        int minForest = _rulesConfig != null ? _rulesConfig.minForest : 1;
+        int minStone = _rulesConfig != null ? _rulesConfig.minStone : 1;
+        int minFertile = _rulesConfig != null ? _rulesConfig.minFertile : 1;
 
-        if (!hasForest)
+        int forestCount = regions.Count(r => r.terrain == TerrainType.Forest);
+        int quarryCount = regions.Count(r => r.terrain == TerrainType.Quarry);
+        int fertileCount = regions.Count(r => r.terrain == TerrainType.Plain && r.plainSubState == PlainSubState.Fertile);
+
+        // 缺木 → 资源区替换为林地
+        for (; forestCount < minForest; forestCount++)
             ForceReplace(rng, regions, M, castleA, castleB,
                 new[] { MapZone.LeftResource, MapZone.RightResource }, TerrainType.Forest);
-        if (!hasStone)
+        // 缺石 → 资源区替换为矿山（丘陵不再提供持续性石来源）
+        for (; quarryCount < minStone; quarryCount++)
             ForceReplace(rng, regions, M, castleA, castleB,
                 new[] { MapZone.LeftResource, MapZone.RightResource }, TerrainType.Quarry);
-        if (!hasFertile)
+        // 缺肥沃 buff → 中心区替换一个平原为肥沃（非强制，仅优化）
+        for (; fertileCount < minFertile; fertileCount++)
             ForceReplace(rng, regions, M, castleA, castleB,
-                new[] { MapZone.Center, MapZone.LeftResource, MapZone.RightResource }, TerrainType.Plain,
+                new[] { MapZone.Center }, TerrainType.Plain,
                 forceSubState: PlainSubState.Fertile);
     }
 
@@ -387,6 +344,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
                     fixIdx = (fixIdx == i) ? i + 1 : i;
 
                 regions[fixIdx].terrain = TerrainType.Hills;
+                regions[fixIdx].plainSubState = PlainSubState.Normal;  // 非平原重置子状态
             }
         }
     }
@@ -408,18 +366,22 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         var producerType = GetProducerType(region);
         if (producerType != BuildingType.None)
         {
-            int count = RollCount(rng, region.terrain, difficulty, isProducer: true);
+            int count = RollCount(rng, region, difficulty, isProducer: true);
             PlaceBuildings(buildings, rng, producerType, count, region.cellCount,
                            difficulty, isInner, BuildingCategory.ResourceProducer, isConsumable: false);
         }
 
-        // 2. 一次性资源
+        // 2. 一次性资源（总数受配置控制，在类型间随机分配）
         var pickupTypes = GetPickupTypes(region);
-        foreach (var pt in pickupTypes)
+        if (pickupTypes.Length > 0)
         {
-            int count = RollCount(rng, region.terrain, difficulty, isProducer: false);
-            PlaceBuildings(buildings, rng, pt, count, region.cellCount,
-                           difficulty, isInner, BuildingCategory.ResourcePickup, isConsumable: true);
+            int totalPickup = RollCount(rng, region, difficulty, isProducer: false);
+            for (int i = 0; i < totalPickup; i++)
+            {
+                BuildingType pt = pickupTypes[rng.Next(pickupTypes.Length)];
+                PlaceBuildings(buildings, rng, pt, 1, region.cellCount,
+                               difficulty, isInner, BuildingCategory.ResourcePickup, isConsumable: true);
+            }
         }
 
         // 3. 特殊点（低概率）
@@ -434,59 +396,66 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         return buildings;
     }
 
-    /// <summary>地形 → 持续性资源类型映射。</summary>
+    /// <summary>地形 → 持续性资源类型映射（3.2.1 第 6.2 节）。</summary>
+    /// <remarks>
+    /// 平原 always 有农田（普通=基础产出，肥沃=高级 buff）。
+    /// 丘陵无持续性资源（只提供一次性石头/木头/矿脉）。
+    /// 石来源仅靠矿山（矿洞）。
+    /// </remarks>
     BuildingType GetProducerType(Region region)
     {
         switch (region.terrain)
         {
-            case TerrainType.Forest: return BuildingType.Tree;
-            case TerrainType.Quarry: return BuildingType.Mine;
-            case TerrainType.Hills: return BuildingType.Mine;       // 丘陵复合：也有矿洞
-            case TerrainType.Plain:
-                return region.plainSubState == PlainSubState.Fertile
-                    ? BuildingType.Farmland : BuildingType.None;
+            case TerrainType.Forest: return BuildingType.Tree;       // 林地 → 树（木来源）
+            case TerrainType.Quarry: return BuildingType.Mine;       // 矿山 → 矿洞（石来源）
+            case TerrainType.Plain:  return BuildingType.Farmland;   // 平原 always 有农田
+            // 丘陵/荒地/雪山/海岸：无持续性资源
             default: return BuildingType.None;
         }
     }
 
-    /// <summary>地形 → 一次性资源类型列表。</summary>
+    /// <summary>地形 → 一次性资源类型列表（3.2.1 第 6.2 节）。</summary>
     BuildingType[] GetPickupTypes(Region region)
     {
         switch (region.terrain)
         {
             case TerrainType.Forest:
-                return new[] { BuildingType.WoodPile };
+                return new[] { BuildingType.WoodPile };              // 林地 → 木头堆
             case TerrainType.Quarry:
-                return new[] { BuildingType.OreVein };
+                return new[] { BuildingType.OreVein };               // 矿山 → 矿脉
             case TerrainType.Hills:
+                // 丘陵复合：一次性石头堆 + 木头堆 + 矿脉（无持续性资源）
                 return new[] { BuildingType.StonePile, BuildingType.WoodPile, BuildingType.OreVein };
             case TerrainType.Plain:
-                return region.plainSubState == PlainSubState.Fertile
-                    ? new[] { BuildingType.StonePile, BuildingType.WoodPile }
-                    : new[] { BuildingType.StonePile, BuildingType.WoodPile };
+                return new[] { BuildingType.StonePile, BuildingType.WoodPile };  // 平原 → 少量石头堆+木头堆
             default:
                 return new BuildingType[0];
         }
     }
 
-    /// <summary>按地形+难度滚动资源点数量。</summary>
-    int RollCount(System.Random rng, TerrainType terrain, int difficulty, bool isProducer)
+    /// <summary>按地形+子状态+难度滚动资源点数量（3.2.1 第 6.6 节，区分持续性/一次性）。</summary>
+    int RollCount(System.Random rng, Region region, int difficulty, bool isProducer)
     {
+        PlainSubState subState = region.terrain == TerrainType.Plain
+            ? region.plainSubState : PlainSubState.Normal;
+
         var (min, max) = _resourceConfig != null
-            ? _resourceConfig.GetResourceCount(terrain)
+            ? (isProducer
+                ? _resourceConfig.GetProducerCount(region.terrain, subState)
+                : _resourceConfig.GetPickupCount(region.terrain, subState))
             : (2, 4);
 
         float density = _resourceConfig != null
             ? _resourceConfig.GetDensity(difficulty)
             : 1.0f;
 
-        // 一次性资源额外密度因子
-        if (!isProducer && _resourceConfig != null)
-            density *= _resourceConfig.pickupDensityFactor;
-
         int adjMin = Mathf.RoundToInt(min * density);
         int adjMax = Mathf.RoundToInt(max * density);
         if (adjMax < adjMin) adjMax = adjMin;
+
+        // 持续性资源（生产者）至少 1 个：平原 always 有农田，林地 always 有树，矿山 always 有矿洞
+        if (isProducer && adjMax < 1) adjMax = 1;
+        if (isProducer && adjMin < 1) adjMin = 1;
 
         return adjMin + (adjMax > adjMin ? rng.Next(adjMax - adjMin + 1) : 0);
     }
@@ -538,32 +507,61 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     }
 
     // ========================================================================
+    //  废弃城堡占位（3.2.1 第 6.2 节）
+    // ========================================================================
+
+    /// <summary>在中心区块放置废弃城堡（占 2 个小区格，3.2.1 第 6.2 节）。</summary>
+    void PlaceAbandonedCastle(List<Region> regions, int regionIdx, int cellCount)
+    {
+        if (regionIdx < 0 || regionIdx >= regions.Count) return;
+        var region = regions[regionIdx];
+
+        // 占中间 2 格：cellCount/2 - 1 和 cellCount/2
+        int cellA = cellCount / 2 - 1;
+        int cellB = cellCount / 2;
+
+        // 清理目标格子上已有的占位（GenerateBuildings 可能放了农田/资源堆）
+        region.resources.RemoveAll(b => b.localCellX == cellA || b.localCellX == cellB);
+
+        region.resources.Add(new BuildingPlaceholder
+        {
+            type = BuildingType.CastleCore,
+            category = BuildingCategory.CastleCore,
+            localCellX = cellA,
+            cellWidth = 2,  // 占 2 格
+            grade = ResourceGrade.Normal
+        });
+    }
+
+    // ========================================================================
     //  裂隙放置（3.2.1 第 6.10 节）
     // ========================================================================
 
-    /// <summary>在极端区端点放裂隙（Rift Building 占位）。</summary>
+    /// <summary>在极端区端点放裂隙（Rift Building 占位，3.2.1 第 6.10 节）。</summary>
     void PlaceRifts(MapData map, int M, BigTerrain bigTerrain)
     {
         bool isInland = bigTerrain == BigTerrain.Inland;
         int leftRiftRegion = 0;       // 最左大区块
         int rightRiftRegion = M - 1;  // 最右大区块
 
-        // 内陆：左端=雪山屏障(无怪)，右端=荒地出怪
-        // 岛屿：两端海岸都出怪
-        int riftRegion = isInland ? rightRiftRegion : leftRiftRegion;
-        PlaceRiftInRegion(map.regions[riftRegion]);
-
-        if (!isInland)
+        if (isInland)
         {
-            // 岛屿：右端也有裂隙
-            PlaceRiftInRegion(map.regions[rightRiftRegion]);
+            // 内陆：左端=雪山屏障(无怪)，右端=荒地出怪
+            PlaceRiftInRegion(map.regions[rightRiftRegion], isRightEnd: true);
+        }
+        else
+        {
+            // 岛屿：两端海岸都出怪
+            PlaceRiftInRegion(map.regions[leftRiftRegion], isRightEnd: false);
+            PlaceRiftInRegion(map.regions[rightRiftRegion], isRightEnd: true);
         }
     }
 
-    void PlaceRiftInRegion(Region region)
+    /// <summary>在大区块最外端放裂隙。左端放 cell 0，右端放 cellCount-1。</summary>
+    void PlaceRiftInRegion(Region region, bool isRightEnd)
     {
-        // 裂隙放在该大区块的小区块 0（最外端）
-        region.riftCellX = 0;
+        // 左端放 cell 0（最外端），右端放 cellCount-1（最外端）
+        region.riftCellX = isRightEnd ? region.cellCount - 1 : 0;
     }
 
     // ========================================================================

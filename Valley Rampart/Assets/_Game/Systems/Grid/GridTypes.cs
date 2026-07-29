@@ -117,6 +117,7 @@ public class BuildingPlaceholder
     public BuildingCategory category;   // 大类
     public BuildingType type;            // 具体类型
     public int localCellX;               // 在大区块内的小区块局部坐标
+    public int cellWidth = 1;            // 占几个小区格（默认 1，城堡=2）
     public ResourceGrade grade;          // 等级（仅资源点有效）
     public bool isConsumable;            // 是否一次性（true=用完消失，false=持续产出）
 }

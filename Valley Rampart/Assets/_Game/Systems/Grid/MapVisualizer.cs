@@ -58,39 +58,20 @@ public class MapVisualizer : MonoBehaviour
         _root = rootGo.transform;
 
         var gridConfig = Resources.Load<GridConfig>("Grid/GridConfig");
-        float cellSize = gridConfig != null ? gridConfig.cellSize : 4f;
+        float cellSize = gridConfig != null ? gridConfig.cellSize : 2.26f;
         int rpc = gridConfig != null ? gridConfig.regionCellCount : 16;
 
         int M = map.regions.Count;
 
-        // 获取参考图尺寸（作为大区块尺寸）
-        float regionWidth, regionHeight;
-        var refObj = GameObject.Find("参考图");
-        if (refObj != null)
-        {
-            var refSr = refObj.GetComponent<SpriteRenderer>();
-            if (refSr != null && refSr.sprite != null)
-            {
-                regionWidth = refSr.sprite.rect.width / refSr.sprite.pixelsPerUnit;
-                regionHeight = refSr.sprite.rect.height / refSr.sprite.pixelsPerUnit;
-            }
-            else
-            {
-                regionWidth = 36.16f;
-                regionHeight = 12.17f;
-            }
-        }
-        else
-        {
-            regionWidth = 36.16f;
-            regionHeight = 12.17f;
-        }
+        // 算法决定尺寸：大区块 = cellSize × regionCellCount
+        float regionWidth = cellSize * rpc;  // 2.26 × 16 = 36.16
+        float regionHeight = 12.17f;  // 固定高度（匹配参考图比例）
 
         // 缓存白色纹理（Building 用）
         _whiteTex = CreateColoredTexture(Color.white, 1, 1);
 
         // === 基准线 y = -3 (sortingOrder=2, 最顶层) ===
-        CreateBaseline(M, rpc, cellSize, regionWidth);
+        CreateBaseline(M, regionWidth);
 
         // === 每个大区块 ===
         for (int i = 0; i < M; i++)
@@ -107,18 +88,33 @@ public class MapVisualizer : MonoBehaviour
                 GetTerrainColor(region.terrain, region.plainSubState),
                 sortingOrder: 0);
 
-            // 资源点（白色小方块, sortingOrder=1, 在 Region 上面）
+            // 小区块分隔线 (16条对齐, sortingOrder=2 在最上层)
+            float cellWidth = regionWidth / rpc;
+            for (int j = 0; j < rpc; j++)
+            {
+                float lineX = startX + j * cellWidth;
+                CreateSpriteObj(_root, prefix + $"CellLine_{j}",
+                    lineX, 0, 0.05f,
+                    0.08f, regionHeight,
+                    new Color(1f, 1f, 1f, 0.25f),
+                    sortingOrder: 2);
+            }
+
+            // 资源点（按类型上色, sortingOrder=1, 在 Region 上面）
+            // 跳过 CastleCore（由下方废弃城堡专用代码绘制）
             if (region.resources != null)
             {
                 foreach (var b in region.resources)
                 {
-                    float wx = (region.cellStartX + b.localCellX + 0.5f) * cellSize;
-                    // 映射到新的宽度比例
+                    if (b.category == BuildingCategory.CastleCore) continue;
+
                     float mappedWx = startX + (b.localCellX + 0.5f) / rpc * regionWidth;
-                    CreateSpriteObj(_root, prefix + $"Building_{b.type}",
+                    Color color = GetBuildingColor(b);
+                    float size = GetBuildingSize(b);
+                    CreateSpriteObj(_root, prefix + $"Building_{b.type}_{b.category}",
                         mappedWx, 0, 0.1f,
-                        1.5f, 1.5f,
-                        Color.white,
+                        size, size,
+                        color,
                         sortingOrder: 1);
                 }
             }
@@ -134,21 +130,20 @@ public class MapVisualizer : MonoBehaviour
                     sortingOrder: 1);
             }
 
-            // 主城标记（金色, sortingOrder=1）
-            if (region.zone == MapZone.Center)
+            // 废弃城堡（从 map data 读取，两格占位，灰色，sortingOrder=1）
+            foreach (var bp in region.resources)
             {
-                var (center, extreme, resource) = WorldManager.Instance == null
-                    ? (3, 1, 1)
-                    : CalcZoneCountsProxy(M);
-
-                int midIdx = extreme + resource + center / 2;
-                if (i == midIdx || i == midIdx - 1)
+                if (bp.category == BuildingCategory.CastleCore)
                 {
-                    float mappedWx = startX + regionWidth / 2f;
-                    CreateSpriteObj(_root, prefix + "CastleCore",
-                        mappedWx, 2f, 0.2f,
-                        3f, 4f,
-                        new Color(1f, 0.84f, 0f),
+                    float cellW = regionWidth / rpc;
+                    float castleW = cellW * bp.cellWidth;  // 占 cellWidth 格
+                    float castleH = regionHeight * 0.6f;
+                    // 居中：2 格城堡的中心 = 起始格 + 1（即两格中间）
+                    float mappedWx = startX + (bp.localCellX + bp.cellWidth / 2f) * cellW;
+                    CreateSpriteObj(_root, prefix + "AbandonedCastle",
+                        mappedWx, 0f, 0.2f,
+                        castleW, castleH,
+                        new Color(0.5f, 0.5f, 0.5f),  // 灰色
                         sortingOrder: 1);
                 }
             }
@@ -203,7 +198,7 @@ public class MapVisualizer : MonoBehaviour
         return tex;
     }
 
-    private void CreateBaseline(int regionCount, int regionCellCount, float cellSize, float regionWidth)
+    private void CreateBaseline(int regionCount, float regionWidth)
     {
         float totalWidth = regionCount * regionWidth;
         CreateSpriteObj(_root, "Baseline_y=-3",
@@ -242,16 +237,6 @@ public class MapVisualizer : MonoBehaviour
 
     // ===== 辅助 =====
 
-    (int, int, int) CalcZoneCountsProxy(int M)
-    {
-        int center = Mathf.Max(2, M / 3);
-        if (center % 2 != 0) center++;
-        int extreme = Mathf.Max(1, (M - center) / 4);
-        int resource = (M - center - extreme * 2) / 2;
-        if (resource < 1) resource = 1;
-        return (center, extreme, resource);
-    }
-
     int CountResources(MapData map)
     {
         int c = 0;
@@ -283,6 +268,41 @@ public class MapVisualizer : MonoBehaviour
             case TerrainType.Snow:   return new Color(0.7f, 0.75f, 0.8f);
             case TerrainType.Wasteland: return new Color(0.7f, 0.6f, 0.3f);
             default: return Color.gray;
+        }
+    }
+
+    /// <summary>Building 类型 → 可视化颜色。</summary>
+    Color GetBuildingColor(BuildingPlaceholder b)
+    {
+        switch (b.category)
+        {
+            case BuildingCategory.ResourceProducer:
+                // 持续性资源：按类型上色
+                switch (b.type)
+                {
+                    case BuildingType.Tree: return new Color(0.3f, 0.7f, 0.3f);     // 绿色（树）
+                    case BuildingType.Mine: return new Color(0.6f, 0.6f, 0.6f);     // 灰色（矿洞）
+                    case BuildingType.Farmland: return new Color(0.8f, 0.8f, 0.3f); // 黄色（农田）
+                    default: return Color.green;
+                }
+            case BuildingCategory.ResourcePickup:
+                return Color.white;  // 一次性资源：白色
+            case BuildingCategory.SpecialPoint:
+                return new Color(1f, 0.84f, 0f);  // 金色（宝箱/遗迹）
+            default:
+                return Color.white;
+        }
+    }
+
+    /// <summary>Building 类型 → 可视化尺寸。</summary>
+    float GetBuildingSize(BuildingPlaceholder b)
+    {
+        switch (b.category)
+        {
+            case BuildingCategory.ResourceProducer: return 2f;      // 持续性资源：稍大
+            case BuildingCategory.ResourcePickup:   return 1.2f;    // 一次性资源：小
+            case BuildingCategory.SpecialPoint:     return 1.5f;    // 特殊点：中等
+            default: return 1.2f;
         }
     }
 }
