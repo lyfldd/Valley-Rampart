@@ -11,7 +11,7 @@ public enum Occupation
 }
 
 // 阵营枚举。决定单位的敌我关系和所属势力。
-// None 用于未初始化/中立单位；Human_Player 和 Undead 互为敌对阵营。
+// None 用于未初始化/中立单位；Human_Player 和 Undead 互为敌对立营。
 public enum Faction
 {
     None,           // 无阵营：未初始化或中立单位

@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -83,10 +83,11 @@ public class RulerController : Singleton<RulerController>, ISaveable
         SaveManager.Instance.RegisterSaveable(this);
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
         if (_instance != this) return;  // 不是当前单例，跳过清理
 
+        base.OnDestroy();
         EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
     }
 

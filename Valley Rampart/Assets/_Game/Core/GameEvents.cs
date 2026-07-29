@@ -288,6 +288,23 @@ public readonly struct ConfigsLoadedEvent
     public ConfigsLoadedEvent(bool isSuccess) { IsSuccess = isSuccess; }
 }
 
+// ===== 地图生成事件 =====
+
+// 地图生成完成事件。由 WorldManager 在 GenerateMap 返回后发布。
+// BuildingFactory（建造系统⬜）订阅此事件触发 Building 实例化，
+// 摄像机订阅此事件设边界，GridSystem 订阅此事件填充区块。
+public readonly struct MapGeneratedEvent
+{
+    public readonly int MapId;
+    public readonly bool IsPlayerHome;
+
+    public MapGeneratedEvent(int mapId, bool isPlayerHome)
+    {
+        MapId = mapId;
+        IsPlayerHome = isPlayerHome;
+    }
+}
+
 // ===== 全局输入事件 =====
 
 // 玩家按下 ESC 键事件。由 InputManager 发布，UI 系统订阅以弹出/关闭暂停菜单等。

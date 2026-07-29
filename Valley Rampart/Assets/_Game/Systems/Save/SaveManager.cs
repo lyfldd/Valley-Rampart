@@ -47,8 +47,9 @@ public class SaveManager : Singleton<SaveManager>
         EventBus.Subscribe<GameStateChangedEvent>(OnGameStateChanged);
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
+        base.OnDestroy();
         EventBus.Unsubscribe<TimeDayChangedEvent>(OnDayChanged);
         EventBus.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);
     }

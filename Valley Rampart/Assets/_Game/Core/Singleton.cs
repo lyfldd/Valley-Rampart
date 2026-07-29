@@ -22,10 +22,16 @@ public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
     {
         get
         {
+            // 退出时：对象还活着就给，不再隐式创建
+            // （原逻辑一刀切返回 null，导致 TeardownScene 拿不到存活的单例 → NRE/清理跳过）
             if (_isQuitting)
             {
-                Debug.LogWarning($"[{typeof(T).Name}] 游戏正在关闭，不再提供实例。");
-                return null;
+                if (_instance != null)
+                {
+                    try { return _instance; }
+                    catch { return null; }  // _instance 是 fake null，放弃
+                }
+                return null;  // 对象确实没了才返回 null，且不再隐式创建
             }
 
             if (_instance == null)
@@ -62,5 +68,16 @@ public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
     protected virtual void OnApplicationQuit()
     {
         _isQuitting = true;
+    }
+
+    /// <summary>
+    /// 源头防范：对象销毁时主动清静态引用，杜绝 _instance 指向 fake null。
+    /// 配合 Instance getter 的 _instance != null 检查，双重保险。
+    /// 子类 override 时必须调 base.OnDestroy()，否则引用不清。
+    /// </summary>
+    protected virtual void OnDestroy()
+    {
+        if (_instance == this)
+            _instance = null;
     }
 }

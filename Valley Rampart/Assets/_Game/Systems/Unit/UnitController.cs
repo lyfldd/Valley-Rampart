@@ -38,6 +38,20 @@ public class UnitController : MonoBehaviour, ISaveable
 
     public bool IsAlive => CurrentHp > 0;
 
+    /// <summary>
+    /// 按阵营映射堆叠类型（3.2 第 7.8 节）。
+    /// 不划分防御类驻军——NPC 白天经济/晚上防御是行为模式，非阵营分类。
+    /// </summary>
+    public UnitCategory GetCategory()
+    {
+        if (Data == null) return UnitCategory.Civilian;
+        return Data.faction switch
+        {
+            Faction.Human_Player => UnitCategory.Civilian,
+            _ => UnitCategory.Enemy,
+        };
+    }
+
     protected SpriteRenderer _renderer;
     protected Rigidbody2D _rb;
 

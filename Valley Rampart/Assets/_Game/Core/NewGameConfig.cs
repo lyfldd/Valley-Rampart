@@ -8,7 +8,7 @@ public class NewGameConfig
     /// <summary>玩家输入的统治者名字。</summary>
     public string rulerName = "无名君主";
 
-    /// <summary>地图生成种子（0 = 随机生成）。</summary>
+    /// <summary>地图生成种子（0 = 随机生成）。兼容旧字段，实际由 worldSeed 派生。</summary>
     public int mapSeed;
 
     /// <summary>难度：1=Easy, 2=Normal, 3=Hard。</summary>
@@ -16,4 +16,12 @@ public class NewGameConfig
 
     /// <summary>选中的存档槽 ID（用于新建游戏后的初始存档）。</summary>
     public string selectedSlotId = "slot_1";
+
+    // ===== 新增（3.2 第 2.2 节）=====
+
+    /// <summary>世界种子，0=随机生成（决定多地图布局）。</summary>
+    public int worldSeed;
+
+    /// <summary>地图大小：大/中/小。</summary>
+    public WorldSize worldSize = WorldSize.Medium;
 }

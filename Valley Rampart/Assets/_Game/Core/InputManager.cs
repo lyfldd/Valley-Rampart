@@ -57,13 +57,16 @@ public class InputManager : Singleton<InputManager>
     // 启用全部玩家输入（由 GameBootstrap 在游戏正式开始时调用）
     public void EnableInput()
     {
+        if (_inputActions == null) return;
         _inputActions.Enable();
         Debug.Log("[InputManager] 输入已启用");
     }
 
     // 禁用全部玩家输入并重置移动向量（暂停/切场景时调用）
+    // null 防御：退出时 OnApplicationQuit 顺序不确定，CleanupInputActions 可能已将 _inputActions 置 null
     public void DisableInput()
     {
+        if (_inputActions == null) return;
         _inputActions.Disable();
         MoveInput = Vector2.zero;
     }
@@ -103,8 +106,9 @@ public class InputManager : Singleton<InputManager>
         EventBus.Publish(new EscapePressedEvent(current));
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
+        base.OnDestroy();
         CleanupInputActions();
     }
 

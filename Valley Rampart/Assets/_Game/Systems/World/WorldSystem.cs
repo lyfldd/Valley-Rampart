@@ -55,8 +55,8 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
             return;
         }
 
-        // 1. 世界管理器（地图种子 + 难度档位）
-        WorldManager.Instance.ApplyConfig(newConfig.mapSeed, newConfig.difficulty);
+        // 1. 世界管理器（世界种子 + 地图大小 + 难度）
+        WorldManager.Instance.ApplyConfig(newConfig.worldSeed, newConfig.worldSize, newConfig.difficulty);
 
         // 2. 难度系统初始化（设初始系数 + 同步 TimeManager 的 secondsPerDay）
         DifficultyManager.Instance.Initialize(newConfig.difficulty);

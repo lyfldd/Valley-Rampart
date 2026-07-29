@@ -41,8 +41,9 @@ public class DifficultyManager : Singleton<DifficultyManager>, ISaveable
         EventBus.Subscribe<SeasonChangedEvent>(OnSeasonChanged);
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
+        base.OnDestroy();
         EventBus.Unsubscribe<SeasonChangedEvent>(OnSeasonChanged);
     }
 

@@ -18,6 +18,19 @@
                     <ui:DropdownField name="difficulty-select" label="" class="form-select"
                                       choices="简单,普通,困难" value="普通" />
                 </ui:VisualElement>
+
+                <!-- 地图大小（下拉选择） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="地图大小" class="form-label" />
+                    <ui:DropdownField name="map-size-select" label="" class="form-select"
+                                      choices="小,中,大" value="中" />
+                </ui:VisualElement>
+
+                <!-- 世界种子（0=随机） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="世界种子" class="form-label" />
+                    <ui:IntegerField name="world-seed-input" value="0" class="form-input" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement class="form-actions">

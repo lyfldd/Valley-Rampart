@@ -1,45 +1,628 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// 世界管理器。管理程序化地图种子、难度等"游戏会话级"配置。
-/// 地图是程序化生成的（基于群落模板），读档后必须用同一个 seed 复现地形。
+/// 世界管理器。管理程序化地图生成 + 多地图世界状态。
+/// 3.2 第 7.6 节 + 3.2.1 第七节落地：5区结构 + 四资源保障 + 邻接约束 + Building占位 + 裂隙放置。
+/// 存档策略：seed 复现（WorldSaveData 存 seed+meta，读档用同 seed 重生成）。
 /// </summary>
 public class WorldManager : Singleton<WorldManager>, ISaveable
 {
     public string SaveId => "WorldManager";
     public SaveLoadPhase LoadPhase => SaveLoadPhase.Global;
 
-    public int MapSeed { get; private set; }
-    public int Difficulty { get; private set; }   // 1=Easy, 2=Normal, 3=Hard
+    // ===== 兼容旧字段 =====
+    public int MapSeed { get; private set; }    // 兼容（= worldSeed）
+    public int Difficulty { get; private set; }
+
+    // ===== 多地图世界状态 =====
+    private WorldState _world;
+    public WorldState World => _world;
+    public MapData ActiveMap => _world?.ActiveMap;
+    public bool IsCleared => _world?.IsCleared ?? false;
+
+    // ===== SO 配置（Awake 里 Resources.Load）=====
+    private GridConfig _gridConfig;
+    private MapSizeConfig _mapSizeConfig;
+    private MapGenRulesConfig _rulesConfig;
+    private ResourceGenConfig _resourceConfig;
 
     protected override void Awake()
     {
         base.Awake();
         SaveManager.Instance.RegisterSaveable(this);
+
+        // 加载 SO 配置（3.2.2 第 9.1 节，Phase 1 加载）
+        _gridConfig = Resources.Load<GridConfig>("Grid/GridConfig");
+        _mapSizeConfig = Resources.Load<MapSizeConfig>("Grid/MapSizeConfig");
+        _rulesConfig = Resources.Load<MapGenRulesConfig>("Grid/MapGenRulesConfig");
+        _resourceConfig = Resources.Load<ResourceGenConfig>("Grid/ResourceGenConfig");
+
+        if (_gridConfig == null) Debug.LogError("[WorldManager] GridConfig 未找到！请创建放在 Resources/Grid/ 下");
+        if (_mapSizeConfig == null) Debug.LogError("[WorldManager] MapSizeConfig 未找到！");
+        if (_rulesConfig == null) Debug.LogError("[WorldManager] MapGenRulesConfig 未找到！");
+        if (_resourceConfig == null) Debug.LogError("[WorldManager] ResourceGenConfig 未找到！");
     }
 
+    // ========================================================================
+    //  新建游戏入口（3.2 第 7.6 节，签名扩展）
+    // ========================================================================
+
     /// <summary>新建游戏时由 WorldSystem.InitializeWorld 调用。</summary>
-    public void ApplyConfig(int mapSeed, int difficulty)
+    public void ApplyConfig(int worldSeed, WorldSize worldSize, int difficulty)
     {
-        MapSeed = mapSeed;
+        EnsureConfigsLoaded();
+        MapSeed = worldSeed;   // 兼容旧字段
         Difficulty = difficulty;
-        // TODO: 触发地图程序化生成（用 MapSeed 初始化生成器）
-        // GenerateWorld(MapSeed);
-        Debug.Log($"[WorldManager] 应用配置: seed={mapSeed}, difficulty={difficulty}");
+        GenerateWorld(worldSeed, worldSize, difficulty);
     }
+
+    /// <summary>确保 SO 配置已加载（Awake 可能早于 SO 创建）。</summary>
+    void EnsureConfigsLoaded()
+    {
+        if (_gridConfig == null) _gridConfig = Resources.Load<GridConfig>("Grid/GridConfig");
+        if (_mapSizeConfig == null) _mapSizeConfig = Resources.Load<MapSizeConfig>("Grid/MapSizeConfig");
+        if (_rulesConfig == null) _rulesConfig = Resources.Load<MapGenRulesConfig>("Grid/MapGenRulesConfig");
+        if (_resourceConfig == null) _resourceConfig = Resources.Load<ResourceGenConfig>("Grid/ResourceGenConfig");
+    }
+
+    /// <summary>旧版兼容签名（worldSize 默认 Medium）。</summary>
+    public void ApplyConfig(int mapSeed, int difficulty)
+        => ApplyConfig(mapSeed, WorldSize.Medium, difficulty);
+
+    // ========================================================================
+    //  世界生成（3.2 第 5.2 节 + 3.2.1 第七节完整 pipeline）
+    // ========================================================================
+
+    /// <summary>
+    /// 生成世界。当前只生成玩家初始地图（mapId=0），敌方王国地图 TODO。
+    /// </summary>
+    void GenerateWorld(int worldSeed, WorldSize size, int difficulty)
+    {
+        // seed=0 时随机生成一个
+        if (worldSeed == 0) worldSeed = Random.Range(1, int.MaxValue);
+
+        _world = new WorldState
+        {
+            worldSeed = worldSeed,
+            worldSize = size,
+            difficulty = difficulty,
+            activeMapId = 0
+        };
+
+        var rng = new System.Random(worldSeed);
+
+        // 1. 生成玩家初始地图
+        var playerMap = GenerateMap(rng, worldSeed, mapId: 0, size, isPlayerHome: true);
+        _world.maps.Add(playerMap);
+
+        // 填充区块 + 发布事件（3.2.2 第 12.1 节）
+        if (GridSystem.Instance != null)
+            GridSystem.Instance.PopulateFromMap(playerMap);
+        EventBus.Publish(new MapGeneratedEvent(0, true));
+
+        Debug.Log($"[WorldManager] 世界生成完成: seed={worldSeed}, size={size}, " +
+                  $"difficulty={difficulty}, 地图数={_world.maps.Count}");
+    }
+
+    /// <summary>
+    /// 生成一张地图（M 个大区块，含玩法约束）。
+    /// 3.2.1 第 7.2 节完整版 GenerateMap。
+    /// </summary>
+    MapData GenerateMap(System.Random rng, int seed, int mapId, WorldSize size,
+                        bool isPlayerHome, BigTerrain? forcedBigTerrain = null)
+    {
+        int cellCount = _gridConfig != null ? _gridConfig.regionCellCount : 16;
+
+        // === Step 1: 确定大地形 ===
+        BigTerrain bigTerrain = forcedBigTerrain ?? (
+            isPlayerHome
+                ? (rng.NextDouble() < 0.5 ? BigTerrain.Island : BigTerrain.Inland)
+                : BigTerrain.Island  // 敌方王国固定岛屿（攻城）
+        );
+
+        int M = _mapSizeConfig != null ? _mapSizeConfig.GetRegionCount(size) : 15;
+
+        var map = new MapData
+        {
+            mapId = mapId,
+            seed = seed,
+            bigTerrain = bigTerrain,
+            regions = new List<Region>(M),
+            isPlayerHome = isPlayerHome
+        };
+
+        // === Step 2: 5 区分配 ===
+        var (center, extreme, resource) = CalcZoneCounts(M);
+        var (castleA, castleB) = GetCastleRegionIndices(M, center, extreme, resource);
+
+        // === Step 3-5: 按区分配地形 ===
+        for (int i = 0; i < M; i++)
+        {
+            MapZone zone = GetZone(i, M, center, extreme, resource);
+            TerrainType terrain = PickTerrainByZone(rng, zone, i, M, bigTerrain);
+
+            // 主城区块强制平原
+            if (i == castleA || i == castleB) terrain = TerrainType.Plain;
+
+            var region = new Region
+            {
+                regionIndex = i,
+                terrain = terrain,
+                cellStartX = i * cellCount,
+                cellCount = cellCount,
+                resources = new List<BuildingPlaceholder>(),
+                riftCellX = -1,
+                isEnemyTerritory = !isPlayerHome,
+                zone = zone,
+                isInner = (zone == MapZone.LeftResource || zone == MapZone.RightResource)
+                          ? IsResourceInner(i, M, zone) : false
+            };
+
+            // 平原子状态判定
+            if (terrain == TerrainType.Plain)
+            {
+                region.plainSubState = IsCenterEdge(i, M, center, extreme, resource)
+                    && rng.NextDouble() < _rulesConfig.centerFertileChance
+                    ? PlainSubState.Fertile
+                    : PlainSubState.Normal;
+                // 主城强制普通平原
+                if (i == castleA || i == castleB) region.plainSubState = PlainSubState.Normal;
+            }
+
+            map.regions.Add(region);
+        }
+
+        // === Step 6-7: 资源保障 + 邻接校验（循环 2 轮）===
+        for (int round = 0; round < 2; round++)
+        {
+            if (isPlayerHome) EnsureResourceCoverage(rng, map.regions, M, castleA, castleB);
+            EnforceAdjacency(map.regions, M, castleA, castleB);
+        }
+
+        // === Step 8: 二级约束 - Building 生成 ===
+        foreach (var region in map.regions)
+        {
+            region.resources = GenerateBuildings(rng, region, _world.difficulty, region.isInner);
+        }
+
+        // === Step 9: 出怪口/裂隙放置 ===
+        PlaceRifts(map, M, bigTerrain);
+
+        Debug.Log($"[WorldManager] 地图生成: mapId={mapId}, seed={seed}, " +
+                  $"bigTerrain={bigTerrain}, regions={M}, " +
+                  $"裂隙数={map.regions.Count(r => r.riftCellX >= 0)}");
+
+        return map;
+    }
+
+    // ========================================================================
+    //  5 区结构辅助（3.2.1 第二节）
+    // ========================================================================
+
+    /// <summary>计算 5 区分配数量。</summary>
+    (int center, int extreme, int resource) CalcZoneCounts(int M)
+    {
+        float cRatio = _rulesConfig != null ? _rulesConfig.centerRatio : 0.3f;
+        float eRatio = _rulesConfig != null ? _rulesConfig.extremeRatio : 0.25f;
+
+        int center = Mathf.Max(2, EvenRound(M * cRatio));
+        int extreme = Mathf.Max(1, Mathf.FloorToInt((M - center) * eRatio));
+        int resource = (M - center - extreme * 2) / 2;
+        if (resource < 1) resource = 1;
+        return (center, extreme, resource);
+    }
+
+    /// <summary>四舍五入取偶数。</summary>
+    int EvenRound(float f)
+    {
+        int r = Mathf.RoundToInt(f);
+        return r % 2 != 0 ? r + 1 : r;  // 奇数+1变偶数
+    }
+
+    /// <summary>大区块索引 → 区分区。</summary>
+    MapZone GetZone(int idx, int M, int center, int extreme, int resource)
+    {
+        int leftExtremeEnd = extreme;
+        int leftResourceEnd = extreme + resource;
+        int centerEnd = extreme + resource + center;
+        // int rightResourceEnd = centerEnd + resource;
+
+        if (idx < leftExtremeEnd) return MapZone.LeftExtreme;
+        if (idx < leftResourceEnd) return MapZone.LeftResource;
+        if (idx < centerEnd) return MapZone.Center;
+        if (idx < centerEnd + resource) return MapZone.RightResource;
+        return MapZone.RightExtreme;
+    }
+
+    /// <summary>主城所在的大区块索引（2 个，对称）。</summary>
+    (int, int) GetCastleRegionIndices(int M, int center, int extreme, int resource)
+    {
+        int centerStart = extreme + resource;
+        int midOffset = center / 2;
+        return (centerStart + midOffset - 1, centerStart + midOffset);
+    }
+
+    /// <summary>资源区大区块是否内侧（靠中心区）。</summary>
+    bool IsResourceInner(int idx, int M, MapZone zone)
+    {
+        var (center, extreme, resource) = CalcZoneCounts(M);
+        int leftExtremeEnd = extreme;
+        int leftResourceEnd = extreme + resource;
+        int centerEnd = extreme + resource + center;
+
+        if (zone == MapZone.LeftResource)
+        {
+            // 左资源区：靠中心区的是内侧（idx 接近 leftResourceEnd）
+            int offsetFromCenter = leftResourceEnd - idx;  // 越小越靠中心
+            return offsetFromCenter <= resource / 2;
+        }
+        if (zone == MapZone.RightResource)
+        {
+            // 右资源区：靠中心区的是内侧（idx 接近 centerEnd）
+            int offsetFromCenter = idx - centerEnd;  // 越小越靠中心
+            return offsetFromCenter < resource / 2;
+        }
+        return false;
+    }
+
+    /// <summary>是否中心区边缘（靠资源区侧，可能变肥沃）。</summary>
+    bool IsCenterEdge(int idx, int M, int center, int extreme, int resource)
+    {
+        int centerStart = extreme + resource;
+        int centerEnd = centerStart + center;
+        return idx == centerStart || idx == centerEnd - 1;
+    }
+
+    // ========================================================================
+    //  地形选择（3.2.1 第三 + 7.2 节）
+    // ========================================================================
+
+    /// <summary>按区分地形。极端区按大地形固定，资源区分内/外侧风险分层。</summary>
+    TerrainType PickTerrainByZone(System.Random rng, MapZone zone, int idx, int M, BigTerrain bigTerrain)
+    {
+        switch (zone)
+        {
+            case MapZone.Center:
+                // 中心区边缘肥沃概率由调用方处理（plainSubState），这里返回平原
+                return TerrainType.Plain;
+
+            case MapZone.LeftResource:
+            case MapZone.RightResource:
+                return IsResourceInner(idx, M, zone)
+                    ? PickWeighted(rng, _rulesConfig.resourceInnerWeights)
+                    : PickWeighted(rng, _rulesConfig.resourceOuterWeights);
+
+            case MapZone.LeftExtreme:
+            case MapZone.RightExtreme:
+                if (bigTerrain == BigTerrain.Island)
+                    return TerrainType.Coast;
+                else // 内陆
+                    return zone == MapZone.LeftExtreme
+                        ? TerrainType.Snow      // 内陆左端=雪山（大山屏障）
+                        : TerrainType.Wasteland; // 内陆右端=荒地（出怪侧）
+
+            default:
+                return TerrainType.Plain;
+        }
+    }
+
+    /// <summary>按权重随机选地形。</summary>
+    TerrainType PickWeighted(System.Random rng, TerrainWeight[] weights)
+    {
+        if (weights == null || weights.Length == 0) return TerrainType.Plain;
+
+        float total = 0;
+        for (int i = 0; i < weights.Length; i++) total += weights[i].weight;
+
+        float r = (float)rng.NextDouble() * total;
+        float acc = 0;
+        for (int i = 0; i < weights.Length; i++)
+        {
+            acc += weights[i].weight;
+            if (r <= acc) return weights[i].terrain;
+        }
+        return weights[weights.Length - 1].terrain;
+    }
+
+    // ========================================================================
+    //  四资源保障（3.2.1 第四节）
+    // ========================================================================
+
+    /// <summary>校验 + 修复四资源完整性。缺什么补什么（不动主城）。</summary>
+    void EnsureResourceCoverage(System.Random rng, List<Region> regions, int M, int castleA, int castleB)
+    {
+        bool hasForest = regions.Any(r => r.terrain == TerrainType.Forest);
+        bool hasStone = regions.Any(r => r.terrain == TerrainType.Quarry || r.terrain == TerrainType.Hills);
+        bool hasFertile = regions.Any(r => r.terrain == TerrainType.Plain && r.plainSubState == PlainSubState.Fertile);
+
+        if (!hasForest)
+            ForceReplace(rng, regions, M, castleA, castleB,
+                new[] { MapZone.LeftResource, MapZone.RightResource }, TerrainType.Forest);
+        if (!hasStone)
+            ForceReplace(rng, regions, M, castleA, castleB,
+                new[] { MapZone.LeftResource, MapZone.RightResource }, TerrainType.Quarry);
+        if (!hasFertile)
+            ForceReplace(rng, regions, M, castleA, castleB,
+                new[] { MapZone.Center, MapZone.LeftResource, MapZone.RightResource }, TerrainType.Plain,
+                forceSubState: PlainSubState.Fertile);
+    }
+
+    /// <summary>在指定区内随机选一个大区块替换地形（不破坏主城）。</summary>
+    void ForceReplace(System.Random rng, List<Region> regions, int M,
+                     int castleA, int castleB, MapZone[] zoneMask, TerrainType target,
+                     PlainSubState forceSubState = PlainSubState.Normal)
+    {
+        var candidates = regions.Where(r =>
+            zoneMask.Contains(r.zone) &&
+            r.regionIndex != castleA && r.regionIndex != castleB
+        ).ToList();
+
+        if (candidates.Count == 0) return;
+        int pick = rng.Next(candidates.Count);
+        candidates[pick].terrain = target;
+        if (target == TerrainType.Plain)
+            candidates[pick].plainSubState = forceSubState;
+    }
+
+    // ========================================================================
+    //  邻接校验 + 缓冲插入（3.2.1 第五节）
+    // ========================================================================
+
+    /// <summary>扫描相邻大区块对，违规则插入丘陵做缓冲。</summary>
+    void EnforceAdjacency(List<Region> regions, int M, int castleA, int castleB)
+    {
+        for (int i = 0; i < regions.Count - 1; i++)
+        {
+            var a = regions[i].terrain;
+            var b = regions[i + 1].terrain;
+
+            if (!_rulesConfig.CanAdjacency(a, b))
+            {
+                // 违规：优先改 i+1（靠中心侧），除非 i+1 是主城
+                int fixIdx = (i + 1 == castleA || i + 1 == castleB) ? i : i + 1;
+                // 出怪口端(0 或 M-1)不改
+                if (fixIdx == 0 || fixIdx == M - 1)
+                    fixIdx = (fixIdx == i) ? i + 1 : i;
+
+                regions[fixIdx].terrain = TerrainType.Hills;
+            }
+        }
+    }
+
+    // ========================================================================
+    //  Building 生成（3.2.1 第六节）
+    // ========================================================================
+
+    /// <summary>为一个大区块生成所有 Building 占位（持续性 + 一次性 + 特殊点）。</summary>
+    List<BuildingPlaceholder> GenerateBuildings(System.Random rng, Region region, int difficulty, bool isInner)
+    {
+        var buildings = new List<BuildingPlaceholder>();
+
+        // 极端区不放资源点（纯战场/屏障）
+        if (region.zone == MapZone.LeftExtreme || region.zone == MapZone.RightExtreme)
+            return buildings;
+
+        // 1. 持续性资源
+        var producerType = GetProducerType(region);
+        if (producerType != BuildingType.None)
+        {
+            int count = RollCount(rng, region.terrain, difficulty, isProducer: true);
+            PlaceBuildings(buildings, rng, producerType, count, region.cellCount,
+                           difficulty, isInner, BuildingCategory.ResourceProducer, isConsumable: false);
+        }
+
+        // 2. 一次性资源
+        var pickupTypes = GetPickupTypes(region);
+        foreach (var pt in pickupTypes)
+        {
+            int count = RollCount(rng, region.terrain, difficulty, isProducer: false);
+            PlaceBuildings(buildings, rng, pt, count, region.cellCount,
+                           difficulty, isInner, BuildingCategory.ResourcePickup, isConsumable: true);
+        }
+
+        // 3. 特殊点（低概率）
+        float spChance = _resourceConfig != null ? _resourceConfig.specialPointChance : 0.15f;
+        if (rng.NextDouble() < spChance)
+        {
+            var spType = RollSpecialPointType(rng);
+            PlaceBuildings(buildings, rng, spType, 1, region.cellCount,
+                           difficulty, isInner, BuildingCategory.SpecialPoint, isConsumable: false);
+        }
+
+        return buildings;
+    }
+
+    /// <summary>地形 → 持续性资源类型映射。</summary>
+    BuildingType GetProducerType(Region region)
+    {
+        switch (region.terrain)
+        {
+            case TerrainType.Forest: return BuildingType.Tree;
+            case TerrainType.Quarry: return BuildingType.Mine;
+            case TerrainType.Hills: return BuildingType.Mine;       // 丘陵复合：也有矿洞
+            case TerrainType.Plain:
+                return region.plainSubState == PlainSubState.Fertile
+                    ? BuildingType.Farmland : BuildingType.None;
+            default: return BuildingType.None;
+        }
+    }
+
+    /// <summary>地形 → 一次性资源类型列表。</summary>
+    BuildingType[] GetPickupTypes(Region region)
+    {
+        switch (region.terrain)
+        {
+            case TerrainType.Forest:
+                return new[] { BuildingType.WoodPile };
+            case TerrainType.Quarry:
+                return new[] { BuildingType.OreVein };
+            case TerrainType.Hills:
+                return new[] { BuildingType.StonePile, BuildingType.WoodPile, BuildingType.OreVein };
+            case TerrainType.Plain:
+                return region.plainSubState == PlainSubState.Fertile
+                    ? new[] { BuildingType.StonePile, BuildingType.WoodPile }
+                    : new[] { BuildingType.StonePile, BuildingType.WoodPile };
+            default:
+                return new BuildingType[0];
+        }
+    }
+
+    /// <summary>按地形+难度滚动资源点数量。</summary>
+    int RollCount(System.Random rng, TerrainType terrain, int difficulty, bool isProducer)
+    {
+        var (min, max) = _resourceConfig != null
+            ? _resourceConfig.GetResourceCount(terrain)
+            : (2, 4);
+
+        float density = _resourceConfig != null
+            ? _resourceConfig.GetDensity(difficulty)
+            : 1.0f;
+
+        // 一次性资源额外密度因子
+        if (!isProducer && _resourceConfig != null)
+            density *= _resourceConfig.pickupDensityFactor;
+
+        int adjMin = Mathf.RoundToInt(min * density);
+        int adjMax = Mathf.RoundToInt(max * density);
+        if (adjMax < adjMin) adjMax = adjMin;
+
+        return adjMin + (adjMax > adjMin ? rng.Next(adjMax - adjMin + 1) : 0);
+    }
+
+    /// <summary>随机滚动等级（贫瘠/普通/富有）。</summary>
+    ResourceGrade RollGrade(System.Random rng, int difficulty, bool isInner)
+    {
+        var prob = _resourceConfig != null
+            ? _resourceConfig.GetGradeProb(difficulty, isInner)
+            : new GradeProbability { barren = 0.35f, normal = 0.55f, rich = 0.10f };
+
+        float r = (float)rng.NextDouble();
+        if (r < prob.barren) return ResourceGrade.Barren;
+        if (r < prob.barren + prob.normal) return ResourceGrade.Normal;
+        return ResourceGrade.Rich;
+    }
+
+    /// <summary>随机滚动特殊点类型。</summary>
+    BuildingType RollSpecialPointType(System.Random rng)
+    {
+        var types = new[] { BuildingType.TreasureBox, BuildingType.Ruins };
+        return types[rng.Next(types.Length)];
+    }
+
+    /// <summary>在小区块内放置 N 个 Building 占位（避开两端 + 不重复）。</summary>
+    void PlaceBuildings(List<BuildingPlaceholder> list, System.Random rng,
+                       BuildingType type, int count, int cellCount,
+                       int difficulty, bool isInner, BuildingCategory category, bool isConsumable)
+    {
+        // 候选小区块：1..cellCount-2（避开两端做战场缓冲）
+        var candidates = new List<int>();
+        for (int x = 1; x <= cellCount - 2; x++)
+            if (!list.Any(b => b.localCellX == x))  // 每个小区块最多一个 Building
+                candidates.Add(x);
+
+        for (int i = 0; i < count && candidates.Count > 0; i++)
+        {
+            int pickIdx = rng.Next(candidates.Count);
+            list.Add(new BuildingPlaceholder
+            {
+                type = type,
+                category = category,
+                localCellX = candidates[pickIdx],
+                grade = RollGrade(rng, difficulty, isInner),
+                isConsumable = isConsumable
+            });
+            candidates.RemoveAt(pickIdx);
+        }
+    }
+
+    // ========================================================================
+    //  裂隙放置（3.2.1 第 6.10 节）
+    // ========================================================================
+
+    /// <summary>在极端区端点放裂隙（Rift Building 占位）。</summary>
+    void PlaceRifts(MapData map, int M, BigTerrain bigTerrain)
+    {
+        bool isInland = bigTerrain == BigTerrain.Inland;
+        int leftRiftRegion = 0;       // 最左大区块
+        int rightRiftRegion = M - 1;  // 最右大区块
+
+        // 内陆：左端=雪山屏障(无怪)，右端=荒地出怪
+        // 岛屿：两端海岸都出怪
+        int riftRegion = isInland ? rightRiftRegion : leftRiftRegion;
+        PlaceRiftInRegion(map.regions[riftRegion]);
+
+        if (!isInland)
+        {
+            // 岛屿：右端也有裂隙
+            PlaceRiftInRegion(map.regions[rightRiftRegion]);
+        }
+    }
+
+    void PlaceRiftInRegion(Region region)
+    {
+        // 裂隙放在该大区块的小区块 0（最外端）
+        region.riftCellX = 0;
+    }
+
+    // ========================================================================
+    //  跨岛远征 + 王国征服（3.2 第 6.4-6.5 节）
+    // ========================================================================
+
+    /// <summary>切换到指定地图（跨岛远征）。</summary>
+    public void SwitchToMap(int mapId)
+    {
+        if (_world == null) return;
+        _world.activeMapId = mapId;
+        Debug.Log($"[WorldManager] 切换到地图 mapId={mapId}");
+    }
+
+    /// <summary>占领敌方王国地图。</summary>
+    public void ConquerMap(int mapId)
+    {
+        if (_world == null) return;
+        var map = _world.maps.FirstOrDefault(m => m.mapId == mapId);
+        if (map != null)
+        {
+            map.isConquered = true;
+            _world.conqueredMapIds.Add(mapId);
+            Debug.Log($"[WorldManager] 占领地图 mapId={mapId}, 已征服数={_world.conqueredMapIds.Count}");
+        }
+    }
+
+    // ========================================================================
+    //  ISaveable（3.2 第 7.6 节，version=2 多地图存档）
+    // ========================================================================
 
     public SavePayload SaveState()
     {
+        if (_world == null)
+        {
+            // 兼容旧版（无世界状态时存 mapSeed+difficulty）
+            var oldData = new WorldSaveData { mapSeed = MapSeed, difficulty = Difficulty };
+            return new SavePayload
+            {
+                typeName = typeof(WorldSaveData).AssemblyQualifiedName,
+                json = JsonUtility.ToJson(oldData),
+                version = 1
+            };
+        }
+
         var data = new WorldSaveData
         {
-            mapSeed = MapSeed,
-            difficulty = Difficulty
+            worldSeed = _world.worldSeed,
+            worldSize = (int)_world.worldSize,
+            difficulty = _world.difficulty,
+            activeMapId = _world.activeMapId,
+            mapsMeta = SerializeMapsMeta(_world.maps),
+            conqueredMapIds = string.Join(",", _world.conqueredMapIds)
         };
         return new SavePayload
         {
             typeName = typeof(WorldSaveData).AssemblyQualifiedName,
             json = JsonUtility.ToJson(data),
-            version = 1
+            version = 2
         };
     }
 
@@ -47,33 +630,92 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     {
         if (payload.typeName != typeof(WorldSaveData).AssemblyQualifiedName) return;
 
-        var data = JsonUtility.FromJson<WorldSaveData>(payload.json);
-        MapSeed = data.mapSeed;
-        Difficulty = data.difficulty;
+        EnsureConfigsLoaded();
 
-        // TODO: 读档时用存档的 seed 重新生成地图（要求生成过程是确定性的：同 seed 同结果）
-        // GenerateWorld(MapSeed);
-        Debug.Log($"[WorldManager] 从存档恢复: seed={MapSeed}, difficulty={Difficulty}");
+        var data = JsonUtility.FromJson<WorldSaveData>(payload.json);
+
+        // 兼容旧版（version=1 或 worldSeed==0 但 mapSeed!=0）
+        int worldSeed = data.worldSeed;
+        if (worldSeed == 0 && data.mapSeed != 0) worldSeed = data.mapSeed;
+
+        WorldSize worldSize = data.worldSize > 0 ? (WorldSize)data.worldSize : WorldSize.Medium;
+        int difficulty = data.difficulty > 0 ? data.difficulty : 2;
+
+        MapSeed = worldSeed;  // 兼容
+        Difficulty = difficulty;
+
+        // 用 seed 重新生成世界（确定性 → 地形/资源完全复现）
+        GenerateWorld(worldSeed, worldSize, difficulty);
+
+        // 恢复活跃地图
+        if (data.activeMapId >= 0 && _world.maps.Any(m => m.mapId == data.activeMapId))
+            _world.activeMapId = data.activeMapId;
+
+        // 恢复征服状态
+        if (!string.IsNullOrEmpty(data.conqueredMapIds))
+        {
+            foreach (var idStr in data.conqueredMapIds.Split(','))
+                if (int.TryParse(idStr, out var mid))
+                    ConquerMap(mid);
+        }
+
+        Debug.Log($"[WorldManager] 从存档恢复: seed={worldSeed}, size={worldSize}, " +
+                  $"difficulty={difficulty}, activeMapId={_world.activeMapId}");
     }
 
-    // ===== 状态重置（由 TeardownManager 返回主菜单时调用）=====
+    /// <summary>序列化地图列表 meta（只存 mapId/seed/bigTerrain/isConquered，地形靠 seed 复现）。</summary>
+    string SerializeMapsMeta(List<MapData> maps)
+    {
+        var metaList = maps.Select(m => new MapMeta
+        {
+            mapId = m.mapId,
+            seed = m.seed,
+            bigTerrain = (int)m.bigTerrain,
+            isConquered = m.isConquered ? 1 : 0
+        }).ToArray();
+        return JsonUtility.ToJson(new MapMetaList { items = metaList });
+    }
 
-    /// <summary>
-    /// 重置运行时状态到默认值。
-    /// 重新进入游戏时 ApplyConfig（新建）/ LoadState（读档）会覆盖，
-    /// 但显式重置兜底防止上一局地图种子残留，调试时也便于观察状态边界。
-    /// </summary>
+    // ========================================================================
+    //  状态重置（由 TeardownManager 返回主菜单时调用）
+    // ========================================================================
+
     public void ResetState()
     {
+        _world = null;
         MapSeed = 0;
         Difficulty = 0;
-        Debug.Log("[WorldManager] ResetState: seed=0, difficulty=0");
+        Debug.Log("[WorldManager] ResetState: 世界已清空");
     }
 }
+
+// ========================================================================
+//  存档数据结构（version=2，兼容旧版 version=1）
+// ========================================================================
 
 [System.Serializable]
 public class WorldSaveData
 {
-    public int mapSeed;             // 地图生成种子（读档用同 seed 复现地形）
-    public int difficulty;          // 难度（1=Easy, 2=Normal, 3=Hard）
+    // 旧版字段（version=1 兼容）
+    public int mapSeed;          // 旧版地图种子（新版用 worldSeed）
+    public int difficulty;       // 难度
+
+    // 新增字段（version=2）
+    public int worldSeed;         // 世界种子
+    public int worldSize;         // (int)WorldSize
+    public int activeMapId;       // 当前活跃地图
+    public string mapsMeta;       // 地图列表 meta（JSON）
+    public string conqueredMapIds;// 逗号分隔的已征服 mapId
+}
+
+[System.Serializable]
+public class MapMetaList { public MapMeta[] items; }
+
+[System.Serializable]
+public class MapMeta
+{
+    public int mapId;
+    public int seed;
+    public int bigTerrain;
+    public int isConquered;
 }

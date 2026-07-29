@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3b545fbf8d53074fb2725c531f61412, type: 3}
+  m_Name: ResourceGenConfig
+  m_EditorClassIdentifier: 
+  baseCounts:
+  - terrain: 3
+    minCount: 6
+    maxCount: 8
+  - terrain: 4
+    minCount: 4
+    maxCount: 6
+  - terrain: 2
+    minCount: 2
+    maxCount: 4
+  - terrain: 0
+    minCount: 0
+    maxCount: 2
+  densityByDifficulty:
+  - 1
+  - 0.8
+  - 0.6
+  pickupDensityFactor: 0.8
+  specialPointChance: 0.15
+  gradeProbByDifficulty:
+  - difficulty: 1
+    probability:
+      barren: 0.2
+      normal: 0.6
+      rich: 0.2
+  - difficulty: 2
+    probability:
+      barren: 0.35
+      normal: 0.55
+      rich: 0.1
+  - difficulty: 3
+    probability:
+      barren: 0.5
+      normal: 0.45
+      rich: 0.05
+  innerOffset:
+    barrenOffset: 0.1
+    normalOffset: 0
+    richOffset: -0.1
+  outerOffset:
+    barrenOffset: -0.1
+    normalOffset: 0
+    richOffset: 0.1

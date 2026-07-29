@@ -15,6 +15,8 @@ public class CharacterCreationPanel : MonoBehaviour
     private MainMenuController _controller;
     private TextField _nameInput;
     private DropdownField _difficultySelect;
+    private DropdownField _mapSizeSelect;
+    private IntegerField _worldSeedInput;
 
     private bool _buttonsBound;
 
@@ -32,6 +34,8 @@ public class CharacterCreationPanel : MonoBehaviour
 
         _nameInput = root.Q<TextField>("ruler-name-input");
         _difficultySelect = root.Q<DropdownField>("difficulty-select");
+        _mapSizeSelect = root.Q<DropdownField>("map-size-select");
+        _worldSeedInput = root.Q<IntegerField>("world-seed-input");
 
         // 默认值：索引 1 = "普通"（档位 2）
         if (_difficultySelect != null)
@@ -84,6 +88,17 @@ public class CharacterCreationPanel : MonoBehaviour
         };
     }
 
+    /// <summary>将地图大小文字映射为枚举</summary>
+    private WorldSize MapSizeTextToValue(string text)
+    {
+        return text switch
+        {
+            "小" => WorldSize.Small,
+            "大" => WorldSize.Large,
+            _ => WorldSize.Medium  // 默认"中"
+        };
+    }
+
     private void OnConfirmClicked()
     {
         // 自动分配第一个空存档槽（进入本面板前 MainMenuController 已校验有空槽）
@@ -95,15 +110,18 @@ public class CharacterCreationPanel : MonoBehaviour
         }
 
         string name = string.IsNullOrEmpty(_nameInput.value) ? "无名君主" : _nameInput.value;
-        // PopupField 返回选中的文字，转为难度档位 1/2/3
         int difficulty = DifficultyTextToValue(_difficultySelect?.value ?? "普通");
+        WorldSize worldSize = MapSizeTextToValue(_mapSizeSelect?.value ?? "中");
+        int worldSeed = _worldSeedInput?.value ?? 0;
 
         var config = new NewGameConfig
         {
             rulerName = name,
             difficulty = difficulty,
             selectedSlotId = slotId,
-            mapSeed = UnityEngine.Random.Range(1, int.MaxValue)
+            worldSeed = worldSeed,
+            worldSize = worldSize,
+            mapSeed = worldSeed != 0 ? worldSeed : UnityEngine.Random.Range(1, int.MaxValue)
         };
 
         _controller.OnCharacterCreateConfirmed(config);
