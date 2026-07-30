@@ -502,7 +502,7 @@ MonoBehaviour:
   mainMenuRoot: {fileID: 200544039}
   saveSlotsRoot: {fileID: 1481464323}
   characterCreationRoot: {fileID: 1259742390}
-  gameSceneName: SampleScene
+  gameSceneName: GameScene
 --- !u!4 &1244534763
 Transform:
   m_ObjectHideFlags: 0

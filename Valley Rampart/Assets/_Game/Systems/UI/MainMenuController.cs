@@ -23,7 +23,7 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private GameObject characterCreationRoot;
 
     [Header("游戏场景名（点击开始游戏/读档后切到该场景）")]
-    [SerializeField] private string gameSceneName = "SampleScene";
+    [SerializeField] private string gameSceneName = "GameScene";
 
     private Panel _currentPanel = Panel.Splash;
 

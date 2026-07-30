@@ -174,12 +174,11 @@ public class BuildController : Singleton<BuildController>
         b.Init(_selectedDef, coord, true);
         b.StartConstructing();  // 玩家建造走 Constructing 进度（3.3.4 批次3）
 
-        // 确保 Collider2D
+        // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）
         if (go.GetComponent<Collider2D>() == null)
         {
-            float cs = GridSystem.Instance.Config.cellSize;
             var col = go.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(cs * b.cellWidth, cs);
+            col.size = Vector2.one;
         }
 
         GridSystem.Instance.MarkOccupiedFootprint(coord, b.cellWidth, b);

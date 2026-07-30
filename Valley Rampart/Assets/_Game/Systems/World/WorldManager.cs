@@ -74,6 +74,27 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     /// <summary>旧版兼容签名（worldSize 默认 Medium）。</summary>
     public void ApplyConfig(int mapSeed, int difficulty)
         => ApplyConfig(mapSeed, WorldSize.Medium, difficulty);
+    /// <summary>
+    /// 仅生成地图数据并设置 ActiveMap（编辑模式预览用，3.3.4）。
+    /// 不实例化 Building、不发布 MapGeneratedEvent，避免编辑模式副作用。
+    /// 配合 MapVisualizer.Visualize() 在非 Play 模式查看地图。
+    /// </summary>
+    public MapData GenerateMapForPreview(int seed, WorldSize size, int difficulty)
+    {
+        EnsureConfigsLoaded();
+        // 先设 _world，因为 GenerateMap 内部用 _world.difficulty（GenerateBuildings）
+        _world = new WorldState
+        {
+            worldSeed = seed,
+            worldSize = size,
+            difficulty = difficulty,
+            activeMapId = 0
+        };
+        var rng = new System.Random(seed);
+        var map = GenerateMap(rng, seed, 0, size, true);
+        _world.maps.Add(map);
+        return map;
+    }
 
     // ========================================================================
     //  世界生成（3.2 第 5.2 节 + 3.2.1 第七节完整 pipeline）
@@ -84,6 +105,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     /// </summary>
     void GenerateWorld(int worldSeed, WorldSize size, int difficulty)
     {
+        // 清理旧建筑对象（重新生成地图时销毁残留，3.3.4 修复）
+        BuildingFactory.ClearAllBuildings();
+
         // seed=0 时随机生成一个
         if (worldSeed == 0) worldSeed = Random.Range(1, int.MaxValue);
 
@@ -142,10 +166,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
 
         // === Step 2: 5 区分配 ===
         var (center, extreme, resource) = MapGenRules.CalcZoneCounts(M);
-        var (castleA, castleB) = MapGenRules.GetCastleRegionIndices(M, center, extreme, resource);
 
-        // 废弃城堡所在的大区块索引（正中心，只占 1 个大区块）
-        int abandonedCastleRegionIdx = castleB;
+        // 废弃城堡所在的大区块索引（正中心，单一）
+        int abandonedCastleRegionIdx = MapGenRules.GetCastleRegionIndex(M, center, extreme, resource);
 
         // === Step 3-5: 按区分配地形 ===
         for (int i = 0; i < M; i++)

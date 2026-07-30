@@ -137,6 +137,12 @@ public class Building : MonoBehaviour, IInteractable
         UpdateVisual();
     }
 
+    private void Start()
+    {
+        // 地图预置建筑初始化视觉（含 Abandoned 暗化 + 占位缩放）
+        UpdateVisual();
+    }
+
     private void Update()
     {
         if (state != BuildingState.Constructing) return;
@@ -166,10 +172,14 @@ public class Building : MonoBehaviour, IInteractable
         EventBus.Publish(new BuildingActivatedEvent(this));
     }
 
-    /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。</summary>
+    /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 cellWidth 缩放。</summary>
     void UpdateVisual()
     {
         if (_renderer == null) _renderer = GetComponent<SpriteRenderer>();
+        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
+        // 占位 sprite 是 1x1 世界单位，按 cellWidth × cellSize 缩放到实际占地尺寸
+        transform.localScale = new Vector3(Mathf.Max(1, cellWidth) * cellSize, cellSize, 1);
+
         if (state == BuildingState.Constructing)
         {
             // 脚手架（半透明棕方块）

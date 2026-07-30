@@ -51,7 +51,7 @@ public class GridSystem : Singleton<GridSystem>
     {
         if (config == null) return Vector2.zero;
         float x = (coord.x + 0.5f) * config.cellSize;
-        float y = coord.y == 1 ? config.flyHeight : 0f;
+        float y = coord.y == 1 ? config.flyHeight : -3f;  // 地面层贴合 Baseline_y=-3
         return new Vector2(x, y);
     }
 
@@ -311,11 +311,10 @@ public class GridSystem : Singleton<GridSystem>
         }
 
         // 主城标记（金色方块）-- 3.2.1 第 2.4 节
-        var (castleA, castleB) = MapGenRules.GetCastleRegionIndices(M);
-        foreach (int ci in new[] { castleA, castleB })
+        int castleIdx = MapGenRules.GetCastleRegionIndex(M);
+        if (castleIdx >= 0 && castleIdx < M)
         {
-            if (ci < 0 || ci >= M) continue;
-            var cr = _activeMap.regions[ci];
+            var cr = _activeMap.regions[castleIdx];
             float cwx = (cr.cellStartX + cr.cellCount / 2f) * cs;
             Gizmos.color = new Color(0.8f, 0.7f, 0.2f);
             Gizmos.DrawCube(new Vector3(cwx, 0.5f, 0), new Vector3(cs * 2, 0.8f, 0.8f));

@@ -93,11 +93,15 @@ public static class BuildingFactory
         // 全局小区块坐标
         int globalCellX = region.cellStartX + ph.localCellX;
         var coord = new GridCoord(globalCellX, 0);
+        int phCellWidth = (ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
 
-        // 世界坐标
+        // 世界坐标（多格建筑中心偏移：localCellX 是左上角，中心在 localCellX + (cellWidth-1)/2）
+        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
         Vector3 worldPos = GridSystem.Instance != null
-            ? GridSystem.Instance.CoordToWorld(coord)
-            : new Vector3(globalCellX * 32f, 0, 0);
+            ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
+            : new Vector3(globalCellX * cs, -3f, 0);
+        if (phCellWidth > 1)
+            worldPos.x += (phCellWidth - 1) / 2f * cs;  // 多格居中（3.3.4 修复视觉重叠）
 
         // 实例化 GameObject（用 def.prefab 或空壳 + 占位视觉）
         GameObject go;
@@ -135,8 +139,7 @@ public static class BuildingFactory
             b.isPlayerBuilt = false;           // 地图预置建筑 → false
             b.sourceType = ph.type;
             b.grade = ph.grade;
-            int phCellWidth = (ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
-            b.cellWidth = phCellWidth;
+            b.cellWidth = phCellWidth;  // phCellWidth 已提前计算（worldPos 偏移用）
             b.level = 1;
 
             // 2. faction + isObstacle
@@ -174,9 +177,9 @@ public static class BuildingFactory
         // 确保有 Collider2D（InteractionManager OverlapPoint 需要）
         if (go.GetComponent<Collider2D>() == null)
         {
-            float cellSize = GridSystem.Instance != null ? GridSystem.Instance.Config.cellSize : 32f;
+            // size 局部 1x1，由 Building.UpdateVisual 的 localScale 统一缩放到世界尺寸（3.3.4 修复误触+碰撞盒缺失）
             var col = go.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(cellSize * Mathf.Max(1, b.cellWidth), cellSize);
+            col.size = Vector2.one;
         }
 
         // 注册占用 + 注册表 + 事件（防御性：单例不存在时只打一条 Warning，不抛异常）
@@ -234,9 +237,19 @@ public static class BuildingFactory
             b.gameObject.AddComponent<CastleCoreComponent>()?.Init(b);
     }
 
-    /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。</summary>
+    /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。销毁 GameObject + 清 Registry。</summary>
     public static void ClearAllBuildings()
     {
-        BuildingRegistry.Instance?.Clear();
+        if (BuildingRegistry.Instance == null) return;
+        var all = BuildingRegistry.Instance.All;
+        for (int i = all.Count - 1; i >= 0; i--)
+        {
+            if (all[i] != null && all[i].gameObject != null)
+            {
+                if (Application.isPlaying) Object.Destroy(all[i].gameObject);
+                else Object.DestroyImmediate(all[i].gameObject);  // 编辑模式立即销毁
+            }
+        }
+        BuildingRegistry.Instance.Clear();
     }
 }

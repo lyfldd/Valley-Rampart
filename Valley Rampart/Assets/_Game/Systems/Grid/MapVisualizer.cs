@@ -44,7 +44,19 @@ public class MapVisualizer : MonoBehaviour
 
     public void Visualize()
     {
-        var map = WorldManager.Instance?.ActiveMap;
+        // Play 模式不画建筑标记（BuildingFactory 已创建真实建筑）；非 Play 画（无 BuildingFactory）
+        Visualize(WorldManager.Instance?.ActiveMap, !Application.isPlaying);
+    }
+
+    /// <summary>可视化指定 MapData（编辑模式预览用，默认画建筑标记）。</summary>
+    public void Visualize(MapData map)
+    {
+        Visualize(map, true);
+    }
+
+    /// <summary>可视化指定 MapData。showBuildingMarkers=false 时只画底图，不画建筑标记（Play 模式避免和 BuildingFactory 重复）。</summary>
+    public void Visualize(MapData map, bool showBuildingMarkers)
+    {
         if (map == null)
         {
             Debug.LogWarning("[MapVisualizer] 无活跃地图，无法可视化");
@@ -101,8 +113,8 @@ public class MapVisualizer : MonoBehaviour
             }
 
             // 资源点（按类型上色, sortingOrder=1, 在 Region 上面）
-            // 跳过 CastleCore（由下方废弃城堡专用代码绘制）
-            if (region.resources != null)
+            // 跳过 CastleCore（由下方废弃城堡专用代码绘制）。Play 模式不画（BuildingFactory 已创建真实建筑）
+            if (showBuildingMarkers && region.resources != null)
             {
                 foreach (var b in region.resources)
                 {
@@ -119,8 +131,8 @@ public class MapVisualizer : MonoBehaviour
                 }
             }
 
-            // 裂隙（红色, sortingOrder=1）
-            if (region.riftCellX >= 0)
+            // 裂隙（红色, sortingOrder=1）。Play 模式不画（BuildingFactory 已创建真实 Rift）
+            if (showBuildingMarkers && region.riftCellX >= 0)
             {
                 float mappedWx = startX + (region.riftCellX + 0.5f) / rpc * regionWidth;
                 CreateSpriteObj(_root, prefix + "Rift",
@@ -130,7 +142,8 @@ public class MapVisualizer : MonoBehaviour
                     sortingOrder: 1);
             }
 
-            // 废弃城堡（从 map data 读取，两格占位，灰色，sortingOrder=1）
+            // 废弃城堡（从 map data 读取，两格占位，灰色，sortingOrder=1）。Play 模式不画（BuildingFactory 已创建真实 CastleCore）
+            if (showBuildingMarkers)
             foreach (var bp in region.resources)
             {
                 if (bp.category == BuildingCategory.CastleCore)

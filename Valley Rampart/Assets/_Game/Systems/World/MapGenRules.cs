@@ -75,19 +75,19 @@ public static class MapGenRules
     //  主城位置（3.2.1 第 2.4 节）
     // ========================================================================
 
-    /// <summary>废弃城堡所在的大区块索引（2 个，对称，简写版）。</summary>
-    public static (int castleA, int castleB) GetCastleRegionIndices(int M)
+    /// <summary>废弃城堡所在的大区块索引（正中心，单一，简写版）。</summary>
+    public static int GetCastleRegionIndex(int M)
     {
         var (center, extreme, resource) = CalcZoneCounts(M);
-        return GetCastleRegionIndices(M, center, extreme, resource);
+        return GetCastleRegionIndex(M, center, extreme, resource);
     }
 
-    /// <summary>废弃城堡所在的大区块索引（带预计算 zone counts）。</summary>
-    public static (int castleA, int castleB) GetCastleRegionIndices(int M, int center, int extreme, int resource)
+    /// <summary>废弃城堡所在的大区块索引（正中心，带预计算 zone counts）。</summary>
+    public static int GetCastleRegionIndex(int M, int center, int extreme, int resource)
     {
         int centerStart = extreme + resource;
         int midOffset = center / 2;
-        return (centerStart + midOffset - 1, centerStart + midOffset);
+        return centerStart + midOffset - 1;  // 中心区块（旧双索引废案已去除）
     }
 
     // ========================================================================

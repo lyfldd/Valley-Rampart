@@ -52,11 +52,11 @@ public static class MapValidator
     static void CheckCastlePosition(MapData map, List<ValidationIssue> issues)
     {
         int M = map.regions.Count;
-        var (castleA, castleB) = MapGenRules.GetCastleRegionIndices(M);
+        int castleIdx = MapGenRules.GetCastleRegionIndex(M);
 
-        // castleB 区域应有 CastleCore
+        // castleIdx 区域应有 CastleCore
         bool foundCastle = false;
-        var region = map.regions[castleB];
+        var region = map.regions[castleIdx];
         if (region.resources != null)
         {
             foreach (var b in region.resources)
@@ -74,7 +74,7 @@ public static class MapValidator
             {
                 severity = Severity.Error,
                 checkName = "废弃城堡位置",
-                message = $"区域 {castleB} 未找到 CastleCore 占位"
+                message = $"区域 {castleIdx} 未找到 CastleCore 占位"
             });
 
         // 城堡区域应为平原
@@ -83,7 +83,7 @@ public static class MapValidator
             {
                 severity = Severity.Warning,
                 checkName = "废弃城堡位置",
-                message = $"区域 {castleB} 地形为 {region.terrain}，期望 Plain"
+                message = $"区域 {castleIdx} 地形为 {region.terrain}，期望 Plain"
             });
     }
 
