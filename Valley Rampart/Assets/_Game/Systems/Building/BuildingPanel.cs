@@ -55,6 +55,10 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
 
         var def = _target.def;
 
+        // 标题：废弃态显示"废弃城堡"，修复后(Active)显示 def.displayName（主城）
+        if (_nameLabel != null)
+            _nameLabel.text = _target.state == BuildingState.Abandoned ? "废弃城堡" : def.displayName;
+
         // 修复按钮（Abandoned 态，复用升级按钮；3.3.4 批次7）
         if (_target.state == BuildingState.Abandoned)
         {
@@ -69,8 +73,6 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             return;
         }
 
-        // 标题
-        if (_nameLabel != null) _nameLabel.text = def.displayName;
         if (_levelLabel != null) _levelLabel.text = $"Lv.{_target.level}";
 
         // HP
