@@ -10,39 +10,40 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
-  m_Name: ore_vein
+  m_Name: market
   m_EditorClassIdentifier: 
-  id: ore_vein
-  displayName: "\u77FF\u8109"
-  description: 
+  id: market
+  displayName: "\u5E02\u573A"
+  description: "\u4EA7\u51FA\u91D1\u5E01"
   faction: 1
-  role: 4
+  role: 2
   cost:
-    gold: 0
+    gold: 80
     stone: 0
     wood: 0
     food: 0
   footprint: {x: 1, y: 1}
-  allowedTerrain: 0400000005000000
+  allowedTerrain: 
   isObstacle: 0
   producer:
     kind: 0
-    rate: 0
-    capacity: 0
+    rate: 5
+    capacity: 100
   combat:
     attack: 0
     defense: 0
-    maxHp: 80
+    maxHp: 0
     range: 0
     damageType: 0
   levels: []
-  outputResource: 1
-  isResourceNode: 1
+  outputResource: 0
+  isResourceNode: 0
+  unlockLevel: 2
   interactableType: 0
-  isPlayerBuilt: 0
+  isPlayerBuilt: 1
   isDestructible: 1
-  sourceType: 6
-  isConsumable: 1
+  sourceType: 0
+  isConsumable: 0
   gradeScale:
   - 0.7
   - 1

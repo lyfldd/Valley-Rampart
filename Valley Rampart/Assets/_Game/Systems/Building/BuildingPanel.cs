@@ -32,6 +32,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private Button _upgradeButton;
     private Button _demolishButton;
     private Button _closeButton;
+    private Button _harvestButton;
 
     // ===== IUIPanel =====
 
@@ -53,6 +54,20 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_target == null || _target.def == null) return;
 
         var def = _target.def;
+
+        // 修复按钮（Abandoned 态，复用升级按钮；3.3.4 批次7）
+        if (_target.state == BuildingState.Abandoned)
+        {
+            if (_upgradeButton != null)
+            {
+                _upgradeButton.style.display = DisplayStyle.Flex;
+                var repairCost = def.cost;
+                _upgradeButton.text = $"修复 (金{repairCost.gold} 石{repairCost.stone} 木{repairCost.wood} 粮{repairCost.food})";
+                _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(repairCost));
+            }
+            if (_demolishButton != null) _demolishButton.style.display = DisplayStyle.None;
+            return;
+        }
 
         // 标题
         if (_nameLabel != null) _nameLabel.text = def.displayName;
@@ -106,6 +121,16 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         bool canDemolish = _target.isPlayerBuilt && def.isDestructible;
         if (_demolishButton != null)
             _demolishButton.style.display = canDemolish ? DisplayStyle.Flex : DisplayStyle.None;
+
+        // 收取按钮（条件渲染：有 StorageComponent 且可收取，3.3.4 批次5）
+        var storage = _target.GetComponent<StorageComponent>();
+        if (_harvestButton != null)
+        {
+            bool canHarvest = storage != null && storage.IsReadyToHarvest();
+            _harvestButton.style.display = canHarvest ? DisplayStyle.Flex : DisplayStyle.None;
+            if (canHarvest)
+                _harvestButton.text = $"收取 {storage.storedAmount}/{storage.capacity}";
+        }
     }
 
     // ===== 对外 API（由 Building.Interact → InteractionManager 调用 SetTarget → Open）=====
@@ -174,6 +199,16 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_demolishButton != null) _demolishButton.clicked += OnDemolishClicked;
         if (_closeButton != null) _closeButton.clicked += OnCloseClicked;
 
+        // 动态创建收取按钮（UXML 未预留，3.3.4 批次5）
+        if (_harvestButton == null)
+        {
+            _harvestButton = new Button(OnHarvestClicked) { name = "harvest-button", text = "收取" };
+            // 加到拆除按钮的父级（按钮容器），否则回退到 root
+            var host = _demolishButton != null ? _demolishButton.parent : root;
+            host?.Add(_harvestButton);
+            _harvestButton.style.display = DisplayStyle.None;
+        }
+
         _buttonsBound = true;
     }
 
@@ -183,6 +218,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_upgradeButton != null) _upgradeButton.clicked -= OnUpgradeClicked;
         if (_demolishButton != null) _demolishButton.clicked -= OnDemolishClicked;
         if (_closeButton != null) _closeButton.clicked -= OnCloseClicked;
+        if (_harvestButton != null) _harvestButton.clicked -= OnHarvestClicked;
         _buttonsBound = false;
     }
 
@@ -201,6 +237,22 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private void OnUpgradeClicked()
     {
         if (_target == null || _target.def == null) return;
+
+        // 修复废弃主城（3.3.4 批次7）
+        if (_target.state == BuildingState.Abandoned)
+        {
+            var repairCost = _target.def.cost;
+            if (RulerController.Instance == null || !RulerController.Instance.CanAfford(repairCost))
+            {
+                Debug.Log("[BuildingPanel] 资源不足，无法修复");
+                return;
+            }
+            RulerController.Instance.Spend(repairCost);
+            _target.StartConstructing();
+            UIManager.Instance?.Pop();
+            return;
+        }
+
         if (!_target.isPlayerBuilt || _target.def.levels == null || _target.def.levels.Length == 0) return;
         if (_target.level - 1 >= _target.def.levels.Length) return;
 
@@ -212,7 +264,11 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         }
 
         RulerController.Instance.Spend(lvCost);
-        _target.TryUpgrade();
+        if (_target.TryUpgrade())
+        {
+            // 升级走 Constructing 进度，关闭面板（3.3.4 批次3）
+            UIManager.Instance?.Pop();
+        }
     }
 
     private void OnDemolishClicked()
@@ -220,10 +276,18 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_target == null || _target.def == null) return;
         if (!_target.isPlayerBuilt || !_target.def.isDestructible) return;
 
-        RulerController.Instance?.Refund(_target.def.cost, 0.5f);
-        int maxHp = _target.maxHp;
-        _target.TakeDamage(maxHp); // 触发 Die → Free + Unregister + Destroy
-        Close();
+        // Demolish 内部按 HP 比例返还 + Die（3.3.4 批次3）
+        _target.Demolish();
+        UIManager.Instance?.Pop();  // 出栈关闭面板
+    }
+
+    private void OnHarvestClicked()
+    {
+        if (_target == null) return;
+        var storage = _target.GetComponent<StorageComponent>();
+        if (storage == null || !storage.IsReadyToHarvest()) return;
+        storage.Harvest();  // 内部调 RulerController.ModifyResource 转入国库
+        Refresh();
     }
 
     private void OnCloseClicked()

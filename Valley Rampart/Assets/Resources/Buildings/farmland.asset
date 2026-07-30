@@ -36,6 +36,8 @@ MonoBehaviour:
     range: 0
     damageType: 0
   levels: []
+  outputResource: 3
+  isResourceNode: 1
   interactableType: 0
   isPlayerBuilt: 0
   isDestructible: 1

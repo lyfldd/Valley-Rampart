@@ -65,6 +65,10 @@ public class PausePanel : MonoBehaviour
 
     private void OnEscapePressed(EscapePressedEvent evt)
     {
+        // UI 栈非空时优先关栈顶（建造模式/面板），不触发暂停（3.3.4 批次2）
+        if (UIManager.Instance != null && UIManager.Instance.HandleEscape())
+            return;
+
         switch (evt.CurrentState)
         {
             case GameState.Playing:

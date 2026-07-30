@@ -10,39 +10,40 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
-  m_Name: ore_vein
+  m_Name: gate
   m_EditorClassIdentifier: 
-  id: ore_vein
-  displayName: "\u77FF\u8109"
-  description: 
+  id: gate
+  displayName: "\u57CE\u95E8"
+  description: "\u57CE\u5899\u7F3A\u53E3"
   faction: 1
-  role: 4
+  role: 3
   cost:
-    gold: 0
+    gold: 80
     stone: 0
-    wood: 0
+    wood: 50
     food: 0
   footprint: {x: 1, y: 1}
-  allowedTerrain: 0400000005000000
-  isObstacle: 0
+  allowedTerrain: 
+  isObstacle: 1
   producer:
     kind: 0
     rate: 0
     capacity: 0
   combat:
     attack: 0
-    defense: 0
-    maxHp: 80
+    defense: 10
+    maxHp: 300
     range: 0
     damageType: 0
   levels: []
-  outputResource: 1
-  isResourceNode: 1
+  outputResource: 0
+  isResourceNode: 0
+  unlockLevel: 3
   interactableType: 0
-  isPlayerBuilt: 0
+  isPlayerBuilt: 1
   isDestructible: 1
-  sourceType: 6
-  isConsumable: 1
+  sourceType: 0
+  isConsumable: 0
   gradeScale:
   - 0.7
   - 1

@@ -12,6 +12,9 @@ public class InteractionManager : Singleton<InteractionManager>
     public LayerMask interactableMask = ~0;
 
     private Camera _cam;
+    private IInteractable _hovered;        // 当前悬停的可交互物（3.3.4 批次9 悬停高亮）
+    private Color _hoveredOrigColor;
+    private bool _hoveredHasColor;
 
     protected override void Awake()
     {
@@ -21,14 +24,59 @@ public class InteractionManager : Singleton<InteractionManager>
 
     private void Update()
     {
+        // 悬停高亮（3.3.4 批次9）
+        UpdateHover();
+
         // Build/Dialog 模式下不响应点击交互
         if (InputManager.Instance != null && InputManager.Instance.CurrentMode != InputMode.Normal)
+            return;
+
+        // 面板打开时不响应世界点击，交给 UI Toolkit 处理（问题9临时方案，批次2 UI栈完成后升级）
+        if (UIManager.Instance != null && UIManager.Instance.HasPanelOpen)
             return;
 
         if (Input.GetMouseButtonDown(0))
         {
             HandleClick();
         }
+    }
+
+    /// <summary>悬停高亮：命中 IInteractable 加亮 SpriteRenderer.color，离开还原（3.3.4 批次9）。</summary>
+    private void UpdateHover()
+    {
+        if (_cam == null) _cam = Camera.main;
+        if (_cam == null) return;
+
+        Vector2 worldPos = _cam.ScreenToWorldPoint(Input.mousePosition);
+        var hit = Physics2D.OverlapPoint(worldPos, interactableMask);
+        var interactable = hit != null ? hit.GetComponentInParent<IInteractable>() : null;
+
+        if (interactable != _hovered)
+        {
+            ClearHover();
+            _hovered = interactable;
+            if (_hovered is MonoBehaviour mb && mb != null)
+            {
+                var sr = mb.GetComponent<SpriteRenderer>();
+                if (sr != null)
+                {
+                    _hoveredOrigColor = sr.color;
+                    _hoveredHasColor = true;
+                    sr.color = Color.yellow;
+                }
+            }
+        }
+    }
+
+    private void ClearHover()
+    {
+        if (_hovered is MonoBehaviour mb && mb != null && _hoveredHasColor)
+        {
+            var sr = mb.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.color = _hoveredOrigColor;
+        }
+        _hoveredHasColor = false;
+        _hovered = null;
     }
 
     private void HandleClick()

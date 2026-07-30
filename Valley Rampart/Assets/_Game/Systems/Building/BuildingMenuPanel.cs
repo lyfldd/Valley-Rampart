@@ -138,24 +138,22 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
     private void OnToggleBuildMenu(ToggleBuildMenuPressedEvent e)
     {
         Debug.Log("[BuildingMenuPanel] 收到 ToggleBuildMenuPressedEvent");
-        // 通过 UIManager 打开/关闭
         var ui = UIManager.Instance;
         if (ui == null)
         {
             Debug.LogWarning("[BuildingMenuPanel] UIManager.Instance 为 null");
             return;
         }
-        // 如果当前已打开则关闭，否则打开
-        if (ui.CurrentPanel == this)
+        // 栈顶是本菜单则关闭，否则打开
+        if (ui.Peek() == this)
         {
             Debug.Log("[BuildingMenuPanel] 关闭菜单");
-            ui.CloseCurrent();
+            ui.Pop();
         }
         else
         {
             Debug.Log("[BuildingMenuPanel] 打开菜单");
-            var ctx = new Interactor(Faction.Human_Player, Vector3.zero);
-            ui.Open(this, ctx);
+            ui.Push(this, new Interactor(Faction.Human_Player, Vector3.zero));
         }
     }
 
@@ -190,6 +188,9 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         foreach (var def in _allBuildable)
         {
             if (def.role != _currentTab) continue;
+            // 主城等级过滤（3.3.4 批次7）
+            int castleLv = BuildController.Instance != null ? BuildController.Instance.CastleLevel : 0;
+            if (def.unlockLevel > castleLv) continue;  // 主城等级不足，不显示
             BuildCard(def, ruler);
             count++;
         }
@@ -332,9 +333,17 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
             Debug.LogWarning("[BuildingMenuPanel] 资源不足: " + def.id);
             return;
         }
-        // 进入建造模式，关闭菜单
-        BuildController.Instance?.EnterBuildMode(def);
-        UIManager.Instance?.CloseCurrent();
+        // 菜单出栈（隐藏）+ 建造模式入栈（ESC 后返回菜单）
+        var ui = UIManager.Instance;
+        if (ui != null)
+        {
+            ui.Pop();  // 关闭菜单
+            ui.Push(new BuildModeEntry(def, this), new Interactor(Faction.Human_Player, Vector3.zero));
+        }
+        else
+        {
+            BuildController.Instance?.EnterBuildMode(def);
+        }
     }
 
     private void SetVisible(bool visible)

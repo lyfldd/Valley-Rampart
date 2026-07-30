@@ -29,6 +29,15 @@ public class BuildingDef : ScriptableObject
     public CombatConfig combat;        // 非空 = 防御建筑（攻击属性，交 3.5/3.4）
     public BuildingLevel[] levels;     // 升级档位
 
+    [Header("产能（3.3.4 批次5）")]
+    [Tooltip("产出资源类型（producer.kind==Resource 时用）")]
+    public ResourceType outputResource;
+    [Tooltip("是否为资源点（原始矿洞/树林/农田）。true=自身不产出，仅作工具放置前置（批次6）")]
+    public bool isResourceNode = false;
+
+    [Tooltip("解锁所需主城等级（1=修复后即可建，2/3=主城升级后解锁）")]
+    public int unlockLevel = 1;
+
     [Header("交互与生命周期")]
     public InteractableType interactableType;
     public bool isPlayerBuilt = true;  // false = 地图预置（不可拆/不可移）

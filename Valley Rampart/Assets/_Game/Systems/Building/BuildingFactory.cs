@@ -99,7 +99,7 @@ public static class BuildingFactory
             ? GridSystem.Instance.CoordToWorld(coord)
             : new Vector3(globalCellX * 32f, 0, 0);
 
-        // 实例化 GameObject（用 def.prefab 或空壳）
+        // 实例化 GameObject（用 def.prefab 或空壳 + 占位视觉）
         GameObject go;
         if (def.prefab != null)
         {
@@ -107,9 +107,10 @@ public static class BuildingFactory
         }
         else
         {
-            // 无 prefab 时创建空壳（有 Collider 可被点击，后续接 prefab 替换）
+            // 无 prefab 时创建空壳 + 占位彩色方块（3.3.4 问题12）
             go = new GameObject($"Building_{ph.type}_{globalCellX}");
             go.transform.position = worldPos;
+            BuildingVisual.ApplyPlaceholder(go, ph.type, def.role);
         }
 
         // 确保有 Building 组件（注意：Building 没有 [RequireComponent]，因为 Collider2D 是抽象类，Unity 不能自动补）
@@ -157,6 +158,10 @@ public static class BuildingFactory
             }
             b.maxHp = baseHp;
             b.hp = baseHp;
+
+            // 主城初始废弃态（3.3.4 批次7）
+            if (ph.type == BuildingType.CastleCore)
+                b.state = BuildingState.Abandoned;
         }
         catch (System.Exception ex)
         {
@@ -191,11 +196,42 @@ public static class BuildingFactory
 
         try
         {
+            // 按 def 配置挂行为组件（3.3.4 批次4 组件化架构）
+            AttachComponents(b, def);
+        }
+        catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] AttachComponents 失败: " + ex.Message); }
+
+        try
+        {
             EventBus.Publish(new BuildingPlacedEvent(b));
         }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
 
         return true;
+    }
+
+    /// <summary>按 BuildingDef 配置挂行为组件（3.3.4 批次4）。Producer/Storage 见批次5。供 BuildingFactory 和 BuildController 共用。</summary>
+    public static void AttachComponents(Building b, BuildingDef def)
+    {
+        if (b == null || def == null) return;
+        // Producer + Storage（产能建筑，非资源点；3.3.4 批次5）
+        if (def.producer.rate > 0f && def.producer.kind == ProduceKind.Resource && !def.isResourceNode)
+        {
+            b.gameObject.AddComponent<StorageComponent>()?.Init(b);
+            b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
+        }
+        // Combat（防御建筑，具体逻辑接 3.4/3.5）
+        if (def.combat.attack > 0)
+            b.gameObject.AddComponent<CombatComponent>()?.Init(b);
+        // Pickup（一次性采集：宝箱/木头堆/石头堆）
+        if (def.isConsumable)
+            b.gameObject.AddComponent<PickupComponent>()?.Init(b);
+        // Rift（裂隙，接 3.7 波次）
+        if (b.sourceType == BuildingType.Rift)
+            b.gameObject.AddComponent<RiftComponent>()?.Init(b);
+        // CastleCore（主城，批次7 做最小实现）
+        if (b.sourceType == BuildingType.CastleCore)
+            b.gameObject.AddComponent<CastleCoreComponent>()?.Init(b);
     }
 
     /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。</summary>

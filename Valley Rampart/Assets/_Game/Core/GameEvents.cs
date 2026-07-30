@@ -368,3 +368,11 @@ public readonly struct BuildingProductionTickEvent
     public readonly Building Building;
     public BuildingProductionTickEvent(Building building) { Building = building; }
 }
+
+// 建筑激活事件（3.3.4 批次3）。建造/修复/升级完成时由 Building.OnConstructionComplete 发布。
+// BuildController 订阅此事件解锁建造菜单（主城修复后）；产能系统订阅此事件启动产出。
+public readonly struct BuildingActivatedEvent
+{
+    public readonly Building Building;
+    public BuildingActivatedEvent(Building building) { Building = building; }
+}
