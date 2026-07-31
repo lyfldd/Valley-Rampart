@@ -23,6 +23,9 @@ MonoBehaviour:
   attackCD: 1
   isRanged: 0
   projectileSpeed: 0
-  perceptionRadius: 5
-  threatSensitivity: 1
+  perceptionRadius: 8
+  threatSensitivity: 0.8
+  courage: 70
+  obedience: 70
+  retreatThresholdOffset: 0.5
   equipmentSlotCount: 0

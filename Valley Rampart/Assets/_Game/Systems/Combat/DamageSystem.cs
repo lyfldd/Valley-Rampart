@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 攻击配置（注册攻击时由调用方提供）。
 /// NPC 数据住 NpcProfessionDef（批次3），建筑数据住 BuildingDef.combat。
-/// 调用方（NPCBrain/StubAttacker）从 SO 构造此结构传入 DamageSystem。
+/// 调用方（NPCBrain）从 SO 构造此结构传入 DamageSystem。
 /// </summary>
 public struct AttackProfile
 {
@@ -22,7 +22,7 @@ public struct AttackProfile
 /// 性能破局点：时间轮砍 CD 遍历、分片抹尖峰、空间分区查目标、对象池零 GC。
 ///
 /// 核心流程：
-///   NPCBrain/StubAttacker -> RegisterAttack(attacker, target, profile)
+///   NPCBrain -> RegisterAttack(attacker, target, profile)
 ///   时间轮 tick -> CD 到点进待攻击队列 -> 分片处理
 ///   分流：近战即时命中 / 远程委托 ProjectileManager
 ///   伤害计算 -> victim.TakeDamage -> 发布 UnitDamagedEvent（节流）
@@ -98,7 +98,7 @@ public class DamageSystem : Singleton<DamageSystem>
         ProcessPendingAttacks();
     }
 
-    // ===== 注册接口（NPCBrain/StubAttacker 调用，决策 2+8）=====
+    // ===== 注册接口（NPCBrain 调用，决策 2+8）=====
 
     /// <summary>
     /// 注册攻击。首次注册立即打一次，然后进 CD。
@@ -323,7 +323,7 @@ public class DamageSystem : Singleton<DamageSystem>
         _lastEventTime.Remove(victim);
     }
 
-    // ===== 公开查询（供 NPCBrain/StubAttacker 选目标用）=====
+    // ===== 公开查询（供 NPCBrain 选目标用）=====
 
     /// <summary>查目标当前被多少近战锁定（过度杀伤计数）。</summary>
     public int GetOverkillCount(IDamageable target)

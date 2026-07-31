@@ -27,12 +27,21 @@ public class NpcProfessionDef : UnitData
     [Tooltip("弹速（世界单位/秒，远程用）。联调后值 25/s")]
     public float projectileSpeed = 25f;
 
-    [Header("注意力系统（3.0.1 用，首版不影响战斗）")]
-    [Tooltip("感知半径（格数）")]
+    [Header("注意力系统（3.0.1）")]
+    [Tooltip("感知半径（格数）。士兵远 / 农民近")]
     public float perceptionRadius = 5f;
 
-    [Tooltip("威胁敏感度（越高越容易升级威胁等级）")]
+    [Tooltip("威胁敏感度（越高越容易升级威胁等级）。农民 +x / 士兵 -x")]
     public float threatSensitivity = 1f;
+
+    [Tooltip("勇气值（0-100，基础 50）。高勇气更敢冒险")]
+    [Range(0, 100)] public int courage = 50;
+
+    [Tooltip("服从度（0-100，基础 50）。高服从更少抗命")]
+    [Range(0, 100)] public int obedience = 50;
+
+    [Tooltip("职业撤退阈值偏移。士兵敢扛 +x / 农民怯 -x")]
+    public float retreatThresholdOffset = 0f;
 
     [Header("装备槽（预留，首版空）")]
     [Tooltip("装备槽数量（头盔/护甲/武器，首版 0）")]

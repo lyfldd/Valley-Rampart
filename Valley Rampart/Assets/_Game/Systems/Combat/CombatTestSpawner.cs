@@ -2,11 +2,12 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// 3.4 伤害管线验证场景生成器。
+/// 战斗系统验证场景生成器（3.4 + 3.0.1）。
 /// 挂在 GameScene 的任意 GameObject 上，游戏启动后自动生成测试单位。
 ///
-/// 验证场景（决策 17）：2近战+1远程士兵 vs 3敌人(含1远程) + 1工人旁观
-/// 完成标准：有 NPC 死亡 + 远程投射物命中验证 + 受击闪红可见 + 无报错
+/// 验证场景：2近战+1远程士兵 vs 3敌人(含1远程) + 1工人旁观
+/// 3.4 验证：有 NPC 死亡 + 远程投射物命中 + 受击闪红 + 无报错
+/// 3.0.1 验证：NPCBrain 驱动攻击 + 工人受威胁撤退 + 受击->威胁3->撤退闭环
 /// </summary>
 public class CombatTestSpawner : MonoBehaviour
 {

@@ -85,11 +85,11 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
             controller.Initialize(data);
         }
 
-        // 3.4: 如果有 StubAttacker 且 data 是 NpcProfessionDef，初始化攻击驱动器
-        var attacker = instance.GetComponent<StubAttacker>();
-        if (attacker != null && data is NpcProfessionDef npcDef)
+        // 3.0.1: 如果有 NPCBrain 且 data 是 NpcProfessionDef，初始化 AI 大脑
+        var brain = instance.GetComponent<NPCBrain>();
+        if (brain != null && data is NpcProfessionDef npcDef)
         {
-            attacker.Init(npcDef);
+            brain.Init(npcDef);
         }
 
         return instance;

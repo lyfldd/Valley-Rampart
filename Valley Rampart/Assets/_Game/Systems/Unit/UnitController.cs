@@ -42,6 +42,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
 
     public bool IsAlive => CurrentHp > 0;
 
+    // ===== 空间分区追踪（3.0.1 感知广播用）=====
+    private GridCoord _lastGridCoord;
+    private bool _gridRegistered;
+
     // ===== IDamageable 实现 =====
 
     /// <summary>世界坐标位置（空间分区查目标/投射物到达检测用）。</summary>
@@ -71,6 +75,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
     {
         _renderer = GetComponent<SpriteRenderer>();
         _rb = GetComponent<Rigidbody2D>();
+        // Kinematic：不受物理力/重力影响，只受 MovePosition 控制，杜绝"停不下来"
+        _rb.bodyType = RigidbodyType2D.Kinematic;
+        // 冻结旋转：NPC 不会因物理碰撞翻倒
+        _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
     }
 
     /// <summary>
@@ -157,7 +165,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
     }
 
     // ===== 战斗系统（3.4 重构）=====
-    // AttackUnit 已移除：攻击改由 DamageSystem.RegisterAttack 驱动（NPCBrain/StubAttacker 调注册接口）。
+    // AttackUnit 已移除：攻击改由 DamageSystem.RegisterAttack 驱动（NPCBrain 调注册接口）。
     // TakeDamage 退化为"收算好的伤害扣血"：公式搬 DamageSystem，去掉 source 参数。
     // UnitDamagedEvent 改由 DamageSystem 发布（含 source/position），不在 TakeDamage 内发。
 
@@ -288,6 +296,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
         // 再从注册中心注销
         UnitRegistry.Instance.Unregister(this);
 
+        // 从空间分区注销（3.0.1 感知广播用）
+        GridSystem.Instance?.RemoveUnit(this);
+
         Destroy(gameObject);
     }
 
@@ -305,7 +316,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
 
         float speed = run ? RunSpeed : WalkSpeed;
         Vector2 movement = direction.normalized * speed * Time.deltaTime;
-        _rb.MovePosition(_rb.position + movement);
+        Vector2 newPos = _rb.position + movement;
+        newPos.y = _rb.position.y;  // 固定 Y 轴，1D 横版不上下移动
+        _rb.MovePosition(newPos);
+        UpdateGridPosition();
     }
 
     /// <summary>
@@ -320,12 +334,30 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
 
         Vector2 current = _rb.position;
         Vector2 newPos = Vector2.MoveTowards(current, destination, step);
+        newPos.y = current.y;  // 固定 Y 轴，1D 横版不上下移动
 
         UpdateFacing(newPos - current);
 
         _rb.MovePosition(newPos);
+        UpdateGridPosition();
 
         return Vector2.Distance(current, destination) < 0.01f;
+    }
+
+    /// <summary>
+    /// 更新空间分区格子位置。仅在跨格时调 GridSystem.TryEnter，同格内零开销。
+    /// 3.0.1 感知广播系统依赖此方法维护 GridCell 实体列表。
+    /// </summary>
+    private void UpdateGridPosition()
+    {
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
+
+        GridCoord currentCoord = GridSystem.Instance.WorldToCoord(transform.position);
+        if (_gridRegistered && currentCoord == _lastGridCoord) return;
+
+        GridSystem.Instance.TryEnter(this, currentCoord);
+        _lastGridCoord = currentCoord;
+        _gridRegistered = true;
     }
 
     /// <summary>

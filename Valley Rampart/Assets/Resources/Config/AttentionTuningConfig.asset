@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b018b4137d65234083ac6fb82dce422, type: 3}
+  m_Name: AttentionTuningConfig
+  m_EditorClassIdentifier: 
+  priorityWeightS: 4
+  priorityWeightA: 3
+  priorityWeightB: 2
+  priorityWeightC: 1
+  retreatThresholdBase: 2
+  retreatBonusS: 2
+  retreatBonusA: 1
+  retreatBonusB: 0.5
+  retreatBonusC: 0
+  threatUpgradeThreshold: 0.6
+  threatDowngradeThreshold: 0.4
+  threatUpgradeConfirmTime: 0.3
+  threatDowngradeConfirmTime: 0.5
+  protectionFriendThreshold: 3
+  protectionLossThreshold: 1
+  cautiousMinDwell: 1
+  retreatMinDwell: 1.5
+  safetyConfirmTime: 2
+  threatDecayTime: 3
+  scheduleRetryInterval: 3
+  scheduleRecruitRadiusCells: 3
+  scheduleShardCount: 5
+  scheduleShardInterval: 0.1
+  perceptionUpdateInterval: 0.2
