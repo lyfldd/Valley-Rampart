@@ -1,0 +1,225 @@
+using UnityEngine;
+
+// ============================================================================
+//  3.0.1_2 输入输出决定层 - BehaviorExecutor 行为执行器
+//  详见 3.0.1_2_输入输出决定层设计.md §13.4
+//  契约：持执行进度态非决策态，事件反馈环闭环
+//  可持有：当前cmd幂等续做、到达检测、速度插值、锚点存活检查
+//  禁止：自主切模块、决定到达后行为、改cmd参数
+// ============================================================================
+
+/// <summary>
+/// BehaviorExecutor（§13.4）。
+/// 5 模块执行器：MoveTowards/RetreatMove/WorkAt/FollowAnchor/Idle。
+/// 到达检测用 arrivalThreshold × cellSize；速度插值 0.2s lerp。
+/// 事件通过 IExecutorEventReceiver 同步回调 NPCBrain（本地主），NPCBrain 再 Publish EventBus（辅）。
+/// </summary>
+public class BehaviorExecutor
+{
+    private readonly UnitController _controller;
+    private readonly IDamageable _self;
+    private readonly IExecutorEventReceiver _receiver;
+    private readonly AttentionTuningConfig _config;
+
+    private BehaviorCommand _currentCmd;
+    private bool _hasCmd;
+    private bool _arrivedAtFocus;
+    private float _durationTimer;
+    private float _tacticalRetreatTraveled;  // 战术短撤已移动距离
+
+    // 速度插值
+    private float _currentSpeed;
+    private const float SpeedLerpTime = 0.2f;
+
+    /// <summary>是否到达焦点目标（反馈到 ctx.ArrivedAtFocus，供 L2 三维表查表）</summary>
+    public bool ArrivedAtFocus => _arrivedAtFocus;
+
+    public BehaviorExecutor(UnitController controller, IDamageable self,
+                            IExecutorEventReceiver receiver, AttentionTuningConfig config)
+    {
+        _controller = controller;
+        _self = self;
+        _receiver = receiver;
+        _config = config;
+    }
+
+    /// <summary>
+    /// 执行 BehaviorCommand。
+    /// 幂等续做：相同 Module + 相同 TargetPos -> 续做不切。
+    /// </summary>
+    public void Execute(in BehaviorCommand cmd, float dt, float cellSize)
+    {
+        if (_self == null || _self.CurrentHp <= 0) return;
+
+        // 速度插值（0.2s lerp）
+        _currentSpeed = Mathf.Lerp(_currentSpeed, cmd.Speed, dt / SpeedLerpTime);
+
+        switch (cmd.Module)
+        {
+            case BehaviorModule.MoveTowards:
+                ExecuteMoveTowards(in cmd, cellSize);
+                break;
+            case BehaviorModule.RetreatMove:
+                ExecuteRetreatMove(in cmd, dt, cellSize);
+                break;
+            case BehaviorModule.WorkAt:
+                ExecuteWorkAt(in cmd, cellSize);
+                break;
+            case BehaviorModule.FollowAnchor:
+                ExecuteFollowAnchor(in cmd, cellSize);
+                break;
+            case BehaviorModule.Idle:
+                ExecuteIdle(in cmd, dt);
+                break;
+        }
+
+        _currentCmd = cmd;
+        _hasCmd = true;
+    }
+
+    private void ExecuteMoveTowards(in BehaviorCommand cmd, float cellSize)
+    {
+        Vector2 myPos = _self.GetPosition();
+        float dist = Vector2.Distance(myPos, cmd.TargetPos);
+        float arrivalDist = _config.arrivalThreshold * cellSize;
+
+        if (dist <= arrivalDist)
+        {
+            // 到达焦点目标
+            _arrivedAtFocus = true;
+            _controller.MoveTowards(myPos);  // 停在原地
+            _receiver?.OnArrived(myPos, BehaviorModule.MoveTowards);
+        }
+        else
+        {
+            _arrivedAtFocus = false;
+            _controller.MoveTowards(cmd.TargetPos);
+        }
+    }
+
+    private void ExecuteRetreatMove(in BehaviorCommand cmd, float dt, float cellSize)
+    {
+        if (cmd.IsTacticalRetreatEquivalent())
+        {
+            // 战术短撤：Direction + Distance（撞墙/到达即停）
+            _arrivedAtFocus = false;
+            Vector2 dir = cmd.Direction;
+            if (dir.sqrMagnitude > 0.001f)
+            {
+                _controller.Move(dir.normalized, run: true);
+                // 简化：按速度累积距离，达 Distance 发 MoveComplete
+                _tacticalRetreatTraveled += _currentSpeed * dt;
+                if (_tacticalRetreatTraveled >= cmd.Distance)
+                {
+                    _tacticalRetreatTraveled = 0f;
+                    _receiver?.OnMoveComplete(_self.GetPosition());
+                }
+            }
+        }
+        else
+        {
+            // 战略撤退：MoveTowards(HomePoint)，到达发 MoveComplete
+            Vector2 myPos = _self.GetPosition();
+            float dist = Vector2.Distance(myPos, cmd.TargetPos);
+            float arrivalDist = _config.arrivalThreshold * cellSize;
+
+            if (dist <= arrivalDist)
+            {
+                _controller.MoveTowards(myPos);
+                _receiver?.OnMoveComplete(myPos);
+            }
+            else
+            {
+                _controller.MoveTowards(cmd.TargetPos);
+            }
+        }
+    }
+
+    private void ExecuteWorkAt(in BehaviorCommand cmd, float cellSize)
+    {
+        Vector2 myPos = _self.GetPosition();
+        float dist = Vector2.Distance(myPos, cmd.TargetPos);
+        float arrivalDist = _config.arrivalThreshold * cellSize;
+
+        if (dist <= arrivalDist)
+        {
+            _arrivedAtFocus = true;
+            // P0 WorkAt 占位：位移即目的，原地待机
+        }
+        else
+        {
+            _arrivedAtFocus = false;
+            _controller.MoveTowards(cmd.TargetPos);
+        }
+    }
+
+    private void ExecuteFollowAnchor(in BehaviorCommand cmd, float cellSize)
+    {
+        // FollowAnchor 永不到达（持续过程），ArrivedAtFocus 保持 false
+        _arrivedAtFocus = false;
+
+        if (cmd.Anchor == null || cmd.Anchor.CurrentHp <= 0)
+        {
+            _receiver?.OnAnchorLost();
+            return;
+        }
+
+        Vector2 anchorPos = cmd.Anchor.transform.position;
+        Vector2 myPos = _self.GetPosition();
+        float dist = Vector2.Distance(myPos, anchorPos);
+
+        if (dist > cmd.KeepDistance + _config.arrivalThreshold * cellSize)
+        {
+            // 超出保持距离 -> 靠近
+            _controller.MoveTowards(anchorPos);
+        }
+        else
+        {
+            // 在保持距离内 -> 停
+            _controller.MoveTowards(myPos);
+        }
+    }
+
+    private void ExecuteIdle(in BehaviorCommand cmd, float dt)
+    {
+        _arrivedAtFocus = true;  // Idle = 已在目标点
+        _controller.MoveTowards(_self.GetPosition());  // 停
+
+        if (cmd.Duration > 0f)
+        {
+            _durationTimer += dt;
+            if (_durationTimer >= cmd.Duration)
+            {
+                _durationTimer = 0f;
+                _receiver?.OnMoveComplete(_self.GetPosition());
+            }
+        }
+    }
+
+    public void Stop()
+    {
+        _hasCmd = false;
+        _arrivedAtFocus = false;
+        _durationTimer = 0f;
+        _tacticalRetreatTraveled = 0f;
+    }
+
+    public void Reset()
+    {
+        _hasCmd = false;
+        _arrivedAtFocus = false;
+        _durationTimer = 0f;
+        _tacticalRetreatTraveled = 0f;
+        _currentSpeed = 0f;
+    }
+}
+
+/// <summary>BehaviorCommand 扩展：判断是否战术短撤（Direction+Distance 分支）</summary>
+public static class BehaviorCommandExtensions
+{
+    /// <summary>战术短撤判定：Direction 非零且有 Distance</summary>
+    public static bool IsTacticalRetreatEquivalent(this in BehaviorCommand cmd)
+    {
+        return cmd.Direction.sqrMagnitude > 0.001f && cmd.Distance > 0f;
+    }
+}

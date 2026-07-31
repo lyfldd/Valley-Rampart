@@ -32,46 +32,65 @@ public interface IAIDebugInfoExtended : IAIDebugInfo
 }
 
 /// <summary>
-/// 通用 NPC 大脑（3.0.1 第八节·干细胞框架）。
+/// 通用 NPC 大脑（3.0.1_2 三层裁决管线 + 记忆组件群 + 反馈控制环）。
 ///
-/// 所有 NPC 共用此框架，通过 NpcProfessionDef SO 配置分化行为。
-/// 集成机制甲（五层注意力）+ 机制乙（三维权衡）+ 威胁评定 + 行为执行。
+/// 架构（§1）：
+///   两类东西：纯计算管线(L1/L2/L3 无状态) + 输入侧记忆组件群(有状态需存档)
+///   反馈控制环：Executor事件 -> NPCBrain本地分发 -> EventBus -> 记忆组件 -> ctx -> 管线 -> cmd
 ///
-/// 决策流水线：
-///   感知（PerceptionSystem 查附近敌人）-> 注意力（选焦点）-> 威胁评定 -> 权衡（算谱系）-> 行为执行
+/// tick 管线（先记忆后管线，foreach 钉死秩序）：
+///   ⓪ ctx 组装(世界/自身原始状态) -> ① 记忆组件Tick -> ② FillContext+收集刺激源入池
+///   -> ③ L1->L2->L3 纯管线 -> ④ 攻击链路(并行) -> ⑤ Executor执行 -> ⑥ 切换历史+缓存
 ///
-/// 替换旧 StubAttacker：攻击改由 NPCBrain 在焦点为敌人且在范围内时驱动 DamageSystem.RegisterAttack。
+/// 替换旧扁平架构：AttentionSystem->ThreatAssessor->TradeoffSystem->直接方法调用。
+/// TradeoffSystem 退役，ThreatAssessor 仅保留 CalculateRawFactor。
 /// </summary>
 [RequireComponent(typeof(UnitController))]
-public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
+public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventReceiver, IAIDebugInfoV3
 {
     // ===== 依赖 =====
     private UnitController _controller;
     private IDamageable _self;
     private NpcProfessionDef _profession;
     private AttentionTuningConfig _config;
+    private IHomePointProvider _homePointProvider;
 
-    // ===== AI 子系统 =====
+    // ===== AI 子系统（纯计算管线复用）=====
     private readonly AttentionSystem _attention = new AttentionSystem();
-    private readonly ThreatAssessor _threatAssessor = new ThreatAssessor();
-    private readonly TradeoffSystem _tradeoff = new TradeoffSystem();
+
+    // ===== 记忆组件群（§1.1 原则一，有状态需存档）=====
+    private IMemoryComponent[] _memoryComponents;
+    private ThreatHysteresisComponent _threatHysteresis;
+    private ProtectionHysteresisComponent _protectionHysteresis;
+    private HitCooldownStateMachine _hitCooldown;
+
+    // ===== 刺激源 Provider（池化复用）=====
+    private readonly SafetyStimulusProvider _safetyProvider = new SafetyStimulusProvider();
+    private readonly FollowStimulusProvider _followProvider = new FollowStimulusProvider();
+
+    // ===== BehaviorExecutor（§13.4）=====
+    private BehaviorExecutor _executor;
 
     // ===== 定时器 =====
     private float _thinkTimer;
     private float _perceptionTimer = 999f;  // 首帧立即触发感知
     private const float ThinkInterval = 0.1f;  // 10Hz 思考频率
 
-    // ===== 受击冷却（防止撤退->恢复->送死->撤退无限循环）=====
-    private const float HitCooldownDuration = 5f;  // 被击后 5 秒内不追击
-    private float _lastHitTime = -999f;
-    /// <summary>是否在受击冷却中（被击后 N 秒内不追击敌人）</summary>
-    public bool IsInHitCooldown => Time.time - _lastHitTime < HitCooldownDuration;
+    // ===== tick 分片平摊（决策12，500 NPC 分 5 帧）=====
+    private static int s_globalTickFrame;
+    private static int s_registeredCount;
+    private int _shardIndex;
 
     // ===== 运行时状态 =====
     private IDamageable _currentAttackTarget;
     private readonly List<IDamageable> _nearbyEnemies = new List<IDamageable>();
     private readonly List<IDamageable> _nearbyAllies = new List<IDamageable>();
-    private ThreatAssessmentResult _lastThreatResult;
+    private float _nearestDist = float.MaxValue;
+
+    // ===== 管线中间产物缓存 =====
+    private float _lastRaw;           // 上一帧 rawFactor（量化器消费）
+    private FactorContext _lastCtx;   // 上一帧完整 ctx（调试面板读）
+    private BehaviorCommand _lastCmd; // 上一帧 Think 产出的 cmd（Execute 每帧复用）
 
     // ===== 切换历史（3.0.1_2 AI 调试用）=====
     private readonly AISwitchRecord[] _switchHistory = new AISwitchRecord[10];
@@ -80,16 +99,17 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
     private Focus _lastRecordedFocus;
     private BehaviorSpectrum _lastRecordedSpectrum;
 
-    // ===== IAIDebugInfo 实现 =====
-    public Focus CurrentFocus => _tradeoff.CommittedFocus;
-    public BehaviorSpectrum CurrentSpectrum => _tradeoff.CurrentSpectrum;
-    public ThreatLevel CurrentThreatLevel => _threatAssessor.CurrentLevel;
-    public int NearbyEnemyCount => _lastThreatResult.NearbyEnemyCount;
-    public int NearbyAllyCount => _lastThreatResult.NearbyAllyCount;
-    public bool HasProtection => _lastThreatResult.HasProtection;
-    public bool InSafetyConfirmation => _tradeoff.InSafetyConfirmation;
+    // ===== IAIDebugInfo 实现（映射到 _lastCtx 产物）=====
+    public Focus CurrentFocus => _attention.CurrentFocus;
+    public BehaviorSpectrum CurrentSpectrum => _lastCtx.PostureDecision.Spectrum;
+    public ThreatLevel CurrentThreatLevel => _lastCtx.ThreatLevel;
+    public int NearbyEnemyCount => _lastCtx.NearbyEnemyCount;
+    public int NearbyAllyCount => _lastCtx.NearbyAllyCount;
+    public bool HasProtection => _lastCtx.HasProtection;
+    public bool InSafetyConfirmation => _lastCtx.IsCaution;  // 旧 TradeoffSystem 概念映射
+    public bool IsInHitCooldown => _lastCtx.CurrentState != HitCooldownState.Normal;
 
-    // ===== IAIDebugInfoExtended 实现（3.0.1_2）=====
+    // ===== IAIDebugInfoExtended 实现 =====
     public Vector2 DebugPosition => _controller != null ? (Vector2)_controller.transform.position : Vector2.zero;
     public float DebugHPRatio => _self != null ? (float)_self.CurrentHp / Mathf.Max(1, _self.MaxHp) : 0f;
 
@@ -102,16 +122,24 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
             int idx = (_switchHistoryHead - count + i + _switchHistory.Length) % _switchHistory.Length;
             output.Add(_switchHistory[idx]);
         }
-        // 倒序：最新的在前
         output.Reverse();
     }
 
     public void GetTopStimuli(List<StimulusDebugInfo> output, int maxCount)
     {
         output.Clear();
-        if (_attention == null) return;
-        _attention.GetTopStimuliForDebug(output, maxCount);
+        if (_attention != null) _attention.GetTopStimuliForDebug(output, maxCount);
     }
+
+    // ===== IAIDebugInfoV3 实现（3.0.1_2 三层中间结果 + 记忆组件状态）=====
+    public FocusDecision DebugFocusDecision => _lastCtx.FocusDecision;
+    public PostureDecision DebugPostureDecision => _lastCtx.PostureDecision;
+    public BehaviorCommand DebugCommand => L3CommandComputer.Compute(in _lastCtx.PostureDecision, in _lastCtx);
+    public HitCooldownState DebugHitCooldownState => _lastCtx.CurrentState;
+    public int DebugHitCount => _lastCtx.HitCount;
+    public float DebugLastRaw => _lastRaw;
+    public float DebugSafetyUrge => _safetyProvider.Stimulus.Intensity;
+    public Vector2 DebugHomePoint => _lastCtx.HomePoint;
 
     // ===== 初始化 =====
     public void Init(NpcProfessionDef profession)
@@ -122,6 +150,25 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
         _config = Resources.Load<AttentionTuningConfig>("Config/AttentionTuningConfig");
         if (_config == null)
             Debug.LogError("[NPCBrain] 未找到 AttentionTuningConfig！请创建 Resources/Config/AttentionTuningConfig.asset");
+
+        // 初始化记忆组件群
+        _threatHysteresis = new ThreatHysteresisComponent(_config);
+        _protectionHysteresis = new ProtectionHysteresisComponent(_config);
+        _hitCooldown = new HitCooldownStateMachine();
+        _memoryComponents = new IMemoryComponent[] { _threatHysteresis, _protectionHysteresis, _hitCooldown };
+
+        // 初始化 BehaviorExecutor
+        _executor = new BehaviorExecutor(_controller, _self, this, _config);
+
+        // tick 分片：分配 shardIndex
+        _shardIndex = s_registeredCount++ % Mathf.Max(1, _config.thinkShardCount);
+
+        // HomePointProvider 查找（场景内挂 SceneHomePointProvider）
+        if (_homePointProvider == null)
+        {
+            var provider = FindObjectOfType<SceneHomePointProvider>();
+            if (provider != null) _homePointProvider = provider;
+        }
     }
 
     private void OnEnable()
@@ -134,15 +181,40 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
         EventBus.Unsubscribe<UnitDamagedEvent>(OnDamaged);
     }
 
-    /// <summary>自身受击 -> 触发威胁 3（致命）+ 记录受击时间。</summary>
+    /// <summary>自身受击事件 -> HitCooldownStateMachine.OnDamaged（事件驱动路径b）</summary>
     private void OnDamaged(UnitDamagedEvent evt)
     {
-        if (ReferenceEquals(evt.Unit, _self))
-        {
-            _threatAssessor.OnDamaged(Time.time);
-            _lastHitTime = Time.time;
-        }
+        if (!ReferenceEquals(evt.Unit, _self)) return;
+        // 用临时 ctx 触发状态机（受击时刻即转 Caution + hitCount++）
+        var ctx = BuildBaseContext();
+        _hitCooldown.OnDamaged(in ctx);
     }
+
+    // ===== IExecutorEventReceiver 实现（§13.4 双层分发：本地主 + EventBus 辅）=====
+
+    public void OnArrived(Vector2 position, BehaviorModule fromModule)
+    {
+        // 本地处理（主，可靠不丢）
+        // 到达焦点目标 -> 下 tick L2 三维表走"已到达"分支
+        // EventBus 辅转发（供调度/调试/音效）
+        EventBus.Publish(new ExecutorArrivedEvent(this, position, fromModule));
+    }
+
+    public void OnMoveComplete(Vector2 position)
+    {
+        // 本地处理（主）：撤退完成 -> HitCooldownStateMachine Caution 计时起点（§13.3 关键）
+        _hitCooldown.OnMoveComplete();
+        EventBus.Publish(new ExecutorMoveCompleteEvent(this, position));
+    }
+
+    public void OnAnchorLost()
+    {
+        // 本地处理（主）：跟随锚点死亡 -> 清除 FollowStimulus
+        _followProvider.ClearAnchor();
+        EventBus.Publish(new ExecutorAnchorLostEvent(this));
+    }
+
+    // ===== Update（感知 + Think，含 tick 分片）=====
 
     private void Update()
     {
@@ -157,12 +229,24 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
             UpdatePerception();
         }
 
-        // 思考更新（10Hz）
+        // 思考更新（10Hz，走分片：决策12，500 NPC 分 5 帧平摊）
+        // 分片只对 Think（决策）分片，Execute 每帧调用（移动需持续）
         _thinkTimer += Time.deltaTime;
         if (_thinkTimer >= ThinkInterval)
         {
             _thinkTimer = 0f;
-            Think();
+            s_globalTickFrame++;
+            // 仅当前 shardIndex 对应的帧执行 Think（产出新 cmd）
+            if (s_globalTickFrame % Mathf.Max(1, _config.thinkShardCount) == _shardIndex)
+            {
+                Think();
+            }
+        }
+
+        // Execute 每帧调用（用最近一次 Think 产出的 cmd，持续移动）
+        if (_executor != null)
+        {
+            _executor.Execute(in _lastCmd, Time.deltaTime, GetCellSize());
         }
     }
 
@@ -175,13 +259,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
         Vector2 myPos = _self.GetPosition();
         Faction myFaction = _self.GetFaction();
 
-        // 空间分区查询
         PerceptionSystem.QueryNearby(myPos, perceptionWorld, myFaction, true, _nearbyEnemies);
         PerceptionSystem.QueryNearby(myPos, perceptionWorld, myFaction, false, _nearbyAllies);
 
-        // 更新威胁刺激源（清空旧威胁，添加新威胁）
         _attention.ClearThreats();
         float currentTime = Time.time;
+        _nearestDist = float.MaxValue;
 
         for (int i = 0; i < _nearbyEnemies.Count; i++)
         {
@@ -189,72 +272,172 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
             if (enemy == null || enemy.CurrentHp <= 0) continue;
 
             float dist = Vector2.Distance(myPos, enemy.GetPosition());
-            // 强度：越近越高（100 = 贴脸，0 = 感知边缘）
+            if (dist < _nearestDist) _nearestDist = dist;
             float intensity = Mathf.Max(1f, 100f * (1f - dist / perceptionWorld));
 
             var stimulus = new ThreatStimulus(
                 enemy,
-                threatLevel: (int)_threatAssessor.CurrentLevel,
+                threatLevel: (int)_threatHysteresis.CurrentLevel,
                 intensity: intensity,
                 expiry: currentTime + _config.threatDecayTime
             );
             _attention.AddStimulus(stimulus);
         }
+
+        if (_nearbyEnemies.Count == 0) _nearestDist = float.MaxValue;
     }
 
-    // ===== 思考（决策流水线）=====
+    // ===== Think（三层裁决管线，先记忆后管线）=====
 
     private void Think()
     {
+        float dt = ThinkInterval;
         float currentTime = Time.time;
 
-        // 1. 注意力系统更新（机制甲）
-        _attention.Update(currentTime);
+        // ⓪ 组装 FactorContext（世界/自身原始状态）
+        FactorContext ctx = BuildBaseContext();
+        ctx.LastRaw = _lastRaw;
+        ctx.ArrivedAtFocus = _executor.ArrivedAtFocus;
 
-        // 2. 威胁评定
-        float perceptionWorld = _profession.perceptionRadius * GetCellSize();
-        float attackWorld = _profession.attackRange * GetCellSize();
+        // ① 记忆组件 Tick（量化器读 ctx.LastRaw 上一帧缓存）
+        for (int i = 0; i < _memoryComponents.Length; i++)
+            _memoryComponents[i].Tick(dt, in ctx);
 
-        float nearestDist = float.MaxValue;
-        for (int i = 0; i < _nearbyEnemies.Count; i++)
+        // ② FillContext（写入 FactorContext）+ 收集动态刺激源入 L1 池
+        for (int i = 0; i < _memoryComponents.Length; i++)
+            _memoryComponents[i].FillContext(ref ctx);
+
+        // 收集动态刺激源入 L1 评分池（填充式遍历防 GC）
+        _attention.ClearDynamicStimuli();
+        _attention.AddStimulus(_safetyProvider.GetOrUpdate(in ctx));
+        if (_followProvider.IsActive)
         {
-            if (_nearbyEnemies[i] == null || _nearbyEnemies[i].CurrentHp <= 0) continue;
-            float d = Vector2.Distance(_self.GetPosition(), _nearbyEnemies[i].GetPosition());
-            if (d < nearestDist) nearestDist = d;
+            _attention.AddStimulus(_followProvider.Refresh(in ctx));
+        }
+        for (int i = 0; i < _memoryComponents.Length; i++)
+        {
+            var stimuli = _memoryComponents[i].GetActiveStimuli();
+            for (int j = 0; j < stimuli.Count; j++)
+                _attention.AddDynamicStimulus(stimuli[j]);
         }
 
-        float hpRatio = _self.MaxHp > 0 ? (float)_self.CurrentHp / _self.MaxHp : 0f;
-        bool isNight = IsNight();
+        // 设置任务折扣（Caution 态对 TaskStimulus 打折）
+        _attention.SetTaskDiscount(ctx.StateTaskDiscount);
 
-        float rawFactor = ThreatAssessor.CalculateRawFactor(
-            nearestDist, _nearbyEnemies.Count, hpRatio, _nearbyAllies.Count,
-            isNight, _profession, _config, perceptionWorld, attackWorld
-        );
+        // ③ 纯管线：L1 -> L2 -> L3（无副作用）
+        _attention.Update(currentTime);
+        ctx.FocusDecision = L1FocusEvaluator.Evaluate(_attention, in ctx);
+        ctx.PostureDecision = L2PostureDecider.Decide(in ctx);
 
-        _lastThreatResult = _threatAssessor.Update(
-            rawFactor, _nearbyEnemies.Count, _nearbyAllies.Count,
-            hpRatio, isNight, _config, _profession, currentTime
-        );
+        // rawFactor 计算（复用 CalculateRawFactor）+ stateThreatBias 处理
+        ctx.RawFactor = ThreatAssessor.CalculateRawFactor(
+            ctx.NearestEnemyDist, ctx.NearbyEnemyCount, ctx.HpRatio, ctx.NearbyAllyCount,
+            ctx.IsNight, ctx.Profession, ctx.Config, ctx.PerceptionWorldRadius, ctx.AttackWorldRange);
+        // stateThreatBias 已在 ThreatHysteresisComponent.FillContext 内直接抬等级处理，
+        // 此处不叠 rawFactor（避免与量化器滞回打架）
+        _lastRaw = ctx.RawFactor;
 
-        // 3. 权衡系统更新（机制乙）
-        TaskPriority? taskPriority = GetCurrentTaskPriority();
-        _tradeoff.Update(
-            _attention.CurrentFocus, _attention.FocusChanged,
-            _lastThreatResult, taskPriority, _profession, _config, currentTime
-        );
+        var cmd = L3CommandComputer.Compute(in ctx.PostureDecision, in ctx);
 
-        // 3.5 记录切换历史（3.0.1_2 AI 调试用）
+        // ④ 攻击链路保留（与 Executor 并行，不进 BehaviorExecutor）
+        UpdateCombatRegistration(in ctx);
+
+        // ⑤ 缓存 cmd（Execute 在 Update 里每帧调用，持续移动）
+        _lastCmd = cmd;
+
+        // ⑥ 切换历史记录 + 缓存 _lastCtx（IAIDebugInfo 兼容）
         RecordSwitchHistory(currentTime);
-
-        // 4. 行为执行
-        ExecuteBehavior();
+        _lastCtx = ctx;
     }
 
-    /// <summary>记录焦点/谱系切换历史（3.0.1_2）。</summary>
+    /// <summary>组装基础 FactorContext（世界/自身原始状态）</summary>
+    private FactorContext BuildBaseContext()
+    {
+        float hpRatio = _self.MaxHp > 0 ? (float)_self.CurrentHp / _self.MaxHp : 0f;
+        bool isNight = IsNight();
+        return new FactorContext
+        {
+            Self = _self,
+            Profession = _profession,
+            Config = _config,
+            SelfPos = _self.GetPosition(),
+            HpRatio = hpRatio,
+            IsNight = isNight,
+            NightFactor = GetNightFactor(),
+            NearbyEnemyCount = _nearbyEnemies.Count,
+            NearbyAllyCount = _nearbyAllies.Count,
+            NearestEnemyDist = _nearestDist,
+            PerceptionWorldRadius = _profession.perceptionRadius * GetCellSize(),
+            AttackWorldRange = _profession.attackRange * GetCellSize(),
+            CellSize = GetCellSize(),
+            CurrentTime = Time.time,
+            HomePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero,
+        };
+    }
+
+    // ===== 攻击链路保留（搬自旧 ThreatFocusBehavior，不进 Executor）=====
+
+    /// <summary>
+    /// 攻击注册：威胁焦点 + 士兵 + 在范围内 -> DamageSystem.RegisterAttack。
+    /// 受击冷却防追击的旧 allowChase:false 由 Caution 态 HoldPosition 胜出焦点取代。
+    /// </summary>
+    private void UpdateCombatRegistration(in FactorContext ctx)
+    {
+        FocusDecision focus = ctx.FocusDecision;
+        bool shouldAttack = false;
+        IDamageable targetEnemy = null;
+
+        if (focus.IsValid && focus.Focus is ThreatStimulus ts && ts.Enemy != null && ts.Enemy.CurrentHp > 0)
+        {
+            if (_profession.attack > 0)  // 战斗单位才攻击
+            {
+                float dist = Vector2.Distance(ctx.SelfPos, ts.Enemy.GetPosition());
+                if (dist <= ctx.AttackWorldRange)
+                {
+                    shouldAttack = true;
+                    targetEnemy = ts.Enemy;
+                }
+            }
+        }
+
+        if (shouldAttack)
+        {
+            if (!ReferenceEquals(targetEnemy, _currentAttackTarget))
+            {
+                StopAttacking();
+                var profile = new AttackProfile
+                {
+                    attack = _profession.attack,
+                    range = _profession.attackRange,
+                    cd = _profession.attackCD,
+                    isRanged = _profession.isRanged,
+                    projectileSpeed = _profession.projectileSpeed
+                };
+                if (DamageSystem.Instance != null && DamageSystem.Instance.RegisterAttack(_self, targetEnemy, profile))
+                    _currentAttackTarget = targetEnemy;
+            }
+        }
+        else
+        {
+            StopAttacking();
+        }
+    }
+
+    private void StopAttacking()
+    {
+        if (_currentAttackTarget != null)
+        {
+            DamageSystem.Instance?.Unregister(_self);
+            _currentAttackTarget = null;
+        }
+    }
+
+    // ===== 切换历史 =====
+
     private void RecordSwitchHistory(float time)
     {
-        Focus curFocus = _tradeoff.CommittedFocus;
-        BehaviorSpectrum curSpectrum = _tradeoff.CurrentSpectrum;
+        Focus curFocus = _attention.CurrentFocus;
+        BehaviorSpectrum curSpectrum = _lastCtx.PostureDecision.Spectrum;
 
         bool focusChanged = !AISwitchRecord.FocusEquals(_lastRecordedFocus, curFocus);
         bool spectrumChanged = _lastRecordedSpectrum != curSpectrum;
@@ -272,152 +455,29 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
         }
     }
 
-    /// <summary>获取当前任务优先级（P0 无任务系统，返回 null）。</summary>
-    private TaskPriority? GetCurrentTaskPriority()
-    {
-        return null;
-    }
+    // ===== 昼夜（实装 TimeManager.CurrentPhase）=====
 
-    /// <summary>判断当前是否夜晚。</summary>
+    /// <summary>判断当前是否夜晚（Night/Dusk 视为夜晚，威胁加重 + 归巢放大）</summary>
     private bool IsNight()
     {
-        // P0: TimeManager 昼夜因子预留，首版默认白天
-        return false;
+        return TimeManager.Instance != null
+            && (TimeManager.Instance.CurrentPhase == TimePhase.Night
+                || TimeManager.Instance.CurrentPhase == TimePhase.Dusk);
     }
 
-    // ===== 行为执行 =====
-
-    private void ExecuteBehavior()
+    /// <summary>
+    /// 夜晚因子 0-1（Dusk/Dawn 渐变，Night=1，Day=0）。
+    /// 用于 SafetyStimulus 放大（nightPullWeight）。
+    /// </summary>
+    private float GetNightFactor()
     {
-        switch (_tradeoff.CurrentSpectrum)
+        if (TimeManager.Instance == null) return 0f;
+        switch (TimeManager.Instance.CurrentPhase)
         {
-            case BehaviorSpectrum.FullRetreat:
-                RetreatBehavior();
-                break;
-            case BehaviorSpectrum.Cautious:
-                // 谨慎：维持当前焦点行为，不追击
-                FocusBehavior(allowChase: false);
-                break;
-            default:
-                // 全力执行：受击冷却内不追击（防止撤退->恢复->送死->撤退无限循环）
-                FocusBehavior(allowChase: !IsInHitCooldown);
-                break;
-        }
-    }
-
-    /// <summary>焦点驱动行为：根据焦点类型执行移动/攻击。</summary>
-    private void FocusBehavior(bool allowChase)
-    {
-        Focus focus = _tradeoff.CommittedFocus;
-
-        if (!focus.IsValid)
-        {
-            // 无焦点 -> 待机，停止攻击
-            StopAttacking();
-            return;
-        }
-
-        if (focus.Is(AttentionLayer.Threat))
-        {
-            // 威胁焦点 -> 追击并攻击
-            ThreatFocusBehavior(focus, allowChase);
-        }
-        else if (focus.Is(AttentionLayer.Task))
-        {
-            // 任务焦点 -> 移动到任务位置（P0 无任务系统，此分支暂不触发）
-            StopAttacking();
-            _controller.MoveTowards(focus.Position);
-        }
-        else
-        {
-            // 其他层焦点 -> 待机
-            StopAttacking();
-        }
-    }
-
-    /// <summary>威胁焦点行为：靠近敌人 + 攻击注册。</summary>
-    private void ThreatFocusBehavior(Focus focus, bool allowChase)
-    {
-        var enemy = focus.Source as IDamageable;
-        if (enemy == null || enemy.CurrentHp <= 0)
-        {
-            StopAttacking();
-            return;
-        }
-
-        // 非战斗单位（工人/农民）不攻击，撤退由谱系 4 处理
-        if (_profession.attack <= 0)
-        {
-            StopAttacking();
-            return;
-        }
-
-        float dist = Vector2.Distance(_self.GetPosition(), enemy.GetPosition());
-        float attackRange = _profession.attackRange * GetCellSize();
-
-        if (dist <= attackRange)
-        {
-            // 在攻击范围内 -> 注册攻击
-            if (!ReferenceEquals(enemy, _currentAttackTarget))
-            {
-                var profile = new AttackProfile
-                {
-                    attack = _profession.attack,
-                    range = _profession.attackRange,
-                    cd = _profession.attackCD,
-                    isRanged = _profession.isRanged,
-                    projectileSpeed = _profession.projectileSpeed
-                };
-                bool success = DamageSystem.Instance != null
-                    && DamageSystem.Instance.RegisterAttack(_self, enemy, profile);
-                if (success)
-                    _currentAttackTarget = enemy;
-            }
-        }
-        else if (allowChase)
-        {
-            // 不在范围内且允许追击 -> 移动靠近
-            StopAttacking();
-            _controller.MoveTowards(enemy.GetPosition());
-        }
-        // 不允许追击（谨慎态）-> 原地待机，不追
-    }
-
-    /// <summary>撤退行为：按方向远离敌人一步，不设固定终点（敌人消失即停）。</summary>
-    private void RetreatBehavior()
-    {
-        StopAttacking();
-
-        if (_nearbyEnemies.Count == 0) return;
-
-        Vector2 myPos = _self.GetPosition();
-        Vector2 retreatDir = Vector2.zero;
-        int count = 0;
-
-        for (int i = 0; i < _nearbyEnemies.Count; i++)
-        {
-            if (_nearbyEnemies[i] == null || _nearbyEnemies[i].CurrentHp <= 0) continue;
-            // 累加远离每个敌人的方向
-            retreatDir += (myPos - _nearbyEnemies[i].GetPosition()).normalized;
-            count++;
-        }
-
-        if (count == 0) return;
-
-        retreatDir = retreatDir.normalized;
-        if (retreatDir == Vector2.zero) retreatDir = Vector2.left;
-
-        // 按方向移动一步（不是追一个移动的目标点）
-        _controller.Move(retreatDir, run: true);
-    }
-
-    /// <summary>停止攻击并注销注册。</summary>
-    private void StopAttacking()
-    {
-        if (_currentAttackTarget != null)
-        {
-            DamageSystem.Instance?.Unregister(_self);
-            _currentAttackTarget = null;
+            case TimePhase.Night: return 1f;
+            case TimePhase.Dusk: return 0.6f;   // 黄昏渐入
+            case TimePhase.Dawn: return 0.4f;   // 黎明渐出
+            default: return 0f;                  // Day
         }
     }
 
@@ -427,6 +487,30 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended
     {
         return GridSystem.Instance != null && GridSystem.Instance.Config != null
             ? GridSystem.Instance.Config.cellSize : 2.26f;
+    }
+
+    /// <summary>设置跟随锚点（调度中心/军令下发时调，§3.2）</summary>
+    public void SetFollowAnchor(UnitController anchor, TaskPriority priority, float intensity)
+    {
+        _followProvider.SetFollowAnchor(anchor, priority, intensity);
+    }
+
+    /// <summary>清除跟随锚点（部队解散/任务完成时调）</summary>
+    public void ClearFollowAnchor()
+    {
+        _followProvider.ClearAnchor();
+    }
+
+    /// <summary>注入任务刺激源（调度中心派工时调，如砍树 B 级任务）</summary>
+    public void AddTaskStimulus(TaskStimulus stimulus)
+    {
+        _attention.AddStimulus(stimulus);
+    }
+
+    /// <summary>移除指定来源的任务刺激源（任务完成/取消时调）</summary>
+    public void RemoveTaskStimulus(object source)
+    {
+        _attention.RemoveTaskStimuli(source);
     }
 
     private void OnDestroy()

@@ -19,11 +19,21 @@ public class AttentionSystem
     private readonly List<TaskStimulus> _taskStimuli = new List<TaskStimulus>();
     private readonly List<PerceptionStimulus> _perceptionStimuli = new List<PerceptionStimulus>();
 
+    // 3.0.1_2 新增动态刺激源（class，零装箱）：Safety/Follow/HoldPosition
+    private readonly List<SafetyStimulus> _safetyStimuli = new List<SafetyStimulus>();
+    private readonly List<FollowStimulus> _followStimuli = new List<FollowStimulus>();
+    private readonly List<HoldPositionStimulus> _holdStimuli = new List<HoldPositionStimulus>();
+
     private Focus _currentFocus;
     private bool _focusChanged;
+    /// <summary>当前选中的刺激源实例（3.0.1_2：供 L1FocusEvaluator 取 IStimulus，Focus.Source 存的是业务引用非刺激源本身）</summary>
+    private IStimulus _currentStimulus;
 
     /// <summary>当前焦点（排行榜第一名）</summary>
     public Focus CurrentFocus => _currentFocus;
+
+    /// <summary>当前选中的刺激源实例（ThreatStimulus/TaskStimulus/SafetyStimulus 等）</summary>
+    public IStimulus CurrentStimulus => _currentStimulus;
 
     /// <summary>本轮更新焦点是否变化（机制乙据此决定切换判断 or 强度调节）</summary>
     public bool FocusChanged => _focusChanged;
@@ -33,6 +43,30 @@ public class AttentionSystem
     public void AddStimulus(ThreatStimulus s) => _threatStimuli.Add(s);
     public void AddStimulus(TaskStimulus s) => _taskStimuli.Add(s);
     public void AddStimulus(PerceptionStimulus s) => _perceptionStimuli.Add(s);
+
+    // 3.0.1_2 动态刺激源（class）重载
+    public void AddStimulus(SafetyStimulus s) => _safetyStimuli.Add(s);
+    public void AddStimulus(FollowStimulus s) => _followStimuli.Add(s);
+    public void AddStimulus(HoldPositionStimulus s) => _holdStimuli.Add(s);
+
+    /// <summary>
+    /// 按 IStimulus 运行时类型分发到对应列表（记忆组件 GetActiveStimuli 返回 IStimulus 接口用）。
+    /// 仅支持 3.0.1_2 新增 class 刺激源；struct 刺激源走各自强类型重载。
+    /// </summary>
+    public void AddDynamicStimulus(IStimulus s)
+    {
+        if (s is SafetyStimulus safety) _safetyStimuli.Add(safety);
+        else if (s is FollowStimulus follow) _followStimuli.Add(follow);
+        else if (s is HoldPositionStimulus hold) _holdStimuli.Add(hold);
+    }
+
+    /// <summary>清空动态刺激源（Safety/Follow/HoldPosition，每 tick 重注前调）</summary>
+    public void ClearDynamicStimuli()
+    {
+        _safetyStimuli.Clear();
+        _followStimuli.Clear();
+        _holdStimuli.Clear();
+    }
 
     // ===== 移除刺激源 =====
 
@@ -72,6 +106,7 @@ public class AttentionSystem
         _threatStimuli.Clear();
         _taskStimuli.Clear();
         _perceptionStimuli.Clear();
+        ClearDynamicStimuli();
         _currentFocus = Focus.Invalid;
     }
 
@@ -96,36 +131,118 @@ public class AttentionSystem
         _currentFocus = newFocus;
     }
 
-    /// <summary>选出排行榜第一名（跨层层压制）。</summary>
+    /// <summary>
+    /// 选出排行榜第一名（跨层层压制）。
+    /// 3.0.1_2 扩展：任务层纳入 Safety/Follow/HoldPosition 动态刺激源竞争，
+    /// 输出 Focus 含 FocusType/TargetPos/Score（扩展构造）。
+    /// stateTaskDiscount（Caution 态任务折扣）由 NPCBrain 在 Update 前设置，本方法读取应用。
+    /// </summary>
     private Focus SelectTopFocus()
     {
+        _currentStimulus = null;  // 重置
+
         // 第 1 层：威胁（最高优先）
         if (_threatStimuli.Count > 0)
         {
             var top = GetTopThreat();
-            return new Focus(AttentionLayer.Threat, top.Position, top.Intensity, top.Source);
+            _currentStimulus = top;  // struct 装箱为 IStimulus（P0 接受，P1 优化）
+            return new Focus(AttentionLayer.Threat, top.Position, top.Intensity, top.Source,
+                             top.FocusType, top.Position, top.Intensity);
         }
 
         // 第 2 层：仇恨（首版留壳，无刺激源）
 
-        // 第 3 层：任务
-        if (_taskStimuli.Count > 0)
-        {
-            var top = GetTopTask();
-            return new Focus(AttentionLayer.Task, top.Position, top.Intensity, top.Source);
-        }
+        // 第 3 层：任务（含 TaskStimulus + Safety/Follow/HoldPosition 动态刺激源）
+        Focus taskFocus = SelectTopTaskLayer();
+        if (taskFocus.IsValid)
+            return taskFocus;
 
         // 第 4 层：感知
         if (_perceptionStimuli.Count > 0)
         {
             var top = GetTopPerception();
-            return new Focus(AttentionLayer.Perception, top.Position, top.Intensity, top.Source);
+            _currentStimulus = top;
+            return new Focus(AttentionLayer.Perception, top.Position, top.Intensity, top.Source,
+                             top.FocusType, top.Position, top.Intensity);
         }
 
         // 第 5 层：好奇（首版留壳，无刺激源）
 
         return Focus.Invalid;
     }
+
+    /// <summary>
+    /// 任务层选焦点：TaskStimulus / SafetyStimulus / FollowStimulus / HoldPositionStimulus 竞争。
+    /// 应用 stateTaskDiscount（Caution 态对 TaskStimulus 打折，让 HoldPosition 胜出）。
+    /// </summary>
+    private Focus SelectTopTaskLayer()
+    {
+        float bestIntensity = -1f;
+        Focus best = Focus.Invalid;
+        IStimulus bestStimulus = null;
+
+        // TaskStimulus（struct，应用 stateTaskDiscount）
+        for (int i = 0; i < _taskStimuli.Count; i++)
+        {
+            float eff = _taskStimuli[i].Intensity * _taskDiscount;
+            if (eff > bestIntensity)
+            {
+                bestIntensity = eff;
+                var ts = _taskStimuli[i];
+                best = new Focus(AttentionLayer.Task, ts.Position, ts.Intensity, ts.Source,
+                                 ts.FocusType, ts.TargetPos, ts.Intensity);
+                bestStimulus = ts;  // struct 装箱
+            }
+        }
+
+        // SafetyStimulus（class，不打折--归巢是兜底非任务执行）
+        for (int i = 0; i < _safetyStimuli.Count; i++)
+        {
+            if (_safetyStimuli[i].Intensity > bestIntensity)
+            {
+                bestIntensity = _safetyStimuli[i].Intensity;
+                var ss = _safetyStimuli[i];
+                best = new Focus(AttentionLayer.Task, ss.Position, ss.Intensity, ss.Source,
+                                 ss.FocusType, ss.Position, ss.Intensity);
+                bestStimulus = ss;  // class 不装箱
+            }
+        }
+
+        // FollowStimulus（class，不打折--跟随是持续行为）
+        for (int i = 0; i < _followStimuli.Count; i++)
+        {
+            if (_followStimuli[i].Intensity > bestIntensity)
+            {
+                bestIntensity = _followStimuli[i].Intensity;
+                var fs = _followStimuli[i];
+                best = new Focus(AttentionLayer.Task, fs.Position, fs.Intensity, fs.Source,
+                                 fs.FocusType, fs.Position, fs.Intensity);
+                bestStimulus = fs;
+            }
+        }
+
+        // HoldPositionStimulus（class，不打折--驻留是 Caution 态要胜出的）
+        for (int i = 0; i < _holdStimuli.Count; i++)
+        {
+            if (_holdStimuli[i].Intensity > bestIntensity)
+            {
+                bestIntensity = _holdStimuli[i].Intensity;
+                var hs = _holdStimuli[i];
+                best = new Focus(AttentionLayer.Task, hs.Position, hs.Intensity, hs.Source,
+                                 hs.FocusType, hs.Position, hs.Intensity);
+                bestStimulus = hs;
+            }
+        }
+
+        _currentStimulus = bestStimulus;
+        return best;
+    }
+
+    /// <summary>任务折扣（Caution 态由 NPCBrain 设置，1f=不打折）</summary>
+    private float _taskDiscount = 1f;
+
+    /// <summary>设置任务折扣（NPCBrain 在 Update 前调，Caution 态传 stateTaskDiscount）</summary>
+    public void SetTaskDiscount(float discount) => _taskDiscount = discount;
 
     private ThreatStimulus GetTopThreat()
     {

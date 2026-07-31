@@ -43,6 +43,13 @@ public class NpcProfessionDef : UnitData
     [Tooltip("职业撤退阈值偏移。士兵敢扛 +x / 农民怯 -x")]
     public float retreatThresholdOffset = 0f;
 
+    [Header("输入输出决定层（3.0.1_2）")]
+    [Tooltip("战略撤退触发阈值：受击次数达此值后无条件回家。工人 3 / 士兵 99（几乎不触发）")]
+    public int maxHitCount = 3;
+
+    [Tooltip("归巢职业系数：工人 1.0（爱回城）/ 士兵 0.2（守城不轻易回）")]
+    public float professionPullScale = 1.0f;
+
     [Header("装备槽（预留，首版空）")]
     [Tooltip("装备槽数量（头盔/护甲/武器，首版 0）")]
     public int equipmentSlotCount = 0;

@@ -59,7 +59,7 @@ public enum PerceptionType
 
 /// <summary>
 /// 刺激源基接口。所有刺激源实现此接口，统一进入机制甲评分。
-/// 详见 3.0.1 文档第 2.2 节。
+/// 详见 3.0.1 文档第 2.2 节、3.0.1_2 §9。
 /// </summary>
 public interface IStimulus
 {
@@ -68,6 +68,8 @@ public interface IStimulus
     float Intensity { get; }
     object Source { get; }
     float Expiry { get; }
+    /// <summary>焦点类型（3.0.1_2 §9），供 L2 三维裁决表查表：谱系×焦点类型×到达态->模块</summary>
+    FocusType FocusType { get; }
 }
 
 /// <summary>
@@ -81,6 +83,8 @@ public struct ThreatStimulus : IStimulus
     public float Intensity { get; }
     public object Source { get; }
     public float Expiry { get; }
+    /// <summary>威胁焦点 -> 位置型（L2 谱系0/2 位置型未到达->MoveTowards，已到达->Idle）</summary>
+    public FocusType FocusType => FocusType.Position;
 
     /// <summary>威胁等级 0-3</summary>
     public int ThreatLevel { get; }
@@ -110,6 +114,8 @@ public struct TaskStimulus : IStimulus
     public float Intensity { get; }
     public object Source { get; }
     public float Expiry { get; }
+    /// <summary>任务焦点 -> 工作类位置（L2 谱系0/2 工作类已到达->WorkAt）</summary>
+    public FocusType FocusType => FocusType.WorkPosition;
 
     /// <summary>任务优先级 S/A/B/C</summary>
     public TaskPriority Priority { get; }
@@ -142,6 +148,8 @@ public struct PerceptionStimulus : IStimulus
     public float Intensity { get; }
     public object Source { get; }
     public float Expiry { get; }
+    /// <summary>感知焦点 -> 位置型</summary>
+    public FocusType FocusType => FocusType.Position;
 
     /// <summary>感知对象引用</summary>
     public object Perceived { get; }
@@ -171,6 +179,8 @@ public struct HateStimulus : IStimulus
     public float Intensity { get; }
     public object Source { get; }
     public float Expiry { get; }
+    /// <summary>仇恨焦点 -> 位置型</summary>
+    public FocusType FocusType => FocusType.Position;
 
     public HateStimulus(Vector2 position, float intensity, float expiry, object source = null)
     {
@@ -192,6 +202,8 @@ public struct CuriosityStimulus : IStimulus
     public float Intensity { get; }
     public object Source { get; }
     public float Expiry { get; }
+    /// <summary>好奇焦点 -> 位置型</summary>
+    public FocusType FocusType => FocusType.Position;
 
     public CuriosityStimulus(Vector2 position, float intensity, float expiry, object source = null)
     {
@@ -205,6 +217,7 @@ public struct CuriosityStimulus : IStimulus
 /// <summary>
 /// 焦点数据（注意力系统输出）。
 /// 包含注意力系统选出的第一名刺激源的精简信息，供行为执行器使用。
+/// 3.0.1_2 扩展：新增 FocusType/TargetPos/Score 供 L2 三维裁决表查表。
 /// </summary>
 public struct Focus
 {
@@ -213,6 +226,12 @@ public struct Focus
     public readonly float Intensity;
     public readonly object Source;
     public readonly bool IsValid;
+    /// <summary>焦点类型（3.0.1_2 §9），L2 三维表查表用</summary>
+    public readonly FocusType FocusType;
+    /// <summary>焦点目标位置（FollowAnchor 时每 tick 刷新）</summary>
+    public readonly Vector2 TargetPos;
+    /// <summary>层内强度分</summary>
+    public readonly float Score;
 
     public Focus(AttentionLayer layer, Vector2 position, float intensity, object source)
     {
@@ -221,6 +240,22 @@ public struct Focus
         Intensity = intensity;
         Source = source;
         IsValid = true;
+        FocusType = FocusType.Position;
+        TargetPos = position;
+        Score = intensity;
+    }
+
+    public Focus(AttentionLayer layer, Vector2 position, float intensity, object source,
+                 FocusType focusType, Vector2 targetPos, float score)
+    {
+        Layer = layer;
+        Position = position;
+        Intensity = intensity;
+        Source = source;
+        IsValid = true;
+        FocusType = focusType;
+        TargetPos = targetPos;
+        Score = score;
     }
 
     public static Focus Invalid => default;

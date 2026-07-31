@@ -28,4 +28,6 @@ MonoBehaviour:
   courage: 60
   obedience: 60
   retreatThresholdOffset: 0.3
+  maxHitCount: 99
+  professionPullScale: 0.2
   equipmentSlotCount: 0

@@ -167,6 +167,30 @@ public class AIDebugController : MonoBehaviour
         return snapshot;
     }
 
+    /// <summary>
+    /// 收集 V3 扩展数据（3.0.1_2 三层中间结果 + 记忆组件状态）。
+    /// AIDebugController 检测 IAIDebugInfoV3 接口，有则返回扩展数据，否则返回默认。
+    /// </summary>
+    public AIDebugSnapshotV3 GetSnapshotV3()
+    {
+        var v3 = new AIDebugSnapshotV3 { IsValid = false };
+        if (SelectedBrain == null) return v3;
+
+        var v3Info = SelectedBrain as IAIDebugInfoV3;
+        if (v3Info == null) return v3;
+
+        v3.FocusDecision = v3Info.DebugFocusDecision;
+        v3.PostureDecision = v3Info.DebugPostureDecision;
+        v3.Command = v3Info.DebugCommand;
+        v3.HitCooldownState = v3Info.DebugHitCooldownState;
+        v3.HitCount = v3Info.DebugHitCount;
+        v3.LastRaw = v3Info.DebugLastRaw;
+        v3.SafetyUrge = v3Info.DebugSafetyUrge;
+        v3.HomePoint = v3Info.DebugHomePoint;
+        v3.IsValid = true;
+        return v3;
+    }
+
     private void OnDestroy()
     {
         if (_instance == this)
