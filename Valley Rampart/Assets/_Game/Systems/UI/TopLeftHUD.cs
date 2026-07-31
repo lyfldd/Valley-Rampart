@@ -132,7 +132,8 @@ public class TopLeftHUD : MonoBehaviour
 
     private void OnUnitDied(UnitDiedEvent evt)
     {
-        if (evt.Unit != _monarch) return;
+        // 3.4：evt.Unit 改为 IDamageable，需 as UnitController 判等（君主是 UnitController）
+        if (evt.Unit as UnitController != _monarch) return;
         UpdateHpBar(0, _monarch != null ? _monarch.MaxHp : 0);
         _monarch = null;
         Debug.Log("[TopLeftHUD] 君主阵亡，HUD 停止刷新。");

@@ -151,7 +151,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private void OnEnable()
     {
         EventBus.Subscribe<BuildingUpgradedEvent>(OnBuildingUpgraded);
-        EventBus.Subscribe<BuildingDestroyedEvent>(OnBuildingDestroyed);
+        EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
         if (!_buttonsBound) BindButtons();
         SetVisible(false);
     }
@@ -159,7 +159,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private void OnDisable()
     {
         EventBus.Unsubscribe<BuildingUpgradedEvent>(OnBuildingUpgraded);
-        EventBus.Unsubscribe<BuildingDestroyedEvent>(OnBuildingDestroyed);
+        EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
         UnbindButtons();
     }
 
@@ -231,9 +231,11 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (evt.Building == _target) Refresh();
     }
 
-    private void OnBuildingDestroyed(BuildingDestroyedEvent evt)
+    // 3.4：改订阅 UnitDiedEvent（BuildingDestroyedEvent 退役）。
+    // 建筑被击杀/拆除都关面板，不过滤 Cause。
+    private void OnUnitDied(UnitDiedEvent evt)
     {
-        if (evt.Building == _target) Close();
+        if (evt.Unit as Building == _target) Close();
     }
 
     private void OnUpgradeClicked()

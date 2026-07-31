@@ -85,6 +85,13 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
             controller.Initialize(data);
         }
 
+        // 3.4: 如果有 StubAttacker 且 data 是 NpcProfessionDef，初始化攻击驱动器
+        var attacker = instance.GetComponent<StubAttacker>();
+        if (attacker != null && data is NpcProfessionDef npcDef)
+        {
+            attacker.Init(npcDef);
+        }
+
         return instance;
     }
 

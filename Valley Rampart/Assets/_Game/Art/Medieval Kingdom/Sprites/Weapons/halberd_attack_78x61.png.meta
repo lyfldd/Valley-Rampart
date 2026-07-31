@@ -1,0 +1,943 @@
+fileFormatVersion: 2
+guid: B3oYsyj7VX+cuNb4lYJn3lCoVxXUfCUieBVhJ5o6VHhHMc3SDm1aWxA=
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 2142952935833423426
+    second: halberd_attack_78x61_0
+  - first:
+      213: 8063065412671179867
+    second: halberd_attack_78x61_1
+  - first:
+      213: -164849343396935195
+    second: halberd_attack_78x61_2
+  - first:
+      213: -4664976633572107987
+    second: halberd_attack_78x61_3
+  - first:
+      213: -2331956170723923866
+    second: halberd_attack_78x61_4
+  - first:
+      213: -4888045933625827549
+    second: halberd_attack_78x61_5
+  - first:
+      213: 4877874343213255355
+    second: halberd_attack_78x61_6
+  - first:
+      213: 2564389417974815283
+    second: halberd_attack_78x61_7
+  - first:
+      213: 5196237534664123411
+    second: halberd_attack_78x61_8
+  - first:
+      213: -3961661828661904728
+    second: halberd_attack_78x61_9
+  - first:
+      213: -363893920788002758
+    second: halberd_attack_78x61_10
+  - first:
+      213: -5111111434139710461
+    second: halberd_attack_78x61_11
+  - first:
+      213: -8662657678390245557
+    second: halberd_attack_78x61_12
+  - first:
+      213: -8164281196368758356
+    second: halberd_attack_78x61_13
+  - first:
+      213: -7932582675604828207
+    second: halberd_attack_78x61_14
+  - first:
+      213: -1807712482868279135
+    second: halberd_attack_78x61_15
+  - first:
+      213: -8935356794039192378
+    second: halberd_attack_78x61_16
+  - first:
+      213: 4604246567334827564
+    second: halberd_attack_78x61_17
+  - first:
+      213: 137802427607139227
+    second: halberd_attack_78x61_18
+  - first:
+      213: 4024689005131424390
+    second: halberd_attack_78x61_19
+  - first:
+      213: -2314546068702093958
+    second: halberd_attack_78x61_20
+  - first:
+      213: -7464092804033385292
+    second: halberd_attack_78x61_21
+  - first:
+      213: 6289148874668557044
+    second: halberd_attack_78x61_22
+  - first:
+      213: -8596549302226479699
+    second: halberd_attack_78x61_23
+  - first:
+      213: -3789527737024743491
+    second: halberd_attack_78x61_24
+  - first:
+      213: 837691601836013458
+    second: halberd_attack_78x61_25
+  - first:
+      213: 629911658967943732
+    second: halberd_attack_78x61_26
+  - first:
+      213: 7446463620081178453
+    second: halberd_attack_78x61_27
+  - first:
+      213: 67058805250062873
+    second: halberd_attack_78x61_28
+  - first:
+      213: 1491842636247375902
+    second: halberd_attack_78x61_29
+  - first:
+      213: 3752434121540729551
+    second: halberd_attack_78x61_30
+  - first:
+      213: -4293375308218643325
+    second: halberd_attack_78x61_31
+  - first:
+      213: 1488128542182670496
+    second: halberd_attack_78x61_32
+  - first:
+      213: -2221209140283679701
+    second: halberd_attack_78x61_33
+  - first:
+      213: -6450571137737891181
+    second: halberd_attack_78x61_34
+  - first:
+      213: 1807191028795936160
+    second: halberd_attack_78x61_35
+  - first:
+      213: -3251366832884914489
+    second: halberd_attack_78x61_36
+  - first:
+      213: -9036087715573912317
+    second: halberd_attack_78x61_37
+  - first:
+      213: 1088203476699769235
+    second: halberd_attack_78x61_38
+  - first:
+      213: -8442840322645882404
+    second: halberd_attack_78x61_39
+  - first:
+      213: 7243871410263206355
+    second: halberd_attack_78x61_40
+  - first:
+      213: 4044036953629230468
+    second: halberd_attack_78x61_41
+  - first:
+      213: 6434128970047472212
+    second: halberd_attack_78x61_42
+  - first:
+      213: -272742247661082591
+    second: halberd_attack_78x61_43
+  - first:
+      213: 275754686201450873
+    second: halberd_attack_78x61_44
+  - first:
+      213: 7569858466690780613
+    second: halberd_attack_78x61_45
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 1
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: iPhone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Android
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: OpenHarmony
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: PlayableAds
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: WeixinMiniGame
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: HMIAndroid
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: halberd_attack_78x61_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 24e4bbe575c4dbd10800000000000000
+      internalID: 2142952935833423426
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_1
+      rect:
+        serializedVersion: 2
+        x: 78
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b5c010bd543c5ef60800000000000000
+      internalID: 8063065412671179867
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_2
+      rect:
+        serializedVersion: 2
+        x: 156
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5e98e55456656bdf0800000000000000
+      internalID: -164849343396935195
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_3
+      rect:
+        serializedVersion: 2
+        x: 234
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d29df66c77ca24fb0800000000000000
+      internalID: -4664976633572107987
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_4
+      rect:
+        serializedVersion: 2
+        x: 312
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 668683cc73a33afd0800000000000000
+      internalID: -2331956170723923866
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_5
+      rect:
+        serializedVersion: 2
+        x: 390
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 32f90701f1c2a2cb0800000000000000
+      internalID: -4888045933625827549
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_6
+      rect:
+        serializedVersion: 2
+        x: 468
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: bbac73efed0b1b340800000000000000
+      internalID: 4877874343213255355
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_7
+      rect:
+        serializedVersion: 2
+        x: 546
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 33ad824c69a869320800000000000000
+      internalID: 2564389417974815283
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_8
+      rect:
+        serializedVersion: 2
+        x: 624
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 314e436c18ebc1840800000000000000
+      internalID: 5196237534664123411
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_9
+      rect:
+        serializedVersion: 2
+        x: 702
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8aaf16e7e895509c0800000000000000
+      internalID: -3961661828661904728
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_10
+      rect:
+        serializedVersion: 2
+        x: 780
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a38c183386033faf0800000000000000
+      internalID: -363893920788002758
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_11
+      rect:
+        serializedVersion: 2
+        x: 858
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 30c4aa00b3fa119b0800000000000000
+      internalID: -5111111434139710461
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_12
+      rect:
+        serializedVersion: 2
+        x: 936
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b474dbcfcbe08c780800000000000000
+      internalID: -8662657678390245557
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_13
+      rect:
+        serializedVersion: 2
+        x: 1014
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ca9f9041285a2be80800000000000000
+      internalID: -8164281196368758356
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_14
+      rect:
+        serializedVersion: 2
+        x: 1092
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1df082dc51ec9e190800000000000000
+      internalID: -7932582675604828207
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_15
+      rect:
+        serializedVersion: 2
+        x: 1170
+        y: 61
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1a8c8921317b9e6e0800000000000000
+      internalID: -1807712482868279135
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_16
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6c4bbed565c3ff380800000000000000
+      internalID: -8935356794039192378
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_17
+      rect:
+        serializedVersion: 2
+        x: 78
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c26dd40dbd195ef30800000000000000
+      internalID: 4604246567334827564
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_18
+      rect:
+        serializedVersion: 2
+        x: 156
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b93c5bae39299e100800000000000000
+      internalID: 137802427607139227
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_19
+      rect:
+        serializedVersion: 2
+        x: 234
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 682674293519ad730800000000000000
+      internalID: 4024689005131424390
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_20
+      rect:
+        serializedVersion: 2
+        x: 312
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a7d1cbe0d9411efd0800000000000000
+      internalID: -2314546068702093958
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_21
+      rect:
+        serializedVersion: 2
+        x: 390
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4bc6a0524273a6890800000000000000
+      internalID: -7464092804033385292
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_22
+      rect:
+        serializedVersion: 2
+        x: 468
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4f2ca26849b874750800000000000000
+      internalID: 6289148874668557044
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_23
+      rect:
+        serializedVersion: 2
+        x: 546
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: da598a2c4fbe2b880800000000000000
+      internalID: -8596549302226479699
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_24
+      rect:
+        serializedVersion: 2
+        x: 624
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: db77628d994e86bc0800000000000000
+      internalID: -3789527737024743491
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: halberd_attack_78x61_25
+      rect:
+        serializedVersion: 2
+        x: 702
+        y: 0
+        width: 78
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 29773c6d21410ab00800000000000000
+      internalID: 837691601836013458
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      halberd_attack_78x61_0: 2142952935833423426
+      halberd_attack_78x61_1: 8063065412671179867
+      halberd_attack_78x61_10: -363893920788002758
+      halberd_attack_78x61_11: -5111111434139710461
+      halberd_attack_78x61_12: -8662657678390245557
+      halberd_attack_78x61_13: -8164281196368758356
+      halberd_attack_78x61_14: -7932582675604828207
+      halberd_attack_78x61_15: -1807712482868279135
+      halberd_attack_78x61_16: -8935356794039192378
+      halberd_attack_78x61_17: 4604246567334827564
+      halberd_attack_78x61_18: 137802427607139227
+      halberd_attack_78x61_19: 4024689005131424390
+      halberd_attack_78x61_2: -164849343396935195
+      halberd_attack_78x61_20: -2314546068702093958
+      halberd_attack_78x61_21: -7464092804033385292
+      halberd_attack_78x61_22: 6289148874668557044
+      halberd_attack_78x61_23: -8596549302226479699
+      halberd_attack_78x61_24: -3789527737024743491
+      halberd_attack_78x61_25: 837691601836013458
+      halberd_attack_78x61_3: -4664976633572107987
+      halberd_attack_78x61_4: -2331956170723923866
+      halberd_attack_78x61_5: -4888045933625827549
+      halberd_attack_78x61_6: 4877874343213255355
+      halberd_attack_78x61_7: 2564389417974815283
+      halberd_attack_78x61_8: 5196237534664123411
+      halberd_attack_78x61_9: -3961661828661904728
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

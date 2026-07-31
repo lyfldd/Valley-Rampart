@@ -12,15 +12,18 @@ public enum BuildingState
 
 /// <summary>
 /// 运行时建筑实例。持有 BuildingDef 配置引用 + 运行时状态（level/hp/grade/state）。
-/// 实现 IInteractable 接入统一交互派发。
+/// 实现 IInteractable 接入统一交互派发；3.4 实现 IDamageable 统一走 DamageSystem。
 ///
 /// 3.3.4 批次3：加入状态机 + 统一进度系统。建造/升级/修复都走 Constructing + 进度条，
 /// 首版用"自动累计"（每秒+20%，5秒完成），3.10 后切"工人驱动"模式。
 ///
+/// 3.4 重构：实现 IDamageable；Die 加 DeathCause 参数区分拆除/被击杀；
+/// BuildingDestroyedEvent 退役，改发 UnitDiedEvent；补 Heal 空实现（建筑不回血）。
+///
 /// 地图预置建筑（树/矿/裂隙/主城）由 BuildingFactory 实例化，isPlayerBuilt=false；
 /// 玩家建造由 BuildController 实例化，isPlayerBuilt=true。
 /// </summary>
-public class Building : MonoBehaviour, IInteractable
+public class Building : MonoBehaviour, IInteractable, IDamageable
 {
     // ===== 占位 =====
     [Header("占位")]
@@ -62,6 +65,29 @@ public class Building : MonoBehaviour, IInteractable
 
     /// <summary>是否已完成建造（Active 态）。</summary>
     public bool IsActive => state == BuildingState.Active;
+
+    // ===== IDamageable 实现（3.4）=====
+    // 封装 hp/maxHp 字段为 IDamageable 属性，内部代码仍用 hp/maxHp 字段直接操作。
+
+    /// <summary>当前血量（封装 hp 字段）。</summary>
+    public int CurrentHp => hp;
+
+    /// <summary>最大血量（封装 maxHp 字段）。</summary>
+    public int MaxHp => maxHp;
+
+    /// <summary>护甲值（复用 BuildingDef.combat.defense，供 DamageSystem 减伤计算）。</summary>
+    public int Defense => def != null ? def.combat.defense : 0;
+
+    /// <summary>世界坐标位置。</summary>
+    public Vector2 GetPosition() => transform.position;
+
+    /// <summary>阵营。</summary>
+    public Faction GetFaction() => faction;
+
+    /// <summary>
+    /// 恢复血量（建筑不回血，空实现）。首版不触发，后续对接资源系统时按需实装。
+    /// </summary>
+    public void Heal(int amount) { }
 
     // ===== 初始化 =====
 
@@ -243,24 +269,41 @@ public class Building : MonoBehaviour, IInteractable
         if (!isPlayerBuilt || def == null || !def.isDestructible) return;
         float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
         RulerController.Instance?.Refund(def.cost, ratio);
-        Die();
+        Die(DeathCause.Demolished);
     }
 
-    // ===== 战斗（3.4/3.5 对接）=====
+    // ===== 战斗（3.4 实现 IDamageable）=====
 
+    /// <summary>
+    /// 受到伤害，只扣血。伤害已由 DamageSystem 算好+取整。
+    /// 血量≤0 触发 Die(Killed)。非 Active 态不受伤。
+    /// </summary>
     public void TakeDamage(int amount)
     {
         if (state != BuildingState.Active) return; // 非 Active 不受伤
         hp = Mathf.Max(0, hp - amount);
-        if (hp <= 0) Die();
+        if (hp <= 0) Die(DeathCause.Killed);
     }
 
-    public void Die()
+    /// <summary>
+    /// 死亡处理。3.4 改造：加 DeathCause 参数区分拆除/被击杀；
+    /// 改发 UnitDiedEvent（BuildingDestroyedEvent 退役）。
+    /// </summary>
+    public void Die(DeathCause cause = DeathCause.Killed)
     {
         state = BuildingState.Dead;
         GridSystem.Instance?.FreeFootprint(coord, cellWidth);
         BuildingRegistry.Instance?.Unregister(this);
-        EventBus.Publish(new BuildingDestroyedEvent(this));
+
+        // 3.4：改发 UnitDiedEvent（建筑也走此事件，BuildingDestroyedEvent 退役）
+        EventBus.Publish(new UnitDiedEvent(
+            this,              // Unit (IDamageable)
+            faction,           // Faction
+            transform.position,// Position
+            null,              // Killer（建筑被击杀时无特定击杀者，DamageSystem 可补充）
+            cause              // Cause（Killed=被击杀，Demolished=玩家拆除）
+        ));
+
         Destroy(gameObject);
     }
 }

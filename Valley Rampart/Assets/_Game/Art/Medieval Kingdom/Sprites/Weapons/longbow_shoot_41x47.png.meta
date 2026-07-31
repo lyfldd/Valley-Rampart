@@ -1,0 +1,1508 @@
+fileFormatVersion: 2
+guid: C3ob5y6oAXuFeQn1PEUaqS7qAijxQFN3foyMjOSOywbvA9YNgjmQseo=
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -2343276816150586025
+    second: longbow_shoot_41x47_0
+  - first:
+      213: 8540941204587977879
+    second: longbow_shoot_41x47_1
+  - first:
+      213: -4433188350776856240
+    second: longbow_shoot_41x47_2
+  - first:
+      213: -1825994945813835396
+    second: longbow_shoot_41x47_3
+  - first:
+      213: -7406357972900780599
+    second: longbow_shoot_41x47_4
+  - first:
+      213: -4850921576111784405
+    second: longbow_shoot_41x47_5
+  - first:
+      213: -3291405706926667982
+    second: longbow_shoot_41x47_6
+  - first:
+      213: -2604589471837275237
+    second: longbow_shoot_41x47_7
+  - first:
+      213: 5295270859003242050
+    second: longbow_shoot_41x47_8
+  - first:
+      213: 8600851313639830077
+    second: longbow_shoot_41x47_9
+  - first:
+      213: 584190683704240645
+    second: longbow_shoot_41x47_10
+  - first:
+      213: 4964667777508991308
+    second: longbow_shoot_41x47_11
+  - first:
+      213: 1547352273862255841
+    second: longbow_shoot_41x47_12
+  - first:
+      213: -5780974626753983943
+    second: longbow_shoot_41x47_13
+  - first:
+      213: -8242444946611511708
+    second: longbow_shoot_41x47_14
+  - first:
+      213: -718973841790050146
+    second: longbow_shoot_41x47_15
+  - first:
+      213: -8981702323688328744
+    second: longbow_shoot_41x47_16
+  - first:
+      213: 6449852023601601426
+    second: longbow_shoot_41x47_17
+  - first:
+      213: -712325401081468255
+    second: longbow_shoot_41x47_18
+  - first:
+      213: 6085643261076230927
+    second: longbow_shoot_41x47_19
+  - first:
+      213: -487596047215679287
+    second: longbow_shoot_41x47_20
+  - first:
+      213: -2876711158074081657
+    second: longbow_shoot_41x47_21
+  - first:
+      213: 6549934921396250439
+    second: longbow_shoot_41x47_22
+  - first:
+      213: -2032268966472305581
+    second: longbow_shoot_41x47_23
+  - first:
+      213: 5262588407646609484
+    second: longbow_shoot_41x47_24
+  - first:
+      213: -4175086664128588834
+    second: longbow_shoot_41x47_25
+  - first:
+      213: 8114369531052913116
+    second: longbow_shoot_41x47_26
+  - first:
+      213: -4890278796844913210
+    second: longbow_shoot_41x47_27
+  - first:
+      213: 6635535558362487076
+    second: longbow_shoot_41x47_28
+  - first:
+      213: -1867548551951684765
+    second: longbow_shoot_41x47_29
+  - first:
+      213: 324597534937457001
+    second: longbow_shoot_41x47_30
+  - first:
+      213: 4851102254687853971
+    second: longbow_shoot_41x47_31
+  - first:
+      213: 8479236054062952787
+    second: longbow_shoot_41x47_32
+  - first:
+      213: -8600956949788257381
+    second: longbow_shoot_41x47_33
+  - first:
+      213: -3768206784464054722
+    second: longbow_shoot_41x47_34
+  - first:
+      213: 3227817581891338821
+    second: longbow_shoot_41x47_35
+  - first:
+      213: -2874149503124123492
+    second: longbow_shoot_41x47_36
+  - first:
+      213: 8479627736722790757
+    second: longbow_shoot_41x47_37
+  - first:
+      213: -5546500117019657450
+    second: longbow_shoot_41x47_38
+  - first:
+      213: 2451056516490162764
+    second: longbow_shoot_41x47_39
+  - first:
+      213: 4125285458941919478
+    second: longbow_shoot_41x47_40
+  - first:
+      213: -589411148161359404
+    second: longbow_shoot_41x47_41
+  - first:
+      213: -1232441275702394714
+    second: longbow_shoot_41x47_42
+  - first:
+      213: -4302431075160489630
+    second: longbow_shoot_41x47_43
+  - first:
+      213: 4462954521770947528
+    second: longbow_shoot_41x47_44
+  - first:
+      213: -3419165387102832321
+    second: longbow_shoot_41x47_45
+  - first:
+      213: 661388461407612246
+    second: longbow_shoot_41x47_46
+  - first:
+      213: -2969784397818170263
+    second: longbow_shoot_41x47_47
+  - first:
+      213: -1726771712276305565
+    second: longbow_shoot_41x47_48
+  - first:
+      213: 3269524703624528180
+    second: longbow_shoot_41x47_49
+  - first:
+      213: 7622655110116770482
+    second: longbow_shoot_41x47_50
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 0
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 1
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: iPhone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Android
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: OpenHarmony
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: PlayableAds
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: WeixinMiniGame
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: HMIAndroid
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: 4
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 75d9fe2a6220b7fd0800000000000000
+      internalID: -2343276816150586025
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_1
+      rect:
+        serializedVersion: 2
+        x: 41
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 79c96f216c4878670800000000000000
+      internalID: 8540941204587977879
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_2
+      rect:
+        serializedVersion: 2
+        x: 82
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 051bb89dea62a72c0800000000000000
+      internalID: -4433188350776856240
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_3
+      rect:
+        serializedVersion: 2
+        x: 123
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c719b157543c8a6e0800000000000000
+      internalID: -1825994945813835396
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_4
+      rect:
+        serializedVersion: 2
+        x: 164
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9c5edd90aa4573990800000000000000
+      internalID: -7406357972900780599
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_5
+      rect:
+        serializedVersion: 2
+        x: 205
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b2e349e17801eacb0800000000000000
+      internalID: -4850921576111784405
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_6
+      rect:
+        serializedVersion: 2
+        x: 246
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 23741fab2f39252d0800000000000000
+      internalID: -3291405706926667982
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_7
+      rect:
+        serializedVersion: 2
+        x: 287
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b9bba61dca3aadbd0800000000000000
+      internalID: -2604589471837275237
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_8
+      rect:
+        serializedVersion: 2
+        x: 328
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 246ad5c6ac49c7940800000000000000
+      internalID: 5295270859003242050
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_9
+      rect:
+        serializedVersion: 2
+        x: 369
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d32347353bc5c5770800000000000000
+      internalID: 8600851313639830077
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_10
+      rect:
+        serializedVersion: 2
+        x: 410
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 50aa847e4567b1800800000000000000
+      internalID: 584190683704240645
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_11
+      rect:
+        serializedVersion: 2
+        x: 451
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c41604a2a0b06e440800000000000000
+      internalID: 4964667777508991308
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_12
+      rect:
+        serializedVersion: 2
+        x: 492
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1e4e3f1e1bc497510800000000000000
+      internalID: 1547352273862255841
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_13
+      rect:
+        serializedVersion: 2
+        x: 533
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 93a48c4b43ad5cfa0800000000000000
+      internalID: -5780974626753983943
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_14
+      rect:
+        serializedVersion: 2
+        x: 574
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 46ed18ccdf3fc9d80800000000000000
+      internalID: -8242444946611511708
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_15
+      rect:
+        serializedVersion: 2
+        x: 615
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e906e45a911b506f0800000000000000
+      internalID: -718973841790050146
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_16
+      rect:
+        serializedVersion: 2
+        x: 656
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8d1b14ed2559a5380800000000000000
+      internalID: -8981702323688328744
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_17
+      rect:
+        serializedVersion: 2
+        x: 697
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 29b9b902e3a728950800000000000000
+      internalID: 6449852023601601426
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_18
+      rect:
+        serializedVersion: 2
+        x: 738
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 1aa2d0062df4d16f0800000000000000
+      internalID: -712325401081468255
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_19
+      rect:
+        serializedVersion: 2
+        x: 779
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f03d2368d4c847450800000000000000
+      internalID: 6085643261076230927
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_20
+      rect:
+        serializedVersion: 2
+        x: 820
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9c823db7af5bb39f0800000000000000
+      internalID: -487596047215679287
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_21
+      rect:
+        serializedVersion: 2
+        x: 861
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 78e7795717ed318d0800000000000000
+      internalID: -2876711158074081657
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_22
+      rect:
+        serializedVersion: 2
+        x: 902
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 747efb3ab1b06ea50800000000000000
+      internalID: 6549934921396250439
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_23
+      rect:
+        serializedVersion: 2
+        x: 943
+        y: 47
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3543e55742eebc3e0800000000000000
+      internalID: -2032268966472305581
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_24
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c406ddc3648780940800000000000000
+      internalID: 5262588407646609484
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_25
+      rect:
+        serializedVersion: 2
+        x: 41
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ed3152eaccc1f06c0800000000000000
+      internalID: -4175086664128588834
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_26
+      rect:
+        serializedVersion: 2
+        x: 82
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cd179a2c8180c9070800000000000000
+      internalID: 8114369531052913116
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_27
+      rect:
+        serializedVersion: 2
+        x: 123
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6cd2f65185d322cb0800000000000000
+      internalID: -4890278796844913210
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_28
+      rect:
+        serializedVersion: 2
+        x: 164
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4295baa0f68261c50800000000000000
+      internalID: 6635535558362487076
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_29
+      rect:
+        serializedVersion: 2
+        x: 205
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 36bef189c722516e0800000000000000
+      internalID: -1867548551951684765
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_30
+      rect:
+        serializedVersion: 2
+        x: 246
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9612aecfcb3318400800000000000000
+      internalID: 324597534937457001
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_31
+      rect:
+        serializedVersion: 2
+        x: 287
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 39d14c36cc3925340800000000000000
+      internalID: 4851102254687853971
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_32
+      rect:
+        serializedVersion: 2
+        x: 328
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3517b19244c4ca570800000000000000
+      internalID: 8479236054062952787
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_33
+      rect:
+        serializedVersion: 2
+        x: 369
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b939177593343a880800000000000000
+      internalID: -8600956949788257381
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_34
+      rect:
+        serializedVersion: 2
+        x: 410
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e369dc3f4e3a4bbc0800000000000000
+      internalID: -3768206784464054722
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_35
+      rect:
+        serializedVersion: 2
+        x: 451
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 542c4603df28bcc20800000000000000
+      internalID: 3227817581891338821
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_36
+      rect:
+        serializedVersion: 2
+        x: 492
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c90dbea3148fc18d0800000000000000
+      internalID: -2874149503124123492
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_37
+      rect:
+        serializedVersion: 2
+        x: 533
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 56959e2ef70bda570800000000000000
+      internalID: 8479627736722790757
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_38
+      rect:
+        serializedVersion: 2
+        x: 574
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 61b716ab78fd603b0800000000000000
+      internalID: -5546500117019657450
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_39
+      rect:
+        serializedVersion: 2
+        x: 615
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c427dcd5ae6e30220800000000000000
+      internalID: 2451056516490162764
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_40
+      rect:
+        serializedVersion: 2
+        x: 656
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6f04159a445ff3930800000000000000
+      internalID: 4125285458941919478
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_41
+      rect:
+        serializedVersion: 2
+        x: 697
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4d1ef2ffeadf1d7f0800000000000000
+      internalID: -589411148161359404
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_42
+      rect:
+        serializedVersion: 2
+        x: 738
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 6a0ca33803d75eee0800000000000000
+      internalID: -1232441275702394714
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_43
+      rect:
+        serializedVersion: 2
+        x: 779
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 261057e7bb1ba44c0800000000000000
+      internalID: -4302431075160489630
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_44
+      rect:
+        serializedVersion: 2
+        x: 820
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8c371e6ed799fed30800000000000000
+      internalID: 4462954521770947528
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_45
+      rect:
+        serializedVersion: 2
+        x: 861
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f39bc69223fac80d0800000000000000
+      internalID: -3419165387102832321
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_46
+      rect:
+        serializedVersion: 2
+        x: 902
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 65d2ebc2d49bd2900800000000000000
+      internalID: 661388461407612246
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_47
+      rect:
+        serializedVersion: 2
+        x: 943
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 964fc8423d439c6d0800000000000000
+      internalID: -2969784397818170263
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_48
+      rect:
+        serializedVersion: 2
+        x: 984
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 369e399c6464908e0800000000000000
+      internalID: -1726771712276305565
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_49
+      rect:
+        serializedVersion: 2
+        x: 1025
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 43187ef256faf5d20800000000000000
+      internalID: 3269524703624528180
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: longbow_shoot_41x47_50
+      rect:
+        serializedVersion: 2
+        x: 1066
+        y: 0
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 2b283d3af6c19c960800000000000000
+      internalID: 7622655110116770482
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      longbow_shoot_41x47_0: -2343276816150586025
+      longbow_shoot_41x47_1: 8540941204587977879
+      longbow_shoot_41x47_10: 584190683704240645
+      longbow_shoot_41x47_11: 4964667777508991308
+      longbow_shoot_41x47_12: 1547352273862255841
+      longbow_shoot_41x47_13: -5780974626753983943
+      longbow_shoot_41x47_14: -8242444946611511708
+      longbow_shoot_41x47_15: -718973841790050146
+      longbow_shoot_41x47_16: -8981702323688328744
+      longbow_shoot_41x47_17: 6449852023601601426
+      longbow_shoot_41x47_18: -712325401081468255
+      longbow_shoot_41x47_19: 6085643261076230927
+      longbow_shoot_41x47_2: -4433188350776856240
+      longbow_shoot_41x47_20: -487596047215679287
+      longbow_shoot_41x47_21: -2876711158074081657
+      longbow_shoot_41x47_22: 6549934921396250439
+      longbow_shoot_41x47_23: -2032268966472305581
+      longbow_shoot_41x47_24: 5262588407646609484
+      longbow_shoot_41x47_25: -4175086664128588834
+      longbow_shoot_41x47_26: 8114369531052913116
+      longbow_shoot_41x47_27: -4890278796844913210
+      longbow_shoot_41x47_28: 6635535558362487076
+      longbow_shoot_41x47_29: -1867548551951684765
+      longbow_shoot_41x47_3: -1825994945813835396
+      longbow_shoot_41x47_30: 324597534937457001
+      longbow_shoot_41x47_31: 4851102254687853971
+      longbow_shoot_41x47_32: 8479236054062952787
+      longbow_shoot_41x47_33: -8600956949788257381
+      longbow_shoot_41x47_34: -3768206784464054722
+      longbow_shoot_41x47_35: 3227817581891338821
+      longbow_shoot_41x47_36: -2874149503124123492
+      longbow_shoot_41x47_37: 8479627736722790757
+      longbow_shoot_41x47_38: -5546500117019657450
+      longbow_shoot_41x47_39: 2451056516490162764
+      longbow_shoot_41x47_4: -7406357972900780599
+      longbow_shoot_41x47_40: 4125285458941919478
+      longbow_shoot_41x47_41: -589411148161359404
+      longbow_shoot_41x47_42: -1232441275702394714
+      longbow_shoot_41x47_43: -4302431075160489630
+      longbow_shoot_41x47_44: 4462954521770947528
+      longbow_shoot_41x47_45: -3419165387102832321
+      longbow_shoot_41x47_46: 661388461407612246
+      longbow_shoot_41x47_47: -2969784397818170263
+      longbow_shoot_41x47_48: -1726771712276305565
+      longbow_shoot_41x47_49: 3269524703624528180
+      longbow_shoot_41x47_5: -4850921576111784405
+      longbow_shoot_41x47_50: 7622655110116770482
+      longbow_shoot_41x47_6: -3291405706926667982
+      longbow_shoot_41x47_7: -2604589471837275237
+      longbow_shoot_41x47_8: 5295270859003242050
+      longbow_shoot_41x47_9: 8600851313639830077
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

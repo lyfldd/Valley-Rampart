@@ -48,15 +48,34 @@ public readonly struct GameStateChangedEvent
 
 // ===== 单位事件 =====
 
-// 单位死亡事件。由 UnitController 在 HP 降至 0 时发布。
-// RulerController 订阅此事件检测君主阵亡，触发 GameOver。
+// 死因枚举（3.4 决策 23）。区分被击杀与玩家拆除，击杀统计只认 Killed。
+public enum DeathCause
+{
+    Killed,      // 被击杀（战斗致死）
+    Demolished   // 玩家拆除
+}
+
+// 单位死亡事件。由 UnitController/Building 在 HP 降至 0 或拆除时发布。
+// Unit/Killer 类型为 IDamageable，建筑被打爆也走此事件（BuildingDestroyedEvent 退役）。
+// RulerController 订阅检测君主阵亡；TopLeftHUD 订阅清君主引用；
+// DamageSystem 订阅做注册表死亡清理（决策 24）；BuildingPanel 订阅关面板。
+// Cause 区分被击杀/拆除：击杀统计/全灭判定只认 Killed，忽略 Demolished。
 public readonly struct UnitDiedEvent
 {
-    public readonly UnitController Unit;
+    public readonly IDamageable Unit;       // 死亡者（UnitController 或 Building）
+    public readonly Faction Faction;        // 死亡者阵营
+    public readonly Vector2 Position;       // 死亡位置（掉落/反馈用）
+    public readonly IDamageable Killer;     // 击杀者（可为 null，如环境伤害/拆除）
+    public readonly DeathCause Cause;       // 死因：Killed=被击杀，Demolished=玩家拆除
 
-    public UnitDiedEvent(UnitController unit)
+    public UnitDiedEvent(IDamageable unit, Faction faction, Vector2 position,
+                         IDamageable killer, DeathCause cause)
     {
         Unit = unit;
+        Faction = faction;
+        Position = position;
+        Killer = killer;
+        Cause = cause;
     }
 }
 
@@ -105,19 +124,23 @@ public readonly struct UnitAttackEvent
     }
 }
 
-// 单位受伤事件。由战斗系统在伤害结算后发布。
-// ActualDamage 为扣除防御后的实际伤害值。
+// 单位受伤事件（3.4 决策 3）。由 DamageSystem 在伤害结算后发布。
+// 复用此事件（原零订阅），不新建 UnitHitEvent。Unit/Source 类型改 IDamageable，建筑也走此事件。
+// 3.0.1 ThreatStimulus 订阅此事件触发威胁 3。
+// 节流：DamageSystem 维护 victim->lastEventTime 字典，同一 victim 每 0.5s 最多发一次（决策 7）。
 public readonly struct UnitDamagedEvent
 {
-    public readonly UnitController Unit;
-    public readonly UnitController Source;
-    public readonly int ActualDamage;
+    public readonly IDamageable Unit;        // 受击者（UnitController 或 Building）
+    public readonly IDamageable Source;      // 攻击方（可为 null，如环境伤害）
+    public readonly int ActualDamage;        // 取整后伤害（int，DamageSystem 算好传入）
+    public readonly Vector2 Position;        // 受击位置（3.0.1 威胁评定/反馈层用）
 
-    public UnitDamagedEvent(UnitController unit, UnitController source, int actualDamage)
+    public UnitDamagedEvent(IDamageable unit, IDamageable source, int actualDamage, Vector2 position)
     {
         Unit = unit;
         Source = source;
         ActualDamage = actualDamage;
+        Position = position;
     }
 }
 
@@ -338,8 +361,8 @@ public readonly struct BuildingPlacedEvent
     public BuildingPlacedEvent(Building building) { Building = building; }
 }
 
-// 建筑摧毁/拆除事件。由 TeardownManager 清理时发布。
-// GridSystem.Free 在发布前已完成；寻路系统订阅此事件重算障碍图。
+// 建筑摧毁/拆除事件。[3.4 退役] 建筑死亡改走 UnitDiedEvent（Cause 区分 Killed/Demolished）。
+// 保留定义仅为编译兼容，不再发布。BuildingPanel 已改订阅 UnitDiedEvent。
 public readonly struct BuildingDestroyedEvent
 {
     public readonly Building Building;

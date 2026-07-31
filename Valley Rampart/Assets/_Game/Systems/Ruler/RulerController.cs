@@ -437,9 +437,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // ===== 君主死亡处理 =====
 
     // 订阅 UnitDiedEvent，检测君主是否阵亡
+    // 3.4：evt.Unit 改为 IDamageable，需 as UnitController 判等（君主是 UnitController）
     private void OnUnitDied(UnitDiedEvent evt)
     {
-        if (evt.Unit == monarchUnit)
+        if (evt.Unit as UnitController == monarchUnit)
         {
             OnMonarchDied();
         }

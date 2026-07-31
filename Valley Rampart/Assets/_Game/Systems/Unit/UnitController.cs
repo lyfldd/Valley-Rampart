@@ -4,16 +4,20 @@ using UnityEngine;
 /// 单位运行时控制器。挂在所有单位 Prefab 上（君主、NPC、敌人通用）。
 /// 持有运行时状态，提供战斗（攻击/受击/死亡）和移动能力。
 /// 由 UnitFactory 创建时注入 UnitData 配置。
-/// 
+///
+/// 3.4 重构：实现 IDamageable 接口，TakeDamage 去掉 source 参数和内部公式（公式搬 DamageSystem），
+/// AttackUnit 移除（改由 DamageSystem.RegisterAttack 驱动），Die 发改造后 UnitDiedEvent。
+///
 /// 数据变化事件：
-///   - 单位生成     → UnitSpawnedEvent
-///   - 血量变化     → UnitHpChangedEvent（受伤/治疗统一）
-///   - 属性变化     → UnitAttributeChangedEvent（MaxHp/Attack/Defense/速度，供 Buff/装备/升级系统）
-///   - 受伤/攻击/死亡沿用既有 UnitDamagedEvent / UnitAttackEvent / UnitDiedEvent
+///   - 单位生成     -> UnitSpawnedEvent
+///   - 血量变化     -> UnitHpChangedEvent（受伤/治疗统一）
+///   - 属性变化     -> UnitAttributeChangedEvent（MaxHp/Attack/Defense/速度，供 Buff/装备/升级系统）
+///   - 受伤事件     -> UnitDamagedEvent（3.4 起由 DamageSystem 发布，不在 TakeDamage 内发）
+///   - 死亡         -> UnitDiedEvent（3.4 改造：IDamageable + Faction + Position + Killer + Cause）
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(Rigidbody2D))]
-public class UnitController : MonoBehaviour, ISaveable
+public class UnitController : MonoBehaviour, ISaveable, IDamageable
 {
     // ===== ISaveable =====
 
@@ -37,6 +41,14 @@ public class UnitController : MonoBehaviour, ISaveable
     public float RunSpeed { get; private set; }
 
     public bool IsAlive => CurrentHp > 0;
+
+    // ===== IDamageable 实现 =====
+
+    /// <summary>世界坐标位置（空间分区查目标/投射物到达检测用）。</summary>
+    public Vector2 GetPosition() => transform.position;
+
+    /// <summary>阵营（敌我识别/Faction 二元判定用）。</summary>
+    public Faction GetFaction() => Data != null ? Data.faction : Faction.None;
 
     /// <summary>
     /// 按阵营映射堆叠类型（3.2 第 7.8 节）。
@@ -144,48 +156,27 @@ public class UnitController : MonoBehaviour, ISaveable
         // 位置已在 SpawnFromSave 时由 UnitFactory.SpawnUnit 设置
     }
 
-    // ===== 战斗系统 =====
+    // ===== 战斗系统（3.4 重构）=====
+    // AttackUnit 已移除：攻击改由 DamageSystem.RegisterAttack 驱动（NPCBrain/StubAttacker 调注册接口）。
+    // TakeDamage 退化为"收算好的伤害扣血"：公式搬 DamageSystem，去掉 source 参数。
+    // UnitDamagedEvent 改由 DamageSystem 发布（含 source/position），不在 TakeDamage 内发。
 
     /// <summary>
-    /// 攻击目标单位，造成基于自身攻击力的伤害。
+    /// 受到伤害，只扣血。伤害已由 DamageSystem 算好+取整（百分比减伤+RoundToInt+保底1）。
+    /// 血量≤0 触发 Die。发布 UnitHpChangedEvent 供血条 UI 刷新。
     /// </summary>
-    public virtual void AttackUnit(UnitController target)
-    {
-        if (target == null || !target.IsAlive) return;
-        if (Data == null) return;
-
-        // 发布攻击事件（供 UI/音效/仇恨系统订阅）
-        EventBus.Publish(new UnitAttackEvent(this, target, Attack));
-
-        // 实际造成伤害，source 传递给 TakeDamage 以便发布 UnitDamagedEvent
-        target.TakeDamage(Attack, this);
-
-        Debug.Log($"[UnitController] {Data.faction}_{Data.occupation} "
-            + $"攻击 {target.Data.faction}_{target.Data.occupation}，"
-            + $"造成 {Attack} 伤害");
-    }
-
-    /// <summary>
-    /// 受到伤害，自动按防御力减免。最低承受 1 点伤害（防止无敌）。
-    /// source 为伤害来源，用于事件追踪（可为 null，如环境伤害）。
-    /// 同时发布 UnitHpChangedEvent 供血条 UI 刷新。
-    /// </summary>
-    public virtual void TakeDamage(int rawDamage, UnitController source = null)
+    public virtual void TakeDamage(int finalDamage)
     {
         if (Data == null || !IsAlive) return;
 
-        int actualDamage = Mathf.Max(1, rawDamage - Defense);
         int oldHp = CurrentHp;
-        CurrentHp = Mathf.Max(0, CurrentHp - actualDamage);
+        CurrentHp = Mathf.Max(0, CurrentHp - finalDamage);
 
-        // 发布受击事件（供 UI/仇恨系统订阅）
-        EventBus.Publish(new UnitDamagedEvent(this, source, actualDamage));
         // 发布血量变化事件（供血条 UI 订阅，受伤/治疗统一走这里）
         EventBus.Publish(new UnitHpChangedEvent(this, oldHp, CurrentHp, MaxHp));
 
         Debug.Log($"[UnitController] {Data.faction}_{Data.occupation} "
-            + $"受到 {rawDamage} 伤害，防御减免后 -{actualDamage}，"
-            + $"剩余 HP: {CurrentHp}/{MaxHp}");
+            + $"受到 {finalDamage} 伤害，剩余 HP: {CurrentHp}/{MaxHp}");
 
         if (CurrentHp <= 0)
         {
@@ -274,7 +265,9 @@ public class UnitController : MonoBehaviour, ISaveable
     }
 
     /// <summary>
-    /// 死亡处理：发布事件 → 注销注册 → 销毁对象。
+    /// 死亡处理：发布 UnitDiedEvent -> 注销注册 -> 销毁对象。
+    /// 3.4 改造：UnitDiedEvent 扩为 IDamageable + Faction + Position + Killer + Cause。
+    /// Killer 此处为 null（TakeDamage 无 source），DamageSystem 可在调用方补充击杀者信息。
     /// </summary>
     protected virtual void Die()
     {
@@ -283,8 +276,14 @@ public class UnitController : MonoBehaviour, ISaveable
         // 先注销 ISaveable，再销毁对象，防止 SaveManager 抓到已销毁实例
         SaveManager.Instance.UnregisterSaveable(this);
 
-        // 先发布事件，订阅者仍可访问 this
-        EventBus.Publish(new UnitDiedEvent(this));
+        // 先发布事件，订阅者仍可访问 this（RulerController/TopLeftHUD/DamageSystem/对象池）
+        EventBus.Publish(new UnitDiedEvent(
+            this,                          // Unit (IDamageable)
+            Data != null ? Data.faction : Faction.None,  // Faction
+            transform.position,            // Position
+            null,                          // Killer（TakeDamage 无 source，此处为 null）
+            DeathCause.Killed              // Cause（战斗致死）
+        ));
 
         // 再从注册中心注销
         UnitRegistry.Instance.Unregister(this);

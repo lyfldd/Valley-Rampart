@@ -1,0 +1,152 @@
+﻿感谢您购买此资源包。
+本文件夹中的所有内容由以下人员合作完成：
+
+Isra Maraver，2D 美术
+    邮箱: isramara@proton.me
+    Discord: ismartal
+
+以及
+
+Alecxs Sunders，音乐作曲
+    邮箱: alecxs.sunders@gmail.com
+    Discord: alecxs.sunders
+
+-------------------------------------------------------------------------------------------------------------------
+
+- 内容列表、精灵尺寸及相关信息 -
+
+- 项目文件夹说明 -
+
+Animations：
+该文件夹包含角色、建筑、动物以及特效的所有动画。
+
+Prefabs：
+该文件夹包含从部分对象或角色创建的预制体，方便快速使用。
+
+Scenes：
+该文件夹包含一个示例场景，展示了本资源包中的部分内容。
+
+Sound：
+该文件夹包含音效文件以及背景音乐。
+
+【音效（SFX）】
+全部为 wav 格式。
+“名称 - 变体数量”
+
+SFX - 动物
+    Animal_BirdChirping - 6
+    Animal_ChickChirping - 4
+    Animal_ChickenClucking - 7
+    Animal_Cow - 5
+    Animal_Graze - 2
+    Animal_Pig - 11
+    Animal_RoosterCall - 2
+    Animal_Snort - 3
+    Animal_WolfGrowl
+    Animal_WolfHowling
+    Animal_Escape
+
+SFX - 外部环境 / 建筑 / 结构
+    Cart（循环）- 2
+    Cart
+    Construction_Site - 4
+    Sack_Dropped - 11
+    Scaffolding - 4
+    Door_House - 6
+    Door_Storage - 6
+    Bonfire（循环）- 2
+    Building_Finished - 2
+    Tent - 4
+    Windmill（循环）- 2
+    Castle_Gates
+    Chapel（循环）
+    Cooking_Place（循环）
+    Farm
+    Forge（循环）
+    Furnace（循环）
+    Market（循环）
+    Monastery（循环）
+    Sharpener（循环）
+    Tavern
+    Tree_FallingDown
+
+SFX - 声音表现（咳嗽、喊叫等）
+    Men_Cough - 3
+    Men_Grunt - 66
+    Warcry - 3
+    Women_Grunt - 28
+    Women_Moan - 4
+
+SFX - 环境音（Soundscape）
+    Sounscape_Grasslands（循环）
+    Sounscape_Nightime（循环）
+    Sounscape_Rain（循环）
+    Sounscape_Riverside（循环）
+    Sounscape_Storm（循环）
+
+SFX - 村民 / 工人 / 日常活动
+    Fishing_Reel - 11
+    Fishing_Rod - 7
+    Fishing_WaterSplash - 5
+    FootSteps（循环）- 6
+    FootStepsSingle - 10
+    Gathering_Minerals - 13
+    HammeringMetal - 14
+    Mining - 8
+    Coins - 2
+    Plowing - 10
+    Shawing - 17
+    Shoveling - 3
+    Skewing - 6
+    Skinning - 10
+    Stone_Hit - 7
+    Wood_Chopping - 17
+    Wood_Hit - 7
+
+SFX - 武器
+    Weapon_BowArrowFly - 11
+    Weapon_BowArrowHit - 7
+    Weapon_BowStretch - 8
+    Weapon_CrossbowBolt - 5
+    Weapon_CrossbowLoadAmmo - 9
+    Weapon_Mace - 11
+    Weapon_Shield - 7
+    Weapon_Spear - 10
+    Weapon_Stab - 7
+    Weapon_Sword - 20
+    SFX Army_Marching（循环）
+
+
+【音乐（Songs）】
+每首音乐包含普通版本和循环版本，全部为 wav 格式。
+
+01 - 宫廷宴会
+02 - 狩猎季节
+03 - 温柔山谷
+04 - 海狼之歌
+05 - 吟游诗人故事
+06 - 风之战马
+07 - 酒馆传说
+08 - 东方召唤
+09 - 钢铁与信仰
+10 - 战争号角
+11 - 黑暗岁月，灰色夜晚
+12 - 冷寂平静
+13 - 坚定希望
+14 - 最后一场冲突
+15 - 温馨河畔
+
+
+【精灵（Sprites）】
+该文件夹包含所有物体、角色、建筑、特效、瓦片及背景图像。
+（所有尺寸单位为像素，所有图片为 PNG 格式）
+
+“名称_单元格尺寸 - 图集尺寸”
+
+（以下列表保持原英文命名以确保兼容性）
+
+
+Tile Palette 文件夹：
+包含已创建并可直接在 Tile Palette 中使用的 Tilemap。
+
+
