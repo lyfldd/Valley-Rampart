@@ -142,10 +142,36 @@ public class AttentionSystem
         _currentStimulus = null;  // 重置
 
         // 第 1 层：威胁（最高优先）
+        // 3.0.1_3 编队优先：编队军令（FollowStimulus.IsFormationSlot）在威胁 0/1 级时压制威胁层，
+        // 让编队成员站槽位不被低威胁打断；威胁 2+（危险/致命）时威胁层才胜出（破阵追击）。
         if (_threatStimuli.Count > 0)
         {
+            // 检查是否有活跃的编队军令
+            bool hasFormationSlot = false;
+            float formationIntensity = 0f;
+            for (int i = 0; i < _followStimuli.Count; i++)
+            {
+                if (_followStimuli[i].IsFormationSlot)
+                {
+                    hasFormationSlot = true;
+                    formationIntensity = _followStimuli[i].Intensity;
+                    break;
+                }
+            }
+
             var top = GetTopThreat();
-            _currentStimulus = top;  // struct 装箱为 IStimulus（P0 接受，P1 优化）
+            int threatLvl = top.ThreatLevel;
+
+            // 编队军令 + 威胁 0/1 级 -> 编队优先（FollowStimulus 胜出，走任务层）
+            if (hasFormationSlot && threatLvl <= 1)
+            {
+                Focus taskFocus = SelectTopTaskLayer();
+                if (taskFocus.IsValid)
+                    return taskFocus;
+            }
+
+            // 非编队 / 威胁 2+ -> 威胁层胜出（原逻辑）
+            _currentStimulus = top;
             return new Focus(AttentionLayer.Threat, top.Position, top.Intensity, top.Source,
                              top.FocusType, top.Position, top.Intensity);
         }
@@ -153,9 +179,9 @@ public class AttentionSystem
         // 第 2 层：仇恨（首版留壳，无刺激源）
 
         // 第 3 层：任务（含 TaskStimulus + Safety/Follow/HoldPosition 动态刺激源）
-        Focus taskFocus = SelectTopTaskLayer();
-        if (taskFocus.IsValid)
-            return taskFocus;
+        Focus taskFocus2 = SelectTopTaskLayer();
+        if (taskFocus2.IsValid)
+            return taskFocus2;
 
         // 第 4 层：感知
         if (_perceptionStimuli.Count > 0)

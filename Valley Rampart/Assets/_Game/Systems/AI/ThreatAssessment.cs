@@ -71,7 +71,12 @@ public class ThreatAssessor
             return 0f;
 
         // 敌人距离因子（越近越高，0-1）
-        float distFactor = 1f - Mathf.Clamp01(nearestEnemyDist / perceptionWorldRadius);
+        // 保底：敌人进入攻击距离内时 distFactor 强制 1.0（弓手贴脸也该是最高距离威胁）
+        float distFactor;
+        if (attackWorldRange > 0f && nearestEnemyDist <= attackWorldRange)
+            distFactor = 1f;
+        else
+            distFactor = 1f - Mathf.Clamp01(nearestEnemyDist / perceptionWorldRadius);
 
         // 敌人数量因子（越多越高，0-1，5 个满）
         float countFactor = Mathf.Clamp01(enemyCount / 5f);
@@ -94,6 +99,11 @@ public class ThreatAssessor
 
         // 应用职业敏感度
         x *= profession.threatSensitivity;
+
+        // 攻击距离内保底：敌人进入自身攻击距离时，rawFactor 不低于 0.5（威胁2级=危险）
+        // 解决远程单位 threatSensitivity 低导致贴脸仍评不出威胁、继续追击走到脸上的问题
+        if (attackWorldRange > 0f && nearestEnemyDist <= attackWorldRange)
+            x = Mathf.Max(x, 0.5f);
 
         return Mathf.Clamp01(x);
     }

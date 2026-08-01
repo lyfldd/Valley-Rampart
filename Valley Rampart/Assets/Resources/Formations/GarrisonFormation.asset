@@ -9,22 +9,22 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
-  m_Name: Formation_Defense
-  m_EditorClassIdentifier: Assembly-CSharp::FormationDef
-  displayName: Formation_Defense
+  m_Script: {fileID: 11500000, guid: f6315aacfe0fcbb4691432ad742c9414, type: 3}
+  m_Name: GarrisonFormation
+  m_EditorClassIdentifier: 
+  displayName: "\u5B88\u57CE-\u5175\u5835\u53E3\u5F13\u4E0A\u5899"
   intent: 0
   battleLine: 0
   slots:
-  - cellOffset: {x: -3, y: 0}
-    role: 1
   - cellOffset: {x: -2, y: 0}
     role: 1
   - cellOffset: {x: -1, y: 0}
-    role: 3
+    role: 1
   - cellOffset: {x: 0, y: 0}
     role: 1
+  - cellOffset: {x: -2, y: 1}
+    role: 2
+  - cellOffset: {x: -1, y: 1}
+    role: 2
   - cellOffset: {x: 1, y: 0}
-    role: 2
-  - cellOffset: {x: 2, y: 0}
-    role: 2
+    role: 0

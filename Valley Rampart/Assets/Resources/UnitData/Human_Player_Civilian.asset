@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Human_Player_Civilian
   m_EditorClassIdentifier: 
   faction: 1
-  occupation: 3
+  occupation: 4
   walkSpeed: 3
   runSpeed: 6
   maxHp: 80

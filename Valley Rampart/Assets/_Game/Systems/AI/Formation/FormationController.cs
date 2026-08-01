@@ -63,6 +63,8 @@ public class FormationController : MonoBehaviour
     private float _lastSwitchTime;
     private float _lastCasualtyTime;
     private bool _pendingReform;
+    // 阵型朝向：1=向右进攻（默认），-1=向左进攻。AssignSlots 时 offset.x *= _formationDirection
+    private int _formationDirection = 1;
 
     /// <summary>当前意图</summary>
     public TacticIntent CurrentIntent => _currentIntent;
@@ -221,7 +223,10 @@ public class FormationController : MonoBehaviour
 
     /// <summary>
     /// 槽位分配（§3.2 R2 残编紧凑：空槽压队尾，按兵种填槽）。
-    /// 一字横队 6 槽，按 FormationDef.slots 顺序匹配成员角色。
+    /// 两轮填充：
+    ///   第一轮：近战按 slot 顺序填 MeleeOnly/GeneralOnly/Any 槽
+    ///   第二轮：弓手填剩余 RangedOnly/Any 槽，按距锚点 |x| 从近到远排序（残编时弓优先填靠后安全位，不甩到极端）
+    /// 方向翻转：offset.x *= _formationDirection（1=右/-1=左）
     /// </summary>
     private void AssignSlots(FormationDef def)
     {
@@ -234,34 +239,43 @@ public class FormationController : MonoBehaviour
             else melee.Add(m);
         }
 
-        int meleeIdx = 0;
-        int archerIdx = 0;
+        bool[] occupied = new bool[def.slots.Length];
+        int dir = _formationDirection;
 
-        for (int i = 0; i < def.slots.Length && (meleeIdx < melee.Count || archerIdx < archer.Count); i++)
+        // 第一轮：近战按 slot 顺序填 MeleeOnly/GeneralOnly/Any 槽
+        int meleeIdx = 0;
+        for (int i = 0; i < def.slots.Length && meleeIdx < melee.Count; i++)
         {
             SlotRole role = def.slots[i].role;
-            Vector2Int offset = def.slots[i].cellOffset;
-            bool assigned = false;
-
             if (role == SlotRole.MeleeOnly || role == SlotRole.GeneralOnly || role == SlotRole.Any)
             {
-                if (meleeIdx < melee.Count)
-                {
-                    var m = melee[meleeIdx++];
-                    m.SlotOffset = offset;
-                    ReplaceMember(m);
-                    assigned = true;
-                }
+                var m = melee[meleeIdx++];
+                m.SlotOffset = new Vector2Int(def.slots[i].cellOffset.x * dir, def.slots[i].cellOffset.y);
+                ReplaceMember(m);
+                occupied[i] = true;
             }
-            if (!assigned && (role == SlotRole.RangedOnly || role == SlotRole.Any))
-            {
-                if (archerIdx < archer.Count)
-                {
-                    var m = archer[archerIdx++];
-                    m.SlotOffset = offset;
-                    ReplaceMember(m);
-                }
-            }
+        }
+
+        // 第二轮：收集剩余 RangedOnly/Any 弓手槽，按距锚点 |x| 从近到远排序后填
+        var archerSlots = new List<int>();
+        for (int i = 0; i < def.slots.Length; i++)
+        {
+            if (occupied[i]) continue;
+            SlotRole role = def.slots[i].role;
+            if (role == SlotRole.RangedOnly || role == SlotRole.Any)
+                archerSlots.Add(i);
+        }
+        archerSlots.Sort((a, b) =>
+            Mathf.Abs(def.slots[a].cellOffset.x).CompareTo(Mathf.Abs(def.slots[b].cellOffset.x)));
+
+        int archerIdx = 0;
+        foreach (int i in archerSlots)
+        {
+            if (archerIdx >= archer.Count) break;
+            var m = archer[archerIdx++];
+            m.SlotOffset = new Vector2Int(def.slots[i].cellOffset.x * dir, def.slots[i].cellOffset.y);
+            ReplaceMember(m);
+            occupied[i] = true;
         }
     }
 
@@ -341,6 +355,12 @@ public class FormationController : MonoBehaviour
     public void SetAdvanceTarget(Vector2 target)
     {
         AdvanceTarget = target;
+        // 根据推进目标相对锚点的 x 符号设置阵型朝向（1=右/-1=左）
+        if (_anchor != null)
+        {
+            float dx = target.x - _anchor.position.x;
+            _formationDirection = dx >= 0f ? 1 : -1;
+        }
     }
 
     // ===== 减员管理（§15）=====

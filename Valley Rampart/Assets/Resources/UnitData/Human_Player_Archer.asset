@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Human_Player_Archer
   m_EditorClassIdentifier: 
   faction: 1
-  occupation: 1
+  occupation: 2
   walkSpeed: 3
   runSpeed: 6
   maxHp: 80

@@ -9,22 +9,22 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
-  m_Name: Formation_Garrison
-  m_EditorClassIdentifier: Assembly-CSharp::FormationDef
-  displayName: Formation_Garrison
-  intent: 0
+  m_Script: {fileID: 11500000, guid: f6315aacfe0fcbb4691432ad742c9414, type: 3}
+  m_Name: RetreatFormation
+  m_EditorClassIdentifier: 
+  displayName: "\u64A4\u9000-\u5F13\u5148\u8D70\u8FD1\u6218\u6BBF\u540E"
+  intent: 2
   battleLine: 0
   slots:
-  - cellOffset: {x: -2, y: 1}
+  - cellOffset: {x: -5, y: 0}
     role: 2
-  - cellOffset: {x: -1, y: 1}
+  - cellOffset: {x: -4, y: 0}
     role: 2
+  - cellOffset: {x: -3, y: 0}
+    role: 1
   - cellOffset: {x: -2, y: 0}
     role: 1
   - cellOffset: {x: -1, y: 0}
     role: 1
-  - cellOffset: {x: 0, y: 0}
-    role: 1
   - cellOffset: {x: 1, y: 0}
-    role: 1
+    role: 0

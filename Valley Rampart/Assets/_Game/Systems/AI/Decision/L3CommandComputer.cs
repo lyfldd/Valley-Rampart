@@ -38,6 +38,13 @@ public static class L3CommandComputer
                     float chaseRangeWorld = ctx.Config.formationChaseRangeCells * cellSize;
                     cmd.TargetPos = ClampToSlotRange(cmd.TargetPos, ctx.FormationSlotWorld, chaseRangeWorld);
                 }
+                // 远程单位攻击距离保底：敌人进入 attackWorldRange 内就停（不走到脸上，让攻击系统 In-Range 自动开火）
+                if (prof != null && prof.isRanged)
+                {
+                    float distToTarget = Vector2.Distance(ctx.SelfPos, cmd.TargetPos);
+                    if (distToTarget < ctx.AttackWorldRange)
+                        cmd.TargetPos = ctx.SelfPos;  // 停在原地，攻击系统自动开火
+                }
                 break;
 
             case BehaviorModule.RetreatMove:

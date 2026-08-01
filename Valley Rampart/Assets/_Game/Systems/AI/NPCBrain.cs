@@ -404,15 +404,35 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         bool shouldAttack = false;
         IDamageable targetEnemy = null;
 
-        if (focus.IsValid && focus.Focus is ThreatStimulus ts && ts.Enemy != null && ts.Enemy.CurrentHp > 0)
+        if (_profession.attack > 0)  // 战斗单位才攻击
         {
-            if (_profession.attack > 0)  // 战斗单位才攻击
+            // 路径1：威胁焦点 + 在射程内（原逻辑）
+            if (focus.IsValid && focus.Focus is ThreatStimulus ts && ts.Enemy != null && ts.Enemy.CurrentHp > 0)
             {
                 float dist = Vector2.Distance(ctx.SelfPos, ts.Enemy.GetPosition());
                 if (dist <= ctx.AttackWorldRange)
                 {
                     shouldAttack = true;
                     targetEnemy = ts.Enemy;
+                }
+            }
+            // 路径2：编队跟随焦点（FollowStimulus）或无威胁焦点时，感知范围内最近敌人在射程内也开火
+            // 解决编队优先（威胁0/1级走FollowAnchor）时弓手站槽位看戏的问题
+            if (!shouldAttack && _nearbyEnemies.Count > 0)
+            {
+                IDamageable nearest = null;
+                float nearestDist = float.MaxValue;
+                for (int i = 0; i < _nearbyEnemies.Count; i++)
+                {
+                    var e = _nearbyEnemies[i];
+                    if (e == null || e.CurrentHp <= 0) continue;
+                    float d = Vector2.Distance(ctx.SelfPos, e.GetPosition());
+                    if (d < nearestDist) { nearestDist = d; nearest = e; }
+                }
+                if (nearest != null && nearestDist <= ctx.AttackWorldRange)
+                {
+                    shouldAttack = true;
+                    targetEnemy = nearest;
                 }
             }
         }

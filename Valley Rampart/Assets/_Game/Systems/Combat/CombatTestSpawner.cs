@@ -86,18 +86,19 @@ public class CombatTestSpawner : MonoBehaviour
         Debug.Log("[3.0.1_3 验证] 开始生成测试单位（满编 6 人）...");
 
         // ===== 我方满编（左侧，x=-9~-5）=====
-        // 1 将军（挂 FormationController）
+        // 生成位置匹配 DefenseFormation 槽位布局：兵在外侧，弓在将军身边
+        // 将军居中（锚点 x=-7）
         GameObject generalGo = SpawnUnit(Faction.Human_Player, Occupation.General, new Vector2(-7f, -3f));
         _generalUnit = generalGo != null ? generalGo.GetComponent<UnitController>() : null;
 
-        // 3 近战士兵
+        // 3 近战士兵（外侧前线位：-3,-2,+2 cell 偏移 × 2.26 cellSize ≈ -13.8,-11.5,-2.5，但生成紧凑些方便招募）
         SpawnUnit(Faction.Human_Player, Occupation.Warrior, new Vector2(-9f, -3f));
         SpawnUnit(Faction.Human_Player, Occupation.Warrior, new Vector2(-8f, -3f));
-        SpawnUnit(Faction.Human_Player, Occupation.Warrior, new Vector2(-6f, -3f));
+        SpawnUnit(Faction.Human_Player, Occupation.Warrior, new Vector2(-5f, -3f));
 
-        // 2 弓手
-        SpawnUnit(Faction.Human_Player, Occupation.Archer, new Vector2(-10f, -3f));
-        SpawnUnit(Faction.Human_Player, Occupation.Archer, new Vector2(-5f, -3f));
+        // 2 弓手（将军身边内侧位：-1,+1 cell 偏移，生成在将军两侧）
+        SpawnUnit(Faction.Human_Player, Occupation.Archer, new Vector2(-7.5f, -3f));
+        SpawnUnit(Faction.Human_Player, Occupation.Archer, new Vector2(-6.5f, -3f));
 
         // 1 工人旁观（无攻击能力）
         SpawnUnit(Faction.Human_Player, Occupation.Civilian, new Vector2(-13f, -3f));
