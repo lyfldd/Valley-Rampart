@@ -138,6 +138,38 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("减员重排防抖（秒，§15.3 即时触发+防抖，占位 1s）")]
     public float formationCasualtyDebounce = 1f;
 
+    [Header("破阵博弈（3.0.1_4 §4.3）")]
+    [Tooltip("破阵升阈：breakScore 持续 > 此值进入破阵（威胁层胜出）")]
+    public float breakThreshold = 1.0f;
+    [Tooltip("破阵降阈：breakScore 持续 < 此值归队（滞回带内保持当前状态）")]
+    public float breakReleaseThreshold = 0.7f;
+    [Tooltip("威胁等级加成权重（levelWeight）：1+threatLevel×此值，默认 0.5")]
+    public float breakLevelWeight = 0.5f;
+    [Tooltip("破阵升级确认（秒，持续超过升阈的时间）")]
+    public float breakConfirmUp = 0.3f;
+    [Tooltip("破阵降级确认（秒，持续低于降阈的时间）")]
+    public float breakConfirmDown = 0.5f;
+    [Tooltip("军令强度归一化基准（S 级军令值，分母 formationIntensity/此值）")]
+    public float breakFormationBase = 4.5f;
+
+    [Header("受击溯源（3.0.1_4 §2.3）")]
+    [Tooltip("溯源基础强度：单次受击的溯源威胁强度")]
+    public float traceBaseIntensity = 40f;
+    [Tooltip("溯源递增斜率：每次追加的强度")]
+    public float traceStepIntensity = 10f;
+    [Tooltip("溯源强度上限（必须 < 贴脸近战强度下限 ~90，保证近战优先）")]
+    public float traceMaxIntensity = 60f;
+    [Tooltip("溯源指数衰减常数（秒，exp(-Δt/此值)，与 threatDecayTime 对齐）")]
+    public float traceDecayTime = 3f;
+    [Tooltip("溯源刺激有效期（秒，无受击超时移除）")]
+    public float traceExpiry = 5f;
+
+    [Header("漫游（3.0.1_4 §6.3）")]
+    [Tooltip("Wander 刺激强度（必须 < Safety 未到达最低值 ~0.10，回城优先）")]
+    public float wanderIntensity = 0.05f;
+    [Tooltip("漫游到点停留时长（秒，走走停停节奏）")]
+    public float wanderStayTime = 1.5f;
+
     /// <summary>按优先级获取权重。</summary>
     public float GetPriorityWeight(TaskPriority priority)
     {

@@ -27,6 +27,12 @@ public class BehaviorExecutor
     private float _durationTimer;
     private float _tacticalRetreatTraveled;  // 战术短撤已移动距离
 
+    // 3.0.1_4 §6.3 漫游状态（Executor 持有随机点，不依赖每 tick L3 重算）
+    private Vector2 _wanderTarget;
+    private bool _wanderHasTarget;
+    private bool _wanderStaying;
+    private float _wanderStayTimer;
+
     // 速度插值
     private float _currentSpeed;
     private const float SpeedLerpTime = 0.2f;
@@ -51,6 +57,13 @@ public class BehaviorExecutor
     {
         if (_self == null || _self.CurrentHp <= 0) return;
 
+        // 模块切换时重置跨模块状态（漫游随机点/战术短撤里程不跨模块续用）
+        if (_hasCmd && cmd.Module != _currentCmd.Module)
+        {
+            ResetWanderState();
+            _tacticalRetreatTraveled = 0f;
+        }
+
         // 速度插值（0.2s lerp）
         _currentSpeed = Mathf.Lerp(_currentSpeed, cmd.Speed, dt / SpeedLerpTime);
 
@@ -70,6 +83,9 @@ public class BehaviorExecutor
                 break;
             case BehaviorModule.Idle:
                 ExecuteIdle(in cmd, dt);
+                break;
+            case BehaviorModule.Wander:  // 3.0.1_4 §6.3
+                ExecuteWander(in cmd, dt, cellSize);
                 break;
         }
 
@@ -220,12 +236,77 @@ public class BehaviorExecutor
         }
     }
 
+    // ===== 3.0.1_4 §6.3 漫游 =====
+
+    /// <summary>
+    /// 漫游执行：HomePoint 周围随机取点 -> 走到 -> 停留 wanderStayTime -> 取新点（走走停停循环）。
+    /// 随机点由 Executor 持有（_wanderTarget），不依赖每 tick L3 重算，避免目标抖动。
+    /// </summary>
+    private void ExecuteWander(in BehaviorCommand cmd, float dt, float cellSize)
+    {
+        _arrivedAtFocus = false;  // 漫游是持续过程，永不到达语义
+
+        if (!_wanderHasTarget)
+        {
+            _wanderTarget = PickWanderPoint(cmd.TargetPos, cmd.WanderRadius);
+            _wanderHasTarget = true;
+            _wanderStaying = false;
+        }
+
+        if (_wanderStaying)
+        {
+            // 到点停留（走走停停），停满后取新点
+            _controller.MoveTowards(_self.GetPosition());
+            _wanderStayTimer += dt;
+            if (_wanderStayTimer >= cmd.Duration)
+            {
+                _wanderStaying = false;
+                _wanderStayTimer = 0f;
+                _wanderTarget = PickWanderPoint(cmd.TargetPos, cmd.WanderRadius);
+            }
+        }
+        else
+        {
+            Vector2 myPos = _self.GetPosition();
+            float dist = Vector2.Distance(myPos, _wanderTarget);
+            float arrivalDist = _config.arrivalThreshold * cellSize;
+
+            if (dist <= arrivalDist)
+            {
+                // 到达 -> 开始停留
+                _wanderStaying = true;
+                _wanderStayTimer = 0f;
+                _controller.MoveTowards(myPos);
+            }
+            else
+            {
+                _controller.MoveTowards(_wanderTarget);
+            }
+        }
+    }
+
+    /// <summary>1D 横版随机取点：x 轴 ±radius 随机，y 固定漫游中心（地面基线由 MoveTowards 夹取）。</summary>
+    private Vector2 PickWanderPoint(Vector2 center, float radius)
+    {
+        float rx = UnityEngine.Random.Range(-radius, radius);
+        return new Vector2(center.x + rx, center.y);
+    }
+
+    private void ResetWanderState()
+    {
+        _wanderHasTarget = false;
+        _wanderStaying = false;
+        _wanderStayTimer = 0f;
+        _wanderTarget = Vector2.zero;
+    }
+
     public void Stop()
     {
         _hasCmd = false;
         _arrivedAtFocus = false;
         _durationTimer = 0f;
         _tacticalRetreatTraveled = 0f;
+        ResetWanderState();
     }
 
     public void Reset()
@@ -235,6 +316,7 @@ public class BehaviorExecutor
         _durationTimer = 0f;
         _tacticalRetreatTraveled = 0f;
         _currentSpeed = 0f;
+        ResetWanderState();
     }
 }
 

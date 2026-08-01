@@ -106,7 +106,7 @@ public static class L2PostureDecider
 
         // ② 有活跃 ThreatStimulus -> 战术短撤（受击反方向）
         IDamageable enemy = FindActiveThreatEnemy(in ctx);
-        if (enemy != null)
+        if (enemy != null && !IsDestroyed(enemy))
         {
             posture.IsTacticalRetreat = true;
             // 战术方向来源：活跃 ThreatStimulus.enemy 位置反方向（单位向量）
@@ -122,13 +122,24 @@ public static class L2PostureDecider
     }
 
     /// <summary>
+    /// 销毁防御：IDamageable 接口变量的 !=null 是普通引用比较，不触发 Unity 的 Object==null 销毁检查。
+    /// 需先 as UnityEngine.Object 再判空，才能拦截已销毁（但引用未清空）的 UnitController 等组件。
+    /// </summary>
+    private static bool IsDestroyed(IDamageable d)
+    {
+        var uo = d as UnityEngine.Object;
+        return uo == null;  // UnityEngine.Object==null 触发销毁检测
+    }
+
+    /// <summary>
     /// 查找活跃 ThreatStimulus 的敌人引用（供战术短撤算方向）。
     /// P0：从 ctx 的附近敌人列表取最近的一个（ThreatStimulus 在 L1 评分时已注入）。
     /// </summary>
     private static IDamageable FindActiveThreatEnemy(in FactorContext ctx)
     {
-        // L1 焦点是威胁层且有 Enemy 引用
-        if (ctx.FocusDecision.IsValid && ctx.FocusDecision.Focus is ThreatStimulus ts && ts.Enemy != null)
+        // L1 焦点是威胁层且有 Enemy 引用（ts.Enemy 的 !=null 同样不触发销毁检测，需 IsDestroyed 防御）
+        if (ctx.FocusDecision.IsValid && ctx.FocusDecision.Focus is ThreatStimulus ts
+            && ts.Enemy != null && !IsDestroyed(ts.Enemy))
             return ts.Enemy;
 
         // 焦点非威胁但附近有敌人（威胁层压制下焦点可能是任务层，但威胁源仍存在）
@@ -160,6 +171,9 @@ public static class L2PostureDecider
 
             case FocusType.HomePosition:
                 return ctx.ArrivedAtFocus ? BehaviorModule.Idle : BehaviorModule.MoveTowards;
+
+            case FocusType.Wander:  // 3.0.1_4 §6.3 漫游：Executor 持续取点循环
+                return BehaviorModule.Wander;
 
             default:
                 return BehaviorModule.Idle;

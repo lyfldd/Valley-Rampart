@@ -78,3 +78,24 @@ public sealed class HoldPositionStimulus : IStimulus
     /// <summary>任务优先级（与 TaskStimulus 同层竞争，靠 Intensity 胜出而非 Priority）</summary>
     public TaskPriority Priority => TaskPriority.C;
 }
+
+/// <summary>
+/// 漫游刺激源（3.0.1_4 §6.3，任务层最低优先级）。
+/// 无事可做（无威胁/任务/军令，且已回城 Safety 压 0）时浮出，
+/// 驱动 Executor Wander 命令在 HomePoint 周围随机小幅走动。
+/// </summary>
+public sealed class WanderStimulus : IStimulus
+{
+    public AttentionLayer Layer => AttentionLayer.Task;
+    /// <summary>漫游中心 = HomePoint（随机取点范围由 Executor 按 cmd.WanderRadius 决定）</summary>
+    public Vector2 Position { get; set; }
+    /// <summary>wanderIntensity（0.05，须 < Safety 未到达最低值 ~0.10，回城优先）</summary>
+    public float Intensity { get; set; }
+    public object Source => null;
+    public float Expiry => float.MaxValue;
+    /// <summary>漫游型：L2 选 Wander 模块（Executor 持续取点循环）</summary>
+    public FocusType FocusType => FocusType.Wander;
+
+    /// <summary>任务优先级（C 级，与 Safety 同层竞争，靠 Intensity 让位）</summary>
+    public TaskPriority Priority => TaskPriority.C;
+}

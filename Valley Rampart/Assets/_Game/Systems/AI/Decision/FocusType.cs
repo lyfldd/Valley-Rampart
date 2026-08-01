@@ -17,5 +17,7 @@ public enum FocusType
     /// <summary>工作类位置（TaskStimulus 砍树/挖矿）：到达后 WorkAt</summary>
     WorkPosition,
     /// <summary>驻留类位置（SafetyStimulus HomePoint）：到达后 Idle</summary>
-    HomePosition
+    HomePosition,
+    /// <summary>漫游型（WanderStimulus 3.0.1_4 §6.3）：L2 选 Wander 模块，Executor 持续取点循环</summary>
+    Wander
 }

@@ -20,5 +20,7 @@ public enum BehaviorModule
     /// <summary>跟随动态锚点：每 tick 随锚点刷新</summary>
     FollowAnchor,
     /// <summary>原地待机：警戒驻留 / 无焦点兜底</summary>
-    Idle
+    Idle,
+    /// <summary>漫游（3.0.1_4 §6.3）：HomePoint 周围随机小幅走动，到点停一下再取新点</summary>
+    Wander
 }

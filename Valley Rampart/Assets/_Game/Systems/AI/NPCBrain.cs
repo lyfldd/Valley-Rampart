@@ -67,6 +67,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     // ===== 刺激源 Provider（池化复用）=====
     private readonly SafetyStimulusProvider _safetyProvider = new SafetyStimulusProvider();
     private readonly FollowStimulusProvider _followProvider = new FollowStimulusProvider();
+    // 3.0.1_4 §6.3 漫游
+    private readonly WanderStimulusProvider _wanderProvider = new WanderStimulusProvider();
+
+    // ===== 3.0.1_4 §2.3 受击溯源（聚合 O(1)，不追踪攻击者列表）=====
+    private IDamageable _lastAggressor;   // 最近攻击者（1 个，谁打最狠/最近）
+    private int _recentHitCount;          // 受击次数（聚合计数）
+    private float _lastHitTime;           // 最近受击时间
 
     // ===== BehaviorExecutor（§13.4）=====
     private BehaviorExecutor _executor;
@@ -157,6 +164,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         _hitCooldown = new HitCooldownStateMachine();
         _memoryComponents = new IMemoryComponent[] { _threatHysteresis, _protectionHysteresis, _hitCooldown };
 
+        // 3.0.1_4：注入全局调参引用（破阵博弈/漫游用）
+        _attention.SetConfig(_config);
+
         // 初始化 BehaviorExecutor
         _executor = new BehaviorExecutor(_controller, _self, this, _config);
 
@@ -181,13 +191,22 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         EventBus.Unsubscribe<UnitDamagedEvent>(OnDamaged);
     }
 
-    /// <summary>自身受击事件 -> HitCooldownStateMachine.OnDamaged（事件驱动路径b）</summary>
+    /// <summary>自身受击事件 -> HitCooldownStateMachine.OnDamaged（事件驱动路径b）+ 3.0.1_4 受击溯源聚合更新</summary>
     private void OnDamaged(UnitDamagedEvent evt)
     {
         if (!ReferenceEquals(evt.Unit, _self)) return;
         // 用临时 ctx 触发状态机（受击时刻即转 Caution + hitCount++）
         var ctx = BuildBaseContext();
         _hitCooldown.OnDamaged(in ctx);
+
+        // 3.0.1_4 §2.3 受击溯源（聚合 O(1)）：
+        // 敌对攻击者 -> 记录最近攻击者 + 计数 + 时间；环境伤害/误伤 -> 只计数不记攻击者
+        if (evt.Source == null) return;
+        if (evt.Source.GetFaction() == Faction.None || evt.Source.GetFaction() == _self.GetFaction())
+            return;  // 环境伤害/友军误伤不溯源
+        _lastAggressor = evt.Source;
+        _recentHitCount++;
+        _lastHitTime = Time.time;
     }
 
     // ===== IExecutorEventReceiver 实现（§13.4 双层分发：本地主 + EventBus 辅）=====
@@ -269,7 +288,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         for (int i = 0; i < _nearbyEnemies.Count; i++)
         {
             var enemy = _nearbyEnemies[i];
-            if (enemy == null || enemy.CurrentHp <= 0) continue;
+            if (enemy == null || IsDestroyed(enemy) || enemy.CurrentHp <= 0) continue;
 
             float dist = Vector2.Distance(myPos, enemy.GetPosition());
             if (dist < _nearestDist) _nearestDist = dist;
@@ -282,6 +301,25 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 expiry: currentTime + _config.threatDecayTime
             );
             _attention.AddStimulus(stimulus);
+        }
+
+        // 3.0.1_4 §2.3 受击溯源（聚合 O(1)）：感知范围外的攻击者也能被溯源到
+        // 强度 = min(上限, 基础40 + (次数-1)×10) × 指数衰减(3s)；受击保底威胁 1（警戒）
+        // 溯源上限 60 < 贴脸近战下限 90 -> 威胁分层近战>远程（§3.4）
+        if (_lastAggressor != null && !IsDestroyed(_lastAggressor) && _lastAggressor.CurrentHp > 0)
+        {
+            float delta = Mathf.Max(0f, currentTime - _lastHitTime);
+            float baseIntensity = Mathf.Min(_config.traceMaxIntensity,
+                _config.traceBaseIntensity + (_recentHitCount - 1) * _config.traceStepIntensity);
+            float intensity = Mathf.Max(1f, baseIntensity * Mathf.Exp(-delta / _config.traceDecayTime));
+
+            var trace = new ThreatStimulus(
+                _lastAggressor,
+                threatLevel: Mathf.Max((int)_threatHysteresis.CurrentLevel, 1),  // 受击至少警戒
+                intensity: intensity,
+                expiry: currentTime + _config.traceExpiry
+            );
+            _attention.AddStimulus(trace);
         }
 
         if (_nearbyEnemies.Count == 0) _nearestDist = float.MaxValue;
@@ -314,6 +352,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             _attention.AddStimulus(_followProvider.Refresh(in ctx));
         }
+        // 3.0.1_4 §6.3 漫游兜底（强度 0.05，Safety 到达后压 0 才浮出）
+        _attention.AddStimulus(_wanderProvider.GetOrUpdate(in ctx));
         for (int i = 0; i < _memoryComponents.Length; i++)
         {
             var stimuli = _memoryComponents[i].GetActiveStimuli();
@@ -324,8 +364,14 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // 设置任务折扣（Caution 态对 TaskStimulus 打折）
         _attention.SetTaskDiscount(ctx.StateTaskDiscount);
 
+        // 3.0.1_4 §4.3 破阵博弈：注入职业参数（courage 高敢脱队，obedience 高难脱队）
+        if (_profession != null)
+        {
+            _attention.SetBreakContext(_profession.courage, _profession.obedience);
+        }
+
         // ③ 纯管线：L1 -> L2 -> L3（无副作用）
-        _attention.Update(currentTime);
+        _attention.Update(currentTime, dt);
         ctx.FocusDecision = L1FocusEvaluator.Evaluate(_attention, in ctx);
         ctx.PostureDecision = L2PostureDecider.Decide(in ctx);
 
@@ -407,7 +453,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         if (_profession.attack > 0)  // 战斗单位才攻击
         {
             // 路径1：威胁焦点 + 在射程内（原逻辑）
-            if (focus.IsValid && focus.Focus is ThreatStimulus ts && ts.Enemy != null && ts.Enemy.CurrentHp > 0)
+            if (focus.IsValid && focus.Focus is ThreatStimulus ts
+                && ts.Enemy != null && !IsDestroyed(ts.Enemy) && ts.Enemy.CurrentHp > 0)
             {
                 float dist = Vector2.Distance(ctx.SelfPos, ts.Enemy.GetPosition());
                 if (dist <= ctx.AttackWorldRange)
@@ -425,7 +472,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 for (int i = 0; i < _nearbyEnemies.Count; i++)
                 {
                     var e = _nearbyEnemies[i];
-                    if (e == null || e.CurrentHp <= 0) continue;
+                    if (e == null || IsDestroyed(e) || e.CurrentHp <= 0) continue;
                     float d = Vector2.Distance(ctx.SelfPos, e.GetPosition());
                     if (d < nearestDist) { nearestDist = d; nearest = e; }
                 }
@@ -493,6 +540,16 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     }
 
     // ===== 昼夜（实装 TimeManager.CurrentPhase）=====
+
+    /// <summary>
+    /// 销毁防御：IDamageable 接口变量的 !=null 是普通引用比较，不触发 Unity 的 Object==null 销毁检查。
+    /// 需先 as UnityEngine.Object 再判空，才能拦截已销毁（但引用未清空）的 UnitController 等组件。
+    /// </summary>
+    private static bool IsDestroyed(IDamageable d)
+    {
+        var uo = d as UnityEngine.Object;
+        return uo == null;  // UnityEngine.Object==null 触发销毁检测
+    }
 
     /// <summary>判断当前是否夜晚（Night/Dusk 视为夜晚，威胁加重 + 归巢放大）</summary>
     private bool IsNight()

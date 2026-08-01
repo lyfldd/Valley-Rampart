@@ -174,37 +174,32 @@ public class CombatTestSpawner : MonoBehaviour
         HandleDebugKeys();
     }
 
-    /// <summary>Debug 热键（场景可见验证清单 §3.3）</summary>
+    /// <summary>Debug 热键（场景可见验证清单 §3.3）。将军编队热键动态检测：将军死自动失效、新将军自动恢复。</summary>
     private void HandleDebugKeys()
     {
+        // 动态查找当前活跃的将军编队（不依赖缓存引用——将军死亡组件销毁，引用会失效；
+        // 改为每次按键按"存活将军 + 非守城 + 有成员"查找，新将军生成后自动恢复）
+        FormationController general = FindActiveGeneralFormation();
+
         // 1 = 防守意图
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            if (_generalFormation != null)
-            {
-                _generalFormation.SetIntent(TacticIntent.Defense);
-                Debug.Log("[热键 1] 防守意图：列队守槽，弓手殿后，将军居中。");
-            }
+            if (general != null) { general.SetIntent(TacticIntent.Defense); Debug.Log("[热键 1] 防守意图：列队守槽，弓手殿后，将军居中。"); }
+            else LogNoGeneralFormation(1);
         }
         // 2 = 进攻意图（将军带头推进）
         else if (Input.GetKeyDown(KeyCode.Alpha2))
         {
-            if (_generalFormation != null)
-            {
-                _generalFormation.SetIntent(TacticIntent.Charge);
-                Debug.Log("[热键 2] 进攻意图：将军带头推进，士兵跟槽位。将军靠威胁焦点自驱动推进（P1 改 TaskStimulus）。");
-            }
+            if (general != null) { general.SetIntent(TacticIntent.Charge); Debug.Log("[热键 2] 进攻意图：将军带头推进，士兵跟槽位。将军靠威胁焦点自驱动推进（P1 改 TaskStimulus）。"); }
+            else LogNoGeneralFormation(2);
         }
         // 3 = 撤退意图
         else if (Input.GetKeyDown(KeyCode.Alpha3))
         {
-            if (_generalFormation != null)
-            {
-                _generalFormation.SetIntent(TacticIntent.Retreat);
-                Debug.Log("[热键 3] 撤退意图：弓手先走，近战殿后。");
-            }
+            if (general != null) { general.SetIntent(TacticIntent.Retreat); Debug.Log("[热键 3] 撤退意图：弓手先走，近战殿后。"); }
+            else LogNoGeneralFormation(3);
         }
-        // 4 = 守城编队（无将军）
+        // 4 = 守城编队（无将军，不依赖将军存活）
         else if (Input.GetKeyDown(KeyCode.Alpha4))
         {
             FormUpGarrison();
@@ -213,20 +208,14 @@ public class CombatTestSpawner : MonoBehaviour
         // 5 = 解散将军编队（测试减员状态清理）
         else if (Input.GetKeyDown(KeyCode.Alpha5))
         {
-            if (_generalFormation != null)
-            {
-                _generalFormation.DisbandAll();
-                Debug.Log("[热键 5] 将军编队解散，全体状态清理（ClearFormationState）。");
-            }
+            if (general != null) { general.DisbandAll(); Debug.Log("[热键 5] 将军编队解散，全体状态清理（ClearFormationState）。"); }
+            else LogNoGeneralFormation(5);
         }
         // 6 = 补员（测试补充机制）
         else if (Input.GetKeyDown(KeyCode.Alpha6))
         {
-            if (_generalFormation != null)
-            {
-                _generalFormation.RecruitReinforcement();
-                Debug.Log("[热键 6] 补员（同初始招募流程）。");
-            }
+            if (general != null) { general.RecruitReinforcement(); Debug.Log("[热键 6] 补员（同初始招募流程）。"); }
+            else LogNoGeneralFormation(6);
         }
         // 7 = 残编测试（杀掉编队中第一个近战成员触发防抖重排）
         else if (Input.GetKeyDown(KeyCode.Alpha7))
@@ -235,10 +224,39 @@ public class CombatTestSpawner : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 查找当前活跃的将军编队（3.0.1_4 热键动态化）：
+    /// 非守城 + 将军存活 + 编队有成员。将军死后组件销毁自动找不到；新将军生成组编队后自动恢复。
+    /// </summary>
+    private FormationController FindActiveGeneralFormation()
+    {
+        var formations = FindObjectsByType<FormationController>(FindObjectsSortMode.None);
+        foreach (var f in formations)
+        {
+            if (f == null || f.isGarrison) continue;  // 跳过守城编队
+            if (f.GeneralUnit == null || !f.GeneralUnit.IsAlive) continue;  // 将军须存活
+            if (f.MemberCount <= 0) continue;  // 编队须有成员（解散后无内容可调）
+            return f;
+        }
+        return null;
+    }
+
+    /// <summary>将军编队不存在时的提示（将军已死 / 未生成 / 已解散）</summary>
+    private void LogNoGeneralFormation(int key)
+    {
+        Debug.Log($"[热键 {key}] 无活跃将军编队（将军已阵亡/未生成/编队已解散）。按 4 可用守城编队，或重新生成将军恢复。");
+    }
+
     /// <summary>杀掉编队中第一个近战成员（残编测试 §7.3 / §15.3）</summary>
     private void KillFirstMeleeMember()
     {
-        if (_generalFormation == null || _generalUnit == null) return;
+        // 动态检测活跃将军编队（3.0.1_4 热键动态化：将军死/无编队 -> 提示而非静默）
+        FormationController general = FindActiveGeneralFormation();
+        if (general == null)
+        {
+            LogNoGeneralFormation(7);
+            return;
+        }
         // 找场景内一个编队中的近战士兵，调其 TakeDamage 致死
         var brains = FindObjectsByType<NPCBrain>(FindObjectsSortMode.None);
         foreach (var brain in brains)

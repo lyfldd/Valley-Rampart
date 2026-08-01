@@ -95,4 +95,12 @@ public struct BehaviorCommand
 
     /// <summary>是否编队槽位化（SlotOffset 非 zero）</summary>
     public bool IsFormationSlot => SlotOffset.x != 0 || SlotOffset.y != 0;
+
+    // ===== 3.0.1_4 §6.3 漫游（Wander 模块用）=====
+
+    /// <summary>
+    /// 漫游半径（世界单位，L3 算 = wanderRadiusCells × cellSize）。
+    /// Executor 在 cmd.TargetPos（= HomePoint 漫游中心）周围取随机点。
+    /// </summary>
+    public float WanderRadius;
 }

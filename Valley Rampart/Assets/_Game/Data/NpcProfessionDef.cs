@@ -53,4 +53,8 @@ public class NpcProfessionDef : UnitData
     [Header("装备槽（预留，首版空）")]
     [Tooltip("装备槽数量（头盔/护甲/武器，首版 0）")]
     public int equipmentSlotCount = 0;
+
+    [Header("漫游（3.0.1_4 §6.3）")]
+    [Tooltip("漫游安全半径（格数，HomePoint 周围随机取点范围）。工人晃悠大 / 士兵小")]
+    public float wanderRadiusCells = 2f;
 }

@@ -92,6 +92,13 @@ public static class L3CommandComputer
                     ? RetreatFormulas.CautionDuration(prof.courage, ctx.HpRatio, ctx.Config.baseCautionTime)
                     : 0f;
                 break;
+
+            case BehaviorModule.Wander:  // 3.0.1_4 §6.3 漫游：中心=HomePoint，半径/停留由 Executor 管理
+                cmd.TargetPos = posture.Focus.TargetPos;  // = HomePoint（漫游中心）
+                cmd.Speed = walkSpeed;
+                cmd.Duration = ctx.Config.wanderStayTime;
+                cmd.WanderRadius = prof != null ? prof.wanderRadiusCells * cellSize : 2f * cellSize;
+                break;
         }
 
         return cmd;

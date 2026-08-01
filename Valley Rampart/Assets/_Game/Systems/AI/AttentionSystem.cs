@@ -24,6 +24,22 @@ public class AttentionSystem
     private readonly List<FollowStimulus> _followStimuli = new List<FollowStimulus>();
     private readonly List<HoldPositionStimulus> _holdStimuli = new List<HoldPositionStimulus>();
 
+    // 3.0.1_4 漫游刺激源（class，零装箱）
+    private readonly List<WanderStimulus> _wanderStimuli = new List<WanderStimulus>();
+
+    // ===== 3.0.1_4 破阵博弈（§4.3，NPCBrain 每 tick 注入职业参数）=====
+    private int _breakCourage = 50;
+    private int _breakObedience = 50;
+    private bool _isBreaking;              // 当前是否破阵（滞回状态）
+    private float _breakUpTimer;
+    private float _breakDownTimer;
+
+    /// <summary>全局调参（破阵阈值/漫游等用，NPCBrain Init 时设置）</summary>
+    private AttentionTuningConfig _config;
+
+    /// <summary>设置全局调参引用（NPCBrain Init 时调）</summary>
+    public void SetConfig(AttentionTuningConfig config) => _config = config;
+
     private Focus _currentFocus;
     private bool _focusChanged;
     /// <summary>当前选中的刺激源实例（3.0.1_2：供 L1FocusEvaluator 取 IStimulus，Focus.Source 存的是业务引用非刺激源本身）</summary>
@@ -38,6 +54,9 @@ public class AttentionSystem
     /// <summary>本轮更新焦点是否变化（机制乙据此决定切换判断 or 强度调节）</summary>
     public bool FocusChanged => _focusChanged;
 
+    /// <summary>是否处于破阵状态（威胁层压制编队，调试用）</summary>
+    public bool IsBreaking => _isBreaking;
+
     // ===== 添加刺激源 =====
 
     public void AddStimulus(ThreatStimulus s) => _threatStimuli.Add(s);
@@ -48,6 +67,8 @@ public class AttentionSystem
     public void AddStimulus(SafetyStimulus s) => _safetyStimuli.Add(s);
     public void AddStimulus(FollowStimulus s) => _followStimuli.Add(s);
     public void AddStimulus(HoldPositionStimulus s) => _holdStimuli.Add(s);
+    // 3.0.1_4 漫游刺激源（class）重载
+    public void AddStimulus(WanderStimulus s) => _wanderStimuli.Add(s);
 
     /// <summary>
     /// 按 IStimulus 运行时类型分发到对应列表（记忆组件 GetActiveStimuli 返回 IStimulus 接口用）。
@@ -58,14 +79,16 @@ public class AttentionSystem
         if (s is SafetyStimulus safety) _safetyStimuli.Add(safety);
         else if (s is FollowStimulus follow) _followStimuli.Add(follow);
         else if (s is HoldPositionStimulus hold) _holdStimuli.Add(hold);
+        else if (s is WanderStimulus wander) _wanderStimuli.Add(wander);
     }
 
-    /// <summary>清空动态刺激源（Safety/Follow/HoldPosition，每 tick 重注前调）</summary>
+    /// <summary>清空动态刺激源（Safety/Follow/HoldPosition/Wander，每 tick 重注前调）</summary>
     public void ClearDynamicStimuli()
     {
         _safetyStimuli.Clear();
         _followStimuli.Clear();
         _holdStimuli.Clear();
+        _wanderStimuli.Clear();
     }
 
     // ===== 移除刺激源 =====
@@ -114,9 +137,9 @@ public class AttentionSystem
 
     /// <summary>
     /// 更新注意力系统：清理过期刺激源，重新评分排序，输出焦点。
-    /// 由 NPCBrain 每隔思考间隔调用。
+    /// 由 NPCBrain 每隔思考间隔调用（dt=ThinkInterval 0.1s，滞回计时用思考节奏而非渲染帧率）。
     /// </summary>
-    public void Update(float currentTime)
+    public void Update(float currentTime, float dt)
     {
         // 1. 清理过期刺激源
         RemoveExpired(_threatStimuli, currentTime);
@@ -124,7 +147,7 @@ public class AttentionSystem
         RemoveExpired(_perceptionStimuli, currentTime);
 
         // 2. 评分排序，选出焦点
-        Focus newFocus = SelectTopFocus();
+        Focus newFocus = SelectTopFocus(dt);
 
         // 3. 检测焦点是否变化
         _focusChanged = !FocusEquals(_currentFocus, newFocus);
@@ -137,13 +160,17 @@ public class AttentionSystem
     /// 输出 Focus 含 FocusType/TargetPos/Score（扩展构造）。
     /// stateTaskDiscount（Caution 态任务折扣）由 NPCBrain 在 Update 前设置，本方法读取应用。
     /// </summary>
-    private Focus SelectTopFocus()
+    private Focus SelectTopFocus(float dt)
     {
         _currentStimulus = null;  // 重置
 
         // 第 1 层：威胁（最高优先）
-        // 3.0.1_3 编队优先：编队军令（FollowStimulus.IsFormationSlot）在威胁 0/1 级时压制威胁层，
-        // 让编队成员站槽位不被低威胁打断；威胁 2+（危险/致命）时威胁层才胜出（破阵追击）。
+        // 3.0.1_4 §4.3 破阵博弈（替代 3.0.1_3 的威胁≤1级硬开关）：
+        // 编队军令（FollowStimulus.IsFormationSlot）不再按等级一刀切压制，
+        // 改为"威胁压力 vs 编队约束"连续博弈 + 双阈值滞回：
+        //   breakScore > 升阈(1.0) 持续确认 -> 破阵（威胁层胜出）
+        //   breakScore < 降阈(0.7) 持续确认 -> 归队（编队压制）
+        //   带内保持当前状态，防焦点横跳。
         if (_threatStimuli.Count > 0)
         {
             // 检查是否有活跃的编队军令
@@ -162,18 +189,33 @@ public class AttentionSystem
             var top = GetTopThreat();
             int threatLvl = top.ThreatLevel;
 
-            // 编队军令 + 威胁 0/1 级 -> 编队优先（FollowStimulus 胜出，走任务层）
-            if (hasFormationSlot && threatLvl <= 1)
+            // 编队军令存在时：破阵博弈（双阈值滞回），未破阵则编队优先（走任务层）
+            if (hasFormationSlot)
             {
-                Focus taskFocus = SelectTopTaskLayer();
-                if (taskFocus.IsValid)
-                    return taskFocus;
+                float breakScore = ComputeBreakScore(top, threatLvl, formationIntensity);
+                UpdateBreakHysteresis(breakScore, dt);
+
+                if (!_isBreaking)
+                {
+                    Focus taskFocus = SelectTopTaskLayer();
+                    if (taskFocus.IsValid)
+                        return taskFocus;
+                }
+                // 破阵中：fall through 到威胁层胜出
             }
 
-            // 非编队 / 威胁 2+ -> 威胁层胜出（原逻辑）
+            // 非编队 -> 威胁层胜出（原逻辑）
             _currentStimulus = top;
             return new Focus(AttentionLayer.Threat, top.Position, top.Intensity, top.Source,
                              top.FocusType, top.Position, top.Intensity);
+        }
+
+        // 威胁层为空：破阵状态立即归队（无威胁可破阵，滞回计时清零）
+        if (_isBreaking || _breakUpTimer > 0f || _breakDownTimer > 0f)
+        {
+            _isBreaking = false;
+            _breakUpTimer = 0f;
+            _breakDownTimer = 0f;
         }
 
         // 第 2 层：仇恨（首版留壳，无刺激源）
@@ -268,6 +310,19 @@ public class AttentionSystem
             }
         }
 
+        // WanderStimulus（class，3.0.1_4 §6.3，不打折--最低优先级漫游兜底）
+        for (int i = 0; i < _wanderStimuli.Count; i++)
+        {
+            if (_wanderStimuli[i].Intensity > bestIntensity)
+            {
+                bestIntensity = _wanderStimuli[i].Intensity;
+                var ws = _wanderStimuli[i];
+                best = new Focus(AttentionLayer.Task, ws.Position, ws.Intensity, ws.Source,
+                                 ws.FocusType, ws.Position, ws.Intensity);
+                bestStimulus = ws;
+            }
+        }
+
         _currentStimulus = bestStimulus;
         return best;
     }
@@ -277,6 +332,82 @@ public class AttentionSystem
 
     /// <summary>设置任务折扣（NPCBrain 在 Update 前调，Caution 态传 stateTaskDiscount）</summary>
     public void SetTaskDiscount(float discount) => _taskDiscount = discount;
+
+    // ===== 3.0.1_4 破阵博弈（§4.3）=====
+
+    /// <summary>注入破阵博弈职业参数（NPCBrain 每 tick 在 Update 前调）</summary>
+    public void SetBreakContext(int courage, int obedience)
+    {
+        _breakCourage = courage;
+        _breakObedience = obedience;
+    }
+
+    /// <summary>
+    /// 破阵评分（§4.3 归一化公式）：
+    /// threatPressure = (Intensity/100) × (1 + threatLevel×levelWeight) × (0.5 + courage/100)
+    /// formationHold  = max(0.1, formationIntensity/4.5) × (0.5 + obedience/100)
+    /// breakScore = threatPressure / formationHold
+    /// </summary>
+    private float ComputeBreakScore(in ThreatStimulus top, int threatLvl, float formationIntensity)
+    {
+        float levelWeight = _config != null ? _config.breakLevelWeight : 0.5f;
+        float formationBase = _config != null ? _config.breakFormationBase : 4.5f;
+
+        float threatPressure = (top.Intensity / 100f)
+                               * (1f + threatLvl * levelWeight)
+                               * (0.5f + _breakCourage / 100f);
+        float formationHold = Mathf.Max(0.1f, formationIntensity / formationBase)
+                              * (0.5f + _breakObedience / 100f);
+        return threatPressure / Mathf.Max(0.1f, formationHold);
+    }
+
+    /// <summary>
+    /// 破阵双阈值滞回（§4.3 细节2）：升阈 breakThreshold / 降阈 breakReleaseThreshold，
+    /// 带内保持当前状态 + 升级/降级持续确认，防阈值附近焦点横跳。
+    /// dt = ThinkInterval（思考节奏，不依赖渲染帧率，可测试）。
+    /// </summary>
+    private void UpdateBreakHysteresis(float breakScore, float dt)
+    {
+        float upThreshold = _config != null ? _config.breakThreshold : 1.0f;
+        float downThreshold = _config != null ? _config.breakReleaseThreshold : 0.7f;
+        float confirmUp = _config != null ? _config.breakConfirmUp : 0.3f;
+        float confirmDown = _config != null ? _config.breakConfirmDown : 0.5f;
+
+        if (_isBreaking)
+        {
+            // 破阵中：持续低于降阈 -> 归队
+            if (breakScore < downThreshold)
+            {
+                _breakDownTimer += dt;
+                if (_breakDownTimer >= confirmDown)
+                {
+                    _isBreaking = false;
+                    _breakDownTimer = 0f;
+                }
+            }
+            else
+            {
+                _breakDownTimer = 0f;
+            }
+        }
+        else
+        {
+            // 守位中：持续超过升阈 -> 破阵
+            if (breakScore > upThreshold)
+            {
+                _breakUpTimer += dt;
+                if (_breakUpTimer >= confirmUp)
+                {
+                    _isBreaking = true;
+                    _breakUpTimer = 0f;
+                }
+            }
+            else
+            {
+                _breakUpTimer = 0f;
+            }
+        }
+    }
 
     private ThreatStimulus GetTopThreat()
     {

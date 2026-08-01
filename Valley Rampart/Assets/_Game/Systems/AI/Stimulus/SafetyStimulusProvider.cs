@@ -20,17 +20,30 @@ public class SafetyStimulusProvider
 
     /// <summary>
     /// 每 tick 更新 safetyUrge 强度 + HomePoint 位置，返回池化实例。
+    /// 3.0.1_4 §6.3：已到达 HomePoint 时强度压 0（归巢驱力消失）-> Wander 浮出（城内漫游）。
+    /// 未到达时强度照常算（夜晚/受伤回城驱力不受影响）。
     /// </summary>
     public SafetyStimulus GetOrUpdate(in FactorContext ctx)
     {
         _stimulus.Position = ctx.HomePoint;
-        _stimulus.Intensity = RetreatFormulas.SafetyUrge(
-            ctx.Config.baseSafetyPull,
-            ctx.NightFactor,
-            ctx.Config.nightPullWeight,
-            ctx.HpRatio,
-            ctx.Config.woundPullWeight,
-            ctx.Profession != null ? ctx.Profession.professionPullScale : 1f);
+
+        // 3.0.1_4 §6.3：到家判定用位置距离（不依赖焦点，语义正确——到家了归巢驱力消失）
+        bool atHome = Vector2.Distance(_stimulus.Position, ctx.SelfPos)
+                      <= ctx.Config.arrivalThreshold * ctx.CellSize;
+        if (atHome)
+        {
+            _stimulus.Intensity = 0f;
+        }
+        else
+        {
+            _stimulus.Intensity = RetreatFormulas.SafetyUrge(
+                ctx.Config.baseSafetyPull,
+                ctx.NightFactor,
+                ctx.Config.nightPullWeight,
+                ctx.HpRatio,
+                ctx.Config.woundPullWeight,
+                ctx.Profession != null ? ctx.Profession.professionPullScale : 1f);
+        }
         return _stimulus;
     }
 
