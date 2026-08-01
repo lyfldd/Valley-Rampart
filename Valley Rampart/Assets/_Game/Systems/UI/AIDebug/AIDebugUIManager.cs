@@ -23,7 +23,26 @@ public class AIDebugUIManager : MonoBehaviour
 
     // 屏幕中间开发者面板
     private VisualElement _devPanelRoot;
+    private VisualElement _devTitleBar;
+    private Button _devCloseButton;
     private Button _selectNpcButton;
+
+    // 开发者面板拖拽状态
+    private bool _isDevDragging;
+    private Vector2 _devDragOffset;
+
+    // Tab 切换
+    private VisualElement _tabAIDebug;
+    private VisualElement _tabSpawn;
+    private VisualElement _aiDebugContent;
+    private VisualElement _spawnContent;
+    private VisualElement _spawnButtonsContainer;
+    private Label _spawnHintText;
+
+    // 放置模式状态
+    private bool _isSpawnMode = false;
+    private bool _isSpawnTabActive = false;  // 当前是否激活"放置士兵"Tab
+    private DebugSpawnType? _selectedSpawnType = null;
 
     // 左上角 AI 状态面板
     private VisualElement _statusPanelRoot;
@@ -75,6 +94,7 @@ public class AIDebugUIManager : MonoBehaviour
     private bool _isCollapsed;          // 面板是否折叠
     private bool _modeEntryPushed;       // 调试模式层栈条目是否已压入
     private bool _interactionEntryPushed; // 交互态层栈条目是否已压入
+    private bool _spawnEntryPushed;       // 放置模式栈条目是否已压入
 
     /// <summary>
     /// 调试模式层栈条目。F1 开启调试模式时压栈，Close 时关闭调试模式。
@@ -98,6 +118,17 @@ public class AIDebugUIManager : MonoBehaviour
         public AIDebugInteractionEntry(AIDebugUIManager owner) { _owner = owner; }
         public void Open(Interactor ctx) { }
         public void Close() { _owner.OnInteractionEntryClosed(); }
+    }
+
+    /// <summary>
+    /// 放置模式栈条目。进入放置士兵模式时压栈，ESC/右键退出时弹出。
+    /// </summary>
+    private class AIDebugSpawnEntry : IUIStackEntry
+    {
+        private readonly AIDebugUIManager _owner;
+        public AIDebugSpawnEntry(AIDebugUIManager owner) { _owner = owner; }
+        public void Open(Interactor ctx) { }
+        public void Close() { _owner.OnSpawnEntryClosed(); }
     }
 
     // 谱系颜色表
@@ -165,15 +196,57 @@ public class AIDebugUIManager : MonoBehaviour
         }
     }
 
+    private bool _devPanelCentered = false;
+
     private void BindUIElements()
     {
         // 屏幕中间开发者面板
         _devPanelRoot = _root.Q<VisualElement>("dev-panel-root");
+        _devTitleBar = _root.Q<VisualElement>("dev-title-bar");
+        _devCloseButton = _root.Q<Button>("dev-close-button");
         _selectNpcButton = _root.Q<Button>("select-npc-button");
+
+        // 初始居中定位（延迟到布局完成后）
+        if (_devPanelRoot != null && _root != null)
+        {
+            _devPanelCentered = false;
+            _root.RegisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
+        }
+
+        // 标题栏拖拽
+        if (_devTitleBar != null)
+        {
+            _devTitleBar.RegisterCallback<MouseDownEvent>(OnDevTitleBarMouseDown);
+            _devTitleBar.RegisterCallback<MouseMoveEvent>(OnDevTitleBarMouseMove);
+            _devTitleBar.RegisterCallback<MouseUpEvent>(OnDevTitleBarMouseUp);
+        }
+
+        // 关闭按钮
+        if (_devCloseButton != null)
+        {
+            _devCloseButton.clicked += OnDevCloseButtonClicked;
+        }
+
         if (_selectNpcButton != null)
         {
             _selectNpcButton.clicked += OnSelectNpcButtonClicked;
         }
+
+        // Tab 切换
+        _tabAIDebug = _root.Q<VisualElement>("tab-ai-debug");
+        _tabSpawn = _root.Q<VisualElement>("tab-spawn");
+        _aiDebugContent = _root.Q<VisualElement>("ai-debug-content");
+        _spawnContent = _root.Q<VisualElement>("spawn-content");
+        _spawnButtonsContainer = _root.Q<VisualElement>("spawn-buttons");
+        _spawnHintText = _root.Q<Label>("spawn-hint-text");
+
+        if (_tabAIDebug != null)
+            _tabAIDebug.RegisterCallback<ClickEvent>(OnTabAIDebugClicked);
+        if (_tabSpawn != null)
+            _tabSpawn.RegisterCallback<ClickEvent>(OnTabSpawnClicked);
+
+        // 动态生成放置类型按钮
+        BuildSpawnButtons();
 
         // 左上角 AI 状态面板
         _statusPanelRoot = _root.Q<VisualElement>("status-panel-root");
@@ -265,22 +338,63 @@ public class AIDebugUIManager : MonoBehaviour
             return;
         }
 
-        // 确保交互态压栈：无论通过按钮还是直接点击 NPC 进入交互态，
-        // 只要处于交互态（等待选择/已选中）且未压栈，就补压一次。
-        bool hasInteraction = _waitingForSelection || AIDebugController.Instance.SelectedBrain != null;
-        if (hasInteraction && !_interactionEntryPushed)
+        // ===== 放置模式输入处理 =====
+        if (_isSpawnMode)
         {
-            PushInteractionEntry();
-        }
-
-        // 鼠标左键：等待选择时尝试选中 NPC
-        if (Input.GetMouseButtonDown(0))
-        {
-            Vector2 worldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            bool selected = AIDebugController.Instance.TrySelectAtWorldPosition(worldPos);
-            if (selected && _waitingForSelection)
+            // 右键退出放置模式
+            if (Input.GetMouseButtonDown(1))
             {
-                _waitingForSelection = false;
+                ExitSpawnMode();
+                return;
+            }
+
+            // 左键连续放置
+            if (Input.GetMouseButtonDown(0) && _selectedSpawnType.HasValue)
+            {
+                Vector2 worldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                var result = AIDebugSpawnController.Instance.Spawn(_selectedSpawnType.Value, worldPos);
+                if (result.Success)
+                {
+                    Debug.Log($"[AIDebugUI] {result.Message}");
+                    // 如果是将军，自动编队
+                    if (_selectedSpawnType.Value == DebugSpawnType.PlayerGeneral && result.Spawned != null)
+                    {
+                        AIDebugSpawnController.Instance.BindGeneralFormation(result.Spawned);
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"[AIDebugUI] {result.Message}");
+                }
+            }
+
+            // ESC 由 UIManager.HandleEscape() 通过栈条目处理，此处不重复
+        }
+        else if (_isSpawnTabActive)
+        {
+            // 放置士兵 Tab 激活时，禁用 AI 可视化功能（不处理 NPC 选择）
+            // 只处理退出放置模式（右键/ESC 由栈条目处理）
+        }
+        else
+        {
+            // AI 可视化 Tab 激活时，正常处理 NPC 选择
+            // 确保交互态压栈：无论通过按钮还是直接点击 NPC 进入交互态，
+            // 只要处于交互态（等待选择/已选中）且未压栈，就补压一次。
+            bool hasInteraction = _waitingForSelection || AIDebugController.Instance.SelectedBrain != null;
+            if (hasInteraction && !_interactionEntryPushed)
+            {
+                PushInteractionEntry();
+            }
+
+            // 鼠标左键：等待选择时尝试选中 NPC
+            if (Input.GetMouseButtonDown(0))
+            {
+                Vector2 worldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                bool selected = AIDebugController.Instance.TrySelectAtWorldPosition(worldPos);
+                if (selected && _waitingForSelection)
+                {
+                    _waitingForSelection = false;
+                }
             }
         }
 
@@ -299,25 +413,38 @@ public class AIDebugUIManager : MonoBehaviour
     {
         bool hasSelection = AIDebugController.Instance.SelectedBrain != null;
 
-        // 屏幕中间开发者面板：调试模式开启 + 未选中NPC + 未等待选择
+        // 屏幕中间开发者面板：调试模式开启 + 未选中NPC + 未等待选择 + 非放置模式
+        // 放置模式下隐藏整个开发者面板（用户要求"点击放置后隐藏F1面板"）
         if (_devPanelRoot != null)
         {
-            _devPanelRoot.style.display = (!hasSelection && !_waitingForSelection)
-                ? DisplayStyle.Flex : DisplayStyle.None;
+            bool showDevPanel = !hasSelection && !_waitingForSelection && !_isSpawnMode;
+            _devPanelRoot.style.display = showDevPanel ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // 左上角 AI 状态面板：有选中 NPC
+        // 左上角 AI 状态面板：有选中 NPC（放置模式或放置士兵 Tab 激活时隐藏）
         if (_statusPanelRoot != null)
         {
-            _statusPanelRoot.style.display = hasSelection
-                ? DisplayStyle.Flex : DisplayStyle.None;
+            bool showStatusPanel = hasSelection && !_isSpawnMode && !_isSpawnTabActive;
+            _statusPanelRoot.style.display = showStatusPanel ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // 顶部提示条：等待选择中
+        // 顶部提示条：等待选择中（放置模式下显示放置提示）
         if (_hintBar != null)
         {
-            _hintBar.style.display = _waitingForSelection
-                ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_isSpawnMode)
+            {
+                _hintBar.style.display = DisplayStyle.Flex;
+                if (_spawnHintText != null)
+                {
+                    _spawnHintText.text = _selectedSpawnType.HasValue
+                        ? "左键放置单位，右键/ESC退出"
+                        : "请先选择要放置的单位类型";
+                }
+            }
+            else
+            {
+                _hintBar.style.display = _waitingForSelection ? DisplayStyle.Flex : DisplayStyle.None;
+            }
         }
     }
 
@@ -340,7 +467,209 @@ public class AIDebugUIManager : MonoBehaviour
         PushInteractionEntry();
     }
 
-    // ===== UI 栈集成（两层：调试模式层 + 交互态层）=====
+    // ===== 开发者面板拖拽 =====
+
+    private void OnDevTitleBarMouseDown(MouseDownEvent evt)
+    {
+        if (evt.button != 0) return;
+        _isDevDragging = true;
+        _devTitleBar.CaptureMouse();
+        var pos = _devPanelRoot.layout.position;
+        _devDragOffset = evt.mousePosition - new Vector2(pos.x, pos.y);
+        evt.StopPropagation();
+    }
+
+    private void OnDevTitleBarMouseMove(MouseMoveEvent evt)
+    {
+        if (!_isDevDragging) return;
+        float newX = evt.mousePosition.x - _devDragOffset.x;
+        float newY = evt.mousePosition.y - _devDragOffset.y;
+        _devPanelRoot.style.left = newX;
+        _devPanelRoot.style.top = newY;
+    }
+
+    private void OnDevTitleBarMouseUp(MouseUpEvent evt)
+    {
+        if (!_isDevDragging) return;
+        _isDevDragging = false;
+        _devTitleBar.ReleaseMouse();
+    }
+
+    // ===== 开发者面板关闭按钮 =====
+
+    private void OnDevCloseButtonClicked()
+    {
+        // 关闭调试模式（等同于 F1 退出）
+        if (AIDebugController.Instance != null && AIDebugController.Instance.IsDebugMode)
+        {
+            AIDebugController.Instance.ToggleDebugMode();
+            ClearDebugStack();
+        }
+    }
+
+    // ===== 初始居中定位（延迟到布局完成） =====
+
+    private void OnRootGeometryChanged(GeometryChangedEvent evt)
+    {
+        if (_devPanelCentered || _devPanelRoot == null || _root == null) return;
+
+        // 确保根容器已有有效尺寸
+        if (_root.layout.width > 0 && _root.layout.height > 0)
+        {
+            float centerX = (_root.layout.width - 400f) / 2f;
+            float centerY = (_root.layout.height - 300f) / 2f;
+            _devPanelRoot.style.left = centerX;
+            _devPanelRoot.style.top = centerY;
+            _devPanelCentered = true;
+        }
+    }
+
+    // ===== Tab 切换 =====
+
+    private void OnTabAIDebugClicked(ClickEvent evt)
+    {
+        if (_isSpawnMode) return; // 放置模式下不允许切 Tab
+        SwitchTab(true);
+    }
+
+    private void OnTabSpawnClicked(ClickEvent evt)
+    {
+        if (_isSpawnMode) return;
+        SwitchTab(false);
+    }
+
+    private void SwitchTab(bool showAIDebug)
+    {
+        _isSpawnTabActive = !showAIDebug;
+
+        if (showAIDebug)
+        {
+            if (_aiDebugContent != null) _aiDebugContent.style.display = DisplayStyle.Flex;
+            if (_spawnContent != null) _spawnContent.style.display = DisplayStyle.None;
+            if (_tabAIDebug != null)
+            {
+                _tabAIDebug.AddToClassList("tab-active");
+                _tabAIDebug.RemoveFromClassList("tab-disabled");
+            }
+            if (_tabSpawn != null)
+            {
+                _tabSpawn.RemoveFromClassList("tab-active");
+                _tabSpawn.RemoveFromClassList("tab-disabled");
+            }
+        }
+        else
+        {
+            if (_aiDebugContent != null) _aiDebugContent.style.display = DisplayStyle.None;
+            if (_spawnContent != null) _spawnContent.style.display = DisplayStyle.Flex;
+            if (_tabAIDebug != null)
+            {
+                _tabAIDebug.RemoveFromClassList("tab-active");
+                _tabAIDebug.AddToClassList("tab-disabled");
+            }
+            if (_tabSpawn != null)
+            {
+                _tabSpawn.AddToClassList("tab-active");
+                _tabSpawn.RemoveFromClassList("tab-disabled");
+            }
+        }
+    }
+
+    // ===== 放置按钮构建 =====
+
+    /// <summary>动态生成放置类型按钮（从 AIDebugSpawnController 获取可生成清单）</summary>
+    private void BuildSpawnButtons()
+    {
+        if (_spawnButtonsContainer == null) return;
+        _spawnButtonsContainer.Clear();
+
+        var types = AIDebugSpawnController.Instance.GetAvailableTypes();
+        foreach (var option in types)
+        {
+            var btn = new Button();
+            btn.text = option.DisplayName;
+            btn.AddToClassList("spawn-type-button");
+            var capturedType = option.Type;
+            btn.clicked += () => OnSpawnTypeButtonClicked(capturedType, btn);
+            _spawnButtonsContainer.Add(btn);
+        }
+    }
+
+    private void OnSpawnTypeButtonClicked(DebugSpawnType type, Button clickedBtn)
+    {
+        _selectedSpawnType = type;
+
+        // 更新所有按钮的选中样式
+        if (_spawnButtonsContainer != null)
+        {
+            foreach (var child in _spawnButtonsContainer.Children())
+            {
+                child.RemoveFromClassList("spawn-selected");
+            }
+        }
+        clickedBtn.AddToClassList("spawn-selected");
+
+        // 进入放置模式（隐藏 F1 面板，压栈）
+        EnterSpawnMode();
+    }
+
+    // ===== 放置模式进入/退出 =====
+
+    /// <summary>进入放置模式：隐藏 F1 面板，压入放置栈条目。</summary>
+    private void EnterSpawnMode()
+    {
+        if (_isSpawnMode) return;
+        _isSpawnMode = true;
+
+        // 隐藏 F1 开发者面板
+        if (_devPanelRoot != null)
+            _devPanelRoot.style.display = DisplayStyle.None;
+
+        // 压入放置模式栈条目（ESC 可退出）
+        PushSpawnEntry();
+
+        Debug.Log($"[AIDebugUI] 进入放置模式：{_selectedSpawnType}，左键放置，右键/ESC退出");
+    }
+
+    /// <summary>退出放置模式：恢复 F1 面板，弹出栈条目。</summary>
+    private void ExitSpawnMode()
+    {
+        if (!_isSpawnMode) return;
+        _isSpawnMode = false;
+        _selectedSpawnType = null;
+
+        // 弹出放置模式栈条目
+        PopSpawnEntry();
+
+        // 恢复 F1 面板显示（回到放置 Tab）
+        UpdatePanelVisibility();
+
+        Debug.Log("[AIDebugUI] 退出放置模式");
+    }
+
+    /// <summary>放置模式栈条目 Close 回调（ESC 触发）。</summary>
+    private void OnSpawnEntryClosed()
+    {
+        if (!_spawnEntryPushed) return;
+        _spawnEntryPushed = false;
+        _isSpawnMode = false;
+        _selectedSpawnType = null;
+
+        // 清除按钮选中样式
+        if (_spawnButtonsContainer != null)
+        {
+            foreach (var child in _spawnButtonsContainer.Children())
+            {
+                child.RemoveFromClassList("spawn-selected");
+            }
+        }
+
+        // 恢复面板
+        UpdatePanelVisibility();
+
+        Debug.Log("[AIDebugUI] 放置模式栈条目关闭（ESC）");
+    }
+
+    // ===== UI 栈集成（三层：调试模式层 + 交互态层 + 放置模式层）=====
 
     /// <summary>F1 开启调试模式时压入调试模式层条目。重复调用安全。</summary>
     private void PushModeEntry()
@@ -358,15 +687,40 @@ public class AIDebugUIManager : MonoBehaviour
         _interactionEntryPushed = true;
     }
 
+    /// <summary>进入放置模式时压入放置模式层条目。重复调用安全。</summary>
+    private void PushSpawnEntry()
+    {
+        if (_spawnEntryPushed || UIManager.Instance == null) return;
+        UIManager.Instance.Push(new AIDebugSpawnEntry(this), new Interactor(Faction.Human_Player, Vector3.zero));
+        _spawnEntryPushed = true;
+    }
+
+    /// <summary>退出放置模式时弹出放置模式层条目。</summary>
+    private void PopSpawnEntry()
+    {
+        if (!_spawnEntryPushed || UIManager.Instance == null) return;
+        // 如果栈顶是放置条目，直接 Pop
+        if (UIManager.Instance.Peek() is AIDebugSpawnEntry)
+        {
+            UIManager.Instance.Pop();
+        }
+        _spawnEntryPushed = false;
+    }
+
     /// <summary>F1 关闭调试模式时清理所有 AI 调试栈条目（从栈顶往下 Pop）。</summary>
     private void ClearDebugStack()
     {
         _waitingForSelection = false;
         _interactionEntryPushed = false;
         _modeEntryPushed = false;
+        _spawnEntryPushed = false;
+        _isSpawnMode = false;
+        _selectedSpawnType = null;
         if (UIManager.Instance == null) return;
         // Pop 栈中所有 AI 调试条目（先清标志，防 Close 回调重复操作）
-        while (UIManager.Instance.Peek() is AIDebugModeEntry || UIManager.Instance.Peek() is AIDebugInteractionEntry)
+        while (UIManager.Instance.Peek() is AIDebugModeEntry ||
+               UIManager.Instance.Peek() is AIDebugInteractionEntry ||
+               UIManager.Instance.Peek() is AIDebugSpawnEntry)
         {
             UIManager.Instance.Pop();
         }

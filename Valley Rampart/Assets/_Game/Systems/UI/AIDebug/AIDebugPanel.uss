@@ -1,32 +1,69 @@
 /* ===== AI 调试面板样式 ===== */
 
-/* ===== 屏幕中间：开发者模式面板 ===== */
+/* ===== 屏幕中间：开发者模式面板（居中 + 可拖拽） ===== */
 .dev-panel-root {
     position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
     width: 400px;
     align-items: center;
     justify-content: center;
+    /* left/top 由代码动态设置（初始居中） */
 }
 
 .dev-panel {
     width: 100%;
     background-color: rgba(0, 0, 0, 0.85);
     border-radius: 12px;
-    padding: 32px;
-    align-items: center;
+    padding: 0;
+    align-items: stretch;
     border-width: 2px;
     border-color: var(--color-accent);
+    overflow: hidden;
 }
 
-.dev-title {
-    font-size: 32px;
+/* 标题栏（可拖拽） */
+.dev-title-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    cursor: move;
+}
+
+.dev-title-text {
+    font-size: 22px;
     color: var(--color-accent);
     -unity-font-style: bold;
-    margin-bottom: 24px;
+}
+
+/* 开发者面板关闭按钮 */
+.dev-close-button {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 4px;
+    padding: 0;
     -unity-text-align: middle-center;
+}
+
+.dev-close-button:hover {
+    background-color: rgba(255, 80, 80, 0.3);
+    color: rgb(255, 100, 100);
+}
+
+.dev-close-button:active {
+    background-color: rgba(255, 80, 80, 0.5);
+}
+
+/* 开发者面板内容区（Tab + 按钮等） */
+.dev-panel-content {
+    padding: 16px;
+    align-items: center;
 }
 
 .dev-button {
@@ -37,7 +74,7 @@
     background-color: var(--color-accent);
     border-radius: 8px;
     border-width: 0;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     -unity-font-style: bold;
 }
 
@@ -47,6 +84,107 @@
 
 .dev-button:active {
     background-color: rgb(200, 150, 60);
+}
+
+/* ===== Tab 按钮行 ===== */
+.tab-bar {
+    flex-direction: row;
+    width: 100%;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.tab-button {
+    flex-grow: 1;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 0;
+}
+
+.tab-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tab-active {
+    background-color: var(--color-accent);
+}
+
+.tab-active .tab-label {
+    color: var(--color-bg-dark);
+}
+
+/* 禁用态：另一个 Tab 激活时，当前 Tab 灰显且不可点击 */
+.tab-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.tab-disabled:hover {
+    background-color: transparent;
+}
+
+.tab-label {
+    font-size: 16px;
+    color: var(--color-text-muted);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* ===== Tab 内容区 ===== */
+.tab-content {
+    width: 100%;
+}
+
+/* ===== 放置按钮容器 ===== */
+.spawn-buttons-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.spawn-type-button {
+    width: 48%;
+    height: 44px;
+    font-size: 16px;
+    color: var(--color-text-primary);
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.15);
+    margin-bottom: 8px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.spawn-type-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--color-accent);
+}
+
+.spawn-type-button:active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.spawn-selected {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+    border-color: var(--color-accent);
+}
+
+.spawn-hint {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    -unity-text-align: middle-center;
+    margin-top: 8px;
+    width: 100%;
 }
 
 .dev-hints {

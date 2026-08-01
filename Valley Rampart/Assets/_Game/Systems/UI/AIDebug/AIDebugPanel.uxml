@@ -3,21 +3,42 @@
     <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
     <ui:Style src="project://database/Assets/_Game/Systems/UI/AIDebug/AIDebugPanel.uss" />
 
-    <!-- ===== 屏幕中间：开发者模式面板（调试模式开启但未选中NPC时显示） ===== -->
+    <!-- ===== 屏幕中间：开发者模式面板（居中 + 可拖拽 + 关闭按钮） ===== -->
     <ui:VisualElement name="dev-panel-root" class="dev-panel-root">
         <ui:VisualElement name="dev-panel" class="dev-panel">
-            <ui:Label text="AI 调试模式" class="dev-title" />
-            <ui:Button name="select-npc-button" text="选择 NPC 查看 AI" class="dev-button" />
-            <ui:VisualElement class="dev-hints">
-                <ui:Label text="说明：" class="dev-hint-title" />
-                <ui:Label text="• 点击按钮后，点击场景中的 NPC" class="dev-hint" />
-                <ui:Label text="• 左上角面板显示该 NPC 的 AI 状态" class="dev-hint" />
-                <ui:Label text="• ESC 退出选择，F1 退出调试" class="dev-hint" />
+            <!-- 标题栏（可拖拽） -->
+            <ui:VisualElement name="dev-title-bar" class="dev-title-bar">
+                <ui:Label text="AI 调试模式" class="dev-title-text" />
+                <ui:Button name="dev-close-button" text="✕" class="dev-close-button" />
+            </ui:VisualElement>
+
+            <!-- 内容区 -->
+            <ui:VisualElement name="dev-panel-content" class="dev-panel-content">
+                <!-- Tab 按钮行 -->
+                <ui:VisualElement name="tab-bar" class="tab-bar">
+                    <ui:VisualElement name="tab-ai-debug" class="tab-button tab-active">
+                        <ui:Label text="AI 可视化" class="tab-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="tab-spawn" class="tab-button">
+                        <ui:Label text="放置士兵" class="tab-label" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- Tab 内容：AI 可视化（原面板） -->
+                <ui:VisualElement name="ai-debug-content" class="tab-content">
+                    <ui:Button name="select-npc-button" text="选择 NPC 查看 AI" class="dev-button" />
+                </ui:VisualElement>
+
+                <!-- Tab 内容：放置士兵 -->
+                <ui:VisualElement name="spawn-content" class="tab-content" style="display: none;">
+                    <ui:VisualElement name="spawn-buttons" class="spawn-buttons-container" />
+                    <ui:Label name="spawn-hint-text" text="选择单位类型后点击场景放置" class="spawn-hint" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 
-    <!-- ===== 左上角：AI 状态面板（选中NPC后显示） ===== -->
+    <!-- ===== 左上角：AI 状态面板（选中NPC后显示，放置模式时隐藏） ===== -->
     <ui:VisualElement name="status-panel-root" class="status-panel-root">
         <ui:VisualElement name="status-panel" class="status-panel">
             <!-- 标题栏（可点击折叠、可拖拽） -->
