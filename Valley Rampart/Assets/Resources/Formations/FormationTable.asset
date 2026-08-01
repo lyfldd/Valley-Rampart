@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2e6657d1679fe0b4ba84169edac1b6cf, type: 3}
+  m_Name: FormationTable
+  m_EditorClassIdentifier: 
+  defenseFormation: {fileID: 11400000, guid: 8a2ba3207d04ed049aced1b8cb24a64e, type: 2}
+  chargeFormation: {fileID: 11400000, guid: a5306fea78c1dfb4fb83c4f68cece027, type: 2}
+  retreatFormation: {fileID: 11400000, guid: e5eae8e3f7efb084394ce2a667cc8711, type: 2}
+  garrisonFormation: {fileID: 11400000, guid: 53eed0678fd23da478643c7ecef499b4, type: 2}

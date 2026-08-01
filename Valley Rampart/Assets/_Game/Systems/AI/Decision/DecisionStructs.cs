@@ -78,4 +78,21 @@ public struct BehaviorCommand
     public float Duration;
     /// <summary>仅跟随用</summary>
     public float KeepDistance;
+
+    // ===== 3.0.1_3 编队槽位（FollowAnchor 槽位化 + 守阵追击 clamp 用）=====
+
+    /// <summary>
+    /// 槽位偏移（cell 单位，FollowStimulus.SlotOffset 透传）。
+    /// 非 zero 时 ExecuteFollowAnchor 走槽位化语义：目标 = 锚点位置 + SlotOffset × cellSize。
+    /// </summary>
+    public Vector2Int SlotOffset;
+
+    /// <summary>
+    /// 槽位世界坐标（锚点位置 + SlotOffset × cellSize，L3 算好填）。
+    /// 守阵追击 clamp 用：MoveTowards 目标被钳制在 slotWorld ± chaseRange 内（§4.1）。
+    /// </summary>
+    public Vector2 SlotWorld;
+
+    /// <summary>是否编队槽位化（SlotOffset 非 zero）</summary>
+    public bool IsFormationSlot => SlotOffset.x != 0 || SlotOffset.y != 0;
 }

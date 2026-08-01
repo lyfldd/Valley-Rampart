@@ -164,19 +164,43 @@ public class BehaviorExecutor
             return;
         }
 
-        Vector2 anchorPos = cmd.Anchor.transform.position;
-        Vector2 myPos = _self.GetPosition();
-        float dist = Vector2.Distance(myPos, anchorPos);
-
-        if (dist > cmd.KeepDistance + _config.arrivalThreshold * cellSize)
+        // 3.0.1_3：槽位化跟随时目标 = SlotWorld（锚点位置 + SlotOffset × cellSize，L3 已算）
+        // 非编队跟随 SlotOffset=zero，SlotWorld=zero，退化为原松散跟随（用 KeepDistance 判定）
+        if (cmd.IsFormationSlot)
         {
-            // 超出保持距离 -> 靠近
-            _controller.MoveTowards(anchorPos);
+            Vector2 myPos = _self.GetPosition();
+            Vector2 slotWorld = cmd.SlotWorld;
+            float dist = Vector2.Distance(myPos, slotWorld);
+            float arrivalDist = _config.arrivalThreshold * cellSize;
+
+            if (dist > arrivalDist)
+            {
+                // 未到槽位 -> 向槽位移动（cell 吸附，1D 横版 y 由 MoveTowards 夹取）
+                _controller.MoveTowards(slotWorld);
+            }
+            else
+            {
+                // 到槽位 -> 停
+                _controller.MoveTowards(myPos);
+            }
         }
         else
         {
-            // 在保持距离内 -> 停
-            _controller.MoveTowards(myPos);
+            // 原松散跟随语义（工人随军等非编队场景）
+            Vector2 anchorPos = cmd.Anchor.transform.position;
+            Vector2 myPos = _self.GetPosition();
+            float dist = Vector2.Distance(myPos, anchorPos);
+
+            if (dist > cmd.KeepDistance + _config.arrivalThreshold * cellSize)
+            {
+                // 超出保持距离 -> 靠近
+                _controller.MoveTowards(anchorPos);
+            }
+            else
+            {
+                // 在保持距离内 -> 停
+                _controller.MoveTowards(myPos);
+            }
         }
     }
 

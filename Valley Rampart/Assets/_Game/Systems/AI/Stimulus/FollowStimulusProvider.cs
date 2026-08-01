@@ -29,10 +29,24 @@ public class FollowStimulusProvider
         _stimulus.Intensity = intensity;
     }
 
+    /// <summary>
+    /// 绑定编队槽位（3.0.1_3 §2.1，FormationController 下发军令时调）。
+    /// 槽位化跟随：目标 = 锚点位置 + slotOffset × cellSize。
+    /// 复用 FollowStimulus（审计 D3），不新建 FormationStimulus 类型，省 AttentionSystem 4 处 switch 分支。
+    /// </summary>
+    public void SetFormationSlot(UnitController anchor, TaskPriority priority, float intensity, Vector2Int slotOffset)
+    {
+        _stimulus.Anchor = anchor;
+        _stimulus.Priority = priority;
+        _stimulus.Intensity = intensity;
+        _stimulus.SlotOffset = slotOffset;
+    }
+
     /// <summary>清除跟随锚点（部队解散/任务完成时调）</summary>
     public void ClearAnchor()
     {
         _stimulus.Anchor = null;
+        _stimulus.SlotOffset = Vector2Int.zero;
     }
 
     /// <summary>
@@ -49,5 +63,6 @@ public class FollowStimulusProvider
     public void Reset()
     {
         _stimulus.Anchor = null;
+        _stimulus.SlotOffset = Vector2Int.zero;
     }
 }

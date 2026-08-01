@@ -215,8 +215,16 @@ public class AttentionSystem
             {
                 bestIntensity = _followStimuli[i].Intensity;
                 var fs = _followStimuli[i];
+                // 3.0.1_3：槽位化跟随时 TargetPos = 锚点位置 + SlotOffset × cellSize（cell 吸附）
+                // 非编队跟随 SlotOffset=zero，TargetPos=锚点位置（原语义）
+                Vector2 followTarget = fs.Position;
+                if (fs.IsFormationSlot && GridSystem.Instance != null && GridSystem.Instance.Config != null)
+                {
+                    float cs = GridSystem.Instance.Config.cellSize;
+                    followTarget = fs.Position + new Vector2(fs.SlotOffset.x * cs, fs.SlotOffset.y * cs);
+                }
                 best = new Focus(AttentionLayer.Task, fs.Position, fs.Intensity, fs.Source,
-                                 fs.FocusType, fs.Position, fs.Intensity);
+                                 fs.FocusType, followTarget, fs.Intensity);
                 bestStimulus = fs;
             }
         }

@@ -130,6 +130,14 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("调度分片组数（500 AI 分 N 组轮询，决策12 P0 内容）")]
     public int thinkShardCount = 5;
 
+    [Header("编队（3.0.1_3 §4.1 / §5.3 / §9）")]
+    [Tooltip("守阵追击限制（格数，§4.1：威胁层压制切 MoveTowards 时，目标钳制在槽位 ± 此值内，占位 2 cell）")]
+    public float formationChaseRangeCells = 2f;
+    [Tooltip("阵型切换确认时长（秒，§5.3 将军决策防抖，占位 1s）")]
+    public float formationSwitchDebounce = 1f;
+    [Tooltip("减员重排防抖（秒，§15.3 即时触发+防抖，占位 1s）")]
+    public float formationCasualtyDebounce = 1f;
+
     /// <summary>按优先级获取权重。</summary>
     public float GetPriorityWeight(TaskPriority priority)
     {

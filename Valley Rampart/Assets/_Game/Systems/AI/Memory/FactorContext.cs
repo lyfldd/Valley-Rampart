@@ -35,6 +35,12 @@ public struct FactorContext
     /// <summary>BehaviorExecutor 反馈：是否到达焦点目标</summary>
     public bool ArrivedAtFocus;
 
+    // ===== 3.0.1_3 编队槽位（守阵追击 clamp 用，§4.1）=====
+    /// <summary>编队槽位世界坐标（锚点+SlotOffset×cellSize）；非编队成员=zero</summary>
+    public Vector2 FormationSlotWorld;
+    /// <summary>是否编队成员（有槽位绑定）</summary>
+    public bool HasFormationSlot;
+
     // ===== ② 记忆组件 FillContext 写入 =====
     public HitCooldownState CurrentState;
     public int HitCount;

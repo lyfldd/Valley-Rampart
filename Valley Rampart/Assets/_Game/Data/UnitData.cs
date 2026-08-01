@@ -5,6 +5,7 @@ using UnityEngine;
 public enum Occupation
 {
     Ruler,      // 君主：玩家控制的统治者单位，阵亡则 GameOver
+    General,    // 将军：特殊近战 NPC，挂 FormationController 统帅编队（3.0.1_3 §1.1）
     Archer,     // 弓箭手：远程攻击单位
     Warrior,    // 战士：近战攻击单位
     Civilian    // 平民：非战斗单位，从事资源采集/建造等

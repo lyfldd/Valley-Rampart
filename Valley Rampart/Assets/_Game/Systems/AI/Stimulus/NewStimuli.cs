@@ -34,14 +34,22 @@ public sealed class SafetyStimulus : IStimulus
 /// 跟随锚点刺激源（§3.2，任务层）。
 /// 调度中心/军令下发，目标位置动态绑定锚点（部队队长 UnitController），每 tick 刷新。
 /// 让"工人跟上部队"成为涌现行为。
+///
+/// 3.0.1_3 扩展（审计 D3 复用路径）：加 SlotOffset 字段承载编队槽位偏移。
+/// 槽位化跟随时：目标位置 = 锚点位置 + SlotOffset × cellSize（cell 吸附）。
+/// 非编队跟随（工人随军）SlotOffset = Vector2.zero，退化为原松散跟随语义。
 /// </summary>
 public sealed class FollowStimulus : IStimulus
 {
     public AttentionLayer Layer => AttentionLayer.Task;
-    /// <summary>锚点（部队队长），位置每 tick 随锚点刷新</summary>
+    /// <summary>锚点（部队队长/将军），位置每 tick 随锚点刷新</summary>
     public UnitController Anchor;
-    /// <summary>跟随优先级（跟随工程=B级，随军抢修=A级）</summary>
+    /// <summary>跟随优先级（跟随工程=B级，随军抢修=A级，编队军令=S级）</summary>
     public TaskPriority Priority;
+    /// <summary>槽位偏移（cell 单位，3.0.1_3 编队用；非编队跟随=zero）</summary>
+    public Vector2Int SlotOffset = Vector2Int.zero;
+    /// <summary>是否编队槽位化跟随（SlotOffset 非 zero 即编队成员）</summary>
+    public bool IsFormationSlot => SlotOffset.x != 0 || SlotOffset.y != 0;
     public Vector2 Position => Anchor != null ? (Vector2)Anchor.transform.position : Vector2.zero;
     public float Intensity { get; set; }
     public object Source => Anchor;

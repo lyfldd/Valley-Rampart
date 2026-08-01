@@ -20,11 +20,12 @@
     <!-- ===== 左上角：AI 状态面板（选中NPC后显示） ===== -->
     <ui:VisualElement name="status-panel-root" class="status-panel-root">
         <ui:VisualElement name="status-panel" class="status-panel">
-            <!-- 标题栏（可点击折叠） -->
+            <!-- 标题栏（可点击折叠、可拖拽） -->
             <ui:VisualElement name="title-bar" class="title-bar">
                 <ui:Label name="panel-title" text="AI 调试" class="panel-title" />
                 <ui:Label name="npc-name" text="-" class="npc-name" />
                 <ui:Label name="collapse-icon" text="▼" class="collapse-icon" />
+                <ui:Button name="close-button" text="✕" class="close-button" />
             </ui:VisualElement>
 
             <!-- 可折叠内容区 -->

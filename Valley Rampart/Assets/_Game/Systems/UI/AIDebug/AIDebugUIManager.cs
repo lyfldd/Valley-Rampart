@@ -31,7 +31,14 @@ public class AIDebugUIManager : MonoBehaviour
     private Label _panelTitle;
     private Label _npcNameLabel;
     private Label _collapseIcon;
+    private Button _closeButton;
     private VisualElement _contentArea;
+
+    // 拖拽状态
+    private bool _isDragging;
+    private bool _wasDragging;  // 本次按下是否发生了拖拽（用于区分点击和拖拽）
+    private Vector2 _dragOffset;
+    private Vector2 _dragStartPos;
 
     // 焦点区域
     private Label _focusLayerLabel;
@@ -176,10 +183,20 @@ public class AIDebugUIManager : MonoBehaviour
         _collapseIcon = _root.Q<Label>("collapse-icon");
         _contentArea = _root.Q<VisualElement>("content-area");
 
-        // 标题栏点击折叠/展开
+        // 标题栏点击折叠/展开 + 拖拽
         if (_titleBar != null)
         {
             _titleBar.RegisterCallback<ClickEvent>(OnTitleBarClicked);
+            _titleBar.RegisterCallback<MouseDownEvent>(OnTitleBarMouseDown);
+            _titleBar.RegisterCallback<MouseMoveEvent>(OnTitleBarMouseMove);
+            _titleBar.RegisterCallback<MouseUpEvent>(OnTitleBarMouseUp);
+        }
+
+        // 关闭按钮
+        _closeButton = _root.Q<Button>("close-button");
+        if (_closeButton != null)
+        {
+            _closeButton.clicked += OnCloseButtonClicked;
         }
 
         // 焦点区域
@@ -382,6 +399,7 @@ public class AIDebugUIManager : MonoBehaviour
 
     private void OnTitleBarClicked(ClickEvent evt)
     {
+        if (_wasDragging) { _wasDragging = false; return; }
         _isCollapsed = !_isCollapsed;
         if (_contentArea != null)
         {
@@ -391,6 +409,48 @@ public class AIDebugUIManager : MonoBehaviour
         {
             _collapseIcon.text = _isCollapsed ? "▶" : "▼";
         }
+    }
+
+    // ===== 拖拽 =====
+
+    private void OnTitleBarMouseDown(MouseDownEvent evt)
+    {
+        if (evt.button != 0) return;
+        _isDragging = true;
+        _wasDragging = false;
+        _dragStartPos = evt.mousePosition;
+        _titleBar.CaptureMouse();
+        var pos = _statusPanelRoot.layout.position;
+        _dragOffset = evt.mousePosition - new Vector2(pos.x, pos.y);
+        evt.StopPropagation();
+    }
+
+    private void OnTitleBarMouseMove(MouseMoveEvent evt)
+    {
+        if (!_isDragging) return;
+        float dx = evt.mousePosition.x - _dragStartPos.x;
+        float dy = evt.mousePosition.y - _dragStartPos.y;
+        if (Mathf.Abs(dx) > 3f || Mathf.Abs(dy) > 3f)
+            _wasDragging = true;
+        float newX = evt.mousePosition.x - _dragOffset.x;
+        float newY = evt.mousePosition.y - _dragOffset.y;
+        _statusPanelRoot.style.left = newX;
+        _statusPanelRoot.style.top = newY;
+    }
+
+    private void OnTitleBarMouseUp(MouseUpEvent evt)
+    {
+        if (!_isDragging) return;
+        _isDragging = false;
+        _titleBar.ReleaseMouse();
+    }
+
+    // ===== 关闭按钮 =====
+
+    private void OnCloseButtonClicked()
+    {
+        if (AIDebugController.Instance != null && AIDebugController.Instance.SelectedBrain != null)
+            AIDebugController.Instance.ClearSelection();
     }
 
     // ===== 渲染快照 =====
@@ -552,6 +612,13 @@ public class AIDebugUIManager : MonoBehaviour
         if (_titleBar != null)
         {
             _titleBar.UnregisterCallback<ClickEvent>(OnTitleBarClicked);
+            _titleBar.UnregisterCallback<MouseDownEvent>(OnTitleBarMouseDown);
+            _titleBar.UnregisterCallback<MouseMoveEvent>(OnTitleBarMouseMove);
+            _titleBar.UnregisterCallback<MouseUpEvent>(OnTitleBarMouseUp);
+        }
+        if (_closeButton != null)
+        {
+            _closeButton.clicked -= OnCloseButtonClicked;
         }
     }
 }

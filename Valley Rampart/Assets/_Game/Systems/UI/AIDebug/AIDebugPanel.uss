@@ -79,7 +79,7 @@
 
 .status-panel {
     width: 100%;
-    background-color: rgba(0, 0, 0, 0.75);
+    background-color: rgb(0, 0, 0);
     border-radius: 8px;
     border-width: 1px;
     border-color: rgb(60, 60, 80);
@@ -95,6 +95,30 @@
     background-color: rgba(255, 255, 255, 0.05);
     border-bottom-width: 1px;
     border-bottom-color: rgb(60, 60, 80);
+    cursor: move;
+}
+
+/* 关闭按钮 */
+.close-button {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 4px;
+    margin-left: 8px;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.close-button:hover {
+    background-color: rgba(255, 80, 80, 0.3);
+    color: rgb(255, 100, 100);
+}
+
+.close-button:active {
+    background-color: rgba(255, 80, 80, 0.5);
 }
 
 .panel-title {

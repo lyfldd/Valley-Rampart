@@ -31,6 +31,13 @@ public static class L3CommandComputer
             case BehaviorModule.MoveTowards:
                 cmd.TargetPos = posture.Focus.TargetPos;
                 cmd.Speed = walkSpeed;
+                // 3.0.1_3 §4.1 守阵追击 clamp：编队成员 MoveTowards 目标钳制在槽位 ± chaseRange 内
+                // 威胁层压制切 MoveTowards 追击敌人时，不离开槽位 chaseRange 限制（占位 2 cell）
+                if (ctx.HasFormationSlot)
+                {
+                    float chaseRangeWorld = ctx.Config.formationChaseRangeCells * cellSize;
+                    cmd.TargetPos = ClampToSlotRange(cmd.TargetPos, ctx.FormationSlotWorld, chaseRangeWorld);
+                }
                 break;
 
             case BehaviorModule.RetreatMove:
@@ -60,10 +67,17 @@ public static class L3CommandComputer
 
             case BehaviorModule.FollowAnchor:
                 cmd.Anchor = posture.Focus.Focus is FollowStimulus fs ? fs.Anchor : null;
+                cmd.SlotOffset = posture.Focus.Focus is FollowStimulus fss ? fss.SlotOffset : Vector2Int.zero;
                 cmd.KeepDistance = RetreatFormulas.FollowKeepDistance(
                     (int)ctx.ThreatLevel, ctx.Config.baseFollowCells,
                     ctx.Config.followScatterWeight, cellSize);
                 cmd.Speed = walkSpeed;
+                // 3.0.1_3：槽位化跟随时算 SlotWorld（锚点位置 + SlotOffset × cellSize）
+                if (cmd.IsFormationSlot && cmd.Anchor != null)
+                {
+                    cmd.SlotWorld = (Vector2)cmd.Anchor.transform.position
+                        + new Vector2(cmd.SlotOffset.x * cellSize, cmd.SlotOffset.y * cellSize);
+                }
                 break;
 
             case BehaviorModule.Idle:
@@ -74,5 +88,15 @@ public static class L3CommandComputer
         }
 
         return cmd;
+    }
+
+    /// <summary>
+    /// 守阵追击 clamp（§4.1）：将目标点钳制在槽位 ± chaseRange 矩形范围内。
+    /// 1D 横版只钳 x 轴，y 保持目标原值（地面基线 -3 由 Executor MoveTowards 自行夹取）。
+    /// </summary>
+    private static Vector2 ClampToSlotRange(Vector2 target, Vector2 slotWorld, float chaseRangeWorld)
+    {
+        float clampedX = Mathf.Clamp(target.x, slotWorld.x - chaseRangeWorld, slotWorld.x + chaseRangeWorld);
+        return new Vector2(clampedX, target.y);
     }
 }

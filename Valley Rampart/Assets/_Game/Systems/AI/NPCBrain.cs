@@ -372,7 +372,24 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             CellSize = GetCellSize(),
             CurrentTime = Time.time,
             HomePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero,
+            // 3.0.1_3：编队槽位（守阵追击 clamp 用，§4.1）
+            HasFormationSlot = _followProvider.IsActive && _followProvider.Stimulus.IsFormationSlot,
+            FormationSlotWorld = ResolveFormationSlotWorld(),
         };
+    }
+
+    /// <summary>
+    /// 解析当前编队槽位世界坐标（锚点位置 + SlotOffset × cellSize）。
+    /// 非编队成员或锚点丢失返回 zero。
+    /// </summary>
+    private Vector2 ResolveFormationSlotWorld()
+    {
+        if (!_followProvider.IsActive) return Vector2.zero;
+        var stim = _followProvider.Stimulus;
+        if (!stim.IsFormationSlot || stim.Anchor == null) return Vector2.zero;
+        float cs = GetCellSize();
+        return (Vector2)stim.Anchor.transform.position
+            + new Vector2(stim.SlotOffset.x * cs, stim.SlotOffset.y * cs);
     }
 
     // ===== 攻击链路保留（搬自旧 ThreatFocusBehavior，不进 Executor）=====
@@ -495,11 +512,33 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         _followProvider.SetFollowAnchor(anchor, priority, intensity);
     }
 
+    /// <summary>
+    /// 设置编队槽位（3.0.1_3 §2.1，FormationController 下发军令时调）。
+    /// 槽位化跟随：目标 = 锚点位置 + slotOffset × cellSize（cell 吸附）。
+    /// 复用 FollowStimulus 承载（审计 D3），不新建 FormationStimulus 类型。
+    /// </summary>
+    public void SetFormationSlot(UnitController anchor, TaskPriority priority, float intensity, Vector2Int slotOffset)
+    {
+        _followProvider.SetFormationSlot(anchor, priority, intensity, slotOffset);
+    }
+
     /// <summary>清除跟随锚点（部队解散/任务完成时调）</summary>
     public void ClearFollowAnchor()
     {
         _followProvider.ClearAnchor();
     }
+
+    /// <summary>
+    /// 清除编队槽位绑定（3.0.1_3 §15.5 ClearFormationState 调）。
+    /// 与 ClearFollowAnchor 等价（SlotOffset 一并清零），独立方法保语义清晰。
+    /// </summary>
+    public void ClearFormationSlot()
+    {
+        _followProvider.ClearAnchor();
+    }
+
+    /// <summary>是否绑定了编队槽位（FormationController 状态清理用）</summary>
+    public bool HasFormationSlot => _followProvider.IsActive && _followProvider.Stimulus.IsFormationSlot;
 
     /// <summary>注入任务刺激源（调度中心派工时调，如砍树 B 级任务）</summary>
     public void AddTaskStimulus(TaskStimulus stimulus)

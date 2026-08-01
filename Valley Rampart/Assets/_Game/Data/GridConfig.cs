@@ -9,8 +9,8 @@ using UnityEngine;
 public class GridConfig : ScriptableObject
 {
     [Header("区块大小")]
-    [Tooltip("一个小区块多宽（世界单位/像素）")]
-    public float cellSize = 32f;
+    [Tooltip("一个小区块多宽（世界单位/像素）。审计勘误：资产 GridConfig.asset 实际值 2.26，类默认值对齐防误读")]
+    public float cellSize = 2.26f;
 
     [Header("大区块")]
     [Tooltip("一个大区块含多少个小区块（固定）")]
