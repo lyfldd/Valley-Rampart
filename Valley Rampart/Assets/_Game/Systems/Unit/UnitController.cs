@@ -273,7 +273,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
     }
 
     /// <summary>
-    /// 死亡处理：发布 UnitDiedEvent -> 注销注册 -> 销毁对象。
+    /// 死亡处理：发布 UnitDiedEvent -> 注销注册 -> 回池（3.0.1 §7.4，替代原 Destroy）。
     /// 3.4 改造：UnitDiedEvent 扩为 IDamageable + Faction + Position + Killer + Cause。
     /// Killer 此处为 null（TakeDamage 无 source），DamageSystem 可在调用方补充击杀者信息。
     /// </summary>
@@ -281,7 +281,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
     {
         Debug.Log($"[UnitController] {Data?.faction}_{Data?.occupation} 死亡。");
 
-        // 先注销 ISaveable，再销毁对象，防止 SaveManager 抓到已销毁实例
+        // 先注销 ISaveable，再回池，防止 SaveManager 抓到已回收实例
         SaveManager.Instance.UnregisterSaveable(this);
 
         // 先发布事件，订阅者仍可访问 this（RulerController/TopLeftHUD/DamageSystem/对象池）
@@ -298,8 +298,15 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
 
         // 从空间分区注销（3.0.1 感知广播用）
         GridSystem.Instance?.RemoveUnit(this);
+        // 重置网格注册标志（回池后位置移动缓存失效，防出池跳过首格登记）
+        _gridRegistered = false;
+        _lastGridCoord = default;
 
-        Destroy(gameObject);
+        // 3.0.1 §7.4 对象池回收（无工厂兜底销毁——如场景未挂 UnitFactory）
+        if (UnitFactory.Instance != null)
+            UnitFactory.Instance.ReturnUnitToPool(this);
+        else
+            Destroy(gameObject);
     }
 
     // ===== 移动系统（基于 Rigidbody2D 的 2D 移动）=====

@@ -12,6 +12,12 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
     private readonly Dictionary<string, GameObject> _prefabCache = new Dictionary<string, GameObject>();
     private bool _isPreloaded = false;
 
+    // 3.0.1 §7.4 对象池：实例层（按 prefab 分桶），门面挂在 UnitFactory 现有生成路径
+    private readonly UnitInstancePool _instancePool = new UnitInstancePool();
+
+    /// <summary>实例池（供外部统计/调试）。</summary>
+    public UnitInstancePool InstancePool => _instancePool;
+
     /// <summary>
     /// 同步预加载所有单位 Prefab。幂等：重复调用只加载一次。
     /// 由 LoadManager 阶段1 显式调用。
@@ -75,8 +81,19 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
             return null;
         }
 
-        GameObject instance = Instantiate(prefab, position, Quaternion.identity);
-        instance.name = key;
+        // 3.0.1 §7.4 对象池：优先取桶（池空才 Instantiate——战斗尖峰零分配）
+        GameObject instance = _instancePool.Get(key);
+        if (instance == null)
+        {
+            instance = Instantiate(prefab, position, Quaternion.identity);
+            instance.name = key;
+        }
+        else
+        {
+            instance.transform.position = position;
+            instance.transform.rotation = Quaternion.identity;
+            instance.SetActive(true);
+        }
 
         // 绑定数据到控制器
         var controller = instance.GetComponent<UnitController>();
@@ -93,6 +110,31 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
         }
 
         return instance;
+    }
+
+    /// <summary>
+    /// 3.0.1 §7.4 单位死亡回池（由 UnitController.Die 调用）。
+    /// 立即 SetActive(false) 回桶（P0 简化：死亡动画停留表现 P2 再叠加延迟）。
+    /// 出池时 SpawnUnit 会重新 Initialize + brain.Init，状态天然全新，无需手动 Reset。
+    /// </summary>
+    public void ReturnUnitToPool(UnitController unit)
+    {
+        if (unit == null) return;
+        string key = unit.name;
+        if (unit.Data != null)
+            key = $"{unit.Data.faction}_{unit.Data.occupation}";
+        _instancePool.Return(key, unit.gameObject);
+    }
+
+    /// <summary>
+    /// 3.0.1 §7.4 预热（战斗尖峰零 Instantiate）。按 prefab key × 数量预实例化入桶。
+    /// 数量为 0/缺 prefab 自动跳过。幂等可重复调（重复预热同 key 会继续叠加）。
+    /// </summary>
+    public void Prewarm(string prefabKey, int count)
+    {
+        if (count <= 0) return;
+        if (!_prefabCache.TryGetValue(prefabKey, out var prefab)) return;
+        _instancePool.Prewarm(prefabKey, prefab, count, transform);
     }
 
     /// <summary>

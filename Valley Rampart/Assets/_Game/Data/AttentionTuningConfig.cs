@@ -170,6 +170,50 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("漫游到点停留时长（秒，走走停停节奏）")]
     public float wanderStayTime = 1.5f;
 
+    [Header("rawFactor 权重（3.0.1_LOD §3.2 统一因子表，入 SO 防硬编码）")]
+    [Tooltip("敌人距离因子权重")]
+    public float rfDistWeight = 0.35f;
+    [Tooltip("敌人数量因子权重")]
+    public float rfCountWeight = 0.15f;
+    [Tooltip("血量因子权重")]
+    public float rfHpWeight = 0.2f;
+    [Tooltip("友军保护因子权重")]
+    public float rfAllyWeight = 0.2f;
+    [Tooltip("昼夜因子权重")]
+    public float rfTimeWeight = 0.1f;
+    [Tooltip("区块威胁热度因子权重（heatFactor，环境型威胁）。单次受击热度0.4×此值应 ≥0.25 威胁1阈值——危险一次受击就传开。原0.08远不够，0.3 仍偏低，取0.5）")]
+    public float rfHeatWeight = 0.5f;
+
+    [Header("LOD 三区思考（3.0.1_LOD §1.5 / §五）")]
+    [Tooltip("活跃区 Think 频率（Hz，现状 10）")]
+    public float lodActiveThinkHz = 10f;
+    [Tooltip("半活跃区 Think 频率（Hz）")]
+    public float lodSemiThinkHz = 2f;
+    [Tooltip("休眠区 Think 频率（Hz）")]
+    public float lodSleepThinkHz = 0.5f;
+    [Tooltip("活跃带宽度：中心±N region 为活跃")]
+    public int lodActiveRadius = 1;
+    [Tooltip("活跃带宽度：中心±N region 为半活跃")]
+    public int lodSemiRadius = 2;
+    [Tooltip("降级条件：热度归零且无事件满此秒数后逐级降")]
+    public float lodDowngradeIdleTime = 30f;
+    [Tooltip("军令升级目标区等级（1=半活跃，占位）")]
+    public int lodCommandUpgradeLevel = 1;
+
+    [Header("ThreatHeat 区块热度（3.0.1_LOD §3.1 / §3.3）")]
+    [Tooltip("区块内任何 NPC 受击累积热度")]
+    public float heatHitGain = 0.4f;
+    [Tooltip("敌人进入本 region 累积热度")]
+    public float heatEnemyEnterGain = 0.2f;
+    [Tooltip("友军撤退经过累积热度")]
+    public float heatAllyRetreatGain = 0.05f;
+    [Tooltip("热度衰减速率（/秒）")]
+    public float heatDecayRate = 0.05f;
+    [Tooltip("热度扩散阈值：超过则点燃邻区")]
+    public float heatSpreadThreshold = 0.6f;
+    [Tooltip("热度扩散系数（邻区获得 热度×此值）")]
+    public float heatSpreadRatio = 0.4f;
+
     /// <summary>按优先级获取权重。</summary>
     public float GetPriorityWeight(TaskPriority priority)
     {

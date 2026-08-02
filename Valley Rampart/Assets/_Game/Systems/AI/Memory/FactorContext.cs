@@ -34,6 +34,8 @@ public struct FactorContext
     public float LastRaw;
     /// <summary>BehaviorExecutor 反馈：是否到达焦点目标</summary>
     public bool ArrivedAtFocus;
+    /// <summary>3.0.1_LOD §3.2 区块威胁热度（环境型威胁因子，NPCBrain 从 LODSystem 读）</summary>
+    public float RegionHeat;
 
     // ===== 3.0.1_3 编队槽位（守阵追击 clamp 用，§4.1）=====
     /// <summary>编队槽位世界坐标（锚点+SlotOffset×cellSize）；非编队成员=zero</summary>

@@ -101,6 +101,9 @@ public class FormationController : MonoBehaviour
     {
         _generalUnit = general;
         _anchor = general != null ? general.transform : _anchor;
+        // 3.0.1_LOD §1.2：军队锚点注册（活跃带双中心，将军位置点亮活跃带）
+        if (general != null && LODSystem.Instance != null)
+            LODSystem.Instance.RegisterArmyCenter(general.transform);
     }
 
     /// <summary>
@@ -224,8 +227,9 @@ public class FormationController : MonoBehaviour
     /// <summary>
     /// 槽位分配（§3.2 R2 残编紧凑：空槽压队尾，按兵种填槽）。
     /// 两轮填充：
-    ///   第一轮：近战按 slot 顺序填 MeleeOnly/GeneralOnly/Any 槽
-    ///   第二轮：弓手填剩余 RangedOnly/Any 槽，按距锚点 |x| 从近到远排序（残编时弓优先填靠后安全位，不甩到极端）
+    ///   第一轮：近战填 MeleeOnly/GeneralOnly/Any 槽，**按 |x| 外侧优先**（防残编时弓手顶前排：
+    ///     近战先占两端防线，弓手居中安全位——修 3.0.1_LOD 场景验证暴露的"弓手占第一位"）
+    ///   第二轮：弓手填剩余 RangedOnly/Any 槽，按距锚点 |x| 从近到远排序（残编时弓优先填靠后安全位）
     /// 方向翻转：offset.x *= _formationDirection（1=右/-1=左）
     /// </summary>
     private void AssignSlots(FormationDef def)
@@ -242,18 +246,25 @@ public class FormationController : MonoBehaviour
         bool[] occupied = new bool[def.slots.Length];
         int dir = _formationDirection;
 
-        // 第一轮：近战按 slot 顺序填 MeleeOnly/GeneralOnly/Any 槽
-        int meleeIdx = 0;
-        for (int i = 0; i < def.slots.Length && meleeIdx < melee.Count; i++)
+        // 第一轮：近战按 |x| 外侧优先填 MeleeOnly/GeneralOnly/Any 槽
+        var meleeSlots = new List<int>();
+        for (int i = 0; i < def.slots.Length; i++)
         {
             SlotRole role = def.slots[i].role;
             if (role == SlotRole.MeleeOnly || role == SlotRole.GeneralOnly || role == SlotRole.Any)
-            {
-                var m = melee[meleeIdx++];
-                m.SlotOffset = new Vector2Int(def.slots[i].cellOffset.x * dir, def.slots[i].cellOffset.y);
-                ReplaceMember(m);
-                occupied[i] = true;
-            }
+                meleeSlots.Add(i);
+        }
+        meleeSlots.Sort((a, b) =>
+            Mathf.Abs(def.slots[b].cellOffset.x).CompareTo(Mathf.Abs(def.slots[a].cellOffset.x)));
+
+        int meleeIdx = 0;
+        foreach (int i in meleeSlots)
+        {
+            if (meleeIdx >= melee.Count) break;
+            var m = melee[meleeIdx++];
+            m.SlotOffset = new Vector2Int(def.slots[i].cellOffset.x * dir, def.slots[i].cellOffset.y);
+            ReplaceMember(m);
+            occupied[i] = true;
         }
 
         // 第二轮：收集剩余 RangedOnly/Any 弓手槽，按距锚点 |x| 从近到远排序后填
@@ -483,6 +494,9 @@ public class FormationController : MonoBehaviour
         {
             DisbandAll();
         }
+        // 3.0.1_LOD：注销军队锚点（将军死亡/组件销毁）
+        if (_generalUnit != null && LODSystem.Instance != null)
+            LODSystem.Instance.UnregisterArmyCenter(_generalUnit.transform);
     }
 
     // ===== 辅助 =====

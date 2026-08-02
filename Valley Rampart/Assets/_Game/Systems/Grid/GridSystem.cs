@@ -76,11 +76,24 @@ public class GridSystem : Singleton<GridSystem>
                 return false;
         }
 
+        // 3.0.1_LOD §1.3 感知广播事件源：敌人跨 region 进入 -> 发布事件（威胁类事件升整 region）
+        bool crossedRegion = false;
+        if (_unitCells.TryGetValue(unit, out var oldCoord))
+            crossedRegion = CellToRegionIndex(oldCoord.x) != CellToRegionIndex(coord.x);
+        else
+            crossedRegion = true; // 首次登记（出生）也视为进入
+
         // 退出旧区块
         ExitCurrentCell(unit);
 
         cell.Add(unit);
         _unitCells[unit] = coord;
+
+        if (crossedRegion && unit.GetFaction() == Faction.Undead
+            && EventBus.HasSubscribers<EnemyEnteredRegionEvent>())
+        {
+            EventBus.Publish(new EnemyEnteredRegionEvent(CellToRegionIndex(coord.x), unit));
+        }
         return true;
     }
 

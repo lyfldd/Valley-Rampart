@@ -54,7 +54,9 @@ public class ThreatAssessor
 
     /// <summary>
     /// 计算原始威胁因子 X（0-1）。3.0.1_2 保留复用，L3 调用。
-    /// 因子清单：敌人距离 / 敌人数量 / 血量 / 友军保护 / 时间（昼夜）。
+    /// 因子清单：敌人距离 / 敌人数量 / 血量 / 友军保护 / 时间（昼夜）/ 区块热度（3.0.1_LOD）。
+    /// 3.0.1_LOD 改造：权重迁入 AttentionTuningConfig（防硬编码）；删除 enemyCount==0 早退——
+    /// 否则"没见到敌人也要警觉"的 heat 语义是死路（§3.2）。无敌人时 dist/count 因子自然为 0，heat 仍可推高威胁。
     /// </summary>
     public static float CalculateRawFactor(
         float nearestEnemyDist,
@@ -65,18 +67,24 @@ public class ThreatAssessor
         NpcProfessionDef profession,
         AttentionTuningConfig config,
         float perceptionWorldRadius,
-        float attackWorldRange)
+        float attackWorldRange,
+        float regionHeat)
     {
-        if (enemyCount == 0 || nearestEnemyDist >= perceptionWorldRadius)
-            return 0f;
-
         // 敌人距离因子（越近越高，0-1）
         // 保底：敌人进入攻击距离内时 distFactor 强制 1.0（弓手贴脸也该是最高距离威胁）
+        // 无敌人/敌超出感知时 distFactor=0（不再早退，heat 因子仍可推高）
         float distFactor;
-        if (attackWorldRange > 0f && nearestEnemyDist <= attackWorldRange)
-            distFactor = 1f;
+        if (enemyCount > 0 && nearestEnemyDist < perceptionWorldRadius)
+        {
+            if (attackWorldRange > 0f && nearestEnemyDist <= attackWorldRange)
+                distFactor = 1f;
+            else
+                distFactor = 1f - Mathf.Clamp01(nearestEnemyDist / perceptionWorldRadius);
+        }
         else
-            distFactor = 1f - Mathf.Clamp01(nearestEnemyDist / perceptionWorldRadius);
+        {
+            distFactor = 0f;
+        }
 
         // 敌人数量因子（越多越高，0-1，5 个满）
         float countFactor = Mathf.Clamp01(enemyCount / 5f);
@@ -90,12 +98,16 @@ public class ThreatAssessor
         // 时间因子（夜晚 +0.1）
         float timeFactor = isNight ? 0.1f : 0f;
 
-        // 加权合成
-        float x = distFactor * 0.35f
-                + countFactor * 0.15f
-                + hpFactor * 0.2f
-                + allyFactor * 0.2f
-                + timeFactor * 0.1f;
+        // 3.0.1_LOD §3.2 区块威胁热度因子（环境型威胁，与夜晚同构——无 ThreatStimulus 也能推高威胁）
+        float heatFactor = Mathf.Clamp01(regionHeat);
+
+        // 加权合成（权重入 SO，防硬编码）
+        float x = distFactor * config.rfDistWeight
+                + countFactor * config.rfCountWeight
+                + hpFactor * config.rfHpWeight
+                + allyFactor * config.rfAllyWeight
+                + timeFactor * config.rfTimeWeight
+                + heatFactor * config.rfHeatWeight;
 
         // 应用职业敏感度
         x *= profession.threatSensitivity;

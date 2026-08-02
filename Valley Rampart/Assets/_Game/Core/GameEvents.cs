@@ -399,3 +399,34 @@ public readonly struct BuildingActivatedEvent
     public readonly Building Building;
     public BuildingActivatedEvent(Building building) { Building = building; }
 }
+
+// ===== LOD 性能架构事件（3.0.1_LOD §3.5 / §六.P0.7）=====
+
+// 区块威胁热度变化事件。由 LODSystem 在热度/等级变化时发布（§3.5 衔接 3.0.1_3 协作层留接口）。
+// 将军/调度中心订阅可调兵支援；调试面板订阅可画热力图。无订阅者时不发布（EventBus 守卫）。
+public readonly struct RegionHeatChangedEvent
+{
+    public readonly int RegionIndex;
+    public readonly float Heat;
+    public readonly LodLevel Level;
+
+    public RegionHeatChangedEvent(int regionIndex, float heat, LodLevel level)
+    {
+        RegionIndex = regionIndex;
+        Heat = heat;
+        Level = level;
+    }
+}
+
+// 敌人进入区块事件。由 GridSystem.TryEnter 在敌人跨 region 时发布（§1.3 威胁类事件升整 region）。
+public readonly struct EnemyEnteredRegionEvent
+{
+    public readonly int RegionIndex;
+    public readonly UnitController Enemy;
+
+    public EnemyEnteredRegionEvent(int regionIndex, UnitController enemy)
+    {
+        RegionIndex = regionIndex;
+        Enemy = enemy;
+    }
+}

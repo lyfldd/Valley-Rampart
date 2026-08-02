@@ -62,10 +62,41 @@ public class CombatTestSpawner : MonoBehaviour
 
         yield return new WaitForSeconds(0.5f); // 等一帧让其他系统稳定
 
+        // 3.0.1_LOD：确保 LODSystem 初始化（测试场景可能无地图流程，兜底按覆盖范围初始化）
+        EnsureLodReady();
+
+        // 3.0.1 §7.4 对象池预热（小规模验证；正式规模按 PoolConfig 预热 200/100/200）
+        PrewarmTestPool();
+
         CreateWallAnchors();
         SpawnTestUnits();
         FormUpGeneral();
         StartCoroutine(SpawnReinforcement());
+    }
+
+    /// <summary>
+    /// 3.0.1_LOD：确保 LODSystem 已初始化。地图流程未走时（MapGeneratedEvent 未触发），
+    /// 按测试场景覆盖范围（x≈-13~10，单 region 16 cell）兜底初始化，让 LOD 逻辑可跑。
+    /// </summary>
+    private void EnsureLodReady()
+    {
+        if (LODSystem.Instance == null) return;
+        if (LODSystem.Instance.RegionCount > 0) return; // 已由地图流程初始化
+        // 兜底：测试场景单 region（0）覆盖全部单位，验证系统不报错；正式地图流程会重建
+        LODSystem.Instance.InitRegions(1);
+    }
+
+    /// <summary>对象池预热（§7.4 验证：预热覆盖初始生成规模，战斗尖峰复用）</summary>
+    private void PrewarmTestPool()
+    {
+        if (UnitFactory.Instance == null) return;
+        // 覆盖初始生成规模：我方 1将军+3近战+2弓手+1工人、敌方 3+2 增援——预热略多于最大并发
+        UnitFactory.Instance.Prewarm("Human_Player_General", 2);
+        UnitFactory.Instance.Prewarm("Human_Player_Warrior", 5);
+        UnitFactory.Instance.Prewarm("Human_Player_Archer", 4);
+        UnitFactory.Instance.Prewarm("Human_Player_Civilian", 2);
+        UnitFactory.Instance.Prewarm("Undead_Warrior", 5);
+        UnitFactory.Instance.Prewarm("Undead_Archer", 3);
     }
 
     /// <summary>创建城墙锚点（§14.7 守城编队静态锚点，2 个空 Transform）</summary>

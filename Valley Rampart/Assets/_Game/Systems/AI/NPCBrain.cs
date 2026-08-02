@@ -81,7 +81,15 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     // ===== 定时器 =====
     private float _thinkTimer;
     private float _perceptionTimer = 999f;  // 首帧立即触发感知
-    private const float ThinkInterval = 0.1f;  // 10Hz 思考频率
+    /// <summary>活跃区思考频率 10Hz（3.0.1_LOD：半活跃 2Hz / 休眠 0.5Hz 由 LODSystem 覆盖）</summary>
+    private const float ThinkInterval = 0.1f;
+    /// <summary>当前 LOD 等级的思考间隔（秒，由 LODSystem 每帧刷新）</summary>
+    private float _currentThinkInterval = ThinkInterval;
+    /// <summary>当前 LOD 等级的感知间隔（秒，= max(感知基础, 思考间隔) 保证输入新鲜）</summary>
+    private float _currentPerceptionInterval;
+    private float _lastThinkTime;
+    /// <summary>LODSystem 引用（所在 region 读思考频率，Init 时查找）</summary>
+    private LODSystem _lodSystem;
 
     // ===== tick 分片平摊（决策12，500 NPC 分 5 帧）=====
     private static int s_globalTickFrame;
@@ -173,6 +181,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // tick 分片：分配 shardIndex
         _shardIndex = s_registeredCount++ % Mathf.Max(1, _config.thinkShardCount);
 
+        // 3.0.1_LOD：引用 LODSystem（读所在 region 思考频率；Singleton 隐式创建，未初始化 region 时全活跃行为不变）
+        _lodSystem = LODSystem.Instance;
+        _currentPerceptionInterval = _config != null ? _config.perceptionUpdateInterval : 0.2f;
+
         // HomePointProvider 查找（场景内挂 SceneHomePointProvider）
         if (_homePointProvider == null)
         {
@@ -240,18 +252,21 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         if (_self == null || _profession == null || _config == null) return;
         if (_self.CurrentHp <= 0) return;
 
-        // 感知更新（较低频率，默认 0.2s）
+        // 3.0.1_LOD：每帧按所在 region 刷新思考/感知间隔（读 LODSystem；未挂载则活跃区频率）
+        RefreshLodIntervals();
+
+        // 感知更新（LOD 动态频率：活跃 0.2s / 半活跃/休眠按思考间隔保证输入新鲜）
         _perceptionTimer += Time.deltaTime;
-        if (_perceptionTimer >= _config.perceptionUpdateInterval)
+        if (_perceptionTimer >= _currentPerceptionInterval)
         {
             _perceptionTimer = 0f;
             UpdatePerception();
         }
 
-        // 思考更新（10Hz，走分片：决策12，500 NPC 分 5 帧平摊）
+        // 思考更新（LOD 动态频率，走分片：决策12，500 NPC 分 5 帧平摊）
         // 分片只对 Think（决策）分片，Execute 每帧调用（移动需持续）
         _thinkTimer += Time.deltaTime;
-        if (_thinkTimer >= ThinkInterval)
+        if (_thinkTimer >= _currentThinkInterval)
         {
             _thinkTimer = 0f;
             s_globalTickFrame++;
@@ -267,6 +282,35 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             _executor.Execute(in _lastCmd, Time.deltaTime, GetCellSize());
         }
+    }
+
+    /// <summary>
+    /// 3.0.1_LOD：按所在 region 的 LOD 等级刷新思考/感知间隔。
+    /// 活跃 10Hz / 半活跃 2Hz / 休眠 0.5Hz（AttentionTuningConfig 可调）。
+    /// 感知间隔 = max(感知基础, min(思考间隔, 0.5s))——降频时感知保底 0.5s，
+    /// 防止休眠区 2s 才发现敌人（反应迟钝）。半活跃/休眠区输入收集随思考降频，
+    /// 但感知下限保证"敌人出现能及时看见"。
+    /// </summary>
+    private void RefreshLodIntervals()
+    {
+        if (_lodSystem == null) return;
+        float thinkInterval;
+        switch (_lodSystem.GetLevelAt(_self.GetPosition()))
+        {
+            case LodLevel.SemiActive:
+                thinkInterval = 1f / Mathf.Max(0.1f, _config.lodSemiThinkHz);
+                break;
+            case LodLevel.Sleeping:
+                thinkInterval = 1f / Mathf.Max(0.1f, _config.lodSleepThinkHz);
+                break;
+            default:
+                thinkInterval = ThinkInterval;
+                break;
+        }
+        _currentThinkInterval = thinkInterval;
+        // 感知保底 0.5s（不超过思考间隔，但休眠区不至于 2s 才发现敌人）
+        _currentPerceptionInterval = Mathf.Max(_config.perceptionUpdateInterval,
+            Mathf.Min(thinkInterval, 0.5f));
     }
 
     // ===== 感知 =====
@@ -322,6 +366,25 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             _attention.AddStimulus(trace);
         }
 
+        // 3.0.1_LOD §3.1 第二层：感知范围外但区块有战斗热点 -> 朝热点移动支援（危险传开的位置载体）
+        // 用 TaskStimulus（第 3 层，与 Safety 同层竞争）：引导支援移动、不推高威胁评定（避免误触发撤退谱系）
+        // 强度 0.6 > Safety 未到达 ~0.5（朝热点走优先于回城），< Follow 军令 S 级 4.5（编队士兵守阵不乱跑）
+        if (_nearbyEnemies.Count == 0 && _lodSystem != null
+            && _lodSystem.TryGetCombatHotspot(myPos, _config.traceDecayTime, out var hotspot))
+        {
+            float dist = Vector2.Distance(myPos, hotspot);
+            if (dist > perceptionWorld)  // 热点在感知范围外才需要"传递"；范围内感知已覆盖
+            {
+                _attention.AddStimulus(new TaskStimulus(
+                    TaskPriority.C,                     // 杂务级（支援）
+                    targetPos: hotspot,                 // 热点即目标位置
+                    intensity: 0.6f,                    // > Safety 0.5，< Follow S 级 4.5
+                    expiry: currentTime + _config.traceDecayTime,
+                    issuer: _lodSystem                  // 区块警报来源
+                ));
+            }
+        }
+
         if (_nearbyEnemies.Count == 0) _nearestDist = float.MaxValue;
     }
 
@@ -329,8 +392,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
     private void Think()
     {
-        float dt = ThinkInterval;
+        // 3.0.1_LOD §二：记忆组件 dt 改传真实墙钟差值（半活跃 2Hz / 休眠 0.5Hz 下确认时间不漂）
         float currentTime = Time.time;
+        float dt = _lastThinkTime > 0f ? Mathf.Max(0f, currentTime - _lastThinkTime) : _currentThinkInterval;
+        _lastThinkTime = currentTime;
 
         // ⓪ 组装 FactorContext（世界/自身原始状态）
         FactorContext ctx = BuildBaseContext();
@@ -378,7 +443,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // rawFactor 计算（复用 CalculateRawFactor）+ stateThreatBias 处理
         ctx.RawFactor = ThreatAssessor.CalculateRawFactor(
             ctx.NearestEnemyDist, ctx.NearbyEnemyCount, ctx.HpRatio, ctx.NearbyAllyCount,
-            ctx.IsNight, ctx.Profession, ctx.Config, ctx.PerceptionWorldRadius, ctx.AttackWorldRange);
+            ctx.IsNight, ctx.Profession, ctx.Config, ctx.PerceptionWorldRadius, ctx.AttackWorldRange,
+            ctx.RegionHeat);
         // stateThreatBias 已在 ThreatHysteresisComponent.FillContext 内直接抬等级处理，
         // 此处不叠 rawFactor（避免与量化器滞回打架）
         _lastRaw = ctx.RawFactor;
@@ -421,6 +487,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             // 3.0.1_3：编队槽位（守阵追击 clamp 用，§4.1）
             HasFormationSlot = _followProvider.IsActive && _followProvider.Stimulus.IsFormationSlot,
             FormationSlotWorld = ResolveFormationSlotWorld(),
+            // 3.0.1_LOD §3.2：区块威胁热度（环境型威胁因子；LODSystem 未挂载=0 行为不变）
+            RegionHeat = _lodSystem != null ? _lodSystem.GetHeatAt(_self.GetPosition()) : 0f,
         };
     }
 
