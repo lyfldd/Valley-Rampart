@@ -65,7 +65,8 @@ M6+ 优化项                  → CMA-ES / 公式变体市场 / holdout 防过�
 - ✅ **M3 基准套件+确定性已完成**（2026-08-02，ed4fb89）：S3-S6 场景 JSON + 3 patch（SimPatchLoader 反射部分覆盖）+ ObjectiveFunction 目标函数 v0 + SimReporter 报告聚合（report.json 对齐 schema）+ suite/differentiation/determinism-all 子命令。验收：确定性全剧本逐字节一致 / 区分度行为指标显著敏感（S2 kdRatio 2.97→1.92、S3 全灭率 2%→94%）/ S2 趋势一致（弓手白嫖=阵型保护有效）。已知限制：S2 被贴身恒 0（正面案例，负面场景留 M4）、S4 无撤退触发（场景调参留 M4）、S6 依赖 v1。
 - ✅ **M4 手动调参闭环已完成**（2026-08-02，622ef1b）：SimChampion（champion 全量快照导出/加载）+ SimVerdict（冠军裁决：总分 Δ + 场景退化 >5% 红线 + 双条件 candidate/rejected）+ benchmark/champion 子命令（对齐 05 §四 CLI 契约：--config/--patch/--battles/--out → report.json + verdict.json）。验收：改 1 参数 → patch JSON → 跑分 → 看报告 → 留/弃，全流程秒级完成（champion 加载=默认配置 0.545 逐分一致；rfdist20 Δ+0.001 判 candidate；undeadfast S1 退化 -10% 判 rejected + 退化标记）。
 - ✅ **M5 DeepSeek 训练师已完成**（2026-08-02，b0fa8be）：factor_registry.example.json 全量化 v1.0（tuning ~70 字段 + 职业字段，min/max/语义/harness=false 标记）+ SimProposalValidator 提案校验（≤3改动/注册/边界/死参数/冻结/Σ软提示）+ propose 子命令（validate/run/list）+ opencode.json + proposals/history.log。验收：3 轮提案闭环（p_0001 rejected Δ=0 敏感性教训 / p_0002 p_0004 拒收路径 / p_0005 candidate Δ=+0.001 无退化）+ history.log 复盘引用 verdict 数据。遗留：opencode+DeepSeek 接入需 DEEPSEEK_API_KEY（运营项）。
-- ⬜ M6+ 未开始。
+- ✅ **M6+ 优化项全部落地**（2026-08-02，9badcca）：holdout（H1/H2 隐藏场景 + verdict 冠军三条件防背题）+ CMA-ES（SimCMAES 确定性搜索 + search 子命令）+ 公式变体市场（IThreatFormula/注册表/formula compare T2 守门 + DistSquaredV1 示例）+ FormationBrain v1（SimFormation 自动意图接 SimHeat，S6 已切 v1）+ 敌我阵型差异化（场景 JSON 每编队独立 slots）。验收：确定性全剧本逐字节一致 / S6 v1 subScore 0.771=v0 持平 / DistSquaredV1 Δ+0.002 过守门 / p_0005 三条件 candidate。
+- ✅ **M0-M6 全部完成**——AI 强化训练管线（抽核→模拟→基准→调参→训练师→防过拟合）完整闭环。
 
 ## 六、与 3.0.1_7 的关系
 
