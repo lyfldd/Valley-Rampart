@@ -16,6 +16,12 @@ Valley Rampart/[Mm]emoryCaptures/
 *.csproj
 *.userprefs
 
+# dotnet 构建产物（AI harness 控制台工程）
+ai决策大脑强化训练/harness/bin/
+ai决策大脑强化训练/harness/obj/
+# harness.csproj 是手写工程文件（链接 AI.Core 唯一真身），例外于上方 *.csproj 忽略
+!ai决策大脑强化训练/harness/harness.csproj
+
 # OS
 .DS_Store
 Thumbs.db
