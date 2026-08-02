@@ -449,7 +449,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 君主阵亡处理：清除引用，推进游戏状态到 GameOver
     public void OnMonarchDied()
     {
-        Debug.LogError("[RulerController] ☠ 君主已阵亡！游戏结束。");
+        // ⚠️ 游戏结束是正常游戏流程，用 Log 而非 LogError：
+        // 团结引擎编辑器对 LogError 会"自动暂停 Play Mode"（Error Pause），
+        // 暂停期间 UI Toolkit 输入冻结 → GameOver 面板按钮点击无效（玩家需手动取消暂停）。
+        Debug.Log("[RulerController] ☠ 君主已阵亡！游戏结束。");
         monarchUnit = null;
         GameStateManager.Instance.SetState(GameState.GameOver);
     }
