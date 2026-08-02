@@ -1,0 +1,13 @@
+{
+  "id": "p_0004",
+  "base": "champion@622ef1b",
+  "hypothesis": "边界越界测试：l2ResistCap 上限 0.99，提案改到 1.05 越界——harness 必须拒收。",
+  "evidence": [
+    "schemas/factor_registry.example.json: l2ResistCap max=0.99"
+  ],
+  "changes": [
+    { "path": "tuning.l2ResistCap", "from": 0.95, "to": 1.05, "rationale": "故意越界测试边界校验" }
+  ],
+  "expected": { "harness拒收": "true（1.05 > max 0.99）" },
+  "risk": "无（测试用）"
+}

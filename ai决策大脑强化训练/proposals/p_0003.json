@@ -1,0 +1,14 @@
+{
+  "id": "p_0003",
+  "base": "champion@622ef1b",
+  "hypothesis": "测试边界校验：rawFactor 六权重中只改 rfDistWeight 而不重新归一化，Σ 会偏离 1——harness 必须拒收并要求训练师归一化。",
+  "evidence": [
+    "schemas/factor_registry.example.json: rfDistWeight 约束 rawFactor六权重Σ=1",
+    "AGENTS.md: rawFactor 六权重提案后 Σ 必须=1（自己归一化）"
+  ],
+  "changes": [
+    { "path": "tuning.rfDistWeight", "from": 0.35, "to": 0.20, "rationale": "故意不归一化，测试 Σ 校验" }
+  ],
+  "expected": { "harness拒收": "true（Σ=0.85 ≠ 1）" },
+  "risk": "无（测试用）"
+}

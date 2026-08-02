@@ -40,6 +40,52 @@ public static class SimPatchLoader
         if (doc == null)
             throw new InvalidOperationException("[SimPatchLoader] JSON 反序列化失败: " + path);
 
+        ApplyDoc(doc, config, scenario);
+    }
+
+    /// <summary>
+    /// M5：从训练师提案 JSON 的 changes 数组构建 patch 并应用（propose run 入口）。
+    /// changes 元素 {path, from, to}，path 格式 = "tuning.字段" 或 "professions.职业名.字段"（与 factor_registry 一致）。
+    /// 前置校验（SimProposalValidator）已保证 path 合法/边界内，此处仅装配。
+    /// </summary>
+    public static void ApplyProposal(ProposalDoc proposal, SimConfig config, SimScenarioData scenario)
+    {
+        var patch = new PatchDoc { tuning = new Dictionary<string, JsonElement>(), professions = new Dictionary<string, Dictionary<string, JsonElement>>() };
+        for (int i = 0; i < proposal.changes.Length; i++)
+        {
+            var c = proposal.changes[i];
+            var parts = c.path.Split('.');
+            if (parts.Length == 2 && parts[0] == "tuning")
+            {
+                patch.tuning[parts[1]] = JsonElementFromDouble(c.to);
+            }
+            else if (parts.Length == 3 && parts[0] == "professions")
+            {
+                if (!patch.professions.TryGetValue(parts[1], out var fields))
+                {
+                    fields = new Dictionary<string, JsonElement>();
+                    patch.professions[parts[1]] = fields;
+                }
+                fields[parts[2]] = JsonElementFromDouble(c.to);
+            }
+            else
+            {
+                throw new InvalidOperationException($"[SimPatchLoader] 提案路径非法（应为 tuning.x / professions.职业.x）: {c.path}");
+            }
+        }
+        ApplyDoc(patch, config, scenario);
+    }
+
+    /// <summary>double -> JsonElement（JsonElement 是 struct，用 JsonDocument 桥接转换）。</summary>
+    private static JsonElement JsonElementFromDouble(double v)
+    {
+        using var doc = JsonDocument.Parse(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return doc.RootElement.Clone();
+    }
+
+    /// <summary>内部：把已反序列化的 PatchDoc 应用到 config+scenario（Apply / ApplyProposal 共用）。</summary>
+    private static void ApplyDoc(PatchDoc doc, SimConfig config, SimScenarioData scenario)
+    {
         // 1. tuning 部分覆盖（反射，boxing 改后写回——TuningSnapshot 是 struct）
         if (doc.tuning != null)
         {
@@ -48,7 +94,7 @@ public static class SimPatchLoader
             {
                 var field = typeof(TuningSnapshot).GetField(kv.Key, BindingFlags.Public | BindingFlags.Instance);
                 if (field == null)
-                    throw new InvalidOperationException($"[SimPatchLoader] 未知 tuning 字段 '{kv.Key}'（{path}）");
+                    throw new InvalidOperationException($"[SimPatchLoader] 未知 tuning 字段 '{kv.Key}'");
                 field.SetValue(boxed, ConvertValue(field.FieldType, kv.Value));
             }
             config.tuning = (TuningSnapshot)boxed;
@@ -64,13 +110,13 @@ public static class SimPatchLoader
                 ProfessionSnapshot prof = config.GetProfession(name);
                 // patch 只覆盖已有职业（存在 = faction 非 None；Default 的 faction=None）
                 if (prof.faction == Faction.None)
-                    throw new InvalidOperationException($"[SimPatchLoader] 未知职业 '{name}'（{path}）——patch 只覆盖已有职业");
+                    throw new InvalidOperationException($"[SimPatchLoader] 未知职业 '{name}'——patch 只覆盖已有职业");
 
                 foreach (var fkv in kv.Value)
                 {
                     var field = typeof(ProfessionSnapshot).GetField(fkv.Key, BindingFlags.Public | BindingFlags.Instance);
                     if (field == null)
-                        throw new InvalidOperationException($"[SimPatchLoader] 未知职业字段 '{fkv.Key}'（{name}，{path}）");
+                        throw new InvalidOperationException($"[SimPatchLoader] 未知职业字段 '{fkv.Key}'（{name}）");
                     // ProfessionSnapshot 是 struct：ref 拷贝后反射改字段
                     object pbox = prof;
                     field.SetValue(pbox, ConvertValue(field.FieldType, fkv.Value));
@@ -141,4 +187,30 @@ public static class SimPatchLoader
         public Dictionary<string, Dictionary<string, JsonElement>> professions;
     }
 #pragma warning restore CS0649
+}
+
+/// <summary>
+/// M5：训练师提案 DTO（对齐 schemas/tune_proposal.schema.json）。
+/// changes 元素 {path, from, to, rationale}，path = "tuning.x" / "professions.职业.x"。
+/// 由 SimProposalValidator 校验后交 SimPatchLoader.ApplyProposal 装配为 patch。
+/// </summary>
+public sealed class ProposalDoc
+{
+    public string id;
+    [System.Text.Json.Serialization.JsonPropertyName("base")]
+    public string base_;
+    public string hypothesis;
+    public string[] evidence;
+    public ProposalChange[] changes;
+    public System.Collections.Generic.Dictionary<string, JsonElement> expected;
+    public string risk;
+}
+
+/// <summary>提案单条改动（05 §三 契约：≤3 项、path 注册、边界内）。</summary>
+public sealed class ProposalChange
+{
+    public string path;
+    public double from;
+    public double to;
+    public string rationale;
 }

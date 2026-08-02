@@ -1,0 +1,15 @@
+{
+  "id": "p_0005",
+  "base": "champion@622ef1b",
+  "hypothesis": "复盘 p_0001 教训：改参数先确认敏感性。rfDistWeight 已被 M3 differentiation 证明敏感（0.35→0.20 时 S2 kdRatio 2.97→1.92、S3 全灭率 2%→94%）。降 rfDistWeight 让单位对'距离'不那么恐慌，减少 Cautious 驻留导致的消极——预期 S3 破阵改善且 S4 战损比不恶化。只降 0.05 保留比值意图，防过度。",
+  "evidence": [
+    "results/baseline/report.json: S3 破阵 2.00次/局 全灭率 2%",
+    "harness/out/diff_tuning_rfdist20/report.json: rfDistWeight 0.20 时 S3 全灭率 94%、S2 kdRatio 1.92（M3 区分度实测）",
+    "proposals/history.log: p_0001 复盘（l2FormationResistScale 推不动，rfDistWeight 已被验证推得动）"
+  ],
+  "changes": [
+    { "path": "tuning.rfDistWeight", "from": 0.35, "to": 0.30, "rationale": "降距离恐慌，减少消极驻留；步长 0.05 保守试探" }
+  ],
+  "expected": { "S3破阵次数": "2.00次/局 → 略降", "S4战损比": "不恶化 >2%", "总分": "0.545 → >0.550" },
+  "risk": "rfDistWeight 降过头会忽略近敌贴脸，弓手/近战被贴身率可能上升，关注 S2 被贴身率"
+}

@@ -33,11 +33,13 @@ public static class Program
                 return RunBenchmark(args);
             case "champion":
                 return RunChampion(args);
+            case "propose":
+                return RunPropose(args);
             case "smoke":
                 RunSmoke();
                 return 0;
             default:
-                Console.WriteLine("用法：dotnet run -- <acceptance|determinism|suite|differentiation|benchmark|champion|smoke> ...");
+                Console.WriteLine("用法：dotnet run -- <acceptance|determinism|suite|differentiation|benchmark|champion|propose|smoke> ...");
                 Console.WriteLine("  acceptance [r1] [r2]              M2 验收（S1 胜率带 + S2 弓手指标）");
                 Console.WriteLine("  determinism <场景json|all> [runs]  同 seed 跑两次逐字节一致（all=全剧本）");
                 Console.WriteLine("  suite [runs] [patch] [outDir]      S1-S6 基准套件 -> report.json");
@@ -46,6 +48,9 @@ public static class Program
                 Console.WriteLine("                                     M4 手动调参闭环：champion 基线 + patch 深合并 -> report.json + verdict.json");
                 Console.WriteLine("  champion export [outPath]          导出当前默认配置为 champion 全量快照（首次建档）");
                 Console.WriteLine("  champion baseline [--battles N]    跑 champion（无 patch）建档 results/baseline/report.json");
+                Console.WriteLine("  propose validate <p_x.json>        校验提案（≤3改动/注册/边界/死参数/rawFactor Σ）");
+                Console.WriteLine("  propose run <p_x.json> [--battles N] [--out <dir>]  校验通过后跑分 -> report+verdict");
+                Console.WriteLine("  propose list                      列出 proposals/ 提案与 history.log 尾部");
                 Console.WriteLine("  smoke                              M1 决策核 smoke test");
                 return 1;
         }
@@ -442,7 +447,167 @@ public static class Program
         return list;
     }
 
-    // ===== 简单 arg 解析（--key value）=====
+    // ===== propose：训练师提案闭环（05 §三 契约 + AGENTS.md 铁律，M5）=====
+
+    private const string ProposalsDir = "../proposals";
+
+    /// <summary>propose 子命令：validate（校验）/ run（跑分）/ list（列提案）。</summary>
+    private static int RunPropose(string[] args)
+    {
+        string sub = args.Length > 1 ? args[1] : "list";
+        switch (sub)
+        {
+            case "validate":
+            {
+                string propPath = args.Length > 2 ? args[2] : null;
+                if (string.IsNullOrEmpty(propPath) || !File.Exists(propPath))
+                {
+                    Console.WriteLine("[propose] 提案文件不存在: " + propPath);
+                    return 1;
+                }
+                var result = SimProposalValidator.Validate(propPath);
+                Console.WriteLine($"=== propose validate {Path.GetFileName(propPath)} ===");
+                Console.WriteLine($"  裁决：{(result.Valid ? "✅ 通过" : "❌ 拒收")}");
+                for (int i = 0; i < result.Issues.Count; i++)
+                    Console.WriteLine($"    - {result.Issues[i]}");
+                if (result.Valid)
+                    Console.WriteLine("  通过后可：dotnet run -- propose run " + propPath);
+                return result.Valid ? 0 : 1;
+            }
+            case "run":
+            {
+                string propPath = args.Length > 2 ? args[2] : null;
+                if (string.IsNullOrEmpty(propPath) || !File.Exists(propPath))
+                {
+                    Console.WriteLine("[propose] 提案文件不存在: " + propPath);
+                    return 1;
+                }
+                // 1. 先校验（未过 = 拒收，不进跑分，05 §三 规则）
+                var result = SimProposalValidator.Validate(propPath);
+                Console.WriteLine($"=== propose run {Path.GetFileName(propPath)} ===");
+                Console.WriteLine($"  校验：{(result.Valid ? "通过" : "拒收")}");
+                if (!result.Valid)
+                {
+                    for (int i = 0; i < result.Issues.Count; i++)
+                        Console.WriteLine($"    - {result.Issues[i]}");
+                    Console.WriteLine("  提案被拒收，未执行跑分。修正后重试。");
+                    return 1;
+                }
+
+                // 2. 把提案 changes 转成临时 patch JSON（champion + patch 深合并链路的 patch 部分）
+                var proposal = System.Text.Json.JsonSerializer.Deserialize<ProposalDoc>(
+                    File.ReadAllText(propPath), ProposalJsonOptions());
+                string tmpPatch = Path.Combine("out", Path.GetFileNameWithoutExtension(propPath) + ".patch.json");
+                Directory.CreateDirectory("out");
+                File.WriteAllText(tmpPatch, BuildPatchJson(proposal));
+
+                // 3. 复用 benchmark 闭环（champion 基线 + patch 深合并 -> report.json + verdict.json）
+                int battles = GetIntArg(args, "battles", 100);
+                string outDir = GetArg(args, "out", $"results/{proposal.id}");
+                string name = proposal.id;
+                return RunBenchmark(new[] { "benchmark", "--patch", tmpPatch, "--battles", battles.ToString(), "--out", outDir, "--name", name });
+            }
+            case "list":
+            {
+                Console.WriteLine("=== proposals/ ===");
+                string dir = ProposalsDir;
+                if (Directory.Exists(dir))
+                {
+                    foreach (var f in Directory.GetFiles(dir, "p_*.json"))
+                        Console.WriteLine($"  {Path.GetFileName(f)}（{(File.ReadAllText(f).Length / 1024.0).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}KB）");
+                    string log = Path.Combine(dir, "history.log");
+                    if (File.Exists(log))
+                    {
+                        Console.WriteLine("--- history.log 尾部 ---");
+                        var lines = File.ReadAllLines(log);
+                        int start = Math.Max(0, lines.Length - 15);
+                        for (int i = start; i < lines.Length; i++) Console.WriteLine("  " + lines[i]);
+                    }
+                    else
+                    {
+                        Console.WriteLine("  （无 history.log——训练师复盘记录）");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("  （proposals/ 目录不存在）");
+                }
+                return 0;
+            }
+            default:
+                Console.WriteLine("用法：dotnet run -- propose <validate|run|list>");
+                return 1;
+        }
+    }
+
+    /// <summary>提案 changes -> patch JSON（{tuning:{...}, professions:{...}} 部分覆盖格式，对齐 SimPatchLoader）。</summary>
+    private static string BuildPatchJson(ProposalDoc proposal)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("{");
+        sb.AppendLine("  \"name\": \"" + proposal.id + "\",");
+        sb.AppendLine("  \"tuning\": {");
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        bool firstT = true;
+        for (int i = 0; i < proposal.changes.Length; i++)
+        {
+            var c = proposal.changes[i];
+            if (c.path.StartsWith("tuning."))
+            {
+                if (!firstT) sb.AppendLine(",");
+                sb.Append("    \"").Append(c.path.Substring("tuning.".Length)).Append("\": ").Append(c.to.ToString("R", inv));
+                firstT = false;
+            }
+        }
+        sb.AppendLine(firstT ? "  }," : "\n  },");
+        sb.AppendLine("  \"professions\": {");
+        var profGroups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<(string field, double val)>>();
+        for (int i = 0; i < proposal.changes.Length; i++)
+        {
+            var c = proposal.changes[i];
+            if (c.path.StartsWith("professions."))
+            {
+                var parts = c.path.Split('.');
+                if (parts.Length != 3) continue;
+                if (!profGroups.TryGetValue(parts[1], out var list))
+                {
+                    list = new System.Collections.Generic.List<(string, double)>();
+                    profGroups[parts[1]] = list;
+                }
+                list.Add((parts[2], c.to));
+            }
+        }
+        bool firstP = true;
+        foreach (var kv in profGroups)
+        {
+            if (!firstP) sb.AppendLine(",");
+            sb.Append("    \"").Append(kv.Key).Append("\": {");
+            for (int k = 0; k < kv.Value.Count; k++)
+            {
+                sb.Append(k > 0 ? ", " : "").Append('"').Append(kv.Value[k].field).Append("\": ").Append(kv.Value[k].val.ToString("R", inv));
+            }
+            sb.Append("}");
+            firstP = false;
+        }
+        sb.AppendLine(firstP ? "  }" : "\n  }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private static System.Text.Json.JsonSerializerOptions ProposalJsonOptions()
+    {
+        var options = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            IncludeFields = true,
+            ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        return options;
+    }
+
+    /// <summary>简单 arg 解析（--key value）=====</summary>
 
     private static string GetArg(string[] args, string key, string defaultValue)
     {
