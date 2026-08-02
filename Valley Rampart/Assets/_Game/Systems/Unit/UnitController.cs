@@ -17,7 +17,7 @@ using UnityEngine;
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(Rigidbody2D))]
-public class UnitController : MonoBehaviour, ISaveable, IDamageable
+public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 {
     // ===== ISaveable =====
 
@@ -41,6 +41,19 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
     public float RunSpeed { get; private set; }
 
     public bool IsAlive => CurrentHp > 0;
+
+    // ===== IUnitHandle 实现（M1 决策核提取，AI.Core 端口；接缝 1/2）=====
+    // 核内只认 IUnitHandle，不引用 UnitController/IDamageable。
+    // IsAlive 显式实现 = 伪 null 检测（UnityEngine.Object 销毁后 this != null 为 false），
+    // 与壳公共 IsAlive（CurrentHp>0）语义不同——核内"存活"=引用有效，壳内"存活"=有血。
+
+    /// <summary>职业属性快照缓存（Initialize 时从 Data 生成，非 NpcProfessionDef 用默认值）</summary>
+    private ProfessionSnapshot _professionSnapshot;
+
+    Vector2X IUnitHandle.Position => new Vector2X(transform.position.x, transform.position.y);
+    Faction IUnitHandle.Faction => Data != null ? Data.faction : Faction.None;
+    bool IUnitHandle.IsAlive => this != null;  // 伪 null 检测（Unity 销毁对象）
+    ProfessionSnapshot IUnitHandle.Profession => _professionSnapshot;
 
     // ===== 空间分区追踪（3.0.1 感知广播用）=====
     private GridCoord _lastGridCoord;
@@ -97,6 +110,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable
         RunSpeed = data.runSpeed;
 
         CurrentHp = MaxHp;
+
+        // M1 决策核提取：职业快照缓存（核内吃 ProfessionSnapshot 不吃 SO）
+        var profession = data as NpcProfessionDef;
+        _professionSnapshot = profession != null ? profession.ToSnapshot() : ProfessionSnapshot.Default;
 
         UnitRegistry.Instance.Register(this);
 

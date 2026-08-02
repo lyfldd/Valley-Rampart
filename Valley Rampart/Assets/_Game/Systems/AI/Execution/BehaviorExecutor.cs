@@ -96,7 +96,7 @@ public class BehaviorExecutor
     private void ExecuteMoveTowards(in BehaviorCommand cmd, float cellSize)
     {
         Vector2 myPos = _self.GetPosition();
-        float dist = Vector2.Distance(myPos, cmd.TargetPos);
+        float dist = Vector2X.Distance(Vector2XUnity.FromUnity(myPos), cmd.TargetPos);
         float arrivalDist = _config.arrivalThreshold * cellSize;
 
         if (dist <= arrivalDist)
@@ -109,7 +109,7 @@ public class BehaviorExecutor
         else
         {
             _arrivedAtFocus = false;
-            _controller.MoveTowards(cmd.TargetPos);
+            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos));
         }
     }
 
@@ -119,7 +119,7 @@ public class BehaviorExecutor
         {
             // 战术短撤：Direction + Distance（撞墙/到达即停）
             _arrivedAtFocus = false;
-            Vector2 dir = cmd.Direction;
+            Vector2 dir = Vector2XUnity.ToUnity(cmd.Direction);
             if (dir.sqrMagnitude > 0.001f)
             {
                 _controller.Move(dir.normalized, run: true);
@@ -136,7 +136,7 @@ public class BehaviorExecutor
         {
             // 战略撤退：MoveTowards(HomePoint)，到达发 MoveComplete
             Vector2 myPos = _self.GetPosition();
-            float dist = Vector2.Distance(myPos, cmd.TargetPos);
+            float dist = Vector2X.Distance(Vector2XUnity.FromUnity(myPos), cmd.TargetPos);
             float arrivalDist = _config.arrivalThreshold * cellSize;
 
             if (dist <= arrivalDist)
@@ -146,7 +146,7 @@ public class BehaviorExecutor
             }
             else
             {
-                _controller.MoveTowards(cmd.TargetPos);
+                _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos));
             }
         }
     }
@@ -154,7 +154,7 @@ public class BehaviorExecutor
     private void ExecuteWorkAt(in BehaviorCommand cmd, float cellSize)
     {
         Vector2 myPos = _self.GetPosition();
-        float dist = Vector2.Distance(myPos, cmd.TargetPos);
+        float dist = Vector2X.Distance(Vector2XUnity.FromUnity(myPos), cmd.TargetPos);
         float arrivalDist = _config.arrivalThreshold * cellSize;
 
         if (dist <= arrivalDist)
@@ -171,7 +171,7 @@ public class BehaviorExecutor
         else
         {
             _arrivedAtFocus = false;
-            _controller.MoveTowards(cmd.TargetPos);
+            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos));
         }
     }
 
@@ -191,7 +191,7 @@ public class BehaviorExecutor
         if (cmd.IsFormationSlot)
         {
             Vector2 myPos = _self.GetPosition();
-            Vector2 slotWorld = cmd.SlotWorld;
+            Vector2 slotWorld = Vector2XUnity.ToUnity(cmd.SlotWorld);
             float dist = Vector2.Distance(myPos, slotWorld);
             float arrivalDist = _config.arrivalThreshold * cellSize;
 
@@ -209,7 +209,7 @@ public class BehaviorExecutor
         else
         {
             // 原松散跟随语义（工人随军等非编队场景）
-            Vector2 anchorPos = cmd.Anchor.transform.position;
+            Vector2 anchorPos = Vector2XUnity.ToUnity(cmd.Anchor.Position);
             Vector2 myPos = _self.GetPosition();
             float dist = Vector2.Distance(myPos, anchorPos);
 
@@ -254,7 +254,7 @@ public class BehaviorExecutor
 
         if (!_wanderHasTarget)
         {
-            _wanderTarget = PickWanderPoint(cmd.TargetPos, cmd.WanderRadius);
+            _wanderTarget = PickWanderPoint(Vector2XUnity.ToUnity(cmd.TargetPos), cmd.WanderRadius);
             _wanderHasTarget = true;
             _wanderStaying = false;
         }
@@ -268,7 +268,7 @@ public class BehaviorExecutor
             {
                 _wanderStaying = false;
                 _wanderStayTimer = 0f;
-                _wanderTarget = PickWanderPoint(cmd.TargetPos, cmd.WanderRadius);
+                _wanderTarget = PickWanderPoint(Vector2XUnity.ToUnity(cmd.TargetPos), cmd.WanderRadius);
             }
         }
         else

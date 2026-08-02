@@ -24,7 +24,7 @@ public class WanderStimulusProvider
     public WanderStimulus GetOrUpdate(in FactorContext ctx)
     {
         _stimulus.Position = ctx.HomePoint;
-        _stimulus.Intensity = ctx.Config != null ? ctx.Config.wanderIntensity : 0.05f;
+        _stimulus.Intensity = ctx.Config.wanderIntensity;  // TuningSnapshot 结构体，恒有效
         return _stimulus;
     }
 

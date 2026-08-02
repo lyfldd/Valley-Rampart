@@ -66,67 +66,37 @@ public class FormationBrain : MonoBehaviour
         Decide();
     }
 
-    /// <summary>意图自决（秒级单次决策，SetIntent 自带 1s 防抖天然节流）</summary>
+    /// <summary>意图自决（秒级单次决策，SetIntent 自带 1s 防抖天然节流）。
+    /// M1 决策核提取：任务价值 + 意图判定纯函数入核（FormationDecisionCore），壳只做输入采集 + 控制器副作用。</summary>
     private void Decide()
     {
         if (_controller.Anchor == null) return;
         Vector2 anchorPos = _controller.Anchor.position;
 
-        // 输入：本地热度 / 跨中区块热点 / 存活率 / 任务价值
+        // 输入：本地热度 / 跨中区块热点 / 存活率 / 任务价值（壳采集，含单例 LODSystem）
         float heat = LODSystem.Instance != null ? LODSystem.Instance.GetHeatAt(anchorPos) : 0f;
         Vector2 hotspot = Vector2.zero;
         bool hasRemoteHotspot = LODSystem.Instance != null
             && LODSystem.Instance.TryGetNearestCombatHotspot(anchorPos, hotspotMaxAge, supportSearchRadius, out hotspot);
         float survival = _controller.MemberCount / (float)FormationDef.StandardSize;
-        float value = EvaluateTaskValue(heat, survival);
 
-        // ① 残编 + 被压 → 撤退（先保住有生力量）
-        if (survival < survivalRetreatGate && heat > heatEngage)
-        {
-            _controller.SetIntent(TacticIntent.Retreat);
-            return;
-        }
+        // 决策核心（核内纯函数，可测试）：
+        // ① 残编+被压->撤 ② 远程热点+本地无激战->支援 ③ 高价值+敌压近->冲锋 ④ 敌接近->防守 ⑤ 低热度->维持
+        float value = FormationDecisionCore.EvaluateTaskValue(
+            _controller.isGarrison,
+            _controller.AdvanceTarget != Vector2.zero,
+            heat, survival,
+            _config != null ? _config.ToSnapshot() : default,
+            survivalRetreatGate);
+        var decision = FormationDecisionCore.DecideIntent(
+            heat, survival, value, hasRemoteHotspot,
+            heatEngage, heatCharge, survivalRetreatGate,
+            _config != null ? _config.chargeValueGate : 0.6f);
 
-        // ② 远处战斗热点 + 本地无激战 → 支援（编队 B 支援编队 A：朝热点推进）
-        if (hasRemoteHotspot && heat < heatEngage)
-        {
+        // 壳执行控制器副作用（推进方向 + 切意图）
+        if (decision.ShouldAdvance)
             _controller.SetAdvanceTarget(hotspot);
-            _controller.SetIntent(TacticIntent.Charge);
-            return;
-        }
-
-        // ③ 高价值 + 敌压近 → 冲锋压上（军队敢承受代价：任务价值高，个体撤退被军令压住）
-        if (heat > heatCharge && value > (_config != null ? _config.chargeValueGate : 0.6f))
-        {
-            _controller.SetIntent(TacticIntent.Charge);
-            return;
-        }
-
-        // ④ 敌接近 → 防守
-        if (heat > heatEngage)
-        {
-            _controller.SetIntent(TacticIntent.Defense);
-        }
-        // ⑤ 低热度 → 维持现状（不频繁切换）
-    }
-
-    /// <summary>
-    /// 任务价值动态评估（§4.2）：锚点类型定基础值 + 动态修正。
-    /// 基础值：守城编队中（0.5）/ 将军有推进目标=攻城中高（0.8）/ 无目标=巡逻低（0.2）——AttentionTuningConfig 可调。
-    /// 动态：敌压近升价值（战斗紧迫），残编降价值（保命优先）。
-    /// </summary>
-    private float EvaluateTaskValue(float heat, float survival)
-    {
-        float baseValue;
-        if (_controller.isGarrison)
-            baseValue = _config != null ? _config.taskValueGarrison : 0.5f;   // 守城中：固守待敌，被打狠才撤
-        else if (_controller.AdvanceTarget != Vector2.zero)
-            baseValue = _config != null ? _config.taskValueAttack : 0.8f;   // 攻城中：带伤推进，个体撤退阈值被编队抵抗抬高
-        else
-            baseValue = _config != null ? _config.taskValuePatrol : 0.2f;   // 巡逻/待命：一触即撤，不恋战
-
-        if (heat > (_config != null ? _config.taskValueHeatBoostGate : 0.5f)) baseValue += _config != null ? _config.taskValueHeatBoost : 0.2f;
-        if (survival < survivalRetreatGate) baseValue -= _config != null ? _config.taskValueSurvivalPenalty : 0.3f;
-        return Mathf.Clamp01(baseValue);
+        if (decision.Valid)
+            _controller.SetIntent(decision.Intent);
     }
 }

@@ -39,7 +39,8 @@ public class FollowStimulusProvider
         _stimulus.Anchor = anchor;
         _stimulus.Priority = priority;
         _stimulus.Intensity = intensity;
-        _stimulus.SlotOffset = slotOffset;
+        // 核内槽位偏移为 Vector2IntX（M1 决策核提取），壳侧 Vector2Int 转核内类型
+        _stimulus.SlotOffset = new Vector2IntX(slotOffset.x, slotOffset.y);
         // 3.0.1_8 §6.6 君主令载体：君主下令不顾一切时置位，个体永不弃任务
         _stimulus.IsRoyalCommand = royalCommand;
     }
@@ -48,7 +49,7 @@ public class FollowStimulusProvider
     public void ClearAnchor()
     {
         _stimulus.Anchor = null;
-        _stimulus.SlotOffset = Vector2Int.zero;
+        _stimulus.SlotOffset = Vector2IntX.zero;
     }
 
     /// <summary>
@@ -65,6 +66,6 @@ public class FollowStimulusProvider
     public void Reset()
     {
         _stimulus.Anchor = null;
-        _stimulus.SlotOffset = Vector2Int.zero;
+        _stimulus.SlotOffset = Vector2IntX.zero;
     }
 }

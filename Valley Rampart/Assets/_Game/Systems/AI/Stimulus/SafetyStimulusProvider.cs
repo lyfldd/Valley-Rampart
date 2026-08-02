@@ -28,7 +28,8 @@ public class SafetyStimulusProvider
         _stimulus.Position = ctx.HomePoint;
 
         // 3.0.1_4 §6.3：到家判定用位置距离（不依赖焦点，语义正确——到家了归巢驱力消失）
-        bool atHome = Vector2.Distance(_stimulus.Position, ctx.SelfPos)
+        // M1 决策核提取：核内位置为 Vector2X，距离用 Vector2X.Distance
+        bool atHome = Vector2X.Distance(_stimulus.Position, ctx.SelfPos)
                       <= ctx.Config.arrivalThreshold * ctx.CellSize;
         if (atHome)
         {
@@ -42,7 +43,7 @@ public class SafetyStimulusProvider
                 ctx.Config.nightPullWeight,
                 ctx.HpRatio,
                 ctx.Config.woundPullWeight,
-                ctx.Profession != null ? ctx.Profession.professionPullScale : 1f);
+                ctx.Profession.professionPullScale);  // ProfessionSnapshot 结构体，恒有效
         }
         return _stimulus;
     }

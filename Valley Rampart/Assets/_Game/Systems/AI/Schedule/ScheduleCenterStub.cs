@@ -94,7 +94,7 @@ public class ScheduleCenterStub : MonoBehaviour
             var building = storage.GetComponent<Building>();
             Vector2 pos = building != null ? (Vector2)building.transform.position : (Vector2)storage.transform.position;
             worker.AddTaskStimulus(new TaskStimulus(
-                TaskPriority.B, pos, transportIntensity,
+                TaskPriority.B, Vector2XUnity.FromUnity(pos), transportIntensity,
                 expiry: Time.time + transportExpiry, issuer: storage));
             _transporting.Add(storage);
             Debug.Log($"[调度中心] 派发搬运任务 → {worker.name} @ {pos}（{storage.resourceType} 存量 {storage.storedAmount}）");

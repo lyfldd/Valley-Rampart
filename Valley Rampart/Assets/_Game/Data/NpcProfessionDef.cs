@@ -57,4 +57,35 @@ public class NpcProfessionDef : UnitData
     [Header("漫游（3.0.1_4 §6.3）")]
     [Tooltip("漫游安全半径（格数，HomePoint 周围随机取点范围）。工人晃悠大 / 士兵小")]
     public float wanderRadiusCells = 2f;
+
+    /// <summary>
+    /// 生成核内快照（M1 决策核提取，接缝 4）。
+    /// 核内（AI.Core）只吃 ProfessionSnapshot，不引用本 SO。字段机械拷贝，改字段需同步 ProfessionSnapshot。
+    /// 注：Occupation（壳类型）不入快照——核内决策逻辑不消费职业枚举。
+    /// </summary>
+    public ProfessionSnapshot ToSnapshot()
+    {
+        return new ProfessionSnapshot
+        {
+            faction = faction,
+            walkSpeed = walkSpeed,
+            runSpeed = runSpeed,
+            maxHp = maxHp,
+            attack = attack,
+            defense = defense,
+            attackRange = attackRange,
+            attackCD = attackCD,
+            isRanged = isRanged,
+            projectileSpeed = projectileSpeed,
+            perceptionRadius = perceptionRadius,
+            threatSensitivity = threatSensitivity,
+            courage = courage,
+            obedience = obedience,
+            retreatThresholdOffset = retreatThresholdOffset,
+            maxHitCount = maxHitCount,
+            professionPullScale = professionPullScale,
+            equipmentSlotCount = equipmentSlotCount,
+            wanderRadiusCells = wanderRadiusCells,
+        };
+    }
 }

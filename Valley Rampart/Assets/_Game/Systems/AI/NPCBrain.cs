@@ -103,7 +103,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private float _nearestDist = float.MaxValue;
 
     // ===== 3.0.1_8 §六 放弃任务因子：追击状态跟踪 =====
-    private IDamageable _chaseTarget;   // 当前追击目标（焦点威胁源，切换时重置计时）
+    private IUnitHandle _chaseTarget;   // 当前追击目标（焦点威胁源，切换时重置计时；M1 决策核提取改 IUnitHandle）
     private float _chaseStartTime;      // 追击开始时间戳（超时成本用）
     private float _lastChaseDist;       // 上帧追击距离（距离拉大成本用）
 
@@ -176,7 +176,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     public int DebugHitCount => _lastCtx.HitCount;
     public float DebugLastRaw => _lastRaw;
     public float DebugSafetyUrge => _safetyProvider.Stimulus.Intensity;
-    public Vector2 DebugHomePoint => _lastCtx.HomePoint;
+    public Vector2 DebugHomePoint => Vector2XUnity.ToUnity(_lastCtx.HomePoint);
 
     // ===== 初始化 =====
     public void Init(NpcProfessionDef profession)
@@ -188,14 +188,15 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         if (_config == null)
             Debug.LogError("[NPCBrain] 未找到 AttentionTuningConfig！请创建 Resources/Config/AttentionTuningConfig.asset");
 
-        // 初始化记忆组件群
-        _threatHysteresis = new ThreatHysteresisComponent(_config);
-        _protectionHysteresis = new ProtectionHysteresisComponent(_config);
+        // 初始化记忆组件群（M1 决策核提取：组件吃 TuningSnapshot 快照，接缝 4）
+        _threatHysteresis = new ThreatHysteresisComponent(_config.ToSnapshot());
+        _protectionHysteresis = new ProtectionHysteresisComponent(_config.ToSnapshot());
         _hitCooldown = new HitCooldownStateMachine();
         _memoryComponents = new IMemoryComponent[] { _threatHysteresis, _protectionHysteresis, _hitCooldown };
 
-        // 3.0.1_4：注入全局调参引用（破阵博弈/漫游用）
-        _attention.SetConfig(_config);
+        // 3.0.1_4：注入全局调参快照（破阵博弈/漫游用）+ 世界查询（接缝 3：GridSystem 单例 -> 注入）
+        _attention.SetConfig(_config.ToSnapshot());
+        _attention.SetWorldQuery(new UnityWorldQueryAdapter());
 
         // 初始化 BehaviorExecutor
         _executor = new BehaviorExecutor(_controller, _self, this, _config);
@@ -355,6 +356,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             var enemy = _nearbyEnemies[i];
             if (enemy == null || IsDestroyed(enemy) || enemy.CurrentHp <= 0) continue;
+            // M1 决策核提取：ThreatStimulus.Enemy 改 IUnitHandle（接缝 1），单位双接口转换
+            var enemyHandle = enemy as IUnitHandle;
+            if (enemyHandle == null) continue;  // 非单位 IDamageable（感知查询仅返回单位，防御性跳过）
 
             float dist = Vector2.Distance(myPos, enemy.GetPosition());
             if (dist < _nearestDist) _nearestDist = dist;
@@ -362,7 +366,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             float intensity = Mathf.Max(1f, _config.threatIntensityMax * (1f - dist / perceptionWorld));
 
             var stimulus = new ThreatStimulus(
-                enemy,
+                enemyHandle,
                 threatLevel: (int)_threatHysteresis.CurrentLevel,
                 intensity: intensity,
                 expiry: currentTime + _config.threatDecayTime
@@ -381,7 +385,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             float intensity = Mathf.Max(1f, baseIntensity * Mathf.Exp(-delta / _config.traceDecayTime));
 
             var trace = new ThreatStimulus(
-                _lastAggressor,
+                _lastAggressor as IUnitHandle,
                 threatLevel: Mathf.Max((int)_threatHysteresis.CurrentLevel, 1),  // 受击至少警戒
                 intensity: intensity,
                 expiry: currentTime + _config.traceExpiry
@@ -400,7 +404,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             {
                 _attention.AddStimulus(new TaskStimulus(
                     TaskPriority.C,                     // 杂务级（支援）
-                    targetPos: hotspot,                 // 热点即目标位置
+                    targetPos: Vector2XUnity.FromUnity(hotspot),  // 热点即目标位置
                     intensity: _config.hotspotSupportIntensity,  // > Safety 0.5，< Follow S 级 4.5
                     expiry: currentTime + _config.traceDecayTime,
                     issuer: _lodSystem                  // 区块警报来源
@@ -460,7 +464,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
         // ③ 纯管线：L1 -> L2 -> L3（无副作用）
         _attention.Update(currentTime, dt);
-        ctx.FocusDecision = L1FocusEvaluator.Evaluate(_attention, in ctx);
+        // M1 决策核提取：L1 改为纯函数签名（输入=注意力系统当前产物），行为不变
+        ctx.FocusDecision = L1FocusEvaluator.Evaluate(_attention.CurrentFocus, _attention.CurrentStimulus, in ctx);
         // 3.0.1_8 §六：放弃任务因子需 L1 焦点判追击状态，故在 L2 前组装
         ctx.AbandonTaskFactor = ComputeAbandonTaskFactor(in ctx);
         // 3.0.1_8 §八：工作因子需 L1 焦点判任务类型（TaskStimulus 按优先级归一化），L2 抗打断
@@ -495,12 +500,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         float hpRatio = _self.MaxHp > 0 ? (float)_self.CurrentHp / _self.MaxHp : 0f;
         bool isNight = IsNight();
         Vector2 homePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
+        // M1 决策核提取：核内吃快照（接缝 4），壳每 tick 从 SO 快照保证滑块实时性
         return new FactorContext
         {
-            Self = _self,
-            Profession = _profession,
-            Config = _config,
-            SelfPos = _self.GetPosition(),
+            Self = _self as IUnitHandle,
+            Profession = _profession != null ? _profession.ToSnapshot() : ProfessionSnapshot.Default,
+            Config = _config != null ? _config.ToSnapshot() : default,
+            SelfPos = Vector2XUnity.FromUnity(_self.GetPosition()),
             HpRatio = hpRatio,
             IsNight = isNight,
             NightFactor = GetNightFactor(),
@@ -511,10 +517,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             AttackWorldRange = _profession.attackRange * GetCellSize(),
             CellSize = GetCellSize(),
             CurrentTime = Time.time,
-            HomePoint = homePoint,
+            HomePoint = Vector2XUnity.FromUnity(homePoint),
             // 3.0.1_3：编队槽位（守阵追击 clamp 用，§4.1）
             HasFormationSlot = _followProvider.IsActive && _followProvider.Stimulus.IsFormationSlot,
-            FormationSlotWorld = ResolveFormationSlotWorld(),
+            FormationSlotWorld = Vector2XUnity.FromUnity(ResolveFormationSlotWorld()),
             // 3.0.1_LOD §3.2：区块威胁热度（环境型威胁因子；LODSystem 未挂载=0 行为不变）
             RegionHeat = _lodSystem != null ? _lodSystem.GetHeatAt(_self.GetPosition()) : 0f,
             // 3.0.1_8 综合因子（L2 在 ③ 阶段读取，此处用上一帧 rawFactor = _lastRaw，与量化器消费时序一致）：
@@ -569,10 +575,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private float ComputeAbandonTaskFactor(in FactorContext ctx)
     {
         // 仅战斗单位 + 焦点是威胁刺激（追击/交战中）才计算
-        IDamageable target = null;
+        IUnitHandle target = null;
         if (_profession != null && _profession.attack > 0
             && ctx.FocusDecision.IsValid && ctx.FocusDecision.Focus is ThreatStimulus ts
-            && ts.Enemy != null && !IsDestroyed(ts.Enemy))
+            && ts.Enemy != null && ts.Enemy.IsAlive)  // IsAlive 含伪 null 检测（接缝 2）
         {
             target = ts.Enemy;
         }
@@ -597,7 +603,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         }
 
         float chaseTime = Time.time - _chaseStartTime;
-        float distNow = Vector2.Distance(ctx.SelfPos, target.GetPosition());
+        float distNow = Vector2X.Distance(ctx.SelfPos, target.Position);
         bool distGrow = _lastChaseDist > 0f && distNow > _lastChaseDist * _config.abandonDistGrowRatio;
         _lastChaseDist = distNow;
 
@@ -644,7 +650,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         var stim = _followProvider.Stimulus;
         if (!stim.IsFormationSlot || stim.Anchor == null) return Vector2.zero;
         float cs = GetCellSize();
-        return (Vector2)stim.Anchor.transform.position
+        // M1 决策核提取：锚点位置经 IUnitHandle.Position（Vector2X）转回壳 Vector2
+        return Vector2XUnity.ToUnity(stim.Anchor.Position)
             + new Vector2(stim.SlotOffset.x * cs, stim.SlotOffset.y * cs);
     }
 
@@ -664,13 +671,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             // 路径1：威胁焦点 + 在射程内（原逻辑）
             if (focus.IsValid && focus.Focus is ThreatStimulus ts
-                && ts.Enemy != null && !IsDestroyed(ts.Enemy) && ts.Enemy.CurrentHp > 0)
+                && ts.Enemy != null && ts.Enemy.IsAlive && ts.Enemy.CurrentHp > 0)
             {
-                float dist = Vector2.Distance(ctx.SelfPos, ts.Enemy.GetPosition());
+                float dist = Vector2X.Distance(ctx.SelfPos, ts.Enemy.Position);
                 if (dist <= ctx.AttackWorldRange)
                 {
                     shouldAttack = true;
-                    targetEnemy = ts.Enemy;
+                    targetEnemy = ts.Enemy as IDamageable;  // 单位双接口（UnitController），供 DamageSystem
                 }
             }
             // 路径2：编队跟随焦点（FollowStimulus）或无威胁焦点时，感知范围内最近敌人在射程内也开火
@@ -683,7 +690,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 {
                     var e = _nearbyEnemies[i];
                     if (e == null || IsDestroyed(e) || e.CurrentHp <= 0) continue;
-                    float d = Vector2.Distance(ctx.SelfPos, e.GetPosition());
+                    float d = Vector2X.Distance(ctx.SelfPos, Vector2XUnity.FromUnity(e.GetPosition()));
                     if (d < nearestDist) { nearestDist = d; nearest = e; }
                 }
                 if (nearest != null && nearestDist <= ctx.AttackWorldRange)

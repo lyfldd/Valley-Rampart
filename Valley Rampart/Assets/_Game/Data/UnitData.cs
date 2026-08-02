@@ -11,14 +11,8 @@ public enum Occupation
     Civilian    // 平民：非战斗单位，从事资源采集/建造等
 }
 
-// 阵营枚举。决定单位的敌我关系和所属势力。
-// None 用于未初始化/中立单位；Human_Player 和 Undead 互为敌对立营。
-public enum Faction
-{
-    None,           // 无阵营：未初始化或中立单位
-    Human_Player,   // 玩家阵营：玩家控制的单位
-    Undead          // 亡灵阵营：AI 控制的敌方单位
-}
+// 注意：Faction 枚举已迁入 AI.Core/Ports/Faction.cs（M1 决策核提取，asmdef 边界要求），
+// 全局命名空间不变，本文件及全部壳代码的 Faction 引用自动解析到核内类型。
 
 // 单位数据资产（ScriptableObject）
 // 定义单位的基础属性模板，由 UnitController.Initialize 读取并应用到运行时实例。
