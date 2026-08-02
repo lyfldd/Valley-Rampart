@@ -22,6 +22,9 @@
                     <ui:VisualElement name="tab-spawn" class="tab-button">
                         <ui:Label text="放置士兵" class="tab-label" />
                     </ui:VisualElement>
+                    <ui:VisualElement name="tab-formation" class="tab-button">
+                        <ui:Label text="编队操作" class="tab-label" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- Tab 内容：AI 可视化（原面板） -->
@@ -33,6 +36,13 @@
                 <ui:VisualElement name="spawn-content" class="tab-content" style="display: none;">
                     <ui:VisualElement name="spawn-buttons" class="spawn-buttons-container" />
                     <ui:Label name="spawn-hint-text" text="选择单位类型后点击场景放置" class="spawn-hint" />
+                </ui:VisualElement>
+
+                <!-- Tab 内容：编队操作（热键 4/5/7 迁入，E 面板无此功能） -->
+                <ui:VisualElement name="formation-content" class="tab-content" style="display: none;">
+                    <ui:Button name="formation-garrison-button" text="守城编队（热键4）" class="dev-button" />
+                    <ui:Button name="formation-disband-button" text="解散将军编队（热键5）" class="dev-button" />
+                    <ui:Button name="formation-kill-test-button" text="残编测试（热键7）" class="dev-button" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

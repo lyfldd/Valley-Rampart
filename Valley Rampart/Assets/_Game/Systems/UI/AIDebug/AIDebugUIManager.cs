@@ -34,14 +34,20 @@ public class AIDebugUIManager : MonoBehaviour
     // Tab 切换
     private VisualElement _tabAIDebug;
     private VisualElement _tabSpawn;
+    private VisualElement _tabFormation;
     private VisualElement _aiDebugContent;
     private VisualElement _spawnContent;
     private VisualElement _spawnButtonsContainer;
     private Label _spawnHintText;
+    private VisualElement _formationContent;
+    private Button _garrisonButton;      // 守城编队（热键 4）
+    private Button _disbandButton;       // 解散将军编队（热键 5）
+    private Button _killTestButton;      // 残编测试（热键 7）
 
     // 放置模式状态
     private bool _isSpawnMode = false;
-    private bool _isSpawnTabActive = false;  // 当前是否激活"放置士兵"Tab
+    private bool _isSpawnTabActive = false;      // 当前是否激活"放置士兵"Tab
+    private bool _isFormationTabActive = false;  // 当前是否激活"编队操作"Tab
     private DebugSpawnType? _selectedSpawnType = null;
 
     // 左上角 AI 状态面板
@@ -235,15 +241,27 @@ public class AIDebugUIManager : MonoBehaviour
         // Tab 切换
         _tabAIDebug = _root.Q<VisualElement>("tab-ai-debug");
         _tabSpawn = _root.Q<VisualElement>("tab-spawn");
+        _tabFormation = _root.Q<VisualElement>("tab-formation");
         _aiDebugContent = _root.Q<VisualElement>("ai-debug-content");
         _spawnContent = _root.Q<VisualElement>("spawn-content");
         _spawnButtonsContainer = _root.Q<VisualElement>("spawn-buttons");
         _spawnHintText = _root.Q<Label>("spawn-hint-text");
+        _formationContent = _root.Q<VisualElement>("formation-content");
+        _garrisonButton = _root.Q<Button>("formation-garrison-button");
+        _disbandButton = _root.Q<Button>("formation-disband-button");
+        _killTestButton = _root.Q<Button>("formation-kill-test-button");
 
         if (_tabAIDebug != null)
             _tabAIDebug.RegisterCallback<ClickEvent>(OnTabAIDebugClicked);
         if (_tabSpawn != null)
             _tabSpawn.RegisterCallback<ClickEvent>(OnTabSpawnClicked);
+        if (_tabFormation != null)
+            _tabFormation.RegisterCallback<ClickEvent>(OnTabFormationClicked);
+
+        // 编队操作（热键 4/5/7 迁入）
+        if (_garrisonButton != null) _garrisonButton.clicked += OnGarrisonClicked;
+        if (_disbandButton != null) _disbandButton.clicked += OnDisbandClicked;
+        if (_killTestButton != null) _killTestButton.clicked += OnKillTestClicked;
 
         // 动态生成放置类型按钮
         BuildSpawnButtons();
@@ -370,9 +388,9 @@ public class AIDebugUIManager : MonoBehaviour
 
             // ESC 由 UIManager.HandleEscape() 通过栈条目处理，此处不重复
         }
-        else if (_isSpawnTabActive)
+        else if (_isSpawnTabActive || _isFormationTabActive)
         {
-            // 放置士兵 Tab 激活时，禁用 AI 可视化功能（不处理 NPC 选择）
+            // 放置士兵/编队操作 Tab 激活时，禁用 AI 可视化功能（不处理 NPC 选择）
             // 只处理退出放置模式（右键/ESC 由栈条目处理）
         }
         else
@@ -424,7 +442,7 @@ public class AIDebugUIManager : MonoBehaviour
         // 左上角 AI 状态面板：有选中 NPC（放置模式或放置士兵 Tab 激活时隐藏）
         if (_statusPanelRoot != null)
         {
-            bool showStatusPanel = hasSelection && !_isSpawnMode && !_isSpawnTabActive;
+            bool showStatusPanel = hasSelection && !_isSpawnMode && !_isSpawnTabActive && !_isFormationTabActive;
             _statusPanelRoot.style.display = showStatusPanel ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
@@ -529,49 +547,131 @@ public class AIDebugUIManager : MonoBehaviour
     private void OnTabAIDebugClicked(ClickEvent evt)
     {
         if (_isSpawnMode) return; // 放置模式下不允许切 Tab
-        SwitchTab(true);
+        SwitchTab(0);
     }
 
     private void OnTabSpawnClicked(ClickEvent evt)
     {
         if (_isSpawnMode) return;
-        SwitchTab(false);
+        SwitchTab(1);
     }
 
-    private void SwitchTab(bool showAIDebug)
+    private void OnTabFormationClicked(ClickEvent evt)
     {
-        _isSpawnTabActive = !showAIDebug;
+        if (_isSpawnMode) return;
+        SwitchTab(2);
+    }
 
-        if (showAIDebug)
+    /// <summary>三 Tab 切换：0=AI 可视化，1=放置士兵，2=编队操作。</summary>
+    private void SwitchTab(int index)
+    {
+        _isSpawnTabActive = index == 1;
+        _isFormationTabActive = index == 2;
+
+        // 内容区显隐
+        if (_aiDebugContent != null) _aiDebugContent.style.display = index == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_spawnContent != null) _spawnContent.style.display = index == 1 ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_formationContent != null) _formationContent.style.display = index == 2 ? DisplayStyle.Flex : DisplayStyle.None;
+
+        // Tab 高亮（放置模式下非放置 Tab 置灰）
+        SetTabActive(_tabAIDebug, index == 0);
+        SetTabActive(_tabSpawn, index == 1);
+        SetTabActive(_tabFormation, index == 2);
+    }
+
+    private void SetTabActive(VisualElement tab, bool active)
+    {
+        if (tab == null) return;
+        if (active)
         {
-            if (_aiDebugContent != null) _aiDebugContent.style.display = DisplayStyle.Flex;
-            if (_spawnContent != null) _spawnContent.style.display = DisplayStyle.None;
-            if (_tabAIDebug != null)
-            {
-                _tabAIDebug.AddToClassList("tab-active");
-                _tabAIDebug.RemoveFromClassList("tab-disabled");
-            }
-            if (_tabSpawn != null)
-            {
-                _tabSpawn.RemoveFromClassList("tab-active");
-                _tabSpawn.RemoveFromClassList("tab-disabled");
-            }
+            tab.AddToClassList("tab-active");
+            tab.RemoveFromClassList("tab-disabled");
         }
         else
         {
-            if (_aiDebugContent != null) _aiDebugContent.style.display = DisplayStyle.None;
-            if (_spawnContent != null) _spawnContent.style.display = DisplayStyle.Flex;
-            if (_tabAIDebug != null)
-            {
-                _tabAIDebug.RemoveFromClassList("tab-active");
-                _tabAIDebug.AddToClassList("tab-disabled");
-            }
-            if (_tabSpawn != null)
-            {
-                _tabSpawn.AddToClassList("tab-active");
-                _tabSpawn.RemoveFromClassList("tab-disabled");
-            }
+            tab.RemoveFromClassList("tab-active");
+            if (_isSpawnMode) tab.AddToClassList("tab-disabled");
+            else tab.RemoveFromClassList("tab-disabled");
         }
+    }
+
+    // ===== 编队操作（热键 4/5/7 迁入，原 CombatTestSpawner 逻辑） =====
+
+    /// <summary>守城编队（热键 4）：创建/切换守城编队，绑城墙锚点，按标准配额招募。</summary>
+    private void OnGarrisonClicked()
+    {
+        GameObject wallAnchor = GameObject.Find("WallAnchor_Left");
+        if (wallAnchor == null)
+        {
+            Debug.LogWarning("[AIDebugUI] 未找到 WallAnchor_Left，无法创建守城编队。");
+            return;
+        }
+        FormationController garrison = null;
+        var all = FindObjectsByType<FormationController>(FindObjectsSortMode.None);
+        foreach (var f in all)
+        {
+            if (f != null && f.isGarrison) { garrison = f; break; }
+        }
+        if (garrison == null)
+        {
+            var go = new GameObject("GarrisonController");
+            go.transform.position = wallAnchor.transform.position;
+            garrison = go.AddComponent<FormationController>();
+            garrison.formationTable = Resources.Load<FormationTable>("Formations/FormationTable");
+            garrison.InitGarrison(wallAnchor.transform);
+        }
+        garrison.RecruitStandard();
+        Debug.Log("[AIDebugUI] 守城编队组队完成（无将军，城墙锚点）。");
+    }
+
+    /// <summary>解散活动将军编队（热键 5）：全体状态清理（ClearFormationState）。</summary>
+    private void OnDisbandClicked()
+    {
+        var general = FindActiveGeneralFormation();
+        if (general == null)
+        {
+            Debug.Log("[AIDebugUI] 无活跃将军编队（将军已阵亡/未生成/编队已解散）。");
+            return;
+        }
+        general.DisbandAll();
+        Debug.Log("[AIDebugUI] 将军编队解散，全体状态清理（ClearFormationState）。");
+    }
+
+    /// <summary>残编测试（热键 7）：杀活动将军编队第一个近战，触发 1s 防抖重排。</summary>
+    private void OnKillTestClicked()
+    {
+        var general = FindActiveGeneralFormation();
+        if (general == null)
+        {
+            Debug.Log("[AIDebugUI] 无活跃将军编队（将军已阵亡/未生成/编队已解散）。");
+            return;
+        }
+        var brains = FindObjectsByType<NPCBrain>(FindObjectsSortMode.None);
+        foreach (var brain in brains)
+        {
+            if (!brain.HasFormationSlot) continue;
+            var unit = brain.GetComponent<UnitController>();
+            if (unit == null || unit.Data == null) continue;
+            if (unit.Data.occupation != Occupation.Warrior) continue;
+            unit.TakeDamage(unit.CurrentHp);
+            Debug.Log("[AIDebugUI] 残编测试：杀掉近战士兵，触发 1s 防抖重排。");
+            return;
+        }
+        Debug.Log("[AIDebugUI] 无可杀的近战编队成员。");
+    }
+
+    /// <summary>查找当前活跃的将军编队（非守城 + 将军存活 + 有成员）。</summary>
+    private FormationController FindActiveGeneralFormation()
+    {
+        var formations = FindObjectsByType<FormationController>(FindObjectsSortMode.None);
+        foreach (var f in formations)
+        {
+            if (f == null || f.isGarrison) continue;
+            if (f.GeneralUnit == null || !f.GeneralUnit.IsAlive) continue;
+            if (f.MemberCount <= 0) continue;
+            return f;
+        }
+        return null;
     }
 
     // ===== 放置按钮构建 =====
