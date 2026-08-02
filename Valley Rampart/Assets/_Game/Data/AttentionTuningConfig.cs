@@ -23,20 +23,8 @@ public class AttentionTuningConfig : ScriptableObject
     [Header("撤退阈值（乙层）")]
     [Tooltip("基础撤退阈值（威胁 2 级触发撤退判定）")]
     public float retreatThresholdBase = 2f;
-    [Tooltip("S 级任务撤退阈值加成（更难被打断）")]
-    public float retreatBonusS = 2f;
-    [Tooltip("A 级任务撤退阈值加成")]
-    public float retreatBonusA = 1f;
-    [Tooltip("B 级任务撤退阈值加成")]
-    public float retreatBonusB = 0.5f;
-    [Tooltip("C 级任务撤退阈值加成")]
-    public float retreatBonusC = 0f;
 
     [Header("威胁滞回（6.4 输入侧滞回）")]
-    [Tooltip("威胁因子 X 升级阈值（1->2/2->3 升级：X 持续 > 此值）")]
-    public float threatUpgradeThreshold = 0.6f;
-    [Tooltip("威胁因子 X 降级阈值（2->1/3->2 降级：X 持续 < 此值）")]
-    public float threatDowngradeThreshold = 0.4f;
     [Tooltip("威胁升级持续确认时间（秒）")]
     public float threatUpgradeConfirmTime = 0.3f;
     [Tooltip("威胁降级持续确认时间（秒）")]
@@ -47,14 +35,6 @@ public class AttentionTuningConfig : ScriptableObject
     public int protectionFriendThreshold = 3;
     [Tooltip("友军数失效退出保护（<此值）")]
     public int protectionLossThreshold = 1;
-
-    [Header("谱系驻留（6.4 状态侧驻留）")]
-    [Tooltip("谨慎态最小驻留时间（秒）")]
-    public float cautiousMinDwell = 1.0f;
-    [Tooltip("撤退态最小驻留时间（秒）")]
-    public float retreatMinDwell = 1.5f;
-    [Tooltip("撤退到安全区后停留确认时间（秒）")]
-    public float safetyConfirmTime = 2.0f;
 
     [Header("威胁衰减")]
     [Tooltip("敌人离开后威胁线性衰减到 0 的时间（秒）")]
@@ -87,10 +67,6 @@ public class AttentionTuningConfig : ScriptableObject
     public int baseFollowCells = 2;
     [Tooltip("威胁跟随松散度：威胁越高跟得越松")]
     public float followScatterWeight = 0.5f;
-
-    [Header("姿态速度（3.0.1_2 §4.2 谱系 1 留口）")]
-    [Tooltip("警惕态速度系数（谱系 1 留口，P0 未实装）")]
-    public float alertSpeedScale = 0.9f;
 
     [Header("受击冷却状态机（3.0.1_2 §13.3）")]
     [Tooltip("驻留刺激源强度（Caution 态注入，需 > 折后任务强度。按层内强度 [0,1] 标定；若母文档 0-100 标定需同步放大，P1 统一时再校）")]
@@ -149,8 +125,6 @@ public class AttentionTuningConfig : ScriptableObject
     public float breakConfirmUp = 0.3f;
     [Tooltip("破阵降级确认（秒，持续低于降阈的时间）")]
     public float breakConfirmDown = 0.5f;
-    [Tooltip("军令强度归一化基准（S 级军令值，分母 formationIntensity/此值）")]
-    public float breakFormationBase = 4.5f;
 
     [Header("受击溯源（3.0.1_4 §2.3）")]
     [Tooltip("溯源基础强度：单次受击的溯源威胁强度")]
@@ -238,6 +212,54 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("工作抵抗系数：effectiveThreat 削减 = WorkFactor × 此值（半效 0.5，正在干关键活更抗打断）")]
     public float workResistScale = 0.5f;
 
+    [Header("L2 连续仲裁常数（3.0.1_8 §五，防硬编码）")]
+    [Tooltip("低威胁→FullPower 警戒线：ThreatFactor < 此值直接全力执行（原硬编码 0.3）")]
+    public float l2FullPowerThreatGate = 0.3f;
+    [Tooltip("编队抵抗基础系数：formation × (此值 + obedience/100)，原硬编码 0.5")]
+    public float l2ResistBase = 0.5f;
+    [Tooltip("编队抵抗权重：编队抵抗 × 此值（核心手感参数，原硬编码 0.4）")]
+    public float l2FormationResistScale = 0.4f;
+    [Tooltip("总抗性上限：编队+工作抵抗总和封顶（防负，原硬编码 0.95）")]
+    public float l2ResistCap = 0.95f;
+    [Tooltip("撤退阈值量纲除数：档位量纲(0-3) → 连续量纲(0-1) 除以此值（原硬编码 /3）")]
+    public float thresholdScaleDivisor = 3f;
+    [Tooltip("撤退阈值保底：换算后下限（防除零/过低，原硬编码 0.2）")]
+    public float thresholdMinFloor = 0.2f;
+
+    [Header("军队级任务价值（3.0.1_5 §4.2 FormationBrain，防硬编码）")]
+    [Tooltip("守城编队任务价值基础值（原硬编码 0.5）")]
+    public float taskValueGarrison = 0.5f;
+    [Tooltip("攻城编队任务价值基础值（有推进目标，原硬编码 0.8）")]
+    public float taskValueAttack = 0.8f;
+    [Tooltip("巡逻编队任务价值基础值（无目标待命，原硬编码 0.2）")]
+    public float taskValuePatrol = 0.2f;
+    [Tooltip("冲锋价值门限：任务价值 > 此值且敌压近才冲锋（原硬编码 0.6）")]
+    public float chargeValueGate = 0.6f;
+    [Tooltip("敌压近升价值触发线：本地热度 > 此值则任务价值 + 增量（原硬编码 0.5）")]
+    public float taskValueHeatBoostGate = 0.5f;
+    [Tooltip("敌压近升价值增量（原硬编码 +0.2）")]
+    public float taskValueHeatBoost = 0.2f;
+    [Tooltip("残编降价值：存活率 < 残编门限时任务价值 − 此值（原硬编码 −0.3）")]
+    public float taskValueSurvivalPenalty = 0.3f;
+
+    [Header("威胁刺激标定（NPCBrain/ThreatAssessment，防硬编码）")]
+    [Tooltip("威胁刺激强度标定上限（0-100 量纲，贴脸满强度，原硬编码 ×100）")]
+    public float threatIntensityMax = 100f;
+    [Tooltip("敌人数量因子满编数：enemyCount/此值 归一（原硬编码 /5）")]
+    public float countFactorFullCount = 5f;
+    [Tooltip("贴脸 rawFactor 保底：敌入攻击距离时 rawFactor 不低于此值（原硬编码 0.5）")]
+    public float closeRangeMinRaw = 0.5f;
+    [Tooltip("热点支援刺激强度：感知外战斗热点引导支援，>Safety 未到达 0.5 且 <Follow S 级 4.5（原硬编码 0.6）")]
+    public float hotspotSupportIntensity = 0.6f;
+
+    [Header("编队军令（3.0.1_3 §4.1 / 3.0.1_8 §七 FormationController，防硬编码）")]
+    [Tooltip("军令强度基础（S 级军令，需 > 工作任务 B 级 + 安全归巢 D 级，原硬编码 4.5；同时兼作军令强度归一化基准）")]
+    public float formationOrderIntensity = 4.5f;
+    [Tooltip("阵型切换瞬时提强度：切阵型瞬间基础→此值保底 duration 秒（原硬编码 6.0）")]
+    public float formationOrderBoost = 6f;
+    [Tooltip("阵型切换瞬时提强度保底时长（秒，原硬编码 1s）")]
+    public float formationOrderBoostDuration = 1f;
+
     [Header("LOD 三区思考（3.0.1_LOD §1.5 / §五）")]
     [Tooltip("活跃区 Think 频率（Hz，现状 10）")]
     public float lodActiveThinkHz = 10f;
@@ -251,8 +273,6 @@ public class AttentionTuningConfig : ScriptableObject
     public int lodSemiRadius = 2;
     [Tooltip("降级条件：热度归零且无事件满此秒数后逐级降")]
     public float lodDowngradeIdleTime = 30f;
-    [Tooltip("军令升级目标区等级（1=半活跃，占位）")]
-    public int lodCommandUpgradeLevel = 1;
 
     [Header("ThreatHeat 区块热度（3.0.1_LOD §3.1 / §3.3）")]
     [Tooltip("区块内任何 NPC 受击累积热度")]
@@ -277,18 +297,6 @@ public class AttentionTuningConfig : ScriptableObject
             case TaskPriority.A: return priorityWeightA;
             case TaskPriority.B: return priorityWeightB;
             default: return priorityWeightC;
-        }
-    }
-
-    /// <summary>按优先级获取撤退阈值加成。</summary>
-    public float GetRetreatBonus(TaskPriority priority)
-    {
-        switch (priority)
-        {
-            case TaskPriority.S: return retreatBonusS;
-            case TaskPriority.A: return retreatBonusA;
-            case TaskPriority.B: return retreatBonusB;
-            default: return retreatBonusC;
         }
     }
 }

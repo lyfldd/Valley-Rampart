@@ -45,6 +45,7 @@ public class FormationBrain : MonoBehaviour
 
     private FormationController _controller;
     private float _timer;
+    private AttentionTuningConfig _config;
 
     /// <summary>挂载的编队控制器</summary>
     public FormationController Controller => _controller;
@@ -53,6 +54,7 @@ public class FormationBrain : MonoBehaviour
     public void Init(FormationController controller)
     {
         _controller = controller;
+        _config = Resources.Load<AttentionTuningConfig>("Config/AttentionTuningConfig");
     }
 
     private void Update()
@@ -94,7 +96,7 @@ public class FormationBrain : MonoBehaviour
         }
 
         // ③ 高价值 + 敌压近 → 冲锋压上（军队敢承受代价：任务价值高，个体撤退被军令压住）
-        if (heat > heatCharge && value > 0.6f)
+        if (heat > heatCharge && value > (_config != null ? _config.chargeValueGate : 0.6f))
         {
             _controller.SetIntent(TacticIntent.Charge);
             return;
@@ -110,21 +112,21 @@ public class FormationBrain : MonoBehaviour
 
     /// <summary>
     /// 任务价值动态评估（§4.2）：锚点类型定基础值 + 动态修正。
-    /// 基础值：守城编队中（0.5）/ 将军有推进目标=攻城中高（0.8）/ 无目标=巡逻低（0.2）。
+    /// 基础值：守城编队中（0.5）/ 将军有推进目标=攻城中高（0.8）/ 无目标=巡逻低（0.2）——AttentionTuningConfig 可调。
     /// 动态：敌压近升价值（战斗紧迫），残编降价值（保命优先）。
     /// </summary>
     private float EvaluateTaskValue(float heat, float survival)
     {
         float baseValue;
         if (_controller.isGarrison)
-            baseValue = 0.5f;   // 守城中：固守待敌，被打狠才撤
+            baseValue = _config != null ? _config.taskValueGarrison : 0.5f;   // 守城中：固守待敌，被打狠才撤
         else if (_controller.AdvanceTarget != Vector2.zero)
-            baseValue = 0.8f;   // 攻城中：带伤推进，个体撤退阈值被编队抵抗抬高
+            baseValue = _config != null ? _config.taskValueAttack : 0.8f;   // 攻城中：带伤推进，个体撤退阈值被编队抵抗抬高
         else
-            baseValue = 0.2f;   // 巡逻/待命：一触即撤，不恋战
+            baseValue = _config != null ? _config.taskValuePatrol : 0.2f;   // 巡逻/待命：一触即撤，不恋战
 
-        if (heat > 0.5f) baseValue += 0.2f;
-        if (survival < survivalRetreatGate) baseValue -= 0.3f;
+        if (heat > (_config != null ? _config.taskValueHeatBoostGate : 0.5f)) baseValue += _config != null ? _config.taskValueHeatBoost : 0.2f;
+        if (survival < survivalRetreatGate) baseValue -= _config != null ? _config.taskValueSurvivalPenalty : 0.3f;
         return Mathf.Clamp01(baseValue);
     }
 }

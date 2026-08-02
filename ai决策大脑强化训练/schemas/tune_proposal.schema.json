@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "调参提案（训练师 → harness）",
+  "type": "object",
+  "required": ["id", "base", "hypothesis", "evidence", "changes", "expected"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^p_[0-9]{4}$" },
+    "base": { "type": "string", "description": "基于哪个配置，如 champion@2026-08-05" },
+    "hypothesis": { "type": "string", "minLength": 10, "description": "因果假设：为什么这个改动能解决什么问题" },
+    "evidence": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "string", "description": "引用真实文件+数据，如 results/baseline/S2/report.json: 弓手被贴身率41%" },
+      "description": "证据列表，至少一条，禁止空谈"
+    },
+    "changes": {
+      "type": "array", "minItems": 1, "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["path", "from", "to", "rationale"],
+        "properties": {
+          "path": { "type": "string", "description": "factor_registry 中的注册路径；死参数/未注册参数直接拒收" },
+          "from": { "type": "number" },
+          "to": { "type": "number" },
+          "rationale": { "type": "string", "minLength": 5 }
+        }
+      }
+    },
+    "expected": {
+      "type": "object", "minProperties": 1,
+      "description": "预期指标变化，如 {\"弓手被贴身率\": \"41% → <30%\"}"
+    },
+    "risk": { "type": "string", "description": "预期副作用；滞回类参数必须在此声明方差风险" }
+  }
+}

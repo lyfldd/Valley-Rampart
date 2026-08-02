@@ -17,19 +17,10 @@ MonoBehaviour:
   priorityWeightB: 2
   priorityWeightC: 1
   retreatThresholdBase: 2
-  retreatBonusS: 2
-  retreatBonusA: 1
-  retreatBonusB: 0.5
-  retreatBonusC: 0
-  threatUpgradeThreshold: 0.6
-  threatDowngradeThreshold: 0.4
   threatUpgradeConfirmTime: 0.3
   threatDowngradeConfirmTime: 0.5
   protectionFriendThreshold: 3
   protectionLossThreshold: 1
-  cautiousMinDwell: 1
-  retreatMinDwell: 1.5
-  safetyConfirmTime: 2
   threatDecayTime: 3
   scheduleRetryInterval: 3
   scheduleRecruitRadiusCells: 3
@@ -41,7 +32,6 @@ MonoBehaviour:
   woundPullWeight: 1
   baseFollowCells: 2
   followScatterWeight: 0.5
-  alertSpeedScale: 0.9
   holdPositionIntensity: 0.6
   stateTaskDiscount: 0.3
   stateThreatBias: 0.3
@@ -70,7 +60,6 @@ MonoBehaviour:
   breakLevelWeight: 0.5
   breakConfirmUp: 0.3
   breakConfirmDown: 0.5
-  breakFormationBase: 4.5
   traceBaseIntensity: 40
   traceStepIntensity: 10
   traceMaxIntensity: 60
@@ -107,13 +96,32 @@ MonoBehaviour:
   persistSpeedRatio: 1.1
   persistBenefitSpeed: 0.3
   workResistScale: 0.5
+  l2FullPowerThreatGate: 0.3
+  l2ResistBase: 0.5
+  l2FormationResistScale: 0.4
+  l2ResistCap: 0.95
+  thresholdScaleDivisor: 3
+  thresholdMinFloor: 0.2
+  taskValueGarrison: 0.5
+  taskValueAttack: 0.8
+  taskValuePatrol: 0.2
+  chargeValueGate: 0.6
+  taskValueHeatBoostGate: 0.5
+  taskValueHeatBoost: 0.2
+  taskValueSurvivalPenalty: 0.3
+  threatIntensityMax: 100
+  countFactorFullCount: 5
+  closeRangeMinRaw: 0.5
+  hotspotSupportIntensity: 0.6
+  formationOrderIntensity: 4.5
+  formationOrderBoost: 6
+  formationOrderBoostDuration: 1
   lodActiveThinkHz: 10
   lodSemiThinkHz: 2
   lodSleepThinkHz: 0.5
   lodActiveRadius: 1
   lodSemiRadius: 2
   lodDowngradeIdleTime: 30
-  lodCommandUpgradeLevel: 1
   heatHitGain: 0.4
   heatEnemyEnterGain: 0.2
   heatAllyRetreatGain: 0.05

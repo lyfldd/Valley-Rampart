@@ -358,7 +358,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
             float dist = Vector2.Distance(myPos, enemy.GetPosition());
             if (dist < _nearestDist) _nearestDist = dist;
-            float intensity = Mathf.Max(1f, 100f * (1f - dist / perceptionWorld));
+            // 刺激强度标定 0-100（贴脸满强度，量纲上限 config 可调；3.0.1_4 §3.4 威胁分层依赖此量纲）
+            float intensity = Mathf.Max(1f, _config.threatIntensityMax * (1f - dist / perceptionWorld));
 
             var stimulus = new ThreatStimulus(
                 enemy,
@@ -400,7 +401,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 _attention.AddStimulus(new TaskStimulus(
                     TaskPriority.C,                     // 杂务级（支援）
                     targetPos: hotspot,                 // 热点即目标位置
-                    intensity: 0.6f,                    // > Safety 0.5，< Follow S 级 4.5
+                    intensity: _config.hotspotSupportIntensity,  // > Safety 0.5，< Follow S 级 4.5
                     expiry: currentTime + _config.traceDecayTime,
                     issuer: _lodSystem                  // 区块警报来源
                 ));
@@ -523,7 +524,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             //   SafetyFactor = 归巢因子（离家/夜晚/受伤加权，3.0.1_8 §五）
             ThreatFactor = _lastRaw,
             FormationFactor = _followProvider.IsActive
-                ? Mathf.Clamp01(_followProvider.Stimulus.Intensity / FormationController.OrderIntensityBase)
+                ? Mathf.Clamp01(_followProvider.Stimulus.Intensity / _config.formationOrderIntensity)
                 : 0f,
             SafetyFactor = ComputeSafetyFactor(hpRatio, homePoint),
         };

@@ -86,8 +86,8 @@ public class ThreatAssessor
             distFactor = 0f;
         }
 
-        // 敌人数量因子（越多越高，0-1，5 个满）
-        float countFactor = Mathf.Clamp01(enemyCount / 5f);
+        // 敌人数量因子（越多越高，0-1，满编数 config 可调）
+        float countFactor = Mathf.Clamp01(enemyCount / config.countFactorFullCount);
 
         // 血量因子（越低越高，0-1）
         float hpFactor = 1f - Mathf.Clamp01(hpRatio);
@@ -112,10 +112,10 @@ public class ThreatAssessor
         // 应用职业敏感度
         x *= profession.threatSensitivity;
 
-        // 攻击距离内保底：敌人进入自身攻击距离时，rawFactor 不低于 0.5（威胁2级=危险）
+        // 攻击距离内保底：敌人进入自身攻击距离时，rawFactor 不低于 config 值（默认 0.5 = 威胁2级=危险）
         // 解决远程单位 threatSensitivity 低导致贴脸仍评不出威胁、继续追击走到脸上的问题
         if (attackWorldRange > 0f && nearestEnemyDist <= attackWorldRange)
-            x = Mathf.Max(x, 0.5f);
+            x = Mathf.Max(x, config.closeRangeMinRaw);
 
         return Mathf.Clamp01(x);
     }

@@ -68,7 +68,7 @@ public static class L2PostureDecider
         threshold += (profession.courage - 50f) / 50f;       // 勇气加成 -1~+1
         threshold += (profession.obedience - 50f) / 100f;    // 服从度加成 -0.5~+0.5
         threshold += profession.retreatThresholdOffset;       // 职业偏移
-        threshold = Mathf.Max(0.2f, threshold / 3f);          // 连续量纲，保底防除零
+        threshold = Mathf.Max(config.thresholdMinFloor, threshold / config.thresholdScaleDivisor);  // 连续量纲，保底防除零
 
         // ① 放弃任务（3.0.1_8 §六）：追击成本 > 收益 → Cautious（放弃追击，回归编队/守位，不追不撤）
         //    放最前：被风筝追不上时威胁因子低（敌人远），低威胁分支会误判 FullPower 继续追
@@ -76,16 +76,16 @@ public static class L2PostureDecider
             return BehaviorSpectrum.Cautious;
 
         // ② 低威胁 -> 全力执行（原威胁 0/1）
-        if (threat < 0.3f)
+        if (threat < config.l2FullPowerThreatGate)
             return BehaviorSpectrum.FullPower;
 
         // ③ 连续仲裁：有效威胁 = 威胁因子 × (1 - 协作抵抗 - 工作抵抗)
         // 协作因子（编队军令）作为"扛住"系数：军令越强、服从度越高，越不易被威胁压垮
         // 工作因子（3.0.1_8 §八）：正在干关键活（任务投入高）→ 抗打断（不会被摸一下就撤）
         // 这是"指挥优先级 vs 战斗本能"的连续权衡，而非 4 档二选一
-        float formationResist = formation * (0.5f + profession.obedience / 100f);  // 0~1.5
+        float formationResist = formation * (config.l2ResistBase + profession.obedience / 100f);  // 0~1.5
         float workResist = ctx.WorkFactor * config.workResistScale;                // 0~0.5
-        float resistTotal = Mathf.Min(0.95f, formationResist * 0.4f + workResist); // 抗性封顶防负
+        float resistTotal = Mathf.Min(config.l2ResistCap, formationResist * config.l2FormationResistScale + workResist); // 抗性封顶防负
         float effectiveThreat = threat * (1f - resistTotal);                       // 编队+工作最高抵消 95%
 
         // ④ 撤退 AND 归巢门控（3.0.1_8 §五）：编队成员需归巢驱力强才真撤（军队承受更多代价）

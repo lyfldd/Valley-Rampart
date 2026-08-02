@@ -1,0 +1,115 @@
+{
+  "$comment": "因子注册表 v0.1（示例，M5 时扩充到 01 §六 全部 A 类字段）。path = TuningSnapshot 字段路径；boundary = AI 提案硬边界；consumers = 谁消费（改前先看牵连）；sensitive:hysteresis = 滞回类，改动需加倍基准局数",
+  "registry": [
+    {
+      "path": "tuning.rfDistWeight",
+      "current": 0.35, "min": 0.1, "max": 0.6,
+      "unit": "weight", "group": "rawFactor",
+      "constraint": "rawFactor六权重Σ=1",
+      "consumers": ["ThreatAssessment.CalculateRawFactor"],
+      "semantics": "距离因子权重：越高越怕近敌"
+    },
+    {
+      "path": "tuning.rfCountWeight",
+      "current": 0.15, "min": 0.0, "max": 0.4,
+      "unit": "weight", "group": "rawFactor", "constraint": "rawFactor六权重Σ=1",
+      "consumers": ["ThreatAssessment.CalculateRawFactor"],
+      "semantics": "数量因子权重：越高越怕被围"
+    },
+    {
+      "path": "tuning.rfHpWeight",
+      "current": 0.2, "min": 0.0, "max": 0.5,
+      "unit": "weight", "group": "rawFactor", "constraint": "rawFactor六权重Σ=1",
+      "consumers": ["ThreatAssessment.CalculateRawFactor"],
+      "semantics": "血量恐惧权重：越高残血越怂"
+    },
+    {
+      "path": "tuning.rfHeatWeight",
+      "current": 0.5, "min": 0.1, "max": 1.0,
+      "unit": "weight", "group": "rawFactor", "constraint": "rawFactor六权重Σ=1",
+      "consumers": ["ThreatAssessment.CalculateRawFactor"],
+      "semantics": "区块热度权重：越高越受战场气氛影响"
+    },
+    {
+      "path": "tuning.formationResistScale",
+      "current": 0.4, "min": 0.1, "max": 0.8,
+      "unit": "scale", "group": "arbitration",
+      "consumers": ["L2PostureDecider.CalculateSpectrum"],
+      "semantics": "编队抵抗权重（现硬编码 L2PostureDecider.cs:88，M1 提 config）：越高军令越硬、该撤不撤风险越大",
+      "note": "硬编码提config的典型，M1 顺手做"
+    },
+    {
+      "path": "tuning.workResistScale",
+      "current": 0.5, "min": 0.0, "max": 1.0,
+      "unit": "scale", "group": "arbitration",
+      "consumers": ["L2PostureDecider.CalculateSpectrum"],
+      "semantics": "工作抵抗系数：越高工人越抗打断"
+    },
+    {
+      "path": "tuning.safetyRetreatGate",
+      "current": 0.3, "min": 0.1, "max": 0.6,
+      "unit": "threshold", "group": "safety",
+      "consumers": ["L2PostureDecider.CalculateSpectrum"],
+      "semantics": "编队撤退归巢门控：越高编队越难被打回家"
+    },
+    {
+      "path": "tuning.abandonThreshold",
+      "current": 0.5, "min": 0.2, "max": 0.8,
+      "unit": "threshold", "group": "abandon",
+      "consumers": ["L2PostureDecider"],
+      "semantics": "放弃追击阈值：越低越早放弃（防风筝越灵，但可能放跑残血）"
+    },
+    {
+      "path": "tuning.abandonTimeout",
+      "current": 6.0, "min": 2.0, "max": 15.0,
+      "unit": "seconds", "group": "abandon",
+      "consumers": ["NPCBrain.ComputeAbandonTaskFactor"],
+      "semantics": "追击超时成本触发时长"
+    },
+    {
+      "path": "tuning.breakThreshold",
+      "current": 1.0, "min": 0.6, "max": 1.5,
+      "unit": "threshold", "group": "hysteresis", "sensitive": "hysteresis",
+      "consumers": ["AttentionSystem.UpdateBreakHysteresis"],
+      "semantics": "破阵升阈：越高编队越耐压"
+    },
+    {
+      "path": "tuning.breakReleaseThreshold",
+      "current": 0.7, "min": 0.3, "max": 0.95,
+      "unit": "threshold", "group": "hysteresis", "sensitive": "hysteresis",
+      "consumers": ["AttentionSystem.UpdateBreakHysteresis"],
+      "semantics": "破阵降阈：与升阈间距=滞回带宽"
+    },
+    {
+      "path": "tuning.orderIntensityBoost",
+      "current": 6.0, "min": 4.5, "max": 9.0,
+      "unit": "intensity", "group": "formation",
+      "consumers": ["FormationController.SetIntent"],
+      "semantics": "切阵型瞬时军令强度（现硬编码 FormationController.cs:53）：越高切阵型保护弓手越硬"
+    },
+    {
+      "path": "professions.Human_Player_Archer.courage",
+      "current": 60, "min": 30, "max": 90,
+      "unit": "attr", "group": "profession",
+      "consumers": ["L2撤退阈值", "RetreatFormulas"],
+      "semantics": "弓手勇气：影响撤退阈值与撤退距离"
+    },
+    {
+      "path": "professions.Undead_Warrior.courage",
+      "current": 85, "min": 50, "max": 100,
+      "unit": "attr", "group": "profession",
+      "consumers": ["L2撤退阈值", "RetreatFormulas"],
+      "semantics": "敌方近战勇气：敌方敢扛程度"
+    }
+  ],
+  "deadParams": [
+    "retreatBonusS", "retreatBonusA", "retreatBonusB", "retreatBonusC",
+    "cautiousMinDwell", "retreatMinDwell", "safetyConfirmTime",
+    "threatUpgradeThreshold", "threatDowngradeThreshold",
+    "alertSpeedScale", "lodCommandUpgradeLevel"
+  ],
+  "frozenParams": [
+    {"path": "damage.armorK", "reason": "全游戏数值平衡基石，首轮冻结"},
+    {"path": "grid.cellSize", "reason": "结构性常数"}
+  ]
+}

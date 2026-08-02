@@ -43,18 +43,6 @@ public class FormationController : MonoBehaviour
     [Tooltip("编队阵营（3.0.1_6 §4.3：招募只招本阵营空闲士兵；敌方将军用 Undead + FormationTable_Enemy）")]
     public Faction faction = Faction.Human_Player;
 
-    [Tooltip("军令强度（S 级军令基础强度，需 > 工作任务 B 级 + 安全归巢 D 级）")]
-    public float orderIntensity = 4.5f;
-
-    /// <summary>军令强度归一化基准（3.0.1_8 协作因子用：FormationFactor = orderIntensity / 此值）</summary>
-    public const float OrderIntensityBase = 4.5f;
-
-    [Tooltip("阵型切换瞬时提强度（3.0.1_8 §七：切阵型瞬间 4.5→6.0，保底 duration 秒，低威胁强制归位保护弓手）")]
-    public float orderIntensityBoost = 6f;
-
-    [Tooltip("阵型切换瞬时提强度保底时长（秒，期间军令保持高强度，过期回落到正常强度）")]
-    public float orderBoostDuration = 1f;
-
     [Tooltip("阵型切换防抖时间（秒，§15.3 即时触发+防抖）")]
     public float switchDebounce = 1f;
 
@@ -68,6 +56,7 @@ public class FormationController : MonoBehaviour
     // ===== 运行时状态 =====
     private UnitController _generalUnit;            // 将军单位（isGarrison=true 时为 null）
     private Transform _anchor;                       // 锚点 Transform（将军或城墙点）
+    private AttentionTuningConfig _config;           // 全局调参 SO（军令强度/提强度/保底，防硬编码）
     private readonly List<FormationMember> _members = new List<FormationMember>();
     private TacticIntent _currentIntent = TacticIntent.Defense;
     private BattleLine _currentLine = BattleLine.Single;
@@ -90,8 +79,10 @@ public class FormationController : MonoBehaviour
     public UnitController GeneralUnit => _generalUnit;
     /// <summary>成员数</summary>
     public int MemberCount => _members.Count;
-    /// <summary>有效军令强度（3.0.1_8 §七：切换瞬间提强度保底期内返回 boost 值，否则正常值）</summary>
-    public float EffectiveOrderIntensity => Time.time < _boostUntil ? orderIntensityBoost : orderIntensity;
+    /// <summary>有效军令强度（3.0.1_8 §七：切换瞬间提强度保底期内返回 boost 值，否则正常值；值住 AttentionTuningConfig）</summary>
+    public float EffectiveOrderIntensity => Time.time < _boostUntil
+        ? (_config != null ? _config.formationOrderBoost : 6f)
+        : (_config != null ? _config.formationOrderIntensity : 4.5f);
     /// <summary>是否君主令生效期（3.0.1_8 §6.6：期内军令带 royal 标记）</summary>
     public bool IsRoyalCommandActive => Time.time < _royalUntil;
     /// <summary>锚点世界坐标（将军/城墙锚点；无锚点返回 zero，中区块编队上限登记用）</summary>
@@ -99,6 +90,7 @@ public class FormationController : MonoBehaviour
 
     private void Awake()
     {
+        _config = Resources.Load<AttentionTuningConfig>("Config/AttentionTuningConfig");
         if (isGarrison)
         {
             _anchor = transform;  // 守城编队锚点 = 挂载 GameObject 自身
@@ -386,9 +378,9 @@ public class FormationController : MonoBehaviour
         _currentIntent = intent;
         _lastSwitchTime = Time.time;
         // 3.0.1_8 §七：切阵型瞬时提强度（保底期内军令 4.5→6.0，低威胁士兵强制归位保护弓手）
-        _boostUntil = Time.time + orderBoostDuration;
+        _boostUntil = Time.time + (_config != null ? _config.formationOrderBoostDuration : 1f);
         ApplyFormation();
-        Debug.Log($"[FormationController] 意图切换 -> {intent}（军令瞬时提强度 {EffectiveOrderIntensity:F1} 保底 {orderBoostDuration}s）");
+        Debug.Log($"[FormationController] 意图切换 -> {intent}（军令瞬时提强度 {EffectiveOrderIntensity:F1} 保底 {(_config != null ? _config.formationOrderBoostDuration : 1f)}s）");
     }
 
     /// <summary>切换战线形态（P1 由 ThreatHeat 方向分布驱动）</summary>
@@ -478,7 +470,7 @@ public class FormationController : MonoBehaviour
         {
             _boostUntil = 0f;
             DispatchOrders();
-            Debug.Log($"[FormationController] 军令瞬时提强度过期，回落至 {orderIntensity:F1}。");
+            Debug.Log($"[FormationController] 军令瞬时提强度过期，回落至 {(_config != null ? _config.formationOrderIntensity : 4.5f):F1}。");
         }
 
         // 3.0.1_8 §6.6：君主令过期 → 回落（重发军令清 royal 标记）

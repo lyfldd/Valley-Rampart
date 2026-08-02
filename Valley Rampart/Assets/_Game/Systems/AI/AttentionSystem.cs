@@ -351,9 +351,9 @@ public class AttentionSystem
     private float ComputeBreakScore(in ThreatStimulus top, int threatLvl, float formationIntensity)
     {
         float levelWeight = _config != null ? _config.breakLevelWeight : 0.5f;
-        float formationBase = _config != null ? _config.breakFormationBase : 4.5f;
+        float formationBase = _config != null ? _config.formationOrderIntensity : 4.5f;
 
-        float threatPressure = (top.Intensity / 100f)
+        float threatPressure = (top.Intensity / (_config != null ? _config.threatIntensityMax : 100f))
                                * (1f + threatLvl * levelWeight)
                                * (0.5f + _breakCourage / 100f);
         float formationHold = Mathf.Max(0.1f, formationIntensity / formationBase)
