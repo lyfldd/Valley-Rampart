@@ -445,6 +445,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         ctx.FocusDecision = L1FocusEvaluator.Evaluate(_attention, in ctx);
         // 3.0.1_8 §六：放弃任务因子需 L1 焦点判追击状态，故在 L2 前组装
         ctx.AbandonTaskFactor = ComputeAbandonTaskFactor(in ctx);
+        // 3.0.1_8 §八：工作因子需 L1 焦点判任务类型（TaskStimulus 按优先级归一化），L2 抗打断
+        ctx.WorkFactor = ComputeWorkFactor(in ctx);
         ctx.PostureDecision = L2PostureDecider.Decide(in ctx);
 
         // rawFactor 计算（复用 CalculateRawFactor）+ stateThreatBias 处理
@@ -524,6 +526,19 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             distFactor * _config.safetyDistWeight
             + GetNightFactor() * _config.safetyNightWeight
             + wound * _config.safetyWoundWeight);
+    }
+
+    /// <summary>
+    /// 工作因子（3.0.1_8 §八）：当前任务投入强度（0-1）。
+    /// 焦点是 TaskStimulus（工作/建造任务）→ 按任务优先级归一化（S=1.0 / A=0.75 / B=0.5 / C=0.25）。
+    /// 非任务焦点（威胁/编队/归巢/漫游）= 0（军令执行已由协作因子 FormationFactor 覆盖，不重复计）。
+    /// L2 消费：有效威胁削减 = WorkFactor × workResistScale（正在干关键活更抗打断）。
+    /// </summary>
+    private float ComputeWorkFactor(in FactorContext ctx)
+    {
+        if (!ctx.FocusDecision.IsValid || !(ctx.FocusDecision.Focus is TaskStimulus ts))
+            return 0f;
+        return Mathf.Clamp01(_config.GetPriorityWeight(ts.Priority) / Mathf.Max(1f, _config.priorityWeightS));
     }
 
     /// <summary>

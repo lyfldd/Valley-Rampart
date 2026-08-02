@@ -106,6 +106,7 @@ MonoBehaviour:
   persistBenefitWeakDefense: 0.2
   persistSpeedRatio: 1.1
   persistBenefitSpeed: 0.3
+  workResistScale: 0.5
   lodActiveThinkHz: 10
   lodSemiThinkHz: 2
   lodSleepThinkHz: 0.5

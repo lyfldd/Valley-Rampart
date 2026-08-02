@@ -52,6 +52,8 @@ public struct FactorContext
     public float SafetyFactor;
     /// <summary>放弃任务因子（连续 0-1）：追击成本>收益 时升高（3.0.1_8 §六）。高 → 放弃追击回归编队（防风筝）</summary>
     public float AbandonTaskFactor;
+    /// <summary>工作因子（连续 0-1）：当前任务投入强度（3.0.1_8 §八，焦点=TaskStimulus 按优先级归一化）。高 → L2 抗打断</summary>
+    public float WorkFactor;
 
     // ===== ② 记忆组件 FillContext 写入 =====
     public HitCooldownState CurrentState;

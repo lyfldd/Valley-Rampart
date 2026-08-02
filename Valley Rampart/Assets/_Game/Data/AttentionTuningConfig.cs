@@ -234,6 +234,10 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("移速追得上收益：满足速度条件时 +此值")]
     public float persistBenefitSpeed = 0.3f;
 
+    [Header("工作因子（3.0.1_8 §八，任务投入抗打断）")]
+    [Tooltip("工作抵抗系数：effectiveThreat 削减 = WorkFactor × 此值（半效 0.5，正在干关键活更抗打断）")]
+    public float workResistScale = 0.5f;
+
     [Header("LOD 三区思考（3.0.1_LOD §1.5 / §五）")]
     [Tooltip("活跃区 Think 频率（Hz，现状 10）")]
     public float lodActiveThinkHz = 10f;
