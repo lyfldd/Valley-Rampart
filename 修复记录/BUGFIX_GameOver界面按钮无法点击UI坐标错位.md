@@ -1,6 +1,6 @@
-# BUGFIX：GameOver 界面"返回主菜单"按钮无法点击（UI 坐标错位）
+# BUGFIX：GameOver 界面"返回主菜单"按钮无法点击（UI 坐标错位 + 编辑器 Error Pause）
 
-> 2026-08-02 · 提交 ebf53b2
+> 2026-08-02 · 提交 ebf53b2 / 4480e07
 
 ## 现象
 
@@ -15,19 +15,26 @@
 - ❌ 指针捕获泄漏：`PointerDispatchState.m_PointerCapture` 全 null
 - ❌ timeScale：0 和 1 下物理输入都不进 Panel（对照实验）
 
-## 根因
+## 根因（双因叠加）
 
-**ScaleWithScreenSize 超屏裁剪导致渲染与输入坐标错位。**
+**因一：ScaleWithScreenSize 超屏裁剪导致渲染与输入坐标错位。**
 
 - PanelSettings 参考分辨率 1920x1080，实际 GameView 屏幕 **960x475**（约 2:1）
 - 按宽匹配 scale=0.5 → Panel 高 540 > 屏幕 475 → **垂直超屏被裁剪**
 - 实测：按钮输入坐标物理位置 (420~540, 282~307)，玩家鼠标实际停在 (469, 321)——**在按钮下方 ~14px**，点击全部落在面板空白上
 
+**因二：君主死亡 LogError 触发团结引擎编辑器"Error Pause"（4480e07 补充确认）。**
+
+- 团结引擎编辑器对 `Debug.LogError` 会**自动暂停 Play Mode**
+- 暂停期间 UI Toolkit 输入冻结 → GameOver 按钮点击无效（玩家需手动取消编辑器暂停才能点）
+- `RulerController.OnMonarchDied` 用 LogError 打"游戏结束"提示——**游戏结束是正常流程，不该用错误级日志**
+
 ## 修复点
 
 | 文件 | 改动 |
 |------|------|
-| `Assets/_Game/UI/PanelSettings.asset` | 参考分辨率 **1920x1080 → 1920x950**（匹配实际屏幕比例，scale=0.5 后高度 475 = 屏幕高，无超屏无错位）——核心修复 |
+| `Assets/_Game/UI/PanelSettings.asset` | 参考分辨率 **1920x1080 → 1920x950**（匹配实际屏幕比例，scale=0.5 后高度 475 = 屏幕高，无超屏无错位）——修复因一 |
+| `Systems/Ruler/RulerController.cs:449-458` | 君主死亡日志 **LogError → Debug.Log**（游戏结束是正常流程；避免团结引擎 Error Pause 冻结 UI 输入）——修复因二 |
 | `Systems/UI/PausePanel.cs:84-94` | `OnGameStateChanged` 不再在 GameOver 时强制 `Time.timeScale=1`（GameOver 冻结由 GameOverPanel 管理；原逻辑会把结算冻结覆盖回 1，导致世界继续跑） |
 | `Systems/UI/GameOverPanel.cs:64-72` | `Show()` 补绑按钮（防 OnEnable 时序导致绑定失败） |
 | `Systems/UI/LoadingPanel.cs:11-26` | 新增 `Start()` 兜底隐藏（防 OnEnable 时 rootVisualElement 未就绪导致全屏 loading 面板残留拦截点击） |
