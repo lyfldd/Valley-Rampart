@@ -21,6 +21,7 @@ ai决策大脑强化训练/harness/bin/
 ai决策大脑强化训练/harness/obj/
 # harness 运行输出（JSONL 战报）
 ai决策大脑强化训练/harness/out/
+ai决策大脑强化训练/harness/results/
 # harness.csproj 是手写工程文件（链接 AI.Core 唯一真身），例外于上方 *.csproj 忽略
 !ai决策大脑强化训练/harness/harness.csproj
 

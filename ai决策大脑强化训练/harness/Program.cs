@@ -29,15 +29,23 @@ public static class Program
                 return RunSuite(args);
             case "differentiation":
                 return RunDifferentiation(args);
+            case "benchmark":
+                return RunBenchmark(args);
+            case "champion":
+                return RunChampion(args);
             case "smoke":
                 RunSmoke();
                 return 0;
             default:
-                Console.WriteLine("用法：dotnet run -- <acceptance|determinism|suite|differentiation|smoke> ...");
+                Console.WriteLine("用法：dotnet run -- <acceptance|determinism|suite|differentiation|benchmark|champion|smoke> ...");
                 Console.WriteLine("  acceptance [r1] [r2]              M2 验收（S1 胜率带 + S2 弓手指标）");
                 Console.WriteLine("  determinism <场景json|all> [runs]  同 seed 跑两次逐字节一致（all=全剧本）");
                 Console.WriteLine("  suite [runs] [patch] [outDir]      S1-S6 基准套件 -> report.json");
                 Console.WriteLine("  differentiation [runs]             baseline vs rfdist20/undeadfast/noretreat");
+                Console.WriteLine("  benchmark [--config <champion.json>] [--patch <patch.json>] [--battles N] [--out <dir>] [--name <名>]");
+                Console.WriteLine("                                     M4 手动调参闭环：champion 基线 + patch 深合并 -> report.json + verdict.json");
+                Console.WriteLine("  champion export [outPath]          导出当前默认配置为 champion 全量快照（首次建档）");
+                Console.WriteLine("  champion baseline [--battles N]    跑 champion（无 patch）建档 results/baseline/report.json");
                 Console.WriteLine("  smoke                              M1 决策核 smoke test");
                 return 1;
         }
@@ -81,9 +89,13 @@ public static class Program
     }
 
     private static SimMetrics RunScenario(string scenarioPath, int runs, string outDir,
-                                          string patchPath = null, int debugRun = -1)
+                                          string patchPath = null, int debugRun = -1,
+                                          string championPath = null)
     {
         var config = new SimConfig();
+        // M4：champion 全量基线在场景 Load 之前应用（调参基线唯一真身），patch 部分覆盖在之后
+        if (!string.IsNullOrEmpty(championPath))
+            SimChampion.Load(championPath, config);
         var scenario = SimScenario.Load(scenarioPath, config);
         // M3：区分度注入只走 patch 配置（在场景加载之后应用，patch 部分覆盖其上的实验变量）
         if (!string.IsNullOrEmpty(patchPath))
@@ -191,9 +203,10 @@ public static class Program
         ("S6", "支援热点", "Scenarios/s6_support_hotspot.json"),
     };
 
-    /// <summary>跑一套配置（可选 patch）全剧本，生成 report.json，返回摘要与指标。</summary>
+    /// <summary>跑一套配置（可选 patch/champion）全剧本，生成 report.json，返回摘要与指标。</summary>
     private static List<(string Id, string Name, SimMetrics Metrics)> RunSuiteCore(
-        int runs, string patchPath, string outDir, string configName, bool writeReport)
+        int runs, string patchPath, string outDir, string configName, bool writeReport,
+        string championPath = null)
     {
         var entries = new List<(string Id, string Name, SimMetrics Metrics)>();
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -201,7 +214,7 @@ public static class Program
         for (int i = 0; i < SuiteV1.Length; i++)
         {
             string scenarioName = Path.GetFileNameWithoutExtension(SuiteV1[i].Path);
-            var m = RunScenario(SuiteV1[i].Path, runs, outDir, patchPath);
+            var m = RunScenario(SuiteV1[i].Path, runs, outDir, patchPath, -1, championPath);
             entries.Add((SuiteV1[i].Id, SuiteV1[i].Name, m));
             Console.WriteLine(m.BuildSummary());
             if (i < SuiteV1.Length - 1) Console.WriteLine();
@@ -296,6 +309,152 @@ public static class Program
             Console.WriteLine($"  {entries[i].Id} {entries[i].Name,-8} 胜率 {entries[i].Metrics.HumanWinRate.ToString("P1", System.Globalization.CultureInfo.InvariantCulture),7}  subScore {score.SubScores[entries[i].Id].ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}");
         Console.WriteLine($"  总分（subScore 均值）：{score.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}");
         return 0;
+    }
+
+    // ===== benchmark / champion：M4 手动调参闭环（06 §M4 / 05 §四 CLI 契约）=====
+
+    private const string DefaultChampionPath = "champion/tuning.champion.json";
+    private const string BaselineDir = "results/baseline";
+
+    /// <summary>benchmark 子命令：champion 基线 + patch 深合并 -> report.json + verdict.json。</summary>
+    private static int RunBenchmark(string[] args)
+    {
+        string championPath = GetArg(args, "config", DefaultChampionPath);
+        string patchPath = GetArg(args, "patch", null);
+        int battles = GetIntArg(args, "battles", 100);
+        string outDir = GetArg(args, "out", $"results/{DateTime.Now:yyyyMMdd_HHmmss}_bench");
+        string name = GetArg(args, "name", string.IsNullOrEmpty(patchPath) ? "champion-baseline" : Path.GetFileNameWithoutExtension(patchPath));
+
+        if (!SimChampion.Exists(championPath))
+        {
+            Console.WriteLine($"[benchmark] 冠军配置不存在：{championPath}。先跑：dotnet run -- champion export");
+            return 1;
+        }
+
+        Console.WriteLine($"=== M4 benchmark（champion={championPath}，patch={(string.IsNullOrEmpty(patchPath) ? "无" : patchPath)}，{battles} 局/剧本）===");
+
+        // 1. 若无 baseline 建档，先跑 champion（无 patch）——05 §七.4 冠军双条件需要对照基线
+        string baselineReport = Path.Combine(BaselineDir, "report.json");
+        if (!File.Exists(baselineReport))
+        {
+            Console.WriteLine();
+            Console.WriteLine(">>> 首次运行：建档 champion 基线（results/baseline/）");
+            RunSuiteCore(battles, null, BaselineDir, "champion", writeReport: true, championPath);
+        }
+
+        // 2. 跑本次配置（champion + patch 深合并）
+        Console.WriteLine();
+        var entries = RunSuiteCore(battles, patchPath, outDir, name, writeReport: true, championPath);
+
+        // 3. 裁决：读 baseline report.json 的 subScores vs 本次
+        var weights = new ObjectiveWeights();
+        var norm = new ObjectiveNorm();
+        var candidateScore = ObjectiveFunction.EvaluateSuite(
+            entries.ConvertAll(e => (e.Id, e.Metrics)), weights, norm);
+        var baselineScore = File.Exists(baselineReport) ? ReadSubScores(baselineReport, weights, norm) : null;
+
+        var verdict = SimVerdict.Judge(candidateScore, baselineScore, ScenarioOrder());
+        string verdictPath = Path.Combine(outDir, "verdict.json");
+        string ts = DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss");
+        File.WriteAllText(verdictPath, SimVerdict.BuildVerdictJson(
+            verdict, "champion@baseline", name, ts,
+            string.IsNullOrEmpty(patchPath) ? new string[0] : new[] { patchPath }));
+
+        Console.WriteLine();
+        Console.WriteLine("=== verdict ===");
+        if (baselineScore == null)
+        {
+            Console.WriteLine($"  （baseline 缺失，本次记为建档基线：{BaselineDir}/report.json）");
+        }
+        else
+        {
+            Console.WriteLine($"  总分 Δ：{verdict.ScoreDelta.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}（champion {baselineScore.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} -> candidate {candidateScore.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}）");
+            Console.WriteLine($"  双条件：总分升={verdict.TotalUp} / 无场景退化(>5%)={verdict.NoRegression}");
+            Console.WriteLine($"  裁决：{verdict.Decision}（candidate=可留用 / rejected=弃 / baseline=建档）");
+            if (verdict.RegressionScenarios.Count > 0)
+            {
+                Console.WriteLine("  退化场景：");
+                for (int i = 0; i < verdict.RegressionScenarios.Count; i++)
+                    Console.WriteLine($"    {verdict.RegressionScenarios[i]}");
+            }
+        }
+        Console.WriteLine($"  verdict 已写出：{verdictPath}");
+        return 0;
+    }
+
+    /// <summary>champion 子命令：export（导出默认全量快照）/ baseline（建档）。</summary>
+    private static int RunChampion(string[] args)
+    {
+        string sub = args.Length > 1 ? args[1] : "export";
+        switch (sub)
+        {
+            case "export":
+            {
+                string outPath = args.Length > 2 ? args[2] : DefaultChampionPath;
+                var config = new SimConfig();
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)));
+                File.WriteAllText(outPath, SimChampion.Export(config));
+                Console.WriteLine($"[champion] 全量快照已导出：{outPath}（{config.Professions.Count} 职业，tuning 全字段）");
+                return 0;
+            }
+            case "baseline":
+            {
+                string championPath = GetArg(args, "config", DefaultChampionPath);
+                int battles = GetIntArg(args, "battles", 100);
+                if (!SimChampion.Exists(championPath))
+                {
+                    Console.WriteLine($"[champion] 冠军配置不存在：{championPath}。先跑：dotnet run -- champion export");
+                    return 1;
+                }
+                Console.WriteLine($"=== champion baseline 建档（{battles} 局/剧本）===");
+                RunSuiteCore(battles, null, BaselineDir, "champion", writeReport: true, championPath);
+                Console.WriteLine($"baseline 已建档：{BaselineDir}/report.json");
+                return 0;
+            }
+            default:
+                Console.WriteLine("用法：dotnet run -- champion <export|baseline>");
+                return 1;
+        }
+    }
+
+    /// <summary>从已有 report.json 读 subScores 并重建 ObjectiveScore（裁决对比用）。</summary>
+    private static ObjectiveScore ReadSubScores(string reportPath, ObjectiveWeights w, ObjectiveNorm n)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = doc.RootElement;
+        var score = new ObjectiveScore();
+        if (root.TryGetProperty("score", out var scoreEl) &&
+            scoreEl.TryGetProperty("subScores", out var subs))
+        {
+            foreach (var kv in subs.EnumerateObject())
+                score.SubScores[kv.Name] = kv.Value.GetDouble();
+        }
+        if (root.TryGetProperty("score", out scoreEl) && scoreEl.TryGetProperty("total", out var tot))
+            score.Total = tot.GetDouble();
+        return score;
+    }
+
+    /// <summary>场景顺序（S1-S6，verdict 对比与 report 一致）。</summary>
+    private static List<string> ScenarioOrder()
+    {
+        var list = new List<string>();
+        for (int i = 0; i < SuiteV1.Length; i++) list.Add(SuiteV1[i].Id);
+        return list;
+    }
+
+    // ===== 简单 arg 解析（--key value）=====
+
+    private static string GetArg(string[] args, string key, string defaultValue)
+    {
+        for (int i = 1; i < args.Length - 1; i++)
+            if (args[i] == "--" + key) return args[i + 1];
+        return defaultValue;
+    }
+
+    private static int GetIntArg(string[] args, string key, int defaultValue)
+    {
+        string v = GetArg(args, key, null);
+        return v != null && int.TryParse(v, out int r) ? r : defaultValue;
     }
 
     // ===== differentiation：baseline vs 3 组 patch 对照（06 §M3 验收 2/3 + D6）=====
