@@ -13,7 +13,7 @@
 1. **每次提案 ≤3 个参数改动**。想学得快靠轮次不靠一口吃胖。
 2. **evidence 必须引用真实文件路径+数据**。没有证据的提案=瞎猜，直接拒。
 3. **禁调死参数**（调了无效果）：retreatBonusS/A/B/C、cautiousMinDwell、retreatMinDwell、safetyConfirmTime、threatUpgradeThreshold、threatDowngradeThreshold、alertSpeedScale、lodCommandUpgradeLevel。
-4. **边界硬约束**：每个参数的 min/max 见 factor_registry；rawFactor 六权重提案后 Σ 必须=1（自己归一化）。
+4. **边界硬约束**：每个参数的 min/max 见 factor_registry；harness=false 字段（LOD/调度/模拟器不含职业）禁提——改了 sim 不生效。rawFactor 六权重是加权和+Clamp01（权重绝对值有意义），改比值时确保意图正确（不强制 Σ=1，validator 会给 Σ 提示）。
 5. **滞回类参数**（breakThreshold/breakReleaseThreshold/threatUp/DownThresholds）改动需在 risk 字段声明方差风险。
 6. **禁改**：任何 .cs 文件、场景 JSON（Scenarios/）、本文件、holdout 相关内容。
 7. **复盘义务**：你的提案被拒后，下一份提案开头必须回答"上一份为什么错"——引用 verdict 数据，不许写"可能""也许"开头的空话。
