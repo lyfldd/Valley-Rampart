@@ -551,6 +551,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             return 0f;
         }
 
+        // 君主令（3.0.1_8 §6.6）：君主下令不顾一切 → 收益封顶，永不弃任务（覆盖一切成本）
+        if (_followProvider.IsActive && _followProvider.Stimulus.IsRoyalCommand)
+            return 0f;
+
         // 目标切换 → 重置追击计时（新的追击对象从零算）
         if (!ReferenceEquals(_chaseTarget, target))
         {
@@ -767,9 +771,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// 槽位化跟随：目标 = 锚点位置 + slotOffset × cellSize（cell 吸附）。
     /// 复用 FollowStimulus 承载（审计 D3），不新建 FormationStimulus 类型。
     /// </summary>
-    public void SetFormationSlot(UnitController anchor, TaskPriority priority, float intensity, Vector2Int slotOffset)
+    public void SetFormationSlot(UnitController anchor, TaskPriority priority, float intensity, Vector2Int slotOffset, bool royalCommand = false)
     {
-        _followProvider.SetFormationSlot(anchor, priority, intensity, slotOffset);
+        // 3.0.1_8 §6.6：君主令载体透传（royalCommand=true → 个体永不弃任务）
+        _followProvider.SetFormationSlot(anchor, priority, intensity, slotOffset, royalCommand);
     }
 
     /// <summary>清除跟随锚点（部队解散/任务完成时调）</summary>

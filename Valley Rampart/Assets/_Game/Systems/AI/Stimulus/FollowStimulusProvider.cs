@@ -34,12 +34,14 @@ public class FollowStimulusProvider
     /// 槽位化跟随：目标 = 锚点位置 + slotOffset × cellSize。
     /// 复用 FollowStimulus（审计 D3），不新建 FormationStimulus 类型，省 AttentionSystem 4 处 switch 分支。
     /// </summary>
-    public void SetFormationSlot(UnitController anchor, TaskPriority priority, float intensity, Vector2Int slotOffset)
+    public void SetFormationSlot(UnitController anchor, TaskPriority priority, float intensity, Vector2Int slotOffset, bool royalCommand = false)
     {
         _stimulus.Anchor = anchor;
         _stimulus.Priority = priority;
         _stimulus.Intensity = intensity;
         _stimulus.SlotOffset = slotOffset;
+        // 3.0.1_8 §6.6 君主令载体：君主下令不顾一切时置位，个体永不弃任务
+        _stimulus.IsRoyalCommand = royalCommand;
     }
 
     /// <summary>清除跟随锚点（部队解散/任务完成时调）</summary>

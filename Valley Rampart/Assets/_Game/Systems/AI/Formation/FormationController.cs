@@ -77,6 +77,8 @@ public class FormationController : MonoBehaviour
     private bool _pendingReform;
     /// <summary>阵型切换瞬时提强度截止时间戳（3.0.1_8 §七，Time.time 未到则军令用 boost 强度）</summary>
     private float _boostUntil;
+    /// <summary>君主令截止时间戳（3.0.1_8 §6.6：SetRoyalIntent 置位，期内军令带 royal 标记，个体永不弃任务）</summary>
+    private float _royalUntil;
     // 阵型朝向：1=向右进攻（默认），-1=向左进攻。AssignSlots 时 offset.x *= _formationDirection
     private int _formationDirection = 1;
 
@@ -90,6 +92,8 @@ public class FormationController : MonoBehaviour
     public int MemberCount => _members.Count;
     /// <summary>有效军令强度（3.0.1_8 §七：切换瞬间提强度保底期内返回 boost 值，否则正常值）</summary>
     public float EffectiveOrderIntensity => Time.time < _boostUntil ? orderIntensityBoost : orderIntensity;
+    /// <summary>是否君主令生效期（3.0.1_8 §6.6：期内军令带 royal 标记）</summary>
+    public bool IsRoyalCommandActive => Time.time < _royalUntil;
     /// <summary>锚点世界坐标（将军/城墙锚点；无锚点返回 zero，中区块编队上限登记用）</summary>
     private Vector2 AnchorWorldPos => _anchor != null ? (Vector2)_anchor.position : Vector2.zero;
 
@@ -127,6 +131,13 @@ public class FormationController : MonoBehaviour
         // 3.0.1_LOD §1.2：军队锚点注册（活跃带双中心，将军位置点亮活跃带）
         if (general != null && LODSystem.Instance != null)
             LODSystem.Instance.RegisterArmyCenter(general.transform);
+        // 3.0.1_5 §四：军队级大脑（意图自决：攻/守/撤/支援），将军编队自动挂载
+        if (general != null)
+        {
+            var brain = GetComponent<FormationBrain>();
+            if (brain == null) brain = gameObject.AddComponent<FormationBrain>();
+            brain.Init(this);
+        }
     }
 
     /// <summary>
@@ -356,7 +367,8 @@ public class FormationController : MonoBehaviour
         {
             if (m.Brain == null) continue;
             // 3.0.1_8 §七：军令强度用 EffectiveOrderIntensity（切换保底期内 6.0，否则 4.5）
-            m.Brain.SetFormationSlot(anchorUnit, TaskPriority.S, EffectiveOrderIntensity, m.SlotOffset);
+            // 3.0.1_8 §6.6：君主令期军令带 royal 标记（个体永不弃任务，收益封顶）
+            m.Brain.SetFormationSlot(anchorUnit, TaskPriority.S, EffectiveOrderIntensity, m.SlotOffset, IsRoyalCommandActive);
         }
     }
 
@@ -385,6 +397,17 @@ public class FormationController : MonoBehaviour
         if (line == _currentLine) return;
         _currentLine = line;
         ApplyFormation();
+    }
+
+    /// <summary>
+    /// 君主令（3.0.1_8 §6.6）：君主下令不顾一切 → 切意图 + 军令带 royal 标记（个体永不弃任务，收益封顶）。
+    /// duration 秒内生效，过期回落（重发军令清标记）。作战面板/君主指挥链调用。
+    /// </summary>
+    public void SetRoyalIntent(TacticIntent intent, float duration)
+    {
+        _royalUntil = Time.time + Mathf.Max(0f, duration);
+        SetIntent(intent);
+        Debug.Log($"[FormationController] 君主令：{intent}（{duration}s 内军令带 royal 标记，个体永不弃任务）");
     }
 
     // ===== 进攻推进（§14.2 将军带头）=====
@@ -456,6 +479,14 @@ public class FormationController : MonoBehaviour
             _boostUntil = 0f;
             DispatchOrders();
             Debug.Log($"[FormationController] 军令瞬时提强度过期，回落至 {orderIntensity:F1}。");
+        }
+
+        // 3.0.1_8 §6.6：君主令过期 → 回落（重发军令清 royal 标记）
+        if (_royalUntil > 0f && Time.time >= _royalUntil && _members.Count > 0)
+        {
+            _royalUntil = 0f;
+            DispatchOrders();
+            Debug.Log("[FormationController] 君主令过期，军令回落（royal 标记清除）。");
         }
 
         // 进攻推进 P0 简化：将军 brain 自驱动（靠威胁焦点），此处不直接操控将军

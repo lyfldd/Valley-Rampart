@@ -48,6 +48,8 @@ public sealed class FollowStimulus : IStimulus
     public TaskPriority Priority;
     /// <summary>槽位偏移（cell 单位，3.0.1_3 编队用；非编队跟随=zero）</summary>
     public Vector2Int SlotOffset = Vector2Int.zero;
+    /// <summary>是否君主令（3.0.1_8 §6.6：君主下令不顾一切 → 个体永不弃任务，收益封顶）</summary>
+    public bool IsRoyalCommand;
     /// <summary>是否编队槽位化跟随（SlotOffset 非 zero 即编队成员）</summary>
     public bool IsFormationSlot => SlotOffset.x != 0 || SlotOffset.y != 0;
     public Vector2 Position => Anchor != null ? (Vector2)Anchor.transform.position : Vector2.zero;

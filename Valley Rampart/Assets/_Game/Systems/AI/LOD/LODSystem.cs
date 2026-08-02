@@ -315,6 +315,32 @@ public class LODSystem : Singleton<LODSystem>
         return true;
     }
 
+    /// <summary>
+    /// 查询中心点 searchRadius 内**最近**的有效战斗热点（3.0.1_5 §四 支援机制数据源）。
+    /// 跨中区块扫描（编队 B 支援编队 A：A 受击在中区块 X，B 在中区块 Y 也能读到热点）。
+    /// FormationBrain 秒级调用，O(中区块数) 可接受。
+    /// </summary>
+    public bool TryGetNearestCombatHotspot(Vector2 center, float maxAge, float searchRadius, out Vector2 hotspot)
+    {
+        hotspot = Vector2.zero;
+        if (_midHeats.Count == 0) return false;
+        bool found = false;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < _midHeats.Count; i++)
+        {
+            var m = _midHeats[i];
+            if (m.HotspotTime <= 0f || Time.time - m.HotspotTime > maxAge) continue;
+            float d = Vector2.Distance(center, m.CombatHotspot);
+            if (d <= searchRadius && d < bestDist)
+            {
+                bestDist = d;
+                hotspot = m.CombatHotspot;
+                found = true;
+            }
+        }
+        return found;
+    }
+
     /// <summary>世界坐标 → region 索引（复用 GridSystem 换算）。</summary>
     public int GetRegionOf(Vector2 worldPos)
     {
