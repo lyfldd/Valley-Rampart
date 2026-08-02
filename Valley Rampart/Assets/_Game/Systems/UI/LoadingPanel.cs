@@ -16,6 +16,15 @@ public class LoadingPanel : MonoBehaviour
         SetPanelVisible(false);
     }
 
+    private void Start()
+    {
+        // 兜底：OnEnable 时 UIDocument.rootVisualElement 可能尚未就绪导致隐藏失败，
+        // 全屏 loading-root 若不隐藏会拦截下方所有 UI 点击（挡 GameOver 按钮等）。
+        // 此时按当前 GameState 校正显隐。
+        var gm = GameStateManager.Instance;
+        SetPanelVisible(gm != null && gm.CurrentState == GameState.Loading);
+    }
+
     private void OnDisable()
     {
         EventBus.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);

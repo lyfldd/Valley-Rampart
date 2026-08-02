@@ -87,7 +87,9 @@ public class PausePanel : MonoBehaviour
         if (evt.NewState != GameState.Playing && evt.NewState != GameState.Paused)
         {
             SetPanelVisible(false);
-            Time.timeScale = 1f;
+            // ⚠️ 不在此恢复 timeScale：GameOver 冻结（timeScale=0）由 GameOverPanel.Show() 管理，
+            // 此处恢复会把 GameOver 的冻结覆盖回 1，导致"结算画面弹出但游戏世界继续跑"。
+            // 返回主菜单的恢复由 TeardownManager.TeardownForReturnToMenu 统一处理。
         }
     }
 

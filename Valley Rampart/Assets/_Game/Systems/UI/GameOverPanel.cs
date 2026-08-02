@@ -66,6 +66,8 @@ public class GameOverPanel : MonoBehaviour
         Time.timeScale = 0f;
         SetPanelVisible(true);
         PopulateStats();
+        // 防御：若 OnEnable/Start 时 UIDocument 未就绪导致绑定失败，弹出时补绑（确保按钮可点）
+        if (!_buttonBound) BindButton();
         Debug.Log("[GameOverPanel] 显示结算面板");
     }
 
