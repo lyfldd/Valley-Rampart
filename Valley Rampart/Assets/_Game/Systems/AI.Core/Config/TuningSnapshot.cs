@@ -154,6 +154,14 @@ public struct TuningSnapshot
     public float taskValueHeatBoost;
     public float taskValueSurvivalPenalty;
 
+    // ===== 军队级自动意图阈值（M7：FormationBrain 内置大脑入训，原 Inspector 硬编码）=====
+    public float fbDecisionInterval;        // 决策间隔（秒，原 FormationBrain.decisionInterval=1）
+    public float fbHeatEngage;              // 本地热度≥此值=敌压近（防守/撤退判定线，原 0.3）
+    public float fbHeatCharge;              // 本地热度≥此值且价值高=冲锋（原 0.6）
+    public float fbSurvivalRetreatGate;     // 残编率<此值且被压=撤退（原 0.4）
+    public float fbSupportSearchRadius;     // 支援热点搜索半径（世界单位，原 30 sim=500）
+    public float fbHotspotMaxAge;           // 热点有效期（秒，原 5 sim=10）
+
     // ===== 威胁刺激标定（NPCBrain/ThreatAssessment）=====
     public float threatIntensityMax;
     public float countFactorFullCount;

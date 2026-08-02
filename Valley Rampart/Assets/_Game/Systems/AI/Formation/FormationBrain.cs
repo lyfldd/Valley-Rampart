@@ -62,7 +62,8 @@ public class FormationBrain : MonoBehaviour
         if (_controller == null) return;
         _timer -= Time.deltaTime;
         if (_timer > 0f) return;
-        _timer = decisionInterval;
+        // M7：决策间隔入训（读 SO config.fbDecisionInterval，未配置回退 Inspector 字段）
+        _timer = _config != null ? _config.fbDecisionInterval : decisionInterval;
         Decide();
     }
 
@@ -73,11 +74,18 @@ public class FormationBrain : MonoBehaviour
         if (_controller.Anchor == null) return;
         Vector2 anchorPos = _controller.Anchor.position;
 
+        // M7：FormationBrain 内置判定阈值入训（读 SO config，未配置回退 Inspector 字段）
+        float engage = _config != null ? _config.fbHeatEngage : heatEngage;
+        float charge = _config != null ? _config.fbHeatCharge : heatCharge;
+        float retreatGate = _config != null ? _config.fbSurvivalRetreatGate : survivalRetreatGate;
+        float searchRadius = _config != null ? _config.fbSupportSearchRadius : supportSearchRadius;
+        float maxAge = _config != null ? _config.fbHotspotMaxAge : hotspotMaxAge;
+
         // 输入：本地热度 / 跨中区块热点 / 存活率 / 任务价值（壳采集，含单例 LODSystem）
         float heat = LODSystem.Instance != null ? LODSystem.Instance.GetHeatAt(anchorPos) : 0f;
         Vector2 hotspot = Vector2.zero;
         bool hasRemoteHotspot = LODSystem.Instance != null
-            && LODSystem.Instance.TryGetNearestCombatHotspot(anchorPos, hotspotMaxAge, supportSearchRadius, out hotspot);
+            && LODSystem.Instance.TryGetNearestCombatHotspot(anchorPos, maxAge, searchRadius, out hotspot);
         float survival = _controller.MemberCount / (float)FormationDef.StandardSize;
 
         // 决策核心（核内纯函数，可测试）：
@@ -87,10 +95,10 @@ public class FormationBrain : MonoBehaviour
             _controller.AdvanceTarget != Vector2.zero,
             heat, survival,
             _config != null ? _config.ToSnapshot() : default,
-            survivalRetreatGate);
+            retreatGate);
         var decision = FormationDecisionCore.DecideIntent(
             heat, survival, value, hasRemoteHotspot,
-            heatEngage, heatCharge, survivalRetreatGate,
+            engage, charge, retreatGate,
             _config != null ? _config.chargeValueGate : 0.6f);
 
         // 壳执行控制器副作用（推进方向 + 切意图）

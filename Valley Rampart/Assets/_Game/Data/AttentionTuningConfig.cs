@@ -260,6 +260,20 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("阵型切换瞬时提强度保底时长（秒，原硬编码 1s）")]
     public float formationOrderBoostDuration = 1f;
 
+    [Header("军队级自动意图阈值（M7：FormationBrain 内置大脑入训，原 Inspector 字段迁移）")]
+    [Tooltip("军队级决策间隔（秒，FormationBrain 秒级节奏，原 decisionInterval=1）")]
+    public float fbDecisionInterval = 1f;
+    [Tooltip("本地威胁热度 ≥ 此值视为敌压近（防守/撤退判定线，原 heatEngage=0.3）")]
+    public float fbHeatEngage = 0.3f;
+    [Tooltip("本地威胁热度 ≥ 此值且任务价值高 → 冲锋压上（原 heatCharge=0.6）")]
+    public float fbHeatCharge = 0.6f;
+    [Tooltip("残编率 < 此值且被压 → 撤退（保住有生力量，原 survivalRetreatGate=0.4）")]
+    public float fbSurvivalRetreatGate = 0.4f;
+    [Tooltip("支援热点搜索半径（世界单位：此半径内出现战斗热点且本地无激战 → 切支援，原 supportSearchRadius=30）")]
+    public float fbSupportSearchRadius = 150f;
+    [Tooltip("热点有效期（秒：超过则不再朝旧热点移动，原 hotspotMaxAge=5）")]
+    public float fbHotspotMaxAge = 10f;
+
     [Header("LOD 三区思考（3.0.1_LOD §1.5 / §五）")]
     [Tooltip("活跃区 Think 频率（Hz，现状 10）")]
     public float lodActiveThinkHz = 10f;
@@ -399,6 +413,12 @@ public class AttentionTuningConfig : ScriptableObject
             taskValueHeatBoostGate = taskValueHeatBoostGate,
             taskValueHeatBoost = taskValueHeatBoost,
             taskValueSurvivalPenalty = taskValueSurvivalPenalty,
+            fbDecisionInterval = fbDecisionInterval,
+            fbHeatEngage = fbHeatEngage,
+            fbHeatCharge = fbHeatCharge,
+            fbSurvivalRetreatGate = fbSurvivalRetreatGate,
+            fbSupportSearchRadius = fbSupportSearchRadius,
+            fbHotspotMaxAge = fbHotspotMaxAge,
             threatIntensityMax = threatIntensityMax,
             countFactorFullCount = countFactorFullCount,
             closeRangeMinRaw = closeRangeMinRaw,
