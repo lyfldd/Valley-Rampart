@@ -1,0 +1,8 @@
+{
+  "name": "tuning_rfdist20",
+  "$comment": "区分度注入（M3 验收 2）：rawFactor 距离权重 0.35 -> 0.20，其余字段不动（反射部分覆盖）",
+  "tuning": {
+    "rfDistWeight": 0.20
+  },
+  "professions": {}
+}

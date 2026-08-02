@@ -31,6 +31,13 @@ public sealed class SimRunResult
     public int TotalAttacks;           // 攻击命中次数（attack 事件数）
     public int KillsHuman;             // 人类杀敌数
     public int KillsUndead;            // 亡灵杀敌数
+    // ===== M3 扩展（06 §M3 / 04 §八 行为类指标）=====
+    public int RetreatTacticalCount;   // 战术短撤次数（谱系4 tactical）
+    public int RetreatStrategicCount;  // 战略撤退次数（谱系4 strategic）
+    public float RetreatFirstTime;     // 首次撤退时刻（无撤退 = -1）
+    public int FormationBreakCount;    // 编队解散（破阵）次数（D4，全编队聚合）
+    public float FormationBreakFirstTime; // 首次破阵时刻（无破阵 = -1）
+    public Dictionary<string, int> DeathsByProfession; // 死亡职业分布（M3 report behavior 块）
 }
 
 /// <summary>
@@ -74,6 +81,14 @@ public sealed class SimWorld
     private int _attackCount;
     private int _killsHuman;
     private int _killsUndead;
+
+    // ===== M3 扩展统计（行为类指标，04 §八）=====
+    private int _retreatTactical;
+    private int _retreatStrategic;
+    private float _retreatFirstTime = -1f;
+    private int _formationBreakCount;
+    private float _formationBreakFirstTime = -1f;
+    private readonly Dictionary<string, int> _deathsByProfession = new Dictionary<string, int>();
 
     // 谱系切换跟踪（跨 tick 状态）
     private readonly Dictionary<SimUnit, BehaviorSpectrum> _prevSpectrum = new Dictionary<SimUnit, BehaviorSpectrum>();
@@ -158,6 +173,7 @@ public sealed class SimWorld
         _events.Retreat += OnRetreat;
         _events.FormationIntent += OnFormationIntent;
         _events.AbandonChase += OnAbandonChase;
+        _events.FormationBreak += OnFormationBreak;
 
         _logger = new SimLogger(_logPath);
         _logger.RunStart(_scenario.Name, _scenario.Seed, _runIndex, CountAlive(Faction.Human_Player), CountAlive(Faction.Undead));
@@ -193,6 +209,12 @@ public sealed class SimWorld
             TotalAttacks = _attackCount,
             KillsHuman = _killsHuman,
             KillsUndead = _killsUndead,
+            RetreatTacticalCount = _retreatTactical,
+            RetreatStrategicCount = _retreatStrategic,
+            RetreatFirstTime = _retreatFirstTime,
+            FormationBreakCount = _formationBreakCount,
+            FormationBreakFirstTime = _formationBreakFirstTime,
+            DeathsByProfession = new Dictionary<string, int>(_deathsByProfession),
         };
     }
 
@@ -395,6 +417,11 @@ public sealed class SimWorld
             if (evt.Killer.Faction == Faction.Human_Player) _killsHuman++;
             else if (evt.Killer.Faction == Faction.Undead) _killsUndead++;
         }
+
+        // M3：死亡职业分布（report behavior 块；聚合端 SortedDictionary 固定序）
+        _deathsByProfession.TryGetValue(evt.Unit.ProfessionName, out int d);
+        _deathsByProfession[evt.Unit.ProfessionName] = d + 1;
+
         _logger.UnitDied(_clock.Now, evt.Unit, evt.Killer);
     }
 
@@ -409,7 +436,22 @@ public sealed class SimWorld
     }
 
     private void OnSpectrum(SimSpectrumEvent evt) { /* 已直接写日志，占位 */ }
-    private void OnRetreat(SimRetreatEvent evt) { /* 已直接写日志，占位 */ }
+
+    /// <summary>撤退计数 + 首次时刻（M3 行为指标；谱系 4 边沿已在 SampleBrainEvents 触发）。</summary>
+    private void OnRetreat(SimRetreatEvent evt)
+    {
+        if (evt.IsTactical) _retreatTactical++;
+        else _retreatStrategic++;
+        if (_retreatFirstTime < 0f) _retreatFirstTime = _clock.Now;
+    }
+
+    /// <summary>破阵计数 + 首次时刻（M3 D4；编队将军阵亡 -> DisbandAll 发布）。</summary>
+    private void OnFormationBreak(SimFormationBreakEvent evt)
+    {
+        _formationBreakCount++;
+        if (_formationBreakFirstTime < 0f) _formationBreakFirstTime = evt.Time;
+    }
+
     private void OnAbandonChase(SimAbandonChaseEvent evt) { /* 已直接写日志，占位 */ }
 
     private void OnFormationIntent(SimFormationIntentEvent evt)

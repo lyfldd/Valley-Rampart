@@ -1,0 +1,10 @@
+{
+  "name": "prof_undead_fast",
+  "$comment": "S2 敏感性注入（M3 验收 3 / D7）：Undead_Warrior 移速 3 -> 6，人为制造弓手被贴身（职业字段反射部分覆盖）",
+  "tuning": {},
+  "professions": {
+    "Undead_Warrior": {
+      "walkSpeed": 6.0
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "name": "s6_support_hotspot",
+  "seed": 20260807,
+  "maxDuration": 60.0,
+  "cellSize": 2.26,
+  "winCondition": "annihilation",
+
+  "units": [
+    { "id": 1, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": -11.30, "formationGid": 0, "isGeneral": true },
+    { "id": 2, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": -18.08, "formationGid": 0 },
+    { "id": 3, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": -4.52,  "formationGid": 0 },
+    { "id": 4, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": -15.82, "formationGid": 0 },
+    { "id": 5, "profession": "Human_Player_Archer", "faction": "Human_Player", "x": -13.56, "formationGid": 0 },
+    { "id": 6, "profession": "Human_Player_Archer", "faction": "Human_Player", "x": -9.04,  "formationGid": 0 },
+
+    { "id": 7,  "profession": "Undead_Warrior", "faction": "Undead", "x": 11.30, "formationGid": 2, "isGeneral": true },
+    { "id": 8,  "profession": "Undead_Warrior", "faction": "Undead", "x": 18.08, "formationGid": 2 },
+    { "id": 9,  "profession": "Undead_Warrior", "faction": "Undead", "x": 4.52,  "formationGid": 2 },
+    { "id": 10, "profession": "Undead_Warrior", "faction": "Undead", "x": 15.82, "formationGid": 2 },
+    { "id": 11, "profession": "Undead_Warrior", "faction": "Undead", "x": 6.78,  "formationGid": 2 },
+    { "id": 12, "profession": "Undead_Warrior", "faction": "Undead", "x": 13.56, "formationGid": 2 },
+
+    { "id": 13, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": 83.62, "formationGid": 1, "isGeneral": true },
+    { "id": 14, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": 76.84, "formationGid": 1 },
+    { "id": 15, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": 90.40, "formationGid": 1 },
+    { "id": 16, "profession": "Human_Player_Archer", "faction": "Human_Player", "x": 79.10, "formationGid": 1 },
+    { "id": 17, "profession": "Human_Player_Archer", "faction": "Human_Player", "x": 88.14, "formationGid": 1 },
+    { "id": 18, "profession": "Human_Player_Warrior", "faction": "Human_Player", "x": 85.88, "formationGid": 1 }
+  ],
+
+  "formations": [
+    {
+      "gid": 0, "faction": "Human_Player", "generalUnitId": 1,
+      "direction": 1, "defaultIntent": "Defense",
+      "slots": [
+        { "x": -3, "y": 0, "role": "MeleeOnly" },
+        { "x": -2, "y": 0, "role": "MeleeOnly" },
+        { "x": -1, "y": 0, "role": "RangedOnly" },
+        { "x": 1,  "y": 0, "role": "RangedOnly" },
+        { "x": 2,  "y": 0, "role": "MeleeOnly" },
+        { "x": 3,  "y": 0, "role": "GeneralOnly" }
+      ],
+      "intentScript": []
+    },
+    {
+      "gid": 1, "faction": "Human_Player", "generalUnitId": 13,
+      "direction": -1, "defaultIntent": "Defense",
+      "slots": [
+        { "x": -3, "y": 0, "role": "MeleeOnly" },
+        { "x": -2, "y": 0, "role": "MeleeOnly" },
+        { "x": -1, "y": 0, "role": "RangedOnly" },
+        { "x": 1,  "y": 0, "role": "RangedOnly" },
+        { "x": 2,  "y": 0, "role": "MeleeOnly" },
+        { "x": 3,  "y": 0, "role": "GeneralOnly" }
+      ],
+      "intentScript": [
+        { "t": 8.0, "intent": "Charge" }
+      ]
+    },
+    {
+      "gid": 2, "faction": "Undead", "generalUnitId": 7,
+      "direction": -1, "defaultIntent": "Charge",
+      "slots": [
+        { "x": -3, "y": 0, "role": "Any" }, { "x": -2, "y": 0, "role": "Any" },
+        { "x": -1, "y": 0, "role": "Any" }, { "x": 1,  "y": 0, "role": "Any" },
+        { "x": 2,  "y": 0, "role": "Any" }, { "x": 3,  "y": 0, "role": "Any" }
+      ],
+      "intentScript": []
+    }
+  ]
+}

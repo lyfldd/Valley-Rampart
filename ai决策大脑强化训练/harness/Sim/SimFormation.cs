@@ -297,8 +297,16 @@ public sealed class SimFormation
 
     // ===== 解散与状态清理（§15.5 ClearFormationState）=====
 
+    /// <summary>是否已解散（防重复发布破阵事件，指标只记一次；DisbandAll 幂等）。</summary>
+    private bool _disbanded;
+
     public void DisbandAll()
     {
+        if (_disbanded) return;
+        _disbanded = true;
+        // M3 D4：编队解散事件（破阵指标；AI.Core 零改动，Sim 层发布）
+        _events.Publish(new SimFormationBreakEvent { Gid = Gid, Time = _clock.Now });
+
         foreach (var m in _members)
         {
             if (m.Unit != null && m.Unit.Brain != null)

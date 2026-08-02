@@ -53,6 +53,13 @@ public sealed class SimAbandonChaseEvent
     public SimUnit Unit;
 }
 
+/// <summary>编队解散事件（将军阵亡 -> DisbandAll，M3 D4 破阵指标；AI.Core 零改动，Sim 层发布）。</summary>
+public sealed class SimFormationBreakEvent
+{
+    public int Gid;
+    public float Time;
+}
+
 /// <summary>
 /// sim 事件总线（Unity EventBus 最小子集）。
 /// 事件顺序 = 发布顺序（tick 内固定顺序，04 §二 8 步循环），确定性依赖发布方。
@@ -65,6 +72,7 @@ public sealed class SimEventBus
     public event Action<SimRetreatEvent> Retreat;
     public event Action<SimFormationIntentEvent> FormationIntent;
     public event Action<SimAbandonChaseEvent> AbandonChase;
+    public event Action<SimFormationBreakEvent> FormationBreak;
 
     public void Publish(SimUnitDiedEvent e) => UnitDied?.Invoke(e);
     public void Publish(SimUnitDamagedEvent e) => UnitDamaged?.Invoke(e);
@@ -72,4 +80,5 @@ public sealed class SimEventBus
     public void Publish(SimRetreatEvent e) => Retreat?.Invoke(e);
     public void Publish(SimFormationIntentEvent e) => FormationIntent?.Invoke(e);
     public void Publish(SimAbandonChaseEvent e) => AbandonChase?.Invoke(e);
+    public void Publish(SimFormationBreakEvent e) => FormationBreak?.Invoke(e);
 }
