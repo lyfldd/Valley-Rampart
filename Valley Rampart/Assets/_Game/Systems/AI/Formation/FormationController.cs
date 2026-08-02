@@ -43,6 +43,9 @@ public class FormationController : MonoBehaviour
     [Tooltip("军令强度（S 级军令基础强度，需 > 工作任务 B 级 + 安全归巢 D 级）")]
     public float orderIntensity = 4.5f;
 
+    /// <summary>军令强度归一化基准（3.0.1_8 协作因子用：FormationFactor = orderIntensity / 此值）</summary>
+    public const float OrderIntensityBase = 4.5f;
+
     [Tooltip("阵型切换防抖时间（秒，§15.3 即时触发+防抖）")]
     public float switchDebounce = 1f;
 

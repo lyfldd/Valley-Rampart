@@ -489,6 +489,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             FormationSlotWorld = ResolveFormationSlotWorld(),
             // 3.0.1_LOD §3.2：区块威胁热度（环境型威胁因子；LODSystem 未挂载=0 行为不变）
             RegionHeat = _lodSystem != null ? _lodSystem.GetHeatAt(_self.GetPosition()) : 0f,
+            // 3.0.1_8 综合因子（L2 在 ③ 阶段读取，此处用上一帧 rawFactor = _lastRaw，与量化器消费时序一致）：
+            //   ThreatFactor = 上一帧 rawFactor（连续 0-1，供 L2 连续仲裁）
+            //   FormationFactor = 编队军令强度归一化（FollowStimulus.Intensity / 基准 4.5，有编队≈1 无编队=0）
+            ThreatFactor = _lastRaw,
+            FormationFactor = _followProvider.IsActive
+                ? Mathf.Clamp01(_followProvider.Stimulus.Intensity / FormationController.OrderIntensityBase)
+                : 0f,
         };
     }
 

@@ -45,44 +45,45 @@ public static class L2PostureDecider
     }
 
     /// <summary>
-    /// 谱系计算（复用 TradeoffSystem.CalculateSpectrum 公式）。
-    /// 威胁 0/1 -> FullPower；威胁 2 有保护 -> Cautious / 无保护 -> FullRetreat；
-    /// 威胁 3 -> 按撤退阈值（高阈值职业如士兵扛住 -> Cautious，否则 FullRetreat）。
+    /// 谱系计算（3.0.1_8 §4 分层仲裁：连续因子仲裁，不查 4 档表）。
+    /// 输入：ThreatFactor（连续 0-1）vs FormationFactor（连续 0-1）+ 撤退阈值（职业性格）。
+    /// 仲裁逻辑（连续比较 + 末位离散，非合成总分）：
+    ///   ① ThreatFactor 低（< 警戒线 0.3）-> FullPower（无威胁全力执行）
+    ///   ② 有效威胁 = ThreatFactor × (1 - 协作抵抗)，协作抵抗来自编队军令（服从度越高越扛）
+    ///   ③ 有效威胁 > 撤退阈值 -> FullRetreat；否则 Caution（有编队/性格扛住）
+    /// 谱系是仲裁的结果而非输入；量化器 4 档保留给攻击链路/调试，不参与谱系判定。
+    /// ⚠️ 量纲换算：撤退阈值是旧档位量纲（0-3，threatLevel 档位），ThreatFactor 是连续量纲（0-1），
+    ///    统一用 /3 换算到 0-1（3.0.1_8 §2.3 量化器再定位：连续仲裁不再消费档位）。
     /// </summary>
     private static BehaviorSpectrum CalculateSpectrum(in FactorContext ctx)
     {
         var profession = ctx.Profession;
         var config = ctx.Config;
-        ThreatLevel threatLevel = ctx.ThreatLevel;
+        float threat = ctx.ThreatFactor;        // 连续 0-1（3.0.1_8 威胁因子）
+        float formation = ctx.FormationFactor;  // 连续 0-1（3.0.1_8 协作因子）
 
-        // 撤退阈值公式（3.0.1 §4.2）：
-        // threshold = base + priorityBonus + (courage-50)/50 + (obedience-50)/100 + offset
+        // 撤退阈值（职业性格基线）→ 档位量纲换算到连续量纲（/3）
+        // threshold = base + (courage-50)/50 + (obedience-50)/100 + offset
         float threshold = config.retreatThresholdBase;
-        // 注：P0 无任务系统，priorityBonus 暂不加（GetCurrentTaskPriority 返回 null）
         threshold += (profession.courage - 50f) / 50f;       // 勇气加成 -1~+1
         threshold += (profession.obedience - 50f) / 100f;    // 服从度加成 -0.5~+0.5
         threshold += profession.retreatThresholdOffset;       // 职业偏移
+        threshold = Mathf.Max(0.2f, threshold / 3f);          // 连续量纲，保底防除零
 
-        float threatValue = (float)threatLevel;
-
-        // 威胁 0/1 -> 全力执行
-        if (threatLevel <= ThreatLevel.Alert)
+        // ① 低威胁 -> 全力执行（原威胁 0/1）
+        if (threat < 0.3f)
             return BehaviorSpectrum.FullPower;
 
-        // 威胁 2（危险）
-        if (threatLevel == ThreatLevel.Danger)
-        {
-            if (threatValue > threshold)
-                return BehaviorSpectrum.FullRetreat;
-            if (ctx.HasProtection)
-                return BehaviorSpectrum.Cautious;
-            return BehaviorSpectrum.FullRetreat;
-        }
+        // ② 连续仲裁：有效威胁 = 威胁因子 × (1 - 协作抵抗)
+        // 协作因子（编队军令）作为"扛住"系数：军令越强、服从度越高，越不易被威胁压垮
+        // 这是"指挥优先级 vs 战斗本能"的连续权衡，而非 4 档二选一
+        float formationResist = formation * (0.5f + profession.obedience / 100f);  // 0~1.5
+        float effectiveThreat = threat * (1f - formationResist * 0.4f);             // 编队最高抵消 60%
 
-        // 威胁 3（致命）
-        if (threatValue <= threshold)
-            return BehaviorSpectrum.Cautious;  // 高阈值职业（S级军令）即使致命也扛住
-        return BehaviorSpectrum.FullRetreat;
+        // ③ 有效威胁 vs 撤退阈值 -> 谱系
+        if (effectiveThreat > threshold)
+            return BehaviorSpectrum.FullRetreat;
+        return BehaviorSpectrum.Cautious;  // 有编队/性格扛住 -> 谨慎（维持工作/守阵）
     }
 
     /// <summary>

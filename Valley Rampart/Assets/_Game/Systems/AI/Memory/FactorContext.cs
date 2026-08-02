@@ -43,6 +43,12 @@ public struct FactorContext
     /// <summary>是否编队成员（有槽位绑定）</summary>
     public bool HasFormationSlot;
 
+    // ===== 3.0.1_8 综合因子（分层仲裁，连续 0-1，不压档）=====
+    /// <summary>威胁因子（连续 0-1）：距离/数量/战力/溯源/集火/夜间 的加权和（小因子→综合因子耦合 OK）</summary>
+    public float ThreatFactor;
+    /// <summary>协作因子（连续 0-1）：编队军令约束强度（有编队≈1，无编队=0）。切阵型=此因子提高</summary>
+    public float FormationFactor;
+
     // ===== ② 记忆组件 FillContext 写入 =====
     public HitCooldownState CurrentState;
     public int HitCount;
