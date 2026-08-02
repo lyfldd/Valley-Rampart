@@ -40,6 +40,7 @@
 | `04_模拟器规格.md` | 1D 世界模型、保真度契约、场景套件、日志格式、确定性 | M2 写模拟器时照做 |
 | `05_训练师协议_opencode_DeepSeek.md` | DeepSeek 训练师工作循环、提案 schema、harness 命令契约、opencode 配置 | M5 接 AI 时照做 |
 | `06_执行计划与验收.md` | M0-M6 里程碑，每步验收标准与工时 | 每天开工看一眼 |
+| `07_训练师启动指南.md` | 启动 opencode + 和训练师对话的实操手册（话术模板/常见报错/日常节奏） | 要叫训练师干活时照抄 |
 | `AGENTS.md` | 给 opencode 读的训练师行为准则 | opencode 自动加载 |
 | `schemas/` | 因子注册表/提案/战报 三个 JSON 规范与示例 | 写 harness 与提案时对照 |
 
