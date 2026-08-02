@@ -4,9 +4,9 @@
 
 ## 你能做的
 
-1. 读：`results/**`、`schemas/factor_registry.example.json`、`proposals/history.log`、`01_决策大脑解剖.md`
+1. 读：`harness/results/**`（战报：report.json + *.jsonl 事件流）、`schemas/factor_registry.example.json`、`proposals/history.log`、`01_决策大脑解剖.md`
 2. 写：`proposals/p_{序号}.json`（符合 schemas/tune_proposal.schema.json）
-3. 执行：`dotnet run --project harness -- benchmark ...`（唯一可跑的命令）
+3. 执行：`dotnet run --project harness -- benchmark ...`（唯一可跑的命令；也可 `propose validate/run`）
 
 ## 铁律（违反即废提案）
 

@@ -38,3 +38,15 @@
 - 教训：candidate 不代表立即替换 champion——累积 3-5 个后人抽检（05 §九），
   且回灌 Unity 手玩 10 分钟才是最终裁判。
 
+### [2026-08-02] p_0006 复盘（AI 训练师首份提案，candidate，总分 Δ=+0.001）
+
+- 提案（**DeepSeek 经 opencode 独立完成**）：rfHeatWeight 0.5→0.4 + rfAllyWeight 0.2→0.25
+- 因果链：S3 winRate=0 病根 = 将军 100% 阵亡破阵 → 热度威胁锁死幸存者 Cautious → 不收割 → Draw。
+  证据引用到 run0 事件流具体时间戳（t=23.3 后无 attack、幸存者 threat 0.74-0.79 持续到 60s）。
+- verdict：总分 0.545 → 0.546（Δ=+0.001），无退化，holdout 不退 → **candidate**
+- 复盘结论：**AI 训练师已跑通完整闭环**（读报告→写提案→validate 通过→run→verdict candidate）。
+  它自主应用了 p_0005 教训（只动已验证敏感的 rawFactor 族）、遵守边界与风险声明。
+  注意：Δ 与 p_0005 同为 +0.001，说明 100 局下该套件对微调不敏感——需要更大局数或更多
+  candidate 累积后才能判断"真提升 vs 噪声"。
+- 下一步：让 AI 训练师继续提案（可要求它读 verdict 复盘、探索弓手射程/移速等更陡峭的参数）
+

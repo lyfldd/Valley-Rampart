@@ -67,26 +67,38 @@ verdict.json       # 与 champion 对比：score delta / 各场景退化标记 /
 // ai决策大脑强化训练/opencode.json
 {
   "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "deepseek": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "https://api.deepseek.com",
-        "apiKey": "{env:DEEPSEEK_API_KEY}"
-      },
-      "models": {
-        "deepseek-chat": { "name": "DeepSeek-V3 提案手" },
-        "deepseek-reasoner": { "name": "DeepSeek-R1 归因分析" }
-      }
-    }
-  },
-  "model": "deepseek/deepseek-chat"
+  "model": "deepseek/deepseek-chat",   // 见下方 M6 实装说明
+  "instructions": ["AGENTS.md"]
 }
 ```
 
-- `deepseek-chat`：日常提案（便宜快）
-- `deepseek-reasoner`：学歪归因/疑难分析（"连续 5 轮提案都被拒，为什么"）
-- API Key 存环境变量，不进任何文件
+- **M6 实装（2026-08-02，已跑通）**：项目 `opencode.json` 精简为 `model + instructions`——provider 复用全局配置（`~/.config/opencode/opencode.json` 已含 DeepSeek provider + key），不再写 `{env:DEEPSEEK_API_KEY}`（避免覆盖全局导致起不来）。
+- 模型名按实际可用列表选（`opencode models` 查询）：
+  - `deepseek/deepseek-v4-flash`（全局 provider 已配）
+  - `deepseek/deepseek-chat` / `deepseek/deepseek-reasoner`（官方 API 名，若全局未配需自加 provider）
+- `deepseek-chat`：日常提案（便宜快）；`deepseek-reasoner`：学歪归因/疑难分析
+- **API Key 存全局配置或环境变量，不进项目文件**（项目 opencode.json 已入库，严禁放 key）
+
+## 五·B 启动与对话（训练师怎么叫起来）
+
+```bash
+# 交互式对话（推荐日常用）：在 ai决策大脑强化训练/ 目录
+cd "D:\Valley Rampart\ai决策大脑强化训练"
+opencode
+
+# 非交互单发（脚本/CI 用）
+opencode run "读 results/baseline/report.json，指出最差的场景并给出一个调参提案"
+
+# 看可用模型（确认 provider 生效）
+opencode models
+```
+
+**和训练师说什么**（它读 AGENTS.md 后按铁律干活）：
+1. 开局唤醒：`读 AGENTS.md 了解职责，再读 results/baseline/report.json 和 proposals/history.log，列出你认为最差的 2 个场景及分数`
+2. 让它提案：`针对 S3 破阵频繁（0.384）写一份提案 proposals/p_0006.json，≤3 个参数改动，引用 report.json 数据`
+3. 让它验证：`用 propose run 跑你的提案，读 verdict.json，告诉我结果`（harness 会校验格式/边界并给出裁决）
+4. 复盘：`你的提案被拒了，读 verdict.json 引用数据说明为什么，并写进 history.log`
+5. 注意：**它不能改 C#/场景/holdout/AGENTS.md**（铁律 6）；最终替换 champion 归人（05 §九）
 
 ## 六、训练师行为准则（已落盘为 AGENTS.md，opencode 自动加载）
 
