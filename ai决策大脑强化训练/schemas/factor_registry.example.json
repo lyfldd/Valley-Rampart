@@ -31,12 +31,12 @@
       "semantics": "区块热度权重：越高越受战场气氛影响"
     },
     {
-      "path": "tuning.formationResistScale",
+      "path": "tuning.l2FormationResistScale",
       "current": 0.4, "min": 0.1, "max": 0.8,
       "unit": "scale", "group": "arbitration",
       "consumers": ["L2PostureDecider.CalculateSpectrum"],
-      "semantics": "编队抵抗权重（现硬编码 L2PostureDecider.cs:88，M1 提 config）：越高军令越硬、该撤不撤风险越大",
-      "note": "硬编码提config的典型，M1 顺手做"
+      "semantics": "编队抵抗权重：越高军令越硬、该撤不撤风险越大",
+      "note": "2026-08-02 已提 config（硬编码 SO 化批，原 L2PostureDecider.cs:88）"
     },
     {
       "path": "tuning.workResistScale",
