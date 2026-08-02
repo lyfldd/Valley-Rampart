@@ -16,14 +16,8 @@ Valley Rampart/[Mm]emoryCaptures/
 *.csproj
 *.userprefs
 
-# dotnet 构建产物（AI harness 控制台工程）
-ai决策大脑强化训练/harness/bin/
-ai决策大脑强化训练/harness/obj/
-# harness 运行输出（JSONL 战报）
-ai决策大脑强化训练/harness/out/
-ai决策大脑强化训练/harness/results/
-# harness.csproj 是手写工程文件（链接 AI.Core 唯一真身），例外于上方 *.csproj 忽略
-!ai决策大脑强化训练/harness/harness.csproj
+# AI 训练师独立仓库（2026-08-02 起从本仓库拆分，git 由 ai决策大脑强化训练/ 自管）
+ai决策大脑强化训练/
 
 # OS
 .DS_Store
