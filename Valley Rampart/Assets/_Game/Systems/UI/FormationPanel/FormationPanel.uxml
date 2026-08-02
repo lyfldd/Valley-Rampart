@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/Systems/UI/FormationPanel/FormationPanel.uss" />
+
+    <!-- ===== E 键作战面板（3.0.1_5 §六 P2，多编队管理） =====
+         居中面板 + 可拖拽标题栏 + 右上关闭；编队列表由 C# 动态构建 -->
+    <ui:VisualElement name="formation-panel-root" class="formation-panel-root">
+        <ui:VisualElement name="formation-panel" class="formation-panel">
+            <!-- 标题栏（可拖拽） -->
+            <ui:VisualElement name="formation-title-bar" class="formation-title-bar">
+                <ui:Label text="作战面板" class="formation-title" />
+                <ui:Button name="formation-close-button" text="✕" class="formation-close-button" />
+            </ui:VisualElement>
+
+            <!-- 内容区 -->
+            <ui:VisualElement name="formation-content" class="formation-content">
+                <!-- 编队列表（C# 按 FormationManager.AllFormations 动态构建） -->
+                <ui:VisualElement name="formation-list" class="formation-list" />
+                <ui:Label name="formation-empty-hint" text="暂无编队（按 1-7 生成将军编队）" class="formation-empty-hint" />
+
+                <!-- 选中信息 -->
+                <ui:Label name="selection-info" text="未选中编队" class="selection-info" />
+
+                <!-- 普通军令区（对选中编队） -->
+                <ui:VisualElement class="order-section">
+                    <ui:Label text="军令（对选中编队）" class="section-title" />
+                    <ui:VisualElement class="order-button-row">
+                        <ui:Button name="order-charge-button" text="进攻" class="order-button order-button--charge" />
+                        <ui:Button name="order-defense-button" text="防守" class="order-button" />
+                        <ui:Button name="order-retreat-button" text="撤退" class="order-button order-button--retreat" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 君主令区（10s 不顾一切） -->
+                <ui:VisualElement class="order-section">
+                    <ui:Label text="君主令（10s 不顾一切）" class="section-title" />
+                    <ui:VisualElement class="order-button-row">
+                        <ui:Button name="royal-charge-button" text="君主·进攻" class="order-button order-button--royal" />
+                        <ui:Button name="royal-defense-button" text="君主·防守" class="order-button order-button--royal" />
+                        <ui:Button name="royal-retreat-button" text="君主·撤退" class="order-button order-button--royal" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 底部操作行 -->
+                <ui:VisualElement class="formation-footer">
+                    <ui:Button name="clear-selection-button" text="清空选择" class="formation-footer-button" />
+                    <ui:Label text="点击单选 · Ctrl+点击多选 · E/ESC 关闭" class="footer-hint" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
