@@ -60,7 +60,7 @@ public static class SimReporter
         for (int i = 0; i < meta.Patches.Length; i++)
         {
             if (i > 0) sb.Append(", ");
-            sb.Append('"').Append(meta.Patches[i]).Append('"');
+            sb.Append('"').Append(Escape(meta.Patches[i])).Append('"');
         }
         sb.Append("], \"suite\": \"").Append(meta.Suite).Append("\"");
         sb.Append(", \"battlesPerScenario\": ").Append(meta.BattlesPerScenario);
@@ -154,4 +154,11 @@ public static class SimReporter
     private static string F3(double v) => v.ToString("F3", Inv);
     private static string F2(double v) => v.ToString("F2", Inv);
     private static string F2(float v) => v.ToString("F2", Inv);
+
+    /// <summary>JSON 字符串转义（M6 修复：Windows 路径反斜杠未转义导致 report.json 非法）。</summary>
+    private static string Escape(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
 }

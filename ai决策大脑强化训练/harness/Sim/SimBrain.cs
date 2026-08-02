@@ -108,6 +108,9 @@ public sealed class SimBrain
     private FactorContext _lastCtx;
     public BehaviorCommand LastCmd;
 
+    // ===== M6 T2 公式变体市场（02 §三）：威胁公式（默认 LinearV1=现逻辑）=====
+    private IThreatFormula _threatFormula = new LinearThreatFormula();
+
     /// <summary>行为执行器（SimWorld 装配）。</summary>
     public SimExecutor Executor;
 
@@ -144,6 +147,13 @@ public sealed class SimBrain
 
         _attention.SetConfig(config);
         _attention.SetWorldQuery(world);   // 接缝 3：世界查询注入
+    }
+
+    /// <summary>M6 T2：设置威胁公式（SimWorld 按 config.formulaThreat 装配；未注册回退 LinearV1）。</summary>
+    public void SetThreatFormula(string formulaName)
+    {
+        var f = ThreatFormulaRegistry.Get(formulaName);
+        if (f != null) _threatFormula = f;
     }
 
     // ===== 感知（04 §二 第 2 步，NPCBrain 每 2 tick=0.2s 调）=====
@@ -261,10 +271,19 @@ public sealed class SimBrain
         ctx.WorkFactor = ComputeWorkFactor(in ctx);
         ctx.PostureDecision = L2PostureDecider.Decide(in ctx);
 
-        ctx.RawFactor = ThreatAssessor.CalculateRawFactor(
-            ctx.NearestEnemyDist, ctx.NearbyEnemyCount, ctx.HpRatio, ctx.NearbyAllyCount,
-            ctx.IsNight, ctx.Profession, ctx.Config, ctx.PerceptionWorldRadius, ctx.AttackWorldRange,
-            ctx.RegionHeat);
+        ctx.RawFactor = _threatFormula.Compute(new ThreatInputs
+        {
+            NearestEnemyDist = ctx.NearestEnemyDist,
+            EnemyCount = ctx.NearbyEnemyCount,
+            HpRatio = ctx.HpRatio,
+            AllyCount = ctx.NearbyAllyCount,
+            IsNight = ctx.IsNight,
+            PerceptionWorldRadius = ctx.PerceptionWorldRadius,
+            AttackWorldRange = ctx.AttackWorldRange,
+            RegionHeat = ctx.RegionHeat,
+            ThreatSensitivity = ctx.Profession.threatSensitivity,
+            CloseRangeMinRaw = ctx.Config.closeRangeMinRaw,
+        }, ctx.Config);
         _lastRaw = ctx.RawFactor;
 
         LastCmd = L3CommandComputer.Compute(in ctx.PostureDecision, in ctx);

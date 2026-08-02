@@ -35,6 +35,7 @@ public sealed class SimFormation
     public SimSlotData[] Slots;
     public int Direction = 1;                      // 阵型朝向：1=向右进攻（默认），-1=向左；AssignSlots offset.x *= dir
     public TacticIntent DefaultIntent = TacticIntent.Defense;
+    public bool AutoIntent;                        // M6 v1：true=FormationBrain 自动意图（接 SimHeat），false=v0 剧本驱动
 
     private readonly TuningSnapshot _config;
     private readonly SimClock _clock;
@@ -235,14 +236,69 @@ public sealed class SimFormation
         _consumed = _intentScript != null ? new bool[_intentScript.Length] : null;
     }
 
-    // ===== 自动意图（v1 空壳：04 §五 v0 剧本驱动 / v1 接 FormationDecisionCore.DecideIntent + SimHeat）=====
+    // ===== 自动意图（M6 v1 实装：任务价值 + 意图自决 + SimHeat 支援，04 §五）=====
 
-    /// <summary>自动意图决策（v1 实装：任务价值 + 意图自决；v0 剧本驱动，留空壳）。</summary>
-    public void DecideAutoIntent()
+    private float _advanceTargetX = float.NaN;   // 推进目标 x（rule ② 支援 SetAdvanceTarget 的 sim 侧落地）
+    private float _autoDecideInterval = 0f;      // 秒级决策节流（复刻 FormationBrain 秒级节奏）
+
+    /// <summary>是否有推进目标（任务价值基础值选攻城中）。</summary>
+    private bool HasAdvanceTarget => !float.IsNaN(_advanceTargetX);
+
+    /// <summary>设置推进目标（rule ② 支援/进攻推进；x=世界坐标）。</summary>
+    public void SetAdvanceTarget(float worldX)
     {
-        // v1：heat = _heat.GetHeatAt(anchor.x)；survival = MemberCount / StandardSize；
-        //     value = FormationDecisionCore.EvaluateTaskValue(...)；
-        //     decision = FormationDecisionCore.DecideIntent(...)；decision.Valid -> SetIntent / SetAdvanceTarget。
+        _advanceTargetX = worldX;
+        // 推进目标 = 将军 MoveTowards 的靶点（复用 DispatchOrders 的下发链路：将军受编队军令朝目标移动）
+        DispatchOrders();
+    }
+
+    /// <summary>清除推进目标（回防守态）。</summary>
+    public void ClearAdvanceTarget() => _advanceTargetX = float.NaN;
+
+    /// <summary>
+    /// 自动意图决策（M6 v1 实装：FormationDecisionCore.DecideIntent + SimHeat）。
+    /// 复刻 FormationBrain.Decide（3.0.1_5 §4.1/§4.4）：秒级决策，SetIntent 自带防抖节流。
+    /// 输入：锚点热区热度 heat / 成员存活率 survival / 任务价值 value / 远处战斗热点 hasRemoteHotspot。
+    /// 输出：rule ① 撤退 / ② 支援（SetAdvanceTarget 朝热点推进）/ ③ 冲锋 / ④ 防守 / ⑤ 维持现状。
+    /// </summary>
+    public void DecideAutoIntent(float now)
+    {
+        // 秒级决策节流（复刻 FormationBrain 的 1s 决策间隔，防每 tick 抖动）
+        if (now - _autoDecideInterval < 1f) return;
+        _autoDecideInterval = now;
+
+        // 锚点 = 将军（无将军守城用第一个成员）
+        float anchorX = GeneralUnit != null ? GeneralUnit.Position.x
+            : (_members.Count > 0 ? _members[0].Unit.Position.x : 0f);
+
+        float heat = _heat.GetHeatAt(anchorX);
+        float survival = _members.Count / (float)StandardSize;
+        float value = FormationDecisionCore.EvaluateTaskValue(
+            isGarrison: false, hasAdvanceTarget: HasAdvanceTarget, heat, survival, _config,
+            survivalRetreatGate: 0.4f);
+
+        // 远处战斗热点（rule ② 支援数据源）：锚点 searchRadius 外的最近热点
+        // 用 SimHeat.TryGetNearestCombatHotspot（跨中区块扫描）；本队已交战（heat 高）则不算"远处支援"场景
+        // searchRadius 覆盖全图（S6 场景 B 编队距热点 37 cell 仍应支援；"远"由热区相对判断——
+        //   hasRemoteHotspot = 存在热点 且 本队本地未交战（heat < heatEngage）即触发支援）
+        var center = new Vector2X(anchorX, 0f);
+        bool hasRemoteHotspot = _heat.TryGetNearestCombatHotspot(center, maxAge: 10f,
+            searchRadius: 500f, currentTime: now, out Vector2X hotspot);
+
+        var decision = FormationDecisionCore.DecideIntent(
+            heat, survival, value, hasRemoteHotspot,
+            heatEngage: 0.3f, heatCharge: 0.6f, survivalRetreatGate: 0.4f,
+            chargeValueGate: _config.chargeValueGate);
+
+        if (!decision.Valid) return;   // ⑤ 维持现状
+
+        SetIntent(decision.Intent);
+
+        // rule ② 支援：朝热点推进（SetAdvanceTarget 的 sim 侧落地）
+        if (decision.ShouldAdvance && hasRemoteHotspot)
+            SetAdvanceTarget(hotspot.x);
+        else if (!decision.ShouldAdvance && HasAdvanceTarget)
+            ClearAdvanceTarget();
     }
 
     // ===== 减员管理（§15，订阅 SimUnitDiedEvent）=====
@@ -269,9 +325,13 @@ public sealed class SimFormation
         }
     }
 
-    /// <summary>每 tick 调（SimWorld 第 7 步后）：防抖重排 + boost/royal 过期回落。</summary>
+    /// <summary>每 tick 调（SimWorld 第 7 步后）：自动意图 + 防抖重排 + boost/royal 过期回落。</summary>
     public void Update()
     {
+        // M6 v1：FormationBrain 自动意图（场景 autoIntent=true 时启用；秒级节流在 DecideAutoIntent 内部）
+        if (AutoIntent)
+            DecideAutoIntent(_clock.Now);
+
         // 减员防抖重排（§15.3）
         if (_pendingReform && _clock.Now - _lastCasualtyTime >= _config.formationCasualtyDebounce)
         {

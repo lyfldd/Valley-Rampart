@@ -39,6 +39,10 @@ public sealed class SimConfig
     // 两相下"后注册方不丢出手"（目标在第 5 步才结算死亡），先手窗口收窄。
     public bool twoPhaseResolution = true;
 
+    // ===== M6 T2 公式变体市场（02 §三）：威胁公式选择 =====
+    // 默认 LinearV1 = 现 CalculateRawFactor 逻辑（baseline 真身）；变体放 harness/Formulas/ 注册后此处切换。
+    public string formulaThreat = "LinearV1";
+
     // ===== 决策核调参快照（AttentionTuningConfig.asset 真值，字段逐一对应）=====
     public TuningSnapshot tuning = DefaultTuning();
 

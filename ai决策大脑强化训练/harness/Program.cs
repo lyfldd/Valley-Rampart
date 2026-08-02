@@ -17,6 +17,9 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        // M6 T2：注册公式变体（harness/Formulas/ 目录；默认 LinearV1 已在注册表静态构造注册）
+        RegisterFormulaVariants();
+
         string cmd = args.Length > 0 ? args[0] : "smoke";
 
         switch (cmd)
@@ -35,11 +38,15 @@ public static class Program
                 return RunChampion(args);
             case "propose":
                 return RunPropose(args);
+            case "search":
+                return RunSearch(args);
+            case "formula":
+                return RunFormula(args);
             case "smoke":
                 RunSmoke();
                 return 0;
             default:
-                Console.WriteLine("用法：dotnet run -- <acceptance|determinism|suite|differentiation|benchmark|champion|propose|smoke> ...");
+                Console.WriteLine("用法：dotnet run -- <acceptance|determinism|suite|differentiation|benchmark|champion|propose|search|formula|smoke> ...");
                 Console.WriteLine("  acceptance [r1] [r2]              M2 验收（S1 胜率带 + S2 弓手指标）");
                 Console.WriteLine("  determinism <场景json|all> [runs]  同 seed 跑两次逐字节一致（all=全剧本）");
                 Console.WriteLine("  suite [runs] [patch] [outDir]      S1-S6 基准套件 -> report.json");
@@ -51,9 +58,18 @@ public static class Program
                 Console.WriteLine("  propose validate <p_x.json>        校验提案（≤3改动/注册/边界/死参数/rawFactor Σ）");
                 Console.WriteLine("  propose run <p_x.json> [--battles N] [--out <dir>]  校验通过后跑分 -> report+verdict");
                 Console.WriteLine("  propose list                      列出 proposals/ 提案与 history.log 尾部");
+                Console.WriteLine("  search --params a,b [--generations N] [--battles N]  CMA-ES 黑盒搜索（参数逗号分隔，注册路径）");
+                Console.WriteLine("  formula list                      列出已注册威胁公式（T2 变体市场）");
+                Console.WriteLine("  formula compare <名> [--battles N] 变体 vs LinearV1 baseline 套件对比（T2 守门：不劣于才可人审）");
                 Console.WriteLine("  smoke                              M1 决策核 smoke test");
                 return 1;
         }
+    }
+
+    /// <summary>M6 T2：注册公式变体（新增变体写 harness/Formulas/ 后在此登记）。</summary>
+    private static void RegisterFormulaVariants()
+    {
+        ThreatFormulaRegistry.Register(new DistSquaredThreatFormula());
     }
 
     // ===== acceptance：S1 100 局胜率 + S2 弓手被贴身指标 + JSONL 样例 =====
@@ -285,7 +301,7 @@ public static class Program
             case "S3": return $"破阵 {m.FormationBreaksPerRun.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}次/局 首破 {m.FormationBreakFirstTimeMean.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}s";
             case "S4": return $"战损比 {m.KdRatioOverall.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} vs 全灭率 {m.AnnihilationRate.ToString("P0", System.Globalization.CultureInfo.InvariantCulture)}（D6 对照 no_retreat）";
             case "S5": return "守势稳定性（城墙锚点）";
-            case "S6": return "v0 脚本近似支援（B 编队 t=8s Charge），v1 接 FormationBrain";
+            case "S6": return "M6 v1 FormationBrain 自动意图（B 编队 autoIntent 接 SimHeat 支援热点）";
             default: return "";
         }
     }
@@ -336,29 +352,40 @@ public static class Program
             return 1;
         }
 
-        Console.WriteLine($"=== M4 benchmark（champion={championPath}，patch={(string.IsNullOrEmpty(patchPath) ? "无" : patchPath)}，{battles} 局/剧本）===");
+        Console.WriteLine($"=== M6 benchmark（champion={championPath}，patch={(string.IsNullOrEmpty(patchPath) ? "无" : patchPath)}，{battles} 局/剧本）===");
 
-        // 1. 若无 baseline 建档，先跑 champion（无 patch）——05 §七.4 冠军双条件需要对照基线
+        // 1. 若无 baseline 建档，先跑 champion（无 patch）——05 §七.4 冠军三条件需要对照基线
+        //    baseline 同时建档 holdout（H1/H2 隐藏场景，verdict 阶段同卷对比）
         string baselineReport = Path.Combine(BaselineDir, "report.json");
+        string baselineHoldout = Path.Combine(BaselineDir, "holdout_report.json");
         if (!File.Exists(baselineReport))
         {
             Console.WriteLine();
-            Console.WriteLine(">>> 首次运行：建档 champion 基线（results/baseline/）");
+            Console.WriteLine(">>> 首次运行：建档 champion 基线（results/baseline/，含 holdout）");
             RunSuiteCore(battles, null, BaselineDir, "champion", writeReport: true, championPath);
+            RunHoldoutCore(battles, null, BaselineDir, championPath, writeReport: true);
         }
 
-        // 2. 跑本次配置（champion + patch 深合并）
+        // 2. 跑本次配置（champion + patch 深合并）+ holdout 同卷
         Console.WriteLine();
         var entries = RunSuiteCore(battles, patchPath, outDir, name, writeReport: true, championPath);
+        RunHoldoutCore(battles, patchPath, outDir, championPath, writeReport: true);
 
-        // 3. 裁决：读 baseline report.json 的 subScores vs 本次
+        // 3. 裁决：读 baseline report.json 的 subScores vs 本次（含 holdout 对比）
         var weights = new ObjectiveWeights();
         var norm = new ObjectiveNorm();
         var candidateScore = ObjectiveFunction.EvaluateSuite(
             entries.ConvertAll(e => (e.Id, e.Metrics)), weights, norm);
         var baselineScore = File.Exists(baselineReport) ? ReadSubScores(baselineReport, weights, norm) : null;
 
-        var verdict = SimVerdict.Judge(candidateScore, baselineScore, ScenarioOrder());
+        // M6：holdout 聚合（H1/H2 总分对比）
+        var holdoutCandidate = File.Exists(Path.Combine(outDir, "holdout_report.json"))
+            ? ReadSubScores(Path.Combine(outDir, "holdout_report.json"), weights, norm) : null;
+        var holdoutBaseline = File.Exists(baselineHoldout)
+            ? ReadSubScores(baselineHoldout, weights, norm) : null;
+
+        var verdict = SimVerdict.Judge(candidateScore, baselineScore, ScenarioOrder(),
+                                       holdoutCandidate, holdoutBaseline, HoldoutIds());
         string verdictPath = Path.Combine(outDir, "verdict.json");
         string ts = DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss");
         File.WriteAllText(verdictPath, SimVerdict.BuildVerdictJson(
@@ -374,7 +401,9 @@ public static class Program
         else
         {
             Console.WriteLine($"  总分 Δ：{verdict.ScoreDelta.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}（champion {baselineScore.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} -> candidate {candidateScore.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}）");
-            Console.WriteLine($"  双条件：总分升={verdict.TotalUp} / 无场景退化(>5%)={verdict.NoRegression}");
+            if (verdict.HoldoutEnabled)
+                Console.WriteLine($"  holdout Δ：{verdict.HoldoutDelta.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}（regressed={verdict.HoldoutRegressed}，防背题同卷）");
+            Console.WriteLine($"  三条件：总分升={verdict.TotalUp} / 无场景退化(>5%)={verdict.NoRegression} / holdout不退={!verdict.HoldoutEnabled || !verdict.HoldoutRegressed}");
             Console.WriteLine($"  裁决：{verdict.Decision}（candidate=可留用 / rejected=弃 / baseline=建档）");
             if (verdict.RegressionScenarios.Count > 0)
             {
@@ -385,6 +414,75 @@ public static class Program
         }
         Console.WriteLine($"  verdict 已写出：{verdictPath}");
         return 0;
+    }
+
+    // ===== holdout（M6）：H1/H2 隐藏场景同卷（05 §七.1 防过拟合最终验收）=====
+
+    /// <summary>holdout 场景定义（H1/H2，细节不公布给训练师；harness/Holdout/ 独立目录）。</summary>
+    private static readonly (string Id, string Name, string Path)[] HoldoutV1 =
+    {
+        ("H1", "镜像变体 8v8", "Holdout/h1_mirror_8v8.json"),
+        ("H2", "混合遭遇战", "Holdout/h2_mixed_skirmish.json"),
+    };
+
+    private static string[] HoldoutIds()
+    {
+        var ids = new string[HoldoutV1.Length];
+        for (int i = 0; i < HoldoutV1.Length; i++) ids[i] = HoldoutV1[i].Id;
+        return ids;
+    }
+
+    /// <summary>跑 holdout 场景（同 RunSuiteCore 的指标聚合 + holdout_report.json 生成）。</summary>
+    private static void RunHoldoutCore(int runs, string patchPath, string outDir,
+                                       string championPath, bool writeReport)
+    {
+        if (!Directory.Exists("Holdout"))
+        {
+            Console.WriteLine("  （Holdout/ 目录不存在，跳过 holdout）");
+            return;
+        }
+        var entries = new List<(string Id, string Name, SimMetrics Metrics)>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        Console.WriteLine();
+        Console.WriteLine($">>> holdout 同卷（H1/H2，{runs} 局/剧本，patch={((string.IsNullOrEmpty(patchPath)) ? "无" : patchPath)}）");
+        for (int i = 0; i < HoldoutV1.Length; i++)
+        {
+            var m = RunScenario(HoldoutV1[i].Path, runs, outDir, patchPath, -1, championPath);
+            entries.Add((HoldoutV1[i].Id, HoldoutV1[i].Name, m));
+            Console.WriteLine(m.BuildSummary());
+            if (i < HoldoutV1.Length - 1) Console.WriteLine();
+        }
+        sw.Stop();
+
+        if (writeReport)
+        {
+            var weights = new ObjectiveWeights();
+            var norm = new ObjectiveNorm();
+            var score = ObjectiveFunction.EvaluateSuite(
+                entries.ConvertAll(e => (e.Id, e.Metrics)), weights, norm);
+            var scenarioEntries = new List<ScenarioReportEntry>();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                scenarioEntries.Add(new ScenarioReportEntry
+                {
+                    Id = entries[i].Id, Name = entries[i].Name, Metrics = entries[i].Metrics,
+                    DependsOnV1 = false, Result = "info", Note = "holdout 防背题同卷",
+                });
+            }
+            string reportPath = Path.Combine(outDir, "holdout_report.json");
+            var meta = new ReportMeta
+            {
+                ConfigName = "holdout",
+                Patches = string.IsNullOrEmpty(patchPath) ? new string[0] : new[] { patchPath },
+                BattlesPerScenario = runs,
+                Seed = 20261001 + 20261002,
+                Timestamp = DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss"),
+                DurationMs = sw.Elapsed.TotalMilliseconds,
+            };
+            File.WriteAllText(reportPath, SimReporter.BuildReport(meta, score, weights, scenarioEntries));
+            Console.WriteLine($"  holdout report 已写出：{reportPath}（总分 {score.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}）");
+        }
     }
 
     /// <summary>champion 子命令：export（导出默认全量快照）/ baseline（建档）。</summary>
@@ -606,6 +704,255 @@ public static class Program
         options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         return options;
     }
+
+    // ===== search：CMA-ES 黑盒自动搜索（06 §M6 优化项；SimCMAES）=====
+
+    /// <summary>search 子命令：dotnet run -- search --params a,b [--generations N] [--battles N]。</summary>
+    private static int RunSearch(string[] args)
+    {
+        string paramsArg = GetArg(args, "params", null);
+        if (string.IsNullOrEmpty(paramsArg))
+        {
+            Console.WriteLine("[search] 缺少 --params（逗号分隔的注册路径，如 tuning.rfDistWeight,tuning.rfCountWeight）");
+            return 1;
+        }
+        int generations = GetIntArg(args, "generations", 8);
+        int battles = GetIntArg(args, "battles", 20);   // 搜索用低局数提速，找到后用 propose run 精跑
+
+        var paths = paramsArg.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var ps = new SimCMAES.SearchParam[paths.Length];
+        for (int i = 0; i < paths.Length; i++)
+        {
+            var e = FindRegistryEntry(paths[i].Trim());
+            if (e == null)
+            {
+                Console.WriteLine($"[search] 参数未在 factor_registry 注册: {paths[i].Trim()}");
+                return 1;
+            }
+            ps[i] = new SimCMAES.SearchParam { Path = paths[i].Trim(), Min = e.min, Max = e.max, Current = e.current };
+        }
+
+        Console.WriteLine($"=== CMA-ES 搜索（参数={paramsArg}，{generations} 代 × {SimCMAES.Population} 个体，每个体 {battles} 局/剧本）===");
+        Console.WriteLine($"  当前值：{string.Join(", ", Array.ConvertAll(ps, p => p.Path + "=" + p.Current.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)))}");
+
+        // 基线总分（当前值）
+        double baseScore = EvaluateParams(ps, Array.ConvertAll(ps, p => p.Current), battles, null);
+        Console.WriteLine($"  基线总分：{baseScore.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}");
+
+        // CMA-ES 搜索
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        double[] best = SimCMAES.Search(ps, generations, v => EvaluateParams(ps, v, battles, null));
+        sw.Stop();
+
+        double bestScore = EvaluateParams(ps, best, battles, null);
+        Console.WriteLine();
+        Console.WriteLine($"=== 搜索完成（{sw.Elapsed.TotalSeconds.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}s）===");
+        Console.WriteLine($"  最优总分：{bestScore.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}（基线 {baseScore.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}，Δ{(bestScore - baseScore).ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}）");
+        for (int i = 0; i < ps.Length; i++)
+            Console.WriteLine($"    {ps[i].Path}: {ps[i].Current.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} -> {best[i].ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}");
+
+        // 输出最优 patch（供 propose run 精跑）
+        Directory.CreateDirectory("out");
+        string bestPatch = Path.Combine("out", "search_best.patch.json");
+        File.WriteAllText(bestPatch, BuildSearchPatch(ps, best));
+        Console.WriteLine($"  最优 patch 已写出：{bestPatch}（建议：propose run 精跑验证 + verdict）");
+        return 0;
+    }
+
+    /// <summary>评估一组参数：champion 基线 + 参数覆盖 -> 跑 S1-S6 套件（低局数）-> 总分。</summary>
+    private static double EvaluateParams(SimCMAES.SearchParam[] ps, double[] values, int battles, string outDir)
+    {
+        // 构建参数覆盖（部分覆盖语义：只改搜索参数）
+        var config = new SimConfig();
+        if (File.Exists(DefaultChampionPath))
+            SimChampion.Load(DefaultChampionPath, config);
+        for (int i = 0; i < ps.Length; i++)
+        {
+            var parts = ps[i].Path.Split('.');
+            if (parts.Length == 2 && parts[0] == "tuning")
+                SetTuningField(config, parts[1], values[i]);
+            else if (parts.Length == 3 && parts[0] == "professions")
+                SetProfessionField(config, parts[1], parts[2], values[i]);
+        }
+
+        double total = 0;
+        int n = 0;
+        var weights = new ObjectiveWeights();
+        var norm = new ObjectiveNorm();
+        // 搜索评估不落 JSONL（SimLogger 需要合法路径）；写临时目录防崩
+        string evalLogDir = Path.Combine("out", "search_eval");
+        Directory.CreateDirectory(evalLogDir);
+        for (int s = 0; s < SuiteV1.Length; s++)
+        {
+            var scenario = SimScenario.Load(SuiteV1[s].Path, config);
+            var metrics = new SimMetrics(scenario.Name,
+                                         CountUnits(scenario, Faction.Human_Player),
+                                         CountUnits(scenario, Faction.Human_Player, rangedOnly: true),
+                                         config.cellSize,
+                                         scenario.Formations.Count > 0);
+            for (int run = 0; run < battles; run++)
+            {
+                var world = new SimWorld(config, scenario, run,
+                    Path.Combine(evalLogDir, $"{scenario.Name}_eval{run}.jsonl"));
+                metrics.Add(world.Run());
+            }
+            total += ObjectiveFunction.Evaluate(metrics, weights, norm);
+            n++;
+        }
+        return n > 0 ? total / n : 0d;
+    }
+
+    private static void SetTuningField(SimConfig config, string fieldName, double value)
+    {
+        var field = typeof(TuningSnapshot).GetField(fieldName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (field == null) throw new InvalidOperationException($"[search] 未知 tuning 字段 {fieldName}");
+        object boxed = config.tuning;
+        field.SetValue(boxed, Convert.ChangeType(value, field.FieldType, System.Globalization.CultureInfo.InvariantCulture));
+        config.tuning = (TuningSnapshot)boxed;
+    }
+
+    private static void SetProfessionField(SimConfig config, string name, string fieldName, double value)
+    {
+        var prof = config.GetProfession(name);
+        var field = typeof(ProfessionSnapshot).GetField(fieldName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (field == null) throw new InvalidOperationException($"[search] 未知职业字段 {fieldName}");
+        object pbox = prof;
+        field.SetValue(pbox, Convert.ChangeType(value, field.FieldType, System.Globalization.CultureInfo.InvariantCulture));
+        config.RegisterProfession(name, (ProfessionSnapshot)pbox);
+    }
+
+    /// <summary>从 factor_registry 找注册项（返回 min/max/current）。</summary>
+    private static RegistryEntry FindRegistryEntry(string path)
+    {
+        return SimProposalValidator.FindEntryPublic(path);
+    }
+
+    /// <summary>搜索最优 patch JSON（tuning/professions 部分覆盖，对齐 SimPatchLoader 格式）。</summary>
+    private static string BuildSearchPatch(SimCMAES.SearchParam[] ps, double[] best)
+    {
+        var sb = new System.Text.StringBuilder();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        sb.AppendLine("{");
+        sb.AppendLine("  \"name\": \"search_best\",");
+        var tuningFields = new List<(string, double)>();
+        var profFields = new List<(string name, string field, double val)>();
+        for (int i = 0; i < ps.Length; i++)
+        {
+            var parts = ps[i].Path.Split('.');
+            if (parts.Length == 2 && parts[0] == "tuning") tuningFields.Add((parts[1], best[i]));
+            else if (parts.Length == 3 && parts[0] == "professions") profFields.Add((parts[1], parts[2], best[i]));
+        }
+        sb.AppendLine("  \"tuning\": {");
+        for (int i = 0; i < tuningFields.Count; i++)
+            sb.Append(i > 0 ? ",\n" : "").Append("    \"").Append(tuningFields[i].Item1).Append("\": ").Append(tuningFields[i].Item2.ToString("R", inv));
+        sb.AppendLine(tuningFields.Count > 0 ? "\n  }," : "  },");
+        sb.AppendLine("  \"professions\": {");
+        for (int i = 0; i < profFields.Count; i++)
+            sb.Append(i > 0 ? ",\n" : "").Append("    \"").Append(profFields[i].name).Append("\": { \"").Append(profFields[i].field).Append("\": ").Append(profFields[i].val.ToString("R", inv)).Append(" }");
+        sb.AppendLine(profFields.Count > 0 ? "\n  }" : "  }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    // ===== formula：T2 公式变体市场（02 §三；list / compare 守门）=====
+
+    /// <summary>formula 子命令：list（已注册公式）/ compare <名>（变体 vs LinearV1）。</summary>
+    private static int RunFormula(string[] args)
+    {
+        string sub = args.Length > 1 ? args[1] : "list";
+        switch (sub)
+        {
+            case "list":
+            {
+                Console.WriteLine("=== 已注册威胁公式（T2 变体市场）===");
+                foreach (var name in ThreatFormulaRegistry.Names)
+                {
+                    bool isDefault = name == "LinearV1";
+                    Console.WriteLine($"  {name,-16}{(isDefault ? "（baseline 真身）" : "（变体）")}");
+                }
+                return 0;
+            }
+            case "compare":
+            {
+                string formulaName = args.Length > 2 ? args[2] : null;
+                if (string.IsNullOrEmpty(formulaName))
+                {
+                    Console.WriteLine("[formula] 缺少公式名：dotnet run -- formula compare <名>");
+                    return 1;
+                }
+                if (ThreatFormulaRegistry.Get(formulaName) == null)
+                {
+                    Console.WriteLine($"[formula] 公式 '{formulaName}' 未注册。先 formula list 查看。");
+                    return 1;
+                }
+                int battles = GetIntArg(args, "battles", 100);
+                Console.WriteLine($"=== T2 公式守门：{formulaName} vs LinearV1（{battles} 局/剧本）===");
+
+                // baseline（LinearV1）——复用现有 baseline 建档报告
+                string baselineReport = Path.Combine(BaselineDir, "report.json");
+                if (!File.Exists(baselineReport))
+                {
+                    Console.WriteLine($">>> 建档 LinearV1 baseline（{BaselineDir}/report.json）");
+                    RunSuiteCore(battles, null, BaselineDir, "LinearV1", writeReport: true, DefaultChampionPath);
+                }
+                var weights = new ObjectiveWeights();
+                var norm = new ObjectiveNorm();
+                var baseScore = File.Exists(baselineReport)
+                    ? ReadSubScores(baselineReport, weights, norm)
+                    : EvaluateWithFormula("LinearV1", battles, weights, norm);
+
+                // 变体跑分
+                var variantScore = EvaluateWithFormula(formulaName, battles, weights, norm);
+
+                // T2 守门：总分不劣于 baseline 且无场景退化 >5%（02 §三.2）
+                string outDir = Path.Combine("out", "formula_" + formulaName);
+                Directory.CreateDirectory(outDir);
+                double delta = R3(variantScore.Total) - R3(baseScore.Total);
+                Console.WriteLine();
+                Console.WriteLine($"  总分：LinearV1 {baseScore.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} -> {formulaName} {variantScore.Total.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}（Δ{delta.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}）");
+                bool pass = delta >= 0d;
+                Console.WriteLine($"  T2 守门：{(pass ? "✅ 不劣于 baseline（可人审）" : "❌ 劣于 baseline（拒，02 §三.2 守门原则）")}");
+                Console.WriteLine("  （人审通过后：把 config.formulaThreat 切到该变体，跑 champion baseline 重新建档）");
+                return pass ? 0 : 1;
+            }
+            default:
+                Console.WriteLine("用法：dotnet run -- formula <list|compare>");
+                return 1;
+        }
+    }
+
+    /// <summary>用指定威胁公式跑 S1-S6 套件，返回聚合总分（formula compare 用）。</summary>
+    private static ObjectiveScore EvaluateWithFormula(string formulaName, int battles,
+                                                      ObjectiveWeights weights, ObjectiveNorm norm)
+    {
+        var config = new SimConfig();
+        if (File.Exists(DefaultChampionPath))
+            SimChampion.Load(DefaultChampionPath, config);
+        config.formulaThreat = formulaName;
+
+        var entries = new List<(string Id, string Name, SimMetrics Metrics)>();
+        string outDir = Path.Combine("out", "formula_eval_" + formulaName);
+        Directory.CreateDirectory(outDir);
+        for (int i = 0; i < SuiteV1.Length; i++)
+        {
+            var scenario = SimScenario.Load(SuiteV1[i].Path, config);
+            var metrics = new SimMetrics(scenario.Name,
+                                         CountUnits(scenario, Faction.Human_Player),
+                                         CountUnits(scenario, Faction.Human_Player, rangedOnly: true),
+                                         config.cellSize,
+                                         scenario.Formations.Count > 0);
+            for (int run = 0; run < battles; run++)
+            {
+                var world = new SimWorld(config, scenario, run,
+                    Path.Combine(outDir, $"{scenario.Name}_run{run}.jsonl"));
+                metrics.Add(world.Run());
+            }
+            entries.Add((SuiteV1[i].Id, SuiteV1[i].Name, metrics));
+        }
+        return ObjectiveFunction.EvaluateSuite(entries.ConvertAll(e => (e.Id, e.Metrics)), weights, norm);
+    }
+
+    private static double R3(double v) => System.Math.Round(v, 3, System.MidpointRounding.AwayFromZero);
 
     /// <summary>简单 arg 解析（--key value）=====</summary>
 

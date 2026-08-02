@@ -1,0 +1,30 @@
+{
+  "name": "h2_mixed_skirmish",
+  "$comment": "HOLD-2 防过拟合（细节不公布给训练师）：混合遭遇战——5近战+3弓 vs 6近战+2弓，弓手比例/构成与 S2 不同。考泛化——背题者在此暴露。",
+  "seed": 20261002,
+  "maxDuration": 60.0,
+  "cellSize": 2.26,
+  "winCondition": "annihilation",
+
+  "units": [
+    { "id": 1, "profession": "Undead_Warrior", "faction": "Human_Player", "x": -13.56, "isGeneral": true },
+    { "id": 2, "profession": "Undead_Warrior", "faction": "Human_Player", "x": -18.08 },
+    { "id": 3, "profession": "Undead_Warrior", "faction": "Human_Player", "x": -9.04 },
+    { "id": 4, "profession": "Undead_Warrior", "faction": "Human_Player", "x": -15.82 },
+    { "id": 5, "profession": "Undead_Warrior", "faction": "Human_Player", "x": -11.30 },
+    { "id": 6, "profession": "Undead_Archer", "faction": "Human_Player", "x": -6.78 },
+    { "id": 7, "profession": "Undead_Archer", "faction": "Human_Player", "x": -4.52 },
+    { "id": 8, "profession": "Undead_Archer", "faction": "Human_Player", "x": -2.26 },
+
+    { "id": 9,  "profession": "Undead_Warrior", "faction": "Undead", "x": 13.56, "isGeneral": true },
+    { "id": 10, "profession": "Undead_Warrior", "faction": "Undead", "x": 18.08 },
+    { "id": 11, "profession": "Undead_Warrior", "faction": "Undead", "x": 9.04 },
+    { "id": 12, "profession": "Undead_Warrior", "faction": "Undead", "x": 15.82 },
+    { "id": 13, "profession": "Undead_Warrior", "faction": "Undead", "x": 11.30 },
+    { "id": 14, "profession": "Undead_Warrior", "faction": "Undead", "x": 6.78 },
+    { "id": 15, "profession": "Undead_Archer", "faction": "Undead", "x": 4.52 },
+    { "id": 16, "profession": "Undead_Archer", "faction": "Undead", "x": 2.26 }
+  ],
+
+  "formations": []
+}

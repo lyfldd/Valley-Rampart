@@ -1,0 +1,30 @@
+{
+  "name": "h1_mirror_8v8",
+  "$comment": "HOLD-1 防过拟合（细节不公布给训练师）：8v8 近战镜像，S1 的规模变体（6→8）+ 位置扰动。考泛化——背题者在此暴露。",
+  "seed": 20261001,
+  "maxDuration": 60.0,
+  "cellSize": 2.26,
+  "winCondition": "annihilation",
+
+  "units": [
+    { "id": 1,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -15.82, "isGeneral": true },
+    { "id": 2,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -22.60 },
+    { "id": 3,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -6.78 },
+    { "id": 4,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -20.34 },
+    { "id": 5,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -9.04 },
+    { "id": 6,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -18.08 },
+    { "id": 7,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -13.56 },
+    { "id": 8,  "profession": "Undead_Warrior", "faction": "Human_Player", "x": -11.30 },
+
+    { "id": 9,  "profession": "Undead_Warrior", "faction": "Undead", "x": 15.82, "isGeneral": true },
+    { "id": 10, "profession": "Undead_Warrior", "faction": "Undead", "x": 22.60 },
+    { "id": 11, "profession": "Undead_Warrior", "faction": "Undead", "x": 6.78 },
+    { "id": 12, "profession": "Undead_Warrior", "faction": "Undead", "x": 20.34 },
+    { "id": 13, "profession": "Undead_Warrior", "faction": "Undead", "x": 9.04 },
+    { "id": 14, "profession": "Undead_Warrior", "faction": "Undead", "x": 18.08 },
+    { "id": 15, "profession": "Undead_Warrior", "faction": "Undead", "x": 13.56 },
+    { "id": 16, "profession": "Undead_Warrior", "faction": "Undead", "x": 11.30 }
+  ],
+
+  "formations": []
+}

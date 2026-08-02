@@ -53,6 +53,7 @@ public sealed class SimFormationData
     public int GeneralUnitId = -1;
     public int Direction = 1;                       // 阵型朝向：1=右/-1=左（FormationController._formationDirection）
     public TacticIntent DefaultIntent = TacticIntent.Defense;   // 初始意图（不经过 SetIntent 防抖）
+    public bool AutoIntent;                          // M6 v1：true=FormationBrain 自动意图（接 SimHeat），false=v0 剧本驱动
     public SimSlotData[] Slots = new SimSlotData[0];
     public SimIntentEventData[] IntentScript = new SimIntentEventData[0];
 }
@@ -149,6 +150,7 @@ public static class SimScenario
                     GeneralUnitId = f.generalUnitId,
                     Direction = f.direction != 0 ? f.direction : 1,
                     DefaultIntent = !string.IsNullOrEmpty(f.defaultIntent) ? ParseIntent(f.defaultIntent) : TacticIntent.Defense,
+                    AutoIntent = f.autoIntent,
                 };
                 var slots = new List<SimSlotData>();
                 if (f.slots != null)
@@ -257,6 +259,7 @@ public static class SimScenario
         public int generalUnitId = -1;
         public int direction = 1;
         public string defaultIntent;
+        public bool autoIntent;   // M6 v1：FormationBrain 自动意图开关
         public List<SimSlotDoc> slots;
         public List<SimIntentDoc> intentScript;
     }

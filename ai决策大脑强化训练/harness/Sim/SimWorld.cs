@@ -140,6 +140,7 @@ public sealed class SimWorld
             unit.SetPosition(new Vector2X(unit.Position.x + jitter, 0f));
 
             var brain = new SimBrain(unit, _config.tuning, _world, _clock, _damage);
+            brain.SetThreatFormula(_config.formulaThreat);   // M6 T2：威胁公式（config 选择，默认 LinearV1）
             unit.Brain = brain;
             unit.Executor = new SimExecutor(unit, brain, _rngDecision, _config.tuning);
             brain.Executor = unit.Executor;
@@ -155,6 +156,7 @@ public sealed class SimWorld
             var formation = new SimFormation(
                 fdata.Gid, fdata.Faction, general, fdata.Slots, fdata.Direction,
                 fdata.DefaultIntent, fdata.IntentScript, _config.tuning, _clock, _events, _heat);
+            formation.AutoIntent = fdata.AutoIntent;   // M6 v1：FormationBrain 自动意图开关
             foreach (var spec in _scenario.Units)
             {
                 // 将军不进成员（锚点自跟随偏移会死锁：成员目标=锚点+偏移，锚点=自身）

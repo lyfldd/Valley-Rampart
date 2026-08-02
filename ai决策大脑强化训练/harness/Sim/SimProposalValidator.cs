@@ -196,6 +196,13 @@ public static class SimProposalValidator
 
     public sealed class RegistryFrozen { public string path; public string reason; }
 
+    /// <summary>公开查询：按注册路径查条目（Program.search 用；未注册返回 null）。</summary>
+    public static RegistryEntry FindEntryPublic(string path)
+    {
+        var reg = LoadRegistry();
+        return FindEntry(reg, path);
+    }
+
     private static Registry LoadRegistry()
     {
         string path = null;

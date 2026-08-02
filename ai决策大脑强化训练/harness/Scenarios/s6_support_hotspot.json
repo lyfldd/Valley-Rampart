@@ -44,7 +44,7 @@
     },
     {
       "gid": 1, "faction": "Human_Player", "generalUnitId": 13,
-      "direction": -1, "defaultIntent": "Defense",
+      "direction": -1, "defaultIntent": "Defense", "autoIntent": true,
       "slots": [
         { "x": -3, "y": 0, "role": "MeleeOnly" },
         { "x": -2, "y": 0, "role": "MeleeOnly" },
@@ -53,9 +53,7 @@
         { "x": 2,  "y": 0, "role": "MeleeOnly" },
         { "x": 3,  "y": 0, "role": "GeneralOnly" }
       ],
-      "intentScript": [
-        { "t": 8.0, "intent": "Charge" }
-      ]
+      "intentScript": []
     },
     {
       "gid": 2, "faction": "Undead", "generalUnitId": 7,
