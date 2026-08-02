@@ -44,6 +44,7 @@
 
                 <!-- 底部操作行 -->
                 <ui:VisualElement class="formation-footer">
+                    <ui:Button name="reinforce-button" text="补充军队" class="formation-footer-button" />
                     <ui:Button name="clear-selection-button" text="清空选择" class="formation-footer-button" />
                     <ui:Label text="点击单选 · Ctrl+点击多选 · E/ESC 关闭" class="footer-hint" />
                 </ui:VisualElement>

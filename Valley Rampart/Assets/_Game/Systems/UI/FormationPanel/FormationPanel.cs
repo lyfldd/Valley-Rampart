@@ -36,6 +36,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
     private Label _selectionInfo;        // 选中信息
     private Button _closeButton;         // 右上关闭
     private Button _clearSelectionButton;// 清空选择
+    private Button _reinforceButton;     // 补充军队（对选中编队 RecruitReinforcement）
     private readonly List<Button> _orderButtons = new List<Button>();  // 普通军令按钮
     private readonly List<Button> _royalButtons = new List<Button>();  // 君主令按钮
 
@@ -316,6 +317,28 @@ public class FormationPanel : MonoBehaviour, IUIPanel
             FormationManager.Instance.ClearSelection();
     }
 
+    // ===== 补充军队（3.0.1_3 §15.4，原热键 6 功能迁入面板） =====
+
+    /// <summary>对全部选中编队执行补员（RecruitReinforcement 走同初始招募流程，按阵营招空闲兵）。</summary>
+    private void OnReinforceClicked()
+    {
+        var mgr = FormationManager.Instance;
+        if (mgr == null || mgr.SelectedCount == 0) return;
+        int count = 0;
+        foreach (int id in mgr.SelectedIds)
+        {
+            var fc = mgr.GetById(id);
+            if (fc == null) continue;
+            fc.RecruitReinforcement();
+            count++;
+        }
+        if (count > 0)
+        {
+            Debug.Log($"[FormationPanel] 补员下发：{count} 编队");
+            Refresh(); // 人数变化立即刷新
+        }
+    }
+
     // ===== 军令下发 =====
 
     private void OnOrderCharge() => IssueOrder(TacticIntent.Charge);
@@ -393,6 +416,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
             if (_orderButtons[i] != null) _orderButtons[i].SetEnabled(hasSelection);
         for (int i = 0; i < _royalButtons.Count; i++)
             if (_royalButtons[i] != null) _royalButtons[i].SetEnabled(hasSelection);
+        if (_reinforceButton != null) _reinforceButton.SetEnabled(hasSelection);
     }
 
     // ===== 面板显示 / 绑定 / 解绑 =====
@@ -417,6 +441,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
         _selectionInfo = _root.Q<Label>("selection-info");
         _closeButton = _root.Q<Button>("formation-close-button");
         _clearSelectionButton = _root.Q<Button>("clear-selection-button");
+        _reinforceButton = _root.Q<Button>("reinforce-button");
 
         _orderButtons.Clear();
         _orderButtons.Add(_root.Q<Button>("order-charge-button"));
@@ -445,6 +470,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
         // 按钮
         if (_closeButton != null) _closeButton.clicked += OnCloseClicked;
         if (_clearSelectionButton != null) _clearSelectionButton.clicked += OnClearSelectionClicked;
+        if (_reinforceButton != null) _reinforceButton.clicked += OnReinforceClicked;
 
         BindButton(_orderButtons[0], OnOrderCharge);
         BindButton(_orderButtons[1], OnOrderDefense);
@@ -474,6 +500,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
             _root.UnregisterCallback<GeometryChangedEvent>(OnRootGeometryChanged);
         if (_closeButton != null) _closeButton.clicked -= OnCloseClicked;
         if (_clearSelectionButton != null) _clearSelectionButton.clicked -= OnClearSelectionClicked;
+        if (_reinforceButton != null) _reinforceButton.clicked -= OnReinforceClicked;
 
         for (int i = 0; i < _orderButtons.Count && i < 3; i++)
         {
