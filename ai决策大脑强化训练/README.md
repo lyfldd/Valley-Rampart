@@ -60,7 +60,8 @@ M6+ 优化项                  → CMA-ES / 公式变体市场 / holdout 防过�
 ## 五、当前状态
 
 - ✅ **M0 前置冻结已完成**（2026-08-02）：3.0.1_8 全因子分层落地（Threat/Formation/Safety/AbandonTask/Work 五综合因子 + L2 连续仲裁）、HomePoint 分阵营、敌方军队（FormationBrain+编队）、E 键作战面板。战斗规则进入稳定期。
-- ⬜ M1-M6 未开始。
+- ✅ **M1 抽核双编译已完成**（2026-08-02，ebad4c5）：AI.Core 纯 C# 决策核（30 文件，Shim/Ports/快照/L1-L3/Attention/记忆/Formation 纯函数）+ 壳适配（IUnitHandle/IWorldQuery 注入）+ harness.csproj 链接同源 + smoke test 通过。Unity 编译 0 错误、`grep -r UnityEngine AI.Core` 零代码引用。
+- ⬜ M2-M6 未开始。
 
 ## 六、与 3.0.1_7 的关系
 
