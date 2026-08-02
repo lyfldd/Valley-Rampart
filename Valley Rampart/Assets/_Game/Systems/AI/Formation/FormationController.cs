@@ -40,11 +40,20 @@ public class FormationController : MonoBehaviour
     [Tooltip("阵型查找表 SO（P0 手配防守/进攻/守城各一条）")]
     public FormationTable formationTable;
 
+    [Tooltip("编队阵营（3.0.1_6 §4.3：招募只招本阵营空闲士兵；敌方将军用 Undead + FormationTable_Enemy）")]
+    public Faction faction = Faction.Human_Player;
+
     [Tooltip("军令强度（S 级军令基础强度，需 > 工作任务 B 级 + 安全归巢 D 级）")]
     public float orderIntensity = 4.5f;
 
     /// <summary>军令强度归一化基准（3.0.1_8 协作因子用：FormationFactor = orderIntensity / 此值）</summary>
     public const float OrderIntensityBase = 4.5f;
+
+    [Tooltip("阵型切换瞬时提强度（3.0.1_8 §七：切阵型瞬间 4.5→6.0，保底 duration 秒，低威胁强制归位保护弓手）")]
+    public float orderIntensityBoost = 6f;
+
+    [Tooltip("阵型切换瞬时提强度保底时长（秒，期间军令保持高强度，过期回落到正常强度）")]
+    public float orderBoostDuration = 1f;
 
     [Tooltip("阵型切换防抖时间（秒，§15.3 即时触发+防抖）")]
     public float switchDebounce = 1f;
@@ -66,6 +75,8 @@ public class FormationController : MonoBehaviour
     private float _lastSwitchTime;
     private float _lastCasualtyTime;
     private bool _pendingReform;
+    /// <summary>阵型切换瞬时提强度截止时间戳（3.0.1_8 §七，Time.time 未到则军令用 boost 强度）</summary>
+    private float _boostUntil;
     // 阵型朝向：1=向右进攻（默认），-1=向左进攻。AssignSlots 时 offset.x *= _formationDirection
     private int _formationDirection = 1;
 
@@ -77,6 +88,10 @@ public class FormationController : MonoBehaviour
     public UnitController GeneralUnit => _generalUnit;
     /// <summary>成员数</summary>
     public int MemberCount => _members.Count;
+    /// <summary>有效军令强度（3.0.1_8 §七：切换瞬间提强度保底期内返回 boost 值，否则正常值）</summary>
+    public float EffectiveOrderIntensity => Time.time < _boostUntil ? orderIntensityBoost : orderIntensity;
+    /// <summary>锚点世界坐标（将军/城墙锚点；无锚点返回 zero，中区块编队上限登记用）</summary>
+    private Vector2 AnchorWorldPos => _anchor != null ? (Vector2)_anchor.position : Vector2.zero;
 
     private void Awake()
     {
@@ -89,11 +104,16 @@ public class FormationController : MonoBehaviour
     private void OnEnable()
     {
         EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
+        // 3.0.1_5 §六：编队注册表（作战面板查询/选中/批量军令的数据源）
+        if (FormationManager.Instance != null)
+            FormationManager.Instance.Register(this);
     }
 
     private void OnDisable()
     {
         EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
+        if (FormationManager.Instance != null)
+            FormationManager.Instance.Unregister(this);
     }
 
     /// <summary>
@@ -129,6 +149,13 @@ public class FormationController : MonoBehaviour
     /// </summary>
     public void RecruitStandard()
     {
+        // 3.0.1_5 §五：中区块编队上限登记（单中区块最多 4 编队，超出拒绝招募，底层空间约束）
+        if (FormationManager.Instance != null && !FormationManager.Instance.CanAddInMidRegion(AnchorWorldPos))
+        {
+            Debug.LogWarning($"[FormationController] 中区块编队已满（≥4），拒绝招募（锚点 {AnchorWorldPos}）。");
+            return;
+        }
+
         int targetMelee = 3;  // 不含将军
         int targetArcher = 2;
         if (isGarrison)
@@ -187,7 +214,8 @@ public class FormationController : MonoBehaviour
             if (brain == null) continue;
             var unit = brain.GetComponent<UnitController>();
             if (unit == null || unit.Data == null) continue;
-            if (unit.Data.faction != Faction.Human_Player) continue;
+            // 3.0.1_6 §4.3：招募只招本阵营空闲士兵（敌方将军招 Undead，不抢我方兵）
+            if (unit.Data.faction != faction) continue;
             if (unit.Data.occupation != Occupation.Warrior && unit.Data.occupation != Occupation.Archer) continue;
             if (brain.HasFormationSlot) continue;  // 已编队
             result.Add(brain);
@@ -327,7 +355,8 @@ public class FormationController : MonoBehaviour
         foreach (var m in _members)
         {
             if (m.Brain == null) continue;
-            m.Brain.SetFormationSlot(anchorUnit, TaskPriority.S, orderIntensity, m.SlotOffset);
+            // 3.0.1_8 §七：军令强度用 EffectiveOrderIntensity（切换保底期内 6.0，否则 4.5）
+            m.Brain.SetFormationSlot(anchorUnit, TaskPriority.S, EffectiveOrderIntensity, m.SlotOffset);
         }
     }
 
@@ -344,8 +373,10 @@ public class FormationController : MonoBehaviour
         }
         _currentIntent = intent;
         _lastSwitchTime = Time.time;
+        // 3.0.1_8 §七：切阵型瞬时提强度（保底期内军令 4.5→6.0，低威胁士兵强制归位保护弓手）
+        _boostUntil = Time.time + orderBoostDuration;
         ApplyFormation();
-        Debug.Log($"[FormationController] 意图切换 -> {intent}");
+        Debug.Log($"[FormationController] 意图切换 -> {intent}（军令瞬时提强度 {EffectiveOrderIntensity:F1} 保底 {orderBoostDuration}s）");
     }
 
     /// <summary>切换战线形态（P1 由 ThreatHeat 方向分布驱动）</summary>
@@ -417,6 +448,14 @@ public class FormationController : MonoBehaviour
                 ApplyFormation();
                 Debug.Log($"[FormationController] 减员防抖到期，残编重排：{MemberCount} 人。");
             }
+        }
+
+        // 3.0.1_8 §七：阵型切换瞬时提强度过期 → 回落正常军令强度并重发（士兵侧 FollowStimulus.Intensity 同步回落）
+        if (_boostUntil > 0f && Time.time >= _boostUntil && _members.Count > 0)
+        {
+            _boostUntil = 0f;
+            DispatchOrders();
+            Debug.Log($"[FormationController] 军令瞬时提强度过期，回落至 {orderIntensity:F1}。");
         }
 
         // 进攻推进 P0 简化：将军 brain 自驱动（靠威胁焦点），此处不直接操控将军

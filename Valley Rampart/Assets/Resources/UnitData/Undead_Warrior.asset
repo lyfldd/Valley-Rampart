@@ -16,18 +16,19 @@ MonoBehaviour:
   occupation: 3
   walkSpeed: 3
   runSpeed: 6
-  maxHp: 100
-  attack: 10
+  maxHp: 80
+  attack: 13
   defense: 20
   attackRange: 1
   attackCD: 1
   isRanged: 0
   projectileSpeed: 0
   perceptionRadius: 8
-  threatSensitivity: 0.8
-  courage: 70
+  threatSensitivity: 0.6
+  courage: 85
   obedience: 70
-  retreatThresholdOffset: 0.5
+  retreatThresholdOffset: 1
   maxHitCount: 99
   professionPullScale: 0.2
   equipmentSlotCount: 0
+  wanderRadiusCells: 2

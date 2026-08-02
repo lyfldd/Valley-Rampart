@@ -27,6 +27,7 @@ public enum DebugSpawnType
     // ===== 敌方（Undead）=====
     EnemyWarrior,       // 敌方近战士兵
     EnemyArcher,        // 敌方弓箭手
+    EnemyGeneral,       // 敌方将军（3.0.1_6 §4.3：挂 FormationController + FormationTable_Enemy）
 }
 
 /// <summary>可生成单位的描述（供 UI 渲染按钮）</summary>
@@ -96,6 +97,7 @@ public class AIDebugSpawnController : MonoBehaviour
                 return Faction.Human_Player;
             case DebugSpawnType.EnemyWarrior:
             case DebugSpawnType.EnemyArcher:
+            case DebugSpawnType.EnemyGeneral:
                 return Faction.Undead;
             default:
                 return Faction.None;
@@ -113,6 +115,7 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerCivilian: return Occupation.Civilian;
             case DebugSpawnType.EnemyWarrior: return Occupation.Warrior;
             case DebugSpawnType.EnemyArcher: return Occupation.Archer;
+            case DebugSpawnType.EnemyGeneral: return Occupation.General;
             default: return Occupation.Civilian;
         }
     }
@@ -128,6 +131,7 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerCivilian: return "己方工人";
             case DebugSpawnType.EnemyWarrior: return "敌方士兵";
             case DebugSpawnType.EnemyArcher: return "敌方弓手";
+            case DebugSpawnType.EnemyGeneral: return "敌方将军";
             default: return "未知";
         }
     }
@@ -224,11 +228,14 @@ public class AIDebugSpawnController : MonoBehaviour
         if (fc == null)
             fc = generalGo.AddComponent<FormationController>();
 
+        // 3.0.1_6 §4.3：按将军阵营分流——敌方将军用 Undead + FormationTable_Enemy（独立阵型表）
+        fc.faction = generalUnit.Data != null ? generalUnit.Data.faction : Faction.Human_Player;
         if (fc.formationTable == null)
-            fc.formationTable = Resources.Load<FormationTable>("Formations/FormationTable");
+            fc.formationTable = Resources.Load<FormationTable>(
+                fc.faction == Faction.Undead ? "Formations/FormationTable_Enemy" : "Formations/FormationTable");
 
         fc.BindGeneral(generalUnit);
         fc.RecruitStandard();
-        Debug.Log("[AIDebugSpawn] 将军已编组，招募满编。");
+        Debug.Log($"[AIDebugSpawn] {(fc.faction == Faction.Undead ? "敌方" : "己方")}将军已编组，招募满编。");
     }
 }

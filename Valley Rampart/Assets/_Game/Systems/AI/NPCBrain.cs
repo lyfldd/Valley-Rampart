@@ -102,6 +102,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private readonly List<IDamageable> _nearbyAllies = new List<IDamageable>();
     private float _nearestDist = float.MaxValue;
 
+    // ===== 3.0.1_8 §六 放弃任务因子：追击状态跟踪 =====
+    private IDamageable _chaseTarget;   // 当前追击目标（焦点威胁源，切换时重置计时）
+    private float _chaseStartTime;      // 追击开始时间戳（超时成本用）
+    private float _lastChaseDist;       // 上帧追击距离（距离拉大成本用）
+
     // ===== 管线中间产物缓存 =====
     private float _lastRaw;           // 上一帧 rawFactor（量化器消费）
     private FactorContext _lastCtx;   // 上一帧完整 ctx（调试面板读）
@@ -438,6 +443,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ③ 纯管线：L1 -> L2 -> L3（无副作用）
         _attention.Update(currentTime, dt);
         ctx.FocusDecision = L1FocusEvaluator.Evaluate(_attention, in ctx);
+        // 3.0.1_8 §六：放弃任务因子需 L1 焦点判追击状态，故在 L2 前组装
+        ctx.AbandonTaskFactor = ComputeAbandonTaskFactor(in ctx);
         ctx.PostureDecision = L2PostureDecider.Decide(in ctx);
 
         // rawFactor 计算（复用 CalculateRawFactor）+ stateThreatBias 处理
@@ -467,6 +474,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     {
         float hpRatio = _self.MaxHp > 0 ? (float)_self.CurrentHp / _self.MaxHp : 0f;
         bool isNight = IsNight();
+        Vector2 homePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
         return new FactorContext
         {
             Self = _self,
@@ -483,7 +491,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             AttackWorldRange = _profession.attackRange * GetCellSize(),
             CellSize = GetCellSize(),
             CurrentTime = Time.time,
-            HomePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero,
+            HomePoint = homePoint,
             // 3.0.1_3：编队槽位（守阵追击 clamp 用，§4.1）
             HasFormationSlot = _followProvider.IsActive && _followProvider.Stimulus.IsFormationSlot,
             FormationSlotWorld = ResolveFormationSlotWorld(),
@@ -491,12 +499,102 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             RegionHeat = _lodSystem != null ? _lodSystem.GetHeatAt(_self.GetPosition()) : 0f,
             // 3.0.1_8 综合因子（L2 在 ③ 阶段读取，此处用上一帧 rawFactor = _lastRaw，与量化器消费时序一致）：
             //   ThreatFactor = 上一帧 rawFactor（连续 0-1，供 L2 连续仲裁）
-            //   FormationFactor = 编队军令强度归一化（FollowStimulus.Intensity / 基准 4.5，有编队≈1 无编队=0）
+            //   FormationFactor = 编队军令强度归一化（FollowStimulus.Intensity / 基准 4.5，有编队≈1 无编队=0；
+            //     切阵型瞬时提强度（3.0.1_8 §七）会经 DispatchOrders 写入 FollowStimulus，此处理自动吃到提升值）
+            //   SafetyFactor = 归巢因子（离家/夜晚/受伤加权，3.0.1_8 §五）
             ThreatFactor = _lastRaw,
             FormationFactor = _followProvider.IsActive
                 ? Mathf.Clamp01(_followProvider.Stimulus.Intensity / FormationController.OrderIntensityBase)
                 : 0f,
+            SafetyFactor = ComputeSafetyFactor(hpRatio, homePoint),
         };
+    }
+
+    /// <summary>
+    /// 归巢因子（3.0.1_8 §五）：离家×w1 + 夜晚×w2 + 受伤×w3 加权合成 0-1。
+    /// distFactor = clamp01(离家距离 / (2×感知半径))（2 倍感知半径外=1）。
+    /// L2 消费：编队成员撤退需 SafetyFactor > safetyRetreatGate（AND 联合语义，军队承受更多代价）。
+    /// </summary>
+    private float ComputeSafetyFactor(float hpRatio, Vector2 homePoint)
+    {
+        float perceptionWorld = Mathf.Max(1f, _profession.perceptionRadius * GetCellSize());
+        float distFactor = Mathf.Clamp01(Vector2.Distance(_self.GetPosition(), homePoint) / (perceptionWorld * 2f));
+        float wound = 1f - hpRatio;
+        return Mathf.Clamp01(
+            distFactor * _config.safetyDistWeight
+            + GetNightFactor() * _config.safetyNightWeight
+            + wound * _config.safetyWoundWeight);
+    }
+
+    /// <summary>
+    /// 放弃任务因子（3.0.1_8 §六）：追击成本 vs 收益 仲裁（0-1，越高越想弃）。
+    /// 收益（正分）：可击杀（目标残血）/ 军令要求（协作因子，编队要求追则不弃）
+    /// 成本（负分）：受伤追击 / 孤军 / 追击超时 / 距离拉大（被风筝追不上）
+    /// abandon = clamp01(cost - benefit)，L2 读 > abandonThreshold → Cautious（放弃追击回归编队）。
+    /// 非追击中恒 0（不干扰守位/任务执行）。目标切换重置计时。
+    /// </summary>
+    private float ComputeAbandonTaskFactor(in FactorContext ctx)
+    {
+        // 仅战斗单位 + 焦点是威胁刺激（追击/交战中）才计算
+        IDamageable target = null;
+        if (_profession != null && _profession.attack > 0
+            && ctx.FocusDecision.IsValid && ctx.FocusDecision.Focus is ThreatStimulus ts
+            && ts.Enemy != null && !IsDestroyed(ts.Enemy))
+        {
+            target = ts.Enemy;
+        }
+
+        if (target == null)
+        {
+            _chaseTarget = null;
+            _lastChaseDist = 0f;
+            return 0f;
+        }
+
+        // 目标切换 → 重置追击计时（新的追击对象从零算）
+        if (!ReferenceEquals(_chaseTarget, target))
+        {
+            _chaseTarget = target;
+            _chaseStartTime = Time.time;
+            _lastChaseDist = 0f;
+        }
+
+        float chaseTime = Time.time - _chaseStartTime;
+        float distNow = Vector2.Distance(ctx.SelfPos, target.GetPosition());
+        bool distGrow = _lastChaseDist > 0f && distNow > _lastChaseDist * _config.abandonDistGrowRatio;
+        _lastChaseDist = distNow;
+
+        float targetHpRatio = target.MaxHp > 0 ? (float)target.CurrentHp / target.MaxHp : 0f;
+
+        // 收益（正分）：放弃 vs 坚持的天平（3.0.1_8 §6.6）
+        float benefit = 0f;
+        if (targetHpRatio < _config.abandonKillHpGate)
+            benefit += _config.abandonBenefitKillable;
+        benefit += ctx.FormationFactor * _config.abandonBenefitOrder;
+
+        // 坚持任务因子：装备战力 / 敌情可击败 / 移速追得上（目标 Data 需 as UnitController 读——IDamageable 接口无 Data）
+        UnitController targetUnit = target as UnitController;
+        NpcProfessionDef targetDef = targetUnit != null ? targetUnit.Data as NpcProfessionDef : null;
+        if (_profession.attack >= _config.persistPowerAttackGate)
+            benefit += _config.persistBenefitPower;                       // 装备战力：我方攻高打得动
+        if (targetDef != null
+            && (_profession.attack - targetDef.defense) >= _config.persistDamageMargin)
+            benefit += _config.persistBenefitWeakDefense;                 // 敌情：我方打得出有效伤害（相对比较）
+        if (targetDef != null && _profession.walkSpeed > targetDef.walkSpeed * _config.persistSpeedRatio)
+            benefit += _config.persistBenefitSpeed;                       // 移速：真追得上（>1.1×）才坚持
+
+        // 成本（负分）
+        float cost = 0f;
+        if (ctx.HpRatio < _config.abandonWoundedHpGate)
+            cost += _config.abandonCostWounded;
+        if (ctx.NearbyAllyCount <= _config.abandonAloneGate)
+            cost += _config.abandonCostAlone;
+        if (chaseTime > _config.abandonTimeout)
+            cost += _config.abandonCostTimeout;
+        if (distGrow)
+            cost += _config.abandonCostDistance;
+
+        return Mathf.Clamp01(cost - benefit);
     }
 
     /// <summary>

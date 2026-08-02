@@ -14,10 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cellSize: 2.26
   regionCellCount: 16
+  midRegionCellCount: 4
   flyHeightThreshold: 5
   flyHeight: 8
   stackLimits:
   - category: 0
-    maxStack: 5
+    maxStack: 12
   - category: 1
     maxStack: 0

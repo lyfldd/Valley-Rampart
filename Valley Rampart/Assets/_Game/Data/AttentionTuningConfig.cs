@@ -184,6 +184,56 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("区块威胁热度因子权重（heatFactor，环境型威胁）。单次受击热度0.4×此值应 ≥0.25 威胁1阈值——危险一次受击就传开。原0.08远不够，0.3 仍偏低，取0.5）")]
     public float rfHeatWeight = 0.5f;
 
+    [Header("归巢因子（3.0.1_8 §五，SafetyFactor 独立化）")]
+    [Tooltip("离家权重：distFactor = clamp01(离家距离/(2×感知半径)) × 此值")]
+    public float safetyDistWeight = 0.4f;
+    [Tooltip("夜晚权重：NightFactor × 此值")]
+    public float safetyNightWeight = 0.35f;
+    [Tooltip("受伤权重：(1-hpRatio) × 此值")]
+    public float safetyWoundWeight = 0.45f;
+    [Tooltip("撤退归巢门控：编队成员需 SafetyFactor > 此值才允许撤退（AND 联合语义）")]
+    public float safetyRetreatGate = 0.3f;
+
+    [Header("放弃任务因子（3.0.1_8 §六，防风筝无谓追击）")]
+    [Tooltip("放弃判定阈值：AbandonTaskFactor > 此值 → 放弃追击回归编队")]
+    public float abandonThreshold = 0.5f;
+    [Tooltip("可击杀收益：目标血量 < abandonKillHpGate 时 +此值（残血值得追）")]
+    public float abandonBenefitKillable = 0.6f;
+    [Tooltip("军令收益：FormationFactor × 此值（编队要求追击时降低放弃倾向）")]
+    public float abandonBenefitOrder = 0.4f;
+    [Tooltip("追击受伤成本：我方血量 < abandonWoundedHpGate 时 +此值")]
+    public float abandonCostWounded = 0.4f;
+    [Tooltip("孤军成本：周围友军 ≤ abandonAloneGate 时 +此值")]
+    public float abandonCostAlone = 0.3f;
+    [Tooltip("追击超时成本：持续追击超过 abandonTimeout 秒 +此值")]
+    public float abandonCostTimeout = 0.4f;
+    [Tooltip("距离拉大成本：当前距离 > 上帧 × abandonDistGrowRatio 时 +此值")]
+    public float abandonCostDistance = 0.3f;
+    [Tooltip("追击超时阈值（秒）")]
+    public float abandonTimeout = 6f;
+    [Tooltip("目标血量低于此值视为可击杀")]
+    public float abandonKillHpGate = 0.5f;
+    [Tooltip("我方血量低于此值视为受伤追击")]
+    public float abandonWoundedHpGate = 0.6f;
+    [Tooltip("我方友军数 ≤ 此值视为孤军")]
+    public float abandonAloneGate = 0;
+    [Tooltip("距离增长比：当前/上帧 > 此值视为目标拉大距离")]
+    public float abandonDistGrowRatio = 1.2f;
+
+    [Header("坚持任务因子（3.0.1_8 §6.6，收益侧扩充——放弃 vs 坚持的天平）")]
+    [Tooltip("装备战力收益门槛：我方 attack ≥ 此值视为打得动（装备系统落地前用基础攻击间接表达）")]
+    public float persistPowerAttackGate = 12f;
+    [Tooltip("装备战力收益：我方 attack ≥ 门槛时 +此值")]
+    public float persistBenefitPower = 0.3f;
+    [Tooltip("敌情可击败余量：我方 attack − 目标 defense ≥ 此值视为打得动（相对比较，0=能打出有效伤害即可）")]
+    public float persistDamageMargin = 0f;
+    [Tooltip("敌情可击败收益：我方打得动目标时 +此值")]
+    public float persistBenefitWeakDefense = 0.2f;
+    [Tooltip("移速追得上收益：我方 walkSpeed > 敌方 × 此比值才给（真追得上才坚持）")]
+    public float persistSpeedRatio = 1.1f;
+    [Tooltip("移速追得上收益：满足速度条件时 +此值")]
+    public float persistBenefitSpeed = 0.3f;
+
     [Header("LOD 三区思考（3.0.1_LOD §1.5 / §五）")]
     [Tooltip("活跃区 Think 频率（Hz，现状 10）")]
     public float lodActiveThinkHz = 10f;

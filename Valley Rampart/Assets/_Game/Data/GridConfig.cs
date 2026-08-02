@@ -16,6 +16,10 @@ public class GridConfig : ScriptableObject
     [Tooltip("一个大区块含多少个小区块（固定）")]
     public int regionCellCount = 16;
 
+    [Header("中区块（3.0.1_5 §五：底层支撑多编队协作）")]
+    [Tooltip("一个中区块含多少个小区块（4 个小区块编组，中区块最多承载 4 编队。热度以中区块为粒度聚合，热点跨编队可见）")]
+    public int midRegionCellCount = 4;
+
     [Header("飞行层")]
     [Tooltip("y 值超过此阈值视为空中层")]
     public float flyHeightThreshold = 5f;

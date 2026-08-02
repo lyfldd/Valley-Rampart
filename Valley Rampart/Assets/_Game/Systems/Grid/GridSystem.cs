@@ -62,6 +62,17 @@ public class GridSystem : Singleton<GridSystem>
         return cellX / config.regionCellCount;
     }
 
+    /// <summary>
+    /// 小区块全局 x → 中区块索引（3.0.1_5 §五：midRegionCellCount 个小区块编组为一中区块）。
+    /// 中区块承载编队上限（最多 4 编队）与热度聚合粒度（热点跨编队可见）。
+    /// </summary>
+    public int CellToMidRegionIndex(int cellX)
+    {
+        if (config == null) return 0;
+        int mrc = config.midRegionCellCount > 0 ? config.midRegionCellCount : 4;
+        return cellX / mrc;
+    }
+
     // ===== NPC 进出（堆叠上限）=====
 
     /// <summary>单位尝试进入区块。超过堆叠上限返回 false（排队等待）。</summary>

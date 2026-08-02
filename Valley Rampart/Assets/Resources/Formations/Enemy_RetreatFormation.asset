@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6315aacfe0fcbb4691432ad742c9414, type: 3}
+  m_Name: Enemy_RetreatFormation
+  m_EditorClassIdentifier: 
+  displayName: "\u64A4\u9000-\u5F13\u5148\u8D70\u8FD1\u6218\u6BBF\u540E"
+  intent: 2
+  battleLine: 0
+  slots:
+  - cellOffset: {x: -5, y: 0}
+    role: 2
+  - cellOffset: {x: -4, y: 0}
+    role: 2
+  - cellOffset: {x: -3, y: 0}
+    role: 1
+  - cellOffset: {x: -2, y: 0}
+    role: 1
+  - cellOffset: {x: -1, y: 0}
+    role: 1
+  - cellOffset: {x: 1, y: 0}
+    role: 0

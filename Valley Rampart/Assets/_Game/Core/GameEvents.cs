@@ -418,6 +418,22 @@ public readonly struct RegionHeatChangedEvent
     }
 }
 
+// ===== 编队管理事件（3.0.1_5 §六 E 键作战面板后端）=====
+
+// 编队选中事件。由 FormationManager 在选中时发布（作战面板/UI 订阅刷新高亮）。
+public readonly struct FormationSelectedEvent
+{
+    public readonly int FormationId;
+    public FormationSelectedEvent(int formationId) { FormationId = formationId; }
+}
+
+// 编队取消选中事件。由 FormationManager 在取消选中/清空选中时发布。
+public readonly struct FormationDeselectedEvent
+{
+    public readonly int FormationId;
+    public FormationDeselectedEvent(int formationId) { FormationId = formationId; }
+}
+
 // 敌人进入区块事件。由 GridSystem.TryEnter 在敌人跨 region 时发布（§1.3 威胁类事件升整 region）。
 public readonly struct EnemyEnteredRegionEvent
 {

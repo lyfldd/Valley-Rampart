@@ -48,6 +48,10 @@ public struct FactorContext
     public float ThreatFactor;
     /// <summary>协作因子（连续 0-1）：编队军令约束强度（有编队≈1，无编队=0）。切阵型=此因子提高</summary>
     public float FormationFactor;
+    /// <summary>归巢因子（连续 0-1）：离家/夜晚/受伤 加权合成（3.0.1_8 §五）。撤退 = 威胁压过协作 AND 归巢驱力强（编队成员）</summary>
+    public float SafetyFactor;
+    /// <summary>放弃任务因子（连续 0-1）：追击成本>收益 时升高（3.0.1_8 §六）。高 → 放弃追击回归编队（防风筝）</summary>
+    public float AbandonTaskFactor;
 
     // ===== ② 记忆组件 FillContext 写入 =====
     public HitCooldownState CurrentState;

@@ -23,6 +23,9 @@ public class LODSystem : Singleton<LODSystem>
     // region -> LOD 状态（索引连续，region 数 = MapCellCount / regionCellCount）
     private readonly List<RegionLodState> _regions = new List<RegionLodState>();
 
+    // 中区块 -> 热度状态（3.0.1_5 §五：midRegionCellCount 小区块编组粒度，热度/热点按中区块聚合，热点跨编队可见）
+    private readonly List<MidRegionHeat> _midHeats = new List<MidRegionHeat>();
+
     // 军队锚点注册表（§六.P0.2 留接口：P0 无注册方时仅君主中心运行）
     private readonly List<Transform> _armyCenters = new List<Transform>();
 
@@ -61,7 +64,7 @@ public class LODSystem : Singleton<LODSystem>
     // ===== 初始化 =====
 
     /// <summary>
-    /// 按当前地图初始化 region 数组（世界/地图生成后调，GridSystem.PopulateFromMap 之后）。
+    /// 按当前地图初始化 region + 中区块数组（世界/地图生成后调，GridSystem.PopulateFromMap 之后）。
     /// </summary>
     public void InitRegions(int regionCount)
     {
@@ -69,7 +72,24 @@ public class LODSystem : Singleton<LODSystem>
         _regions.Clear();
         for (int i = 0; i < regionCount; i++)
             _regions.Add(new RegionLodState(i));
-        Debug.Log($"[LODSystem] 初始化 {regionCount} 个 region，初始全休眠。");
+
+        // 中区块 = regionCount × midRegionCellCount（每 region 内 4 个中区块连续编号）
+        int mrc = GetMidCellCount();
+        _midHeats.Clear();
+        for (int i = 0; i < regionCount * mrc; i++)
+            _midHeats.Add(new MidRegionHeat(i));
+        Debug.Log($"[LODSystem] 初始化 {regionCount} 个 region（{_midHeats.Count} 个中区块），初始全休眠。");
+    }
+
+    /// <summary>中区块数 = region 数 × 每 region 中区块数</summary>
+    public int MidRegionCount => _midHeats.Count;
+
+    private int GetMidCellCount()
+    {
+        if (GridSystem.Instance != null && GridSystem.Instance.Config != null
+            && GridSystem.Instance.Config.midRegionCellCount > 0)
+            return GridSystem.Instance.Config.midRegionCellCount;
+        return 4;
     }
 
     // ===== 军队锚点注册表（§六.P0.2 留接口）=====
@@ -101,14 +121,15 @@ public class LODSystem : Singleton<LODSystem>
 
         if (_regions.Count == 0 || _config == null) return;
 
-        // 1. 热度衰减 + 无事件计时器累积（先衰减再判定降级）
-        for (int i = 0; i < _regions.Count; i++)
+        // 1. 中区块热度衰减 + region 无事件计时累积（先衰减再判定降级）
+        for (int i = 0; i < _midHeats.Count; i++)
         {
-            var r = _regions[i];
-            if (r.ThreatHeat > 0f)
-                r.ThreatHeat = Mathf.Max(0f, r.ThreatHeat - _config.heatDecayRate * Time.deltaTime);
-            r.IdleTimer += Time.deltaTime;
+            var m = _midHeats[i];
+            if (m.ThreatHeat > 0f)
+                m.ThreatHeat = Mathf.Max(0f, m.ThreatHeat - _config.heatDecayRate * Time.deltaTime);
         }
+        for (int i = 0; i < _regions.Count; i++)
+            _regions[i].IdleTimer += Time.deltaTime;
 
         // 2. 活跃带重算（升级即时，基于君主/军队中心位置）
         ApplyActiveBands();
@@ -179,15 +200,16 @@ public class LODSystem : Singleton<LODSystem>
         }
     }
 
-    /// <summary>降级防抖（§1.4）：热度归零 + idleTimer ≥ 30s → 降一级，不跳级。</summary>
+    /// <summary>降级防抖（§1.4）：region 下全部中区块热度归零 + idleTimer ≥ 30s → 降一级，不跳级。</summary>
     private void ApplyDowngrade()
     {
         float idleLimit = _config.lodDowngradeIdleTime;
+        int mrc = GetMidCellCount();
         for (int i = 0; i < _regions.Count; i++)
         {
             var r = _regions[i];
             if (r.Level == LodLevel.Sleeping) continue;
-            if (r.ThreatHeat > 0f || r.IdleTimer < idleLimit) continue;
+            if (RegionTotalHeat(i, mrc) > 0f || r.IdleTimer < idleLimit) continue;
             // 逐级降：Active -> SemiActive -> Sleeping
             r.Level = r.Level == LodLevel.Active ? LodLevel.SemiActive : LodLevel.Sleeping;
             r.IdleTimer = 0f;
@@ -195,48 +217,68 @@ public class LODSystem : Singleton<LODSystem>
         }
     }
 
+    /// <summary>region 内全部中区块热度之和（降级判定用：任一中区块有热度即不降级）。</summary>
+    private float RegionTotalHeat(int regionIdx, int mrc)
+    {
+        int baseIdx = regionIdx * mrc;
+        float sum = 0f;
+        for (int i = 0; i < mrc; i++)
+        {
+            int idx = baseIdx + i;
+            if (idx >= 0 && idx < _midHeats.Count)
+                sum += _midHeats[idx].ThreatHeat;
+        }
+        return sum;
+    }
+
     // ===== 事件覆盖（§1.3 升级不走路径 tick）=====
 
-    /// <summary>受击事件：被打 NPC 所在 region 即时升活跃 + 热度累积 + 记录战斗热点（§3.1 +0.4 / §3.2 危险传开）。</summary>
+    /// <summary>受击事件：被打 NPC 所在**中区块**即时升活跃 + 热度累积 + 记录战斗热点（§3.1 +0.4 / §3.2 危险传开，热点跨编队可见）。</summary>
     private void OnUnitDamaged(UnitDamagedEvent evt)
     {
-        if (_regions.Count == 0 || _config == null) return;
+        if (_midHeats.Count == 0 || _config == null) return;
         var uo = evt.Unit as UnityEngine.Object;
         if (uo == null) return;
         var unit = evt.Unit as UnitController;
         if (unit == null) return;
-        int idx = GetRegionOf(unit.transform.position);
-        if (idx < 0 || idx >= _regions.Count) return;
-        var r = _regions[idx];
-        r.ThreatHeat = Mathf.Min(1f, r.ThreatHeat + _config.heatHitGain);
-        // 战斗热点：记录受击位置（供同区感知范围外 NPC 朝支援方向移动，§3.1 第二层位置载体）
-        r.CombatHotspot = unit.transform.position;
-        r.HotspotTime = Time.time;
-        UpgradeImmediate(idx, LodLevel.Active);
+        int midIdx = GetMidRegionOf(unit.transform.position);
+        if (midIdx < 0 || midIdx >= _midHeats.Count) return;
+        var m = _midHeats[midIdx];
+        m.ThreatHeat = Mathf.Min(1f, m.ThreatHeat + _config.heatHitGain);
+        // 战斗热点：记录受击位置（供同中区块感知范围外 NPC 朝支援方向移动，§3.1 第二层位置载体）
+        m.CombatHotspot = unit.transform.position;
+        m.HotspotTime = Time.time;
+        UpgradeImmediate(midIdx, LodLevel.Active);
     }
 
-    /// <summary>敌人进格事件：敌人进入 region 即升活跃 + 热度累积（§3.1 +0.2）。</summary>
+    /// <summary>敌人进格事件：敌人进入 region 即升活跃 + 热度累积（§3.1 +0.2，按敌人所在中区块聚合）。</summary>
     private void OnEnemyEnteredRegion(EnemyEnteredRegionEvent evt)
     {
-        if (_regions.Count == 0 || _config == null) return;
-        if (evt.RegionIndex < 0 || evt.RegionIndex >= _regions.Count) return;
-        var r = _regions[evt.RegionIndex];
-        r.ThreatHeat = Mathf.Min(1f, r.ThreatHeat + _config.heatEnemyEnterGain);
-        UpgradeImmediate(evt.RegionIndex, LodLevel.Active);
+        if (_midHeats.Count == 0 || _config == null) return;
+        int midIdx = -1;
+        if (evt.Enemy != null)
+            midIdx = GetMidRegionOf(evt.Enemy.transform.position);
+        if (midIdx < 0 || midIdx >= _midHeats.Count) return;
+        var m = _midHeats[midIdx];
+        m.ThreatHeat = Mathf.Min(1f, m.ThreatHeat + _config.heatEnemyEnterGain);
+        UpgradeImmediate(midIdx, LodLevel.Active);
     }
 
-    /// <summary>威胁类事件升级（即时，重置 idleTimer 防误降级）。</summary>
-    private void UpgradeImmediate(int regionIdx, LodLevel level)
+    /// <summary>威胁类事件升级（即时，重置 idleTimer 防误降级）。事件带中区块索引（热度粒度=中区块）。</summary>
+    private void UpgradeImmediate(int midIdx, LodLevel level)
     {
+        // LOD 三区仍在 region 粒度：中区块 → 所属 region
+        int regionIdx = midIdx / GetMidCellCount();
+        if (regionIdx < 0 || regionIdx >= _regions.Count) return;
         var r = _regions[regionIdx];
         if (r.Level != level)
         {
             r.Level = level;
             r.IdleTimer = 0f;
         }
-        // 发布热度变化事件（§3.5 协作层事件源，无订阅者守卫由 EventBus.HasSubscribers 判定）
+        // 发布热度变化事件（§3.5 协作层事件源，无订阅者守卫由 EventBus.HasSubscribers 判定；RegionIndex 参数=中区块索引）
         if (EventBus.HasSubscribers<RegionHeatChangedEvent>())
-            EventBus.Publish(new RegionHeatChangedEvent(regionIdx, r.ThreatHeat, r.Level));
+            EventBus.Publish(new RegionHeatChangedEvent(midIdx, _midHeats[midIdx].ThreatHeat, r.Level));
     }
 
     // ===== 对外查询（NPCBrain 调）=====
@@ -249,27 +291,27 @@ public class LODSystem : Singleton<LODSystem>
         return _regions[idx].Level;
     }
 
-    /// <summary>查询所在 region 的威胁热度（NPCBrain 喂 heatFactor）。</summary>
+    /// <summary>查询所在中区块的威胁热度（NPCBrain 喂 heatFactor，3.0.1_5 §五中区块粒度）。</summary>
     public float GetHeatAt(Vector2 worldPos)
     {
-        int idx = GetRegionOf(worldPos);
-        if (idx < 0 || idx >= _regions.Count) return 0f;
-        return _regions[idx].ThreatHeat;
+        int idx = GetMidRegionOf(worldPos);
+        if (idx < 0 || idx >= _midHeats.Count) return 0f;
+        return _midHeats[idx].ThreatHeat;
     }
 
     /// <summary>
-    /// 查询所在 region 的最近战斗热点（§3.1 第二层"危险传开"的位置载体）。
+    /// 查询所在中区块的最近战斗热点（§3.1 第二层"危险传开"的位置载体，中区块粒度热点跨编队可见）。
     /// 热点有效期：maxAge 秒内的热点有效；无热点/过期返回 false。
-    /// 供 NPCBrain 在"感知范围内无敌人但区块有战斗"时朝热点移动支援。
+    /// 供 NPCBrain 在"感知范围内无敌人但中区块有战斗"时朝热点移动支援。
     /// </summary>
     public bool TryGetCombatHotspot(Vector2 worldPos, float maxAge, out Vector2 hotspot)
     {
         hotspot = Vector2.zero;
-        int idx = GetRegionOf(worldPos);
-        if (idx < 0 || idx >= _regions.Count) return false;
-        var r = _regions[idx];
-        if (r.HotspotTime <= 0f || Time.time - r.HotspotTime > maxAge) return false;
-        hotspot = r.CombatHotspot;
+        int idx = GetMidRegionOf(worldPos);
+        if (idx < 0 || idx >= _midHeats.Count) return false;
+        var m = _midHeats[idx];
+        if (m.HotspotTime <= 0f || Time.time - m.HotspotTime > maxAge) return false;
+        hotspot = m.CombatHotspot;
         return true;
     }
 
@@ -279,5 +321,13 @@ public class LODSystem : Singleton<LODSystem>
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return -1;
         var coord = GridSystem.Instance.WorldToCoord(worldPos);
         return GridSystem.Instance.CellToRegionIndex(coord.x);
+    }
+
+    /// <summary>世界坐标 → 中区块索引（3.0.1_5 §五：midRegionCellCount 小区块编组，热度聚合粒度）。</summary>
+    public int GetMidRegionOf(Vector2 worldPos)
+    {
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return -1;
+        var coord = GridSystem.Instance.WorldToCoord(worldPos);
+        return GridSystem.Instance.CellToMidRegionIndex(coord.x);
     }
 }

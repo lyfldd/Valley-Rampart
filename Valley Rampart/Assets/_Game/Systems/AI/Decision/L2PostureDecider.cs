@@ -70,18 +70,25 @@ public static class L2PostureDecider
         threshold += profession.retreatThresholdOffset;       // 职业偏移
         threshold = Mathf.Max(0.2f, threshold / 3f);          // 连续量纲，保底防除零
 
-        // ① 低威胁 -> 全力执行（原威胁 0/1）
+        // ① 放弃任务（3.0.1_8 §六）：追击成本 > 收益 → Cautious（放弃追击，回归编队/守位，不追不撤）
+        //    放最前：被风筝追不上时威胁因子低（敌人远），低威胁分支会误判 FullPower 继续追
+        if (ctx.AbandonTaskFactor > config.abandonThreshold)
+            return BehaviorSpectrum.Cautious;
+
+        // ② 低威胁 -> 全力执行（原威胁 0/1）
         if (threat < 0.3f)
             return BehaviorSpectrum.FullPower;
 
-        // ② 连续仲裁：有效威胁 = 威胁因子 × (1 - 协作抵抗)
+        // ③ 连续仲裁：有效威胁 = 威胁因子 × (1 - 协作抵抗)
         // 协作因子（编队军令）作为"扛住"系数：军令越强、服从度越高，越不易被威胁压垮
         // 这是"指挥优先级 vs 战斗本能"的连续权衡，而非 4 档二选一
         float formationResist = formation * (0.5f + profession.obedience / 100f);  // 0~1.5
         float effectiveThreat = threat * (1f - formationResist * 0.4f);             // 编队最高抵消 60%
 
-        // ③ 有效威胁 vs 撤退阈值 -> 谱系
-        if (effectiveThreat > threshold)
+        // ④ 撤退 AND 归巢门控（3.0.1_8 §五）：编队成员需归巢驱力强才真撤（军队承受更多代价）
+        //    非编队个体（工人/散兵/敌方）维持原行为：威胁超阈即撤
+        bool retreatAllowed = !ctx.HasFormationSlot || ctx.SafetyFactor > config.safetyRetreatGate;
+        if (effectiveThreat > threshold && retreatAllowed)
             return BehaviorSpectrum.FullRetreat;
         return BehaviorSpectrum.Cautious;  // 有编队/性格扛住 -> 谨慎（维持工作/守阵）
     }
