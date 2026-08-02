@@ -96,6 +96,15 @@ public struct BehaviorCommand
     /// <summary>是否编队槽位化（SlotOffset 非 zero）</summary>
     public bool IsFormationSlot => SlotOffset.x != 0 || SlotOffset.y != 0;
 
+    // ===== 3.3.5 资源流转：搬运目标（WorkAt 模块用）=====
+
+    /// <summary>
+    /// 搬运目标（IHarvestable）。TaskStimulus.Source 为 StorageComponent 时透传，
+    /// Executor.WorkAt 到达目标后调用 Harvest() 把本地存储转国库（自动搬运闭环）。
+    /// 非搬运任务（普通工作）为 null。
+    /// </summary>
+    public IHarvestable HarvestTarget;
+
     // ===== 3.0.1_4 §6.3 漫游（Wander 模块用）=====
 
     /// <summary>

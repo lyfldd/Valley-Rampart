@@ -70,6 +70,10 @@ public static class L3CommandComputer
                 cmd.TargetPos = posture.Focus.TargetPos;
                 cmd.Speed = walkSpeed;
                 cmd.Duration = 0f;  // P0 WorkAt 占位：位移即目的，无工作时长
+                // 3.3.5 资源流转：搬运任务（TaskStimulus.Source=StorageComponent）透传 HarvestTarget，
+                // Executor 到达后 Harvest 入国库
+                if (posture.Focus.Focus is TaskStimulus workTs && workTs.Source is IHarvestable harvestable)
+                    cmd.HarvestTarget = harvestable;
                 break;
 
             case BehaviorModule.FollowAnchor:

@@ -112,6 +112,23 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private FactorContext _lastCtx;   // 上一帧完整 ctx（调试面板读）
     private BehaviorCommand _lastCmd; // 上一帧 Think 产出的 cmd（Execute 每帧复用）
 
+    /// <summary>
+    /// 是否空闲可派任务（3.3.5 资源流转调度中心用）。
+    /// 焦点无效 / 焦点是 Wander（漫游）/ Follow（跟随非任务）→ 空闲可派；
+    /// 焦点是 TaskStimulus（正在工作）/ ThreatStimulus（战斗中）→ 忙，不派新任务（防任务堆叠）。
+    /// </summary>
+    public bool IsIdleForTask
+    {
+        get
+        {
+            if (!_lastCtx.FocusDecision.IsValid) return true;
+            var focus = _lastCtx.FocusDecision.Focus;
+            if (focus is TaskStimulus) return false;    // 正在执行任务
+            if (focus is ThreatStimulus) return false;  // 战斗中
+            return true;                                // Wander/Follow/Safety 均可打断派任务
+        }
+    }
+
     // ===== 切换历史（3.0.1_2 AI 调试用）=====
     private readonly AISwitchRecord[] _switchHistory = new AISwitchRecord[10];
     private int _switchHistoryHead;

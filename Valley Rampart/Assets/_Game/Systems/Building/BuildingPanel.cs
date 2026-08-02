@@ -124,14 +124,20 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_demolishButton != null)
             _demolishButton.style.display = canDemolish ? DisplayStyle.Flex : DisplayStyle.None;
 
-        // 收取按钮（条件渲染：有 StorageComponent 且可收取，3.3.4 批次5）
+        // 收取按钮（条件渲染：有 StorageComponent，3.3.5 库存常显 + 搬运中状态）
         var storage = _target.GetComponent<StorageComponent>();
         if (_harvestButton != null)
         {
-            bool canHarvest = storage != null && storage.IsReadyToHarvest();
-            _harvestButton.style.display = canHarvest ? DisplayStyle.Flex : DisplayStyle.None;
-            if (canHarvest)
-                _harvestButton.text = $"收取 {storage.storedAmount}/{storage.capacity}";
+            bool hasStorage = storage != null;
+            _harvestButton.style.display = hasStorage ? DisplayStyle.Flex : DisplayStyle.None;
+            if (hasStorage)
+            {
+                bool transporting = FindObjectOfType<ScheduleCenterStub>()?.IsTransporting(storage) ?? false;
+                _harvestButton.text = transporting
+                    ? $"搬运中 {storage.storedAmount}/{storage.capacity}"
+                    : $"收取 {storage.storedAmount}/{storage.capacity}";
+                _harvestButton.SetEnabled(storage.IsReadyToHarvest());
+            }
         }
     }
 

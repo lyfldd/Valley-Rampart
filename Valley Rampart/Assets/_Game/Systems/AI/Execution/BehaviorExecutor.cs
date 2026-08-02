@@ -159,8 +159,14 @@ public class BehaviorExecutor
 
         if (dist <= arrivalDist)
         {
-            _arrivedAtFocus = true;
-            // P0 WorkAt 占位：位移即目的，原地待机
+            // 边沿触发：仅刚到达（由未到达→到达）时收取一次，防重复 Harvest
+            if (!_arrivedAtFocus)
+            {
+                _arrivedAtFocus = true;
+                // 3.3.5 资源流转：搬运任务到达 → Harvest 入国库（原占位"原地待机"扩展）
+                if (cmd.HarvestTarget != null)
+                    cmd.HarvestTarget.Harvest();
+            }
         }
         else
         {

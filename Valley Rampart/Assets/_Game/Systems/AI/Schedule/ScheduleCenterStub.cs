@@ -1,83 +1,115 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // ============================================================================
-//  3.0.1_2 输入输出决定层 - 调度中心占位（P0 场景验证用）
-//  详见 3.0.1_2_输入输出决定层设计.md §7 / §11 P0 第8项
+//  3.0.1_2 输入输出决定层 - 调度中心（3.3.5 补全：资源流转搬运派发）
+//  详见 3.0.1_2_输入输出决定层设计.md §7 / §11 + 3.3.5_资源流转与搬运系统.md
+//  类名保留 ScheduleCenterStub（兼容场景引用），功能已补全为正式调度中心（搬运方向）。
 //  昼夜节律：夜间停发 B/C 户外任务（输入端一致性要求）
+//  搬运：检测产能建筑存储达标 → 派空闲工人 AddTaskStimulus（issuer=StorageComponent）
+//  任务生命周期：刺激带 expiry（工人被打断没去 → 过期自然消失 → 下 tick 重派）
 // ============================================================================
 
 /// <summary>
-/// 调度中心占位（§7 输入端一致性，P0 场景验证用）。
-/// 白天派砍树任务（B级）/跟随任务（B级），夜间停发 B/C 户外任务。
-/// 防止"调度中心夜间刚派活、威胁层就撤退"两系统打架。
-/// P1 替换为正式调度中心。
+/// 调度中心（§7 输入端一致性 + 3.3.5 资源流转）。
+/// 职责：
+///   1. 搬运派发（3.3.5）：产能建筑 IsReadyToHarvest → 找空闲工人 → TaskStimulus 注入
+///   2. 防重复：_transporting 标记（建筑存储清空后释放）
+///   3. 昼夜节律：夜间停发户外任务（防"调度中心夜间刚派活、威胁层就撤退"两系统打架）
+/// 后续扩展：砍树/建造/随军任务统一走本中心派发（P1）。
 /// </summary>
 public class ScheduleCenterStub : MonoBehaviour
 {
-    [Header("测试用任务配置")]
+    [Header("搬运任务配置（3.3.5 资源流转）")]
+    [Tooltip("搬运任务刺激强度（B 级，同砍树档位）")]
+    public float transportIntensity = 2f;
+    [Tooltip("搬运任务有效期（秒）：工人被打断没去 → 刺激过期 → 下 tick 重派")]
+    public float transportExpiry = 5f;
+    [Tooltip("搬运派发间隔（秒）")]
+    public float assignInterval = 1f;
+
+    [Header("测试用任务配置（旧占位，P1 移除）")]
     [Tooltip("测试用砍树任务位置（白天派发 B 级任务）")]
     public Transform treeTarget;
 
-    [Tooltip("测试用部队队长（跟随任务锚点）")]
-    public UnitController squadLeader;
-
-    [Tooltip("任务派发半径（格数，范围内 NPC 才派发）")]
-    public float assignRadiusCells = 10f;
-
-    [Tooltip("砍树任务刺激强度（B 级）")]
-    public float treeTaskIntensity = 2f;
-
-    [Tooltip("跟随任务刺激强度（B 级）")]
-    public float followTaskIntensity = 2f;
-
+    private readonly HashSet<StorageComponent> _transporting = new HashSet<StorageComponent>();
     private float _assignTimer;
-    private const float AssignInterval = 1f;  // 派发间隔
 
     private void Update()
     {
         _assignTimer += Time.deltaTime;
-        if (_assignTimer < AssignInterval) return;
+        if (_assignTimer < assignInterval) return;
         _assignTimer = 0f;
 
         // 昼夜节律：夜间停发 B/C 户外任务（§7 输入端一致性）
-        bool isNight = TimeManager.Instance != null
+        if (IsNight()) return;
+
+        DispatchTransport();
+    }
+
+    /// <summary>夜间判定（TimeManager 未挂载=白天，行为不变）</summary>
+    private bool IsNight()
+    {
+        return TimeManager.Instance != null
             && (TimeManager.Instance.CurrentPhase == TimePhase.Night
                 || TimeManager.Instance.CurrentPhase == TimePhase.Dusk);
+    }
 
-        if (isNight) return;  // 夜间不派户外任务，SafetyStimulus 自动兜底
+    /// <summary>
+    /// 搬运派发（3.3.5）：遍历产能建筑，存储达标且无搬运中任务的 → 派空闲工人。
+    /// 任务完成（Harvest 清空存储）→ 标记自动释放。
+    /// </summary>
+    private void DispatchTransport()
+    {
+        // 清理已完成搬运标记（建筑存储被 Harvest 清空 / 建筑销毁）
+        if (_transporting.Count > 0)
+            _transporting.RemoveWhere(s => s == null || s.storedAmount <= 0);
 
-        // 白天派发任务给附近 NPC
-        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
-        float assignWorld = assignRadiusCells * cellSize;
+        var storages = FindObjectsOfType<StorageComponent>();
+        if (storages.Length == 0) return;
 
-        // 查找范围内 NPC 并派发任务
+        // 一次收集空闲工人（避免每建筑重复 FindObjectsOfType）
         var npcs = FindObjectsOfType<NPCBrain>();
-        foreach (var npc in npcs)
+        if (npcs.Length == 0) return;
+
+        foreach (var storage in storages)
         {
-            float dist = Vector2.Distance(transform.position, npc.DebugPosition);
-            if (dist > assignWorld) continue;
+            if (storage == null) continue;
+            if (!storage.IsReadyToHarvest()) continue;      // 无产出不搬
+            if (_transporting.Contains(storage)) continue;  // 已有搬运中任务，防重复派发
 
-            // 砍树任务（B 级）
-            if (treeTarget != null)
+            // 找空闲工人（IsIdleForTask：无进行中任务/战斗）
+            NPCBrain worker = null;
+            for (int i = 0; i < npcs.Length; i++)
             {
-                // P0: 通过 TaskStimulus 注入（简化：直接调 NPCBrain 内部接口需扩展）
-                // 正式实装时由调度中心管理任务生命周期，此处仅占位示意
+                if (npcs[i] != null && npcs[i].IsIdleForTask)
+                {
+                    worker = npcs[i];
+                    break;
+                }
             }
+            if (worker == null) return;  // 无空闲工人，等下 tick
 
-            // 跟随任务（B 级，锚点=部队队长）
-            if (squadLeader != null)
-            {
-                // FollowStimulus 由 NPCBrain.FollowProvider 接收
-                // P0: 需 NPCBrain 暴露 SetFollowAnchor 接口（见下方法）
-            }
+            // 派发搬运任务（B 级，目标=建筑位置，issuer=StorageComponent 供 L3 透传 HarvestTarget）
+            var building = storage.GetComponent<Building>();
+            Vector2 pos = building != null ? (Vector2)building.transform.position : (Vector2)storage.transform.position;
+            worker.AddTaskStimulus(new TaskStimulus(
+                TaskPriority.B, pos, transportIntensity,
+                expiry: Time.time + transportExpiry, issuer: storage));
+            _transporting.Add(storage);
+            Debug.Log($"[调度中心] 派发搬运任务 → {worker.name} @ {pos}（{storage.resourceType} 存量 {storage.storedAmount}）");
         }
     }
 
-    /// <summary>设置跟随锚点（测试用：手动调 NPCBrain 接收跟随任务）</summary>
+    /// <summary>是否搬运中（BuildingPanel 显示收取状态用）</summary>
+    public bool IsTransporting(StorageComponent storage)
+    {
+        return storage != null && _transporting.Contains(storage);
+    }
+
+    /// <summary>设置跟随锚点（旧测试占位，P1 统一派发随军任务时实现）</summary>
     public void AssignFollow(NPCBrain npc, UnitController anchor, TaskPriority priority, float intensity)
     {
-        // P0: NPCBrain 需暴露 FollowProvider 访问接口
-        // 正式实装时调度中心通过统一接口派发，此处仅占位
+        // 3.3.5 本轮只做搬运方向；跟随/砍树等任务统一派发留 P1
     }
 }
