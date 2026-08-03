@@ -67,6 +67,7 @@ public static class M8CreateProfessionAssets
             var a = ScriptableObject.CreateInstance<NpcProfessionDef>();
             a.name = s.name;
             a.faction = s.faction;
+            a.occupation = OccFor(s.name);   // M8 新职业 occupation（防 UnitDataManager faction_occupation key 撞 Ruler）
             a.walkSpeed = s.walk; a.runSpeed = s.run;
             a.maxHp = s.hp; a.attack = s.atk; a.defense = s.def;
             a.attackRange = s.range; a.attackCD = s.cd;
@@ -82,5 +83,22 @@ public static class M8CreateProfessionAssets
         }
         AssetDatabase.SaveAssets();
         Debug.Log($"[M8] created {created} profession assets, skipped {skipped}");
+    }
+
+    /// <summary>职业名 -> Occupation 枚举（对齐 UnitData.cs 追加的 7 个 M8 职业）。
+    /// 机器/工事（SiegeMachine/Ballista/工事）不是职业，返回默认 Ruler（无对应枚举，撞 key 问题留 P1 独立处理）。</summary>
+    private static Occupation OccFor(string name)
+    {
+        switch (name)
+        {
+            case "Human_Player_Mage": case "Undead_Mage": return Occupation.Mage;
+            case "Human_Player_Healer": case "Undead_Healer": return Occupation.Healer;
+            case "Human_Player_Crossbowman": case "Undead_Crossbowman": return Occupation.Crossbowman;
+            case "Human_Player_HeavyWarrior": case "Undead_HeavyWarrior": return Occupation.HeavyWarrior;
+            case "Human_Player_Bishop": case "Undead_Bishop": return Occupation.Bishop;
+            case "Human_Player_ShieldGuard": case "Undead_ShieldGuard": return Occupation.ShieldGuard;
+            case "Human_Player_Archmage": case "Undead_Archmage": return Occupation.Archmage;
+            default: return Occupation.Ruler;
+        }
     }
 }

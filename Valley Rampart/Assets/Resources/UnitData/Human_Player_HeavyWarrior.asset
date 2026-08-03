@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Human_Player_HeavyWarrior
   m_EditorClassIdentifier: 
   faction: 1
-  occupation: 0
+  occupation: 8
   walkSpeed: 2.6
   runSpeed: 5.2
   maxHp: 130

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Undead_Crossbowman
   m_EditorClassIdentifier: 
   faction: 2
-  occupation: 0
+  occupation: 7
   walkSpeed: 2.8
   runSpeed: 5.6
   maxHp: 65

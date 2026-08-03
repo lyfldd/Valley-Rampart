@@ -4,11 +4,19 @@ using UnityEngine;
 // Ruler 为君主专属职业，由 RulerController 管理；其余职业由 AI 或玩家指令驱动。
 public enum Occupation
 {
-    Ruler,      // 君主：玩家控制的统治者单位，阵亡则 GameOver
-    General,    // 将军：特殊近战 NPC，挂 FormationController 统帅编队（3.0.1_3 §1.1）
-    Archer,     // 弓箭手：远程攻击单位
-    Warrior,    // 战士：近战攻击单位
-    Civilian    // 平民：非战斗单位，从事资源采集/建造等
+    Ruler,          // 君主：玩家控制的统治者单位，阵亡则 GameOver
+    General,        // 将军：特殊近战 NPC，挂 FormationController 统帅编队（3.0.1_3 §1.1）
+    Archer,         // 弓箭手：远程攻击单位
+    Warrior,        // 战士：近战攻击单位
+    Civilian,       // 平民：非战斗单位，从事资源采集/建造等
+    // ===== M8 新职业（2026-08-03 追加，序号保持前 5 个不变；对应 UnitDataManager 的 faction_occupation key）=====
+    Mage,           // 法师：远程高伤
+    Healer,         // 治疗师：人类侧治疗 / 亡灵侧攻击语义
+    Crossbowman,    // 弩手：远程点杀
+    HeavyWarrior,   // 重装战士：高防近战
+    Bishop,         // 主教：远程治疗（人类）
+    ShieldGuard,    // 盾卫：高防抗线
+    Archmage        // 大法师：远程高伤（更远射程）
 }
 
 // 注意：Faction 枚举已迁入 AI.Core/Ports/Faction.cs（M1 决策核提取，asmdef 边界要求），
