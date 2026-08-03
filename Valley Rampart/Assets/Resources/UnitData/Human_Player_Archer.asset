@@ -17,10 +17,10 @@ MonoBehaviour:
   walkSpeed: 3
   runSpeed: 6
   maxHp: 80
-  attack: 8
+  attack: 10
   defense: 10
-  attackRange: 5
-  attackCD: 1.5
+  attackRange: 5.5
+  attackCD: 1.25
   isRanged: 1
   projectileSpeed: 15
   perceptionRadius: 8
@@ -31,3 +31,4 @@ MonoBehaviour:
   maxHitCount: 99
   professionPullScale: 0.2
   equipmentSlotCount: 0
+  wanderRadiusCells: 2
