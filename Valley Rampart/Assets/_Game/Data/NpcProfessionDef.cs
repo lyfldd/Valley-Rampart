@@ -58,6 +58,10 @@ public class NpcProfessionDef : UnitData
     [Tooltip("漫游安全半径（格数，HomePoint 周围随机取点范围）。工人晃悠大 / 士兵小")]
     public float wanderRadiusCells = 2f;
 
+    [Header("静态单位（M8 工事/静止机器）")]
+    [Tooltip("静态单位（塔/墙/拒马/弩炮）：不参与 AI 决策、不移动、不逃逸；有攻击值的按 CD 攻击射程内敌人，attack=0 纯阻挡")]
+    public bool isStatic = false;
+
     /// <summary>
     /// 生成核内快照（M1 决策核提取，接缝 4）。
     /// 核内（AI.Core）只吃 ProfessionSnapshot，不引用本 SO。字段机械拷贝，改字段需同步 ProfessionSnapshot。
@@ -86,6 +90,7 @@ public class NpcProfessionDef : UnitData
             professionPullScale = professionPullScale,
             equipmentSlotCount = equipmentSlotCount,
             wanderRadiusCells = wanderRadiusCells,
+            isStatic = isStatic,
         };
     }
 }
