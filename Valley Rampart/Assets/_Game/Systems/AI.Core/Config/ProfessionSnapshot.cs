@@ -44,6 +44,10 @@ public struct ProfessionSnapshot
     // ===== 漫游 =====
     public float wanderRadiusCells;
 
+    // ===== 静态单位（M8 工事/静止机器：塔/墙/拒马等）=====
+    // 静态单位不参与 AI 决策、不移动、不逃逸；有攻击值的按 CD 攻击射程内敌人，attack=0 纯阻挡。
+    public bool isStatic;
+
     /// <summary>
     /// 默认值（非 NPC 职业单位用；数值对齐 NpcProfessionDef 字段默认值）。
     /// </summary>
@@ -68,5 +72,6 @@ public struct ProfessionSnapshot
         professionPullScale = 1f,
         equipmentSlotCount = 0,
         wanderRadiusCells = 2f,
+        isStatic = false,
     };
 }
