@@ -34,7 +34,12 @@
 
                 <!-- Tab 内容：放置士兵 -->
                 <ui:VisualElement name="spawn-content" class="tab-content" style="display: none;">
-                    <ui:VisualElement name="spawn-buttons" class="spawn-buttons-container" />
+                    <ui:ScrollView name="spawn-scroll" class="spawn-scroll">
+                        <ui:VisualElement name="spawn-buttons" class="spawn-buttons-container">
+                            <ui:VisualElement name="ally-spawn-column" class="spawn-column" />
+                            <ui:VisualElement name="enemy-spawn-column" class="spawn-column" />
+                        </ui:VisualElement>
+                    </ui:ScrollView>
                     <ui:Label name="spawn-hint-text" text="选择单位类型后点击场景放置" class="spawn-hint" />
                 </ui:VisualElement>
 
@@ -59,105 +64,107 @@
                 <ui:Button name="close-button" text="✕" class="close-button" />
             </ui:VisualElement>
 
-            <!-- 可折叠内容区 -->
-            <ui:VisualElement name="content-area" class="content-area">
-                <!-- 当前焦点 -->
-                <ui:VisualElement name="focus-section" class="section">
-                    <ui:Label text="▸ 当前焦点" class="section-title" />
-                    <ui:VisualElement class="section-body">
-                        <ui:VisualElement class="field-row">
-                            <ui:Label text="层：" class="field-label" />
-                            <ui:Label name="focus-layer" text="-" class="field-value" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="field-row">
-                            <ui:Label text="强度：" class="field-label" />
-                            <ui:Label name="focus-intensity" text="-" class="field-value" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="field-row">
-                            <ui:Label text="位置：" class="field-label" />
-                            <ui:Label name="focus-position" text="-" class="field-value" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- 当前谱系 -->
-                <ui:VisualElement name="spectrum-section" class="section">
-                    <ui:Label text="▸ 当前谱系" class="section-title" />
-                    <ui:VisualElement class="section-body">
-                        <ui:VisualElement class="spectrum-row">
-                            <ui:VisualElement name="spectrum-color" class="spectrum-color" />
-                            <ui:Label name="spectrum-name" text="-" class="spectrum-name" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- 威胁等级 -->
-                <ui:VisualElement name="threat-section" class="section">
-                    <ui:Label text="▸ 威胁等级" class="section-title" />
-                    <ui:VisualElement class="section-body">
-                        <ui:VisualElement class="field-row">
-                            <ui:Label text="等级：" class="field-label" />
-                            <ui:VisualElement class="threat-badge-row">
-                                <ui:VisualElement name="threat-color" class="threat-color" />
-                                <ui:Label name="threat-level" text="-" class="field-value" />
+            <!-- 可折叠内容区（固定高度 + 滚动） -->
+            <ui:ScrollView name="status-scroll" class="status-scroll">
+                <ui:VisualElement name="content-area" class="content-area">
+                    <!-- 当前焦点 -->
+                    <ui:VisualElement name="focus-section" class="section">
+                        <ui:Label text="▸ 当前焦点" class="section-title" />
+                        <ui:VisualElement class="section-body">
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="层：" class="field-label" />
+                                <ui:Label name="focus-layer" text="-" class="field-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="强度：" class="field-label" />
+                                <ui:Label name="focus-intensity" text="-" class="field-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="位置：" class="field-label" />
+                                <ui:Label name="focus-position" text="-" class="field-value" />
                             </ui:VisualElement>
                         </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- 当前谱系 -->
+                    <ui:VisualElement name="spectrum-section" class="section">
+                        <ui:Label text="▸ 当前谱系" class="section-title" />
+                        <ui:VisualElement class="section-body">
+                            <ui:VisualElement class="spectrum-row">
+                                <ui:VisualElement name="spectrum-color" class="spectrum-color" />
+                                <ui:Label name="spectrum-name" text="-" class="spectrum-name" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- 威胁等级 -->
+                    <ui:VisualElement name="threat-section" class="section">
+                        <ui:Label text="▸ 威胁等级" class="section-title" />
+                        <ui:VisualElement class="section-body">
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="等级：" class="field-label" />
+                                <ui:VisualElement class="threat-badge-row">
+                                    <ui:VisualElement name="threat-color" class="threat-color" />
+                                    <ui:Label name="threat-level" text="-" class="field-value" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="保护：" class="field-label" />
+                                <ui:Label name="has-protection" text="否" class="field-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="受击冷却：" class="field-label" />
+                                <ui:Label name="hit-cooldown" text="否" class="field-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- 刺激源排行 -->
+                    <ui:VisualElement name="stimuli-section" class="section">
+                        <ui:Label text="▸ 刺激源排行（前5）" class="section-title" />
+                        <ui:VisualElement name="stimuli-list" class="stimuli-list">
+                            <ui:Label name="stim-0" text="-" class="stim-line" />
+                            <ui:Label name="stim-1" text="-" class="stim-line" />
+                            <ui:Label name="stim-2" text="-" class="stim-line" />
+                            <ui:Label name="stim-3" text="-" class="stim-line" />
+                            <ui:Label name="stim-4" text="-" class="stim-line" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- 最近切换 -->
+                    <ui:VisualElement name="switch-section" class="section">
+                        <ui:Label text="▸ 最近切换（前5）" class="section-title" />
+                        <ui:VisualElement name="switch-list" class="switch-list">
+                            <ui:Label name="switch-0" text="-" class="switch-line" />
+                            <ui:Label name="switch-1" text="-" class="switch-line" />
+                            <ui:Label name="switch-2" text="-" class="switch-line" />
+                            <ui:Label name="switch-3" text="-" class="switch-line" />
+                            <ui:Label name="switch-4" text="-" class="switch-line" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- 底部统计 -->
+                    <ui:VisualElement name="stats-section" class="stats-section">
+                        <!-- HP 条 -->
+                        <ui:VisualElement class="hp-row">
+                            <ui:VisualElement name="hp-bar-bg" class="hp-bar-bg">
+                                <ui:VisualElement name="hp-bar-fill" class="hp-bar-fill" />
+                            </ui:VisualElement>
+                            <ui:Label name="hp-text" text="HP: 100%" class="hp-text" />
+                        </ui:VisualElement>
+                        <!-- 位置 -->
                         <ui:VisualElement class="field-row">
-                            <ui:Label text="保护：" class="field-label" />
-                            <ui:Label name="has-protection" text="否" class="field-value" />
+                            <ui:Label text="位置：" class="field-label" />
+                            <ui:Label name="npc-position" text="-" class="field-value" />
                         </ui:VisualElement>
+                        <!-- 附近单位 -->
                         <ui:VisualElement class="field-row">
-                            <ui:Label text="受击冷却：" class="field-label" />
-                            <ui:Label name="hit-cooldown" text="否" class="field-value" />
+                            <ui:Label text="附近：" class="field-label" />
+                            <ui:Label name="nearby-info" text="敌人 0 / 友军 0" class="field-value" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
-
-                <!-- 刺激源排行 -->
-                <ui:VisualElement name="stimuli-section" class="section">
-                    <ui:Label text="▸ 刺激源排行（前5）" class="section-title" />
-                    <ui:VisualElement name="stimuli-list" class="stimuli-list">
-                        <ui:Label name="stim-0" text="-" class="stim-line" />
-                        <ui:Label name="stim-1" text="-" class="stim-line" />
-                        <ui:Label name="stim-2" text="-" class="stim-line" />
-                        <ui:Label name="stim-3" text="-" class="stim-line" />
-                        <ui:Label name="stim-4" text="-" class="stim-line" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- 最近切换 -->
-                <ui:VisualElement name="switch-section" class="section">
-                    <ui:Label text="▸ 最近切换（前5）" class="section-title" />
-                    <ui:VisualElement name="switch-list" class="switch-list">
-                        <ui:Label name="switch-0" text="-" class="switch-line" />
-                        <ui:Label name="switch-1" text="-" class="switch-line" />
-                        <ui:Label name="switch-2" text="-" class="switch-line" />
-                        <ui:Label name="switch-3" text="-" class="switch-line" />
-                        <ui:Label name="switch-4" text="-" class="switch-line" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- 底部统计 -->
-                <ui:VisualElement name="stats-section" class="stats-section">
-                    <!-- HP 条 -->
-                    <ui:VisualElement class="hp-row">
-                        <ui:VisualElement name="hp-bar-bg" class="hp-bar-bg">
-                            <ui:VisualElement name="hp-bar-fill" class="hp-bar-fill" />
-                        </ui:VisualElement>
-                        <ui:Label name="hp-text" text="HP: 100%" class="hp-text" />
-                    </ui:VisualElement>
-                    <!-- 位置 -->
-                    <ui:VisualElement class="field-row">
-                        <ui:Label text="位置：" class="field-label" />
-                        <ui:Label name="npc-position" text="-" class="field-value" />
-                    </ui:VisualElement>
-                    <!-- 附近单位 -->
-                    <ui:VisualElement class="field-row">
-                        <ui:Label text="附近：" class="field-label" />
-                        <ui:Label name="nearby-info" text="敌人 0 / 友军 0" class="field-value" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-            </ui:VisualElement>
+            </ui:ScrollView>
         </ui:VisualElement>
     </ui:VisualElement>
 

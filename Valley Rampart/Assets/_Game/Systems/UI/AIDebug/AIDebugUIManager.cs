@@ -37,7 +37,10 @@ public class AIDebugUIManager : MonoBehaviour
     private VisualElement _tabFormation;
     private VisualElement _aiDebugContent;
     private VisualElement _spawnContent;
+    private ScrollView _spawnScroll;
     private VisualElement _spawnButtonsContainer;
+    private VisualElement _allySpawnColumn;
+    private VisualElement _enemySpawnColumn;
     private Label _spawnHintText;
     private VisualElement _formationContent;
     private Button _garrisonButton;      // 守城编队（热键 4）
@@ -57,6 +60,7 @@ public class AIDebugUIManager : MonoBehaviour
     private Label _npcNameLabel;
     private Label _collapseIcon;
     private Button _closeButton;
+    private ScrollView _statusScroll;
     private VisualElement _contentArea;
 
     // 拖拽状态
@@ -91,6 +95,22 @@ public class AIDebugUIManager : MonoBehaviour
     private Label _hpTextLabel;
     private Label _npcPositionLabel;
     private Label _nearbyInfoLabel;
+
+    // 滚动窗口（控制滚动速度）
+    private ScrollView _statusScrollView;
+    private ScrollView _spawnScrollView;
+
+    private void BindScrollViewSettings(ScrollView sv)
+    {
+        if (sv == null) return;
+        // 三项关键修复：
+        // 1. wheelSize=5：默认 18 → 改 5px（每次滚轮只滚 5px，"细腻"）
+        // 2. scrollDecelerationRate=0.99：默认 0.135 → 0.99（几乎不衰减，滚一下立即停）
+        // 3. elasticity=0：默认 0.1 → 0（无弹性回弹，滚到底立刻停）
+        sv.mouseWheelScrollSize = 5f;
+        sv.scrollDecelerationRate = 0.99f;
+        sv.elasticity = 0f;
+    }
 
     // 顶部提示条
     private VisualElement _hintBar;
@@ -244,7 +264,10 @@ public class AIDebugUIManager : MonoBehaviour
         _tabFormation = _root.Q<VisualElement>("tab-formation");
         _aiDebugContent = _root.Q<VisualElement>("ai-debug-content");
         _spawnContent = _root.Q<VisualElement>("spawn-content");
+        _spawnScroll = _root.Q<ScrollView>("spawn-scroll");
         _spawnButtonsContainer = _root.Q<VisualElement>("spawn-buttons");
+        _allySpawnColumn = _root.Q<VisualElement>("ally-spawn-column");
+        _enemySpawnColumn = _root.Q<VisualElement>("enemy-spawn-column");
         _spawnHintText = _root.Q<Label>("spawn-hint-text");
         _formationContent = _root.Q<VisualElement>("formation-content");
         _garrisonButton = _root.Q<Button>("formation-garrison-button");
@@ -272,6 +295,7 @@ public class AIDebugUIManager : MonoBehaviour
         _panelTitle = _root.Q<Label>("panel-title");
         _npcNameLabel = _root.Q<Label>("npc-name");
         _collapseIcon = _root.Q<Label>("collapse-icon");
+        _statusScroll = _root.Q<ScrollView>("status-scroll");
         _contentArea = _root.Q<VisualElement>("content-area");
 
         // 标题栏点击折叠/展开 + 拖拽
@@ -325,6 +349,12 @@ public class AIDebugUIManager : MonoBehaviour
 
         // 顶部提示条
         _hintBar = _root.Q<VisualElement>("hint-bar");
+
+        // 绑定 ScrollView + 应用减速设置（滚一下立即停，不惯性滑很远）
+        _statusScrollView = _root.Q<ScrollView>("status-scroll");
+        _spawnScrollView = _root.Q<ScrollView>("spawn-scroll");
+        BindScrollViewSettings(_statusScrollView);
+        BindScrollViewSettings(_spawnScrollView);
     }
 
     private void Update()
@@ -678,11 +708,11 @@ public class AIDebugUIManager : MonoBehaviour
 
     // ===== 放置按钮构建 =====
 
-    /// <summary>动态生成放置类型按钮（从 AIDebugSpawnController 获取可生成清单）</summary>
+    /// <summary>动态生成放置类型按钮，按阵营分两列（左己方/右敌方）。</summary>
     private void BuildSpawnButtons()
     {
-        if (_spawnButtonsContainer == null) return;
-        _spawnButtonsContainer.Clear();
+        if (_allySpawnColumn != null) _allySpawnColumn.Clear();
+        if (_enemySpawnColumn != null) _enemySpawnColumn.Clear();
 
         var types = AIDebugSpawnController.Instance.GetAvailableTypes();
         foreach (var option in types)
@@ -692,7 +722,16 @@ public class AIDebugUIManager : MonoBehaviour
             btn.AddToClassList("spawn-type-button");
             var capturedType = option.Type;
             btn.clicked += () => OnSpawnTypeButtonClicked(capturedType, btn);
-            _spawnButtonsContainer.Add(btn);
+
+            // 按阵营分列
+            if (option.FactionName == "己方")
+            {
+                if (_allySpawnColumn != null) _allySpawnColumn.Add(btn);
+            }
+            else
+            {
+                if (_enemySpawnColumn != null) _enemySpawnColumn.Add(btn);
+            }
         }
     }
 
@@ -700,13 +739,16 @@ public class AIDebugUIManager : MonoBehaviour
     {
         _selectedSpawnType = type;
 
-        // 更新所有按钮的选中样式
-        if (_spawnButtonsContainer != null)
+        // 清除所有按钮的选中样式（遍历两列）
+        if (_allySpawnColumn != null)
         {
-            foreach (var child in _spawnButtonsContainer.Children())
-            {
+            foreach (var child in _allySpawnColumn.Children())
                 child.RemoveFromClassList("spawn-selected");
-            }
+        }
+        if (_enemySpawnColumn != null)
+        {
+            foreach (var child in _enemySpawnColumn.Children())
+                child.RemoveFromClassList("spawn-selected");
         }
         clickedBtn.AddToClassList("spawn-selected");
 
@@ -756,13 +798,16 @@ public class AIDebugUIManager : MonoBehaviour
         _isSpawnMode = false;
         _selectedSpawnType = null;
 
-        // 清除按钮选中样式
-        if (_spawnButtonsContainer != null)
+        // 清除按钮选中样式（遍历两列）
+        if (_allySpawnColumn != null)
         {
-            foreach (var child in _spawnButtonsContainer.Children())
-            {
+            foreach (var child in _allySpawnColumn.Children())
                 child.RemoveFromClassList("spawn-selected");
-            }
+        }
+        if (_enemySpawnColumn != null)
+        {
+            foreach (var child in _enemySpawnColumn.Children())
+                child.RemoveFromClassList("spawn-selected");
         }
 
         // 恢复面板

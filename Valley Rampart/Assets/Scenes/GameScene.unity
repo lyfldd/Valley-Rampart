@@ -1492,6 +1492,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9bba91cbe6383234aad01195f858c4c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  fortification: {fileID: 0}
+  ChargeState: 0
+  ChargeTarget: {fileID: 0}
+  ChargeReadyTime: 0
+  ChargeSecondTime: 0
+  AmmoStone: 0
+  AmmoFireball: 0
+  AmmoMagic: 0
+  AmmoResupplyTimer: 0
+  HvKillHpGate: 0.5
+  HvDefenseGate: 20
+  AmmoConserveRatio: 0.3
 --- !u!50 &1308194628
 Rigidbody2D:
   serializedVersion: 4
