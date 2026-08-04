@@ -8,12 +8,26 @@
 // ============================================================================
 
 /// <summary>
+/// 职业角色族（B4 构成驱动非职业驱动，00 B2 定案）。
+/// 目标选择/治疗/保命等行为按族走；细分 7 族对齐 sim 配方（snipe/aoe/support/tank/machine）。
+/// </summary>
+public enum RoleFamily
+{
+    None,       // 工人/工事等无战斗角色（纯被保护者/阻挡物）
+    Tank,       // 盾卫/重装：顶住守位
+    Sniper,     // 弓手/弩手：点杀残血/脆皮
+    Aoe,        // 法师/大法师：密度人群（AOE 收益）
+    Support,    // 治疗/主教：低血友军治疗
+    Mobility,   // 骑兵：冲锋切入
+    Machine,    // 投掷机/弩炮：远程重火力 + 弹药经济（被贴身保命）
+}
+
+/// <summary>
 /// 职业属性快照（纯数据，零引擎依赖）。
 /// 字段与 NpcProfessionDef（含 UnitData 基础三件套扩展）一一对应，除 Occupation（壳类型）。
 /// </summary>
 public struct ProfessionSnapshot
 {
-    // ===== UnitData 基础 =====
     public Faction faction;
     public float walkSpeed;
     public float runSpeed;
@@ -79,6 +93,11 @@ public struct ProfessionSnapshot
     public float protectPower;              // 保护者权重（0-1，可训练）
     /// <summary>重甲标记（3.7）：重装/盾卫等重甲单位，评分统计用（替代职业名字符串硬编码）</summary>
     public bool isHeavyArmor;
+
+    // ===== 角色族（B4 构成驱动非职业驱动，00 B2 定案）=====
+    // 目标选择/治疗等行为按角色族走，不按职业名硬编码；新增兵种 = 标角色族 + 挂 protectPower。
+    // 细分 7 族对齐 sim 配方（snipe/aoe/support/tank/machine）与 Unity 行为差异。
+    public RoleFamily roleFamily;
 
     // ===== 骑兵冲锋（3.6 §5.3，职业级参数，训练可调）=====
     public bool isCavalry;                  // 是否骑兵（冲锋能力开关）
@@ -150,6 +169,7 @@ public struct ProfessionSnapshot
         baseDamageReduce = 0f,
         protectPower = 0.2f,
         isHeavyArmor = false,
+        roleFamily = RoleFamily.None,
         isCavalry = false,
         chargeDamage = 80f,
         chargeRangeCells = 4f,

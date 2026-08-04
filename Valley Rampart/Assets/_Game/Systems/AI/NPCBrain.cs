@@ -507,6 +507,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 + (_profession.runSpeed - _profession.walkSpeed) * _config.speedChaseBoost;
         }
 
+        // ④c B4 角色族因子（对齐 sim ApplyProfessionFactors）：死拼/保命/顶住/压上
+        ApplyProfessionFactors(ref cmd, in ctx);
+
         // ⑤ 缓存 cmd（Execute 在 Update 里每帧调用，持续移动）
         _lastCmd = cmd;
 
@@ -850,12 +853,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         }
     }
 
-    /// <summary>B2 是否治疗职业（Healer/Bishop；对齐 sim Healer/Bishop 配方注册，B4 角色族重构时替换）。</summary>
+    /// <summary>B2 是否治疗职业（B4 角色族：Support 族；资产 roleFamily 真身，构成驱动非职业驱动）。</summary>
     private bool IsHealerRole()
     {
         if (_profession == null || !_profession.isRanged || _profession.attack <= 0) return false;
-        string n = _profession.name;
-        return n != null && (n.Contains("Healer") || n.Contains("Bishop"));
+        return _profession.roleFamily == RoleFamily.Support;
     }
 
     /// <summary>B2 治疗因子（对齐 sim SimBrain.ApplyHealingFactor）：射程内选最低血友军（hpRatio&lt;healHpGate），
@@ -891,21 +893,18 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         return true;   // 治疗中停火守位（对齐 sim：StopAttacking + Idle）
     }
 
-    /// <summary>B4 是否点杀职业（人类弓手/弩手；对齐 sim BuildDefaultProfiles 的 SnipeEnabled 配方，角色族重构时替换）。</summary>
+    /// <summary>B4 是否点杀职业（角色族 Sniper 族：弓手/弩手；对齐 sim SnipeEnabled 配方，构成驱动非职业驱动）。</summary>
     private bool IsSniperRole()
     {
         if (_profession == null || !_profession.isRanged) return false;
-        string n = _profession.name;
-        return n != null && !n.Contains("Undead")
-            && (n.Contains("Crossbowman") || n.Contains("Archer"));
+        return _profession.roleFamily == RoleFamily.Sniper;
     }
 
-    /// <summary>B4 是否密度职业（人类 Mage/Archmage；对齐 sim DensityTargetingEnabled 配方，角色族重构时替换）。</summary>
+    /// <summary>B4 是否密度职业（角色族 Aoe 族：法师/大法师；对齐 sim DensityTargetingEnabled 配方，构成驱动非职业驱动）。</summary>
     private bool IsDensityRole()
     {
         if (_profession == null || !_profession.isRanged) return false;
-        string n = _profession.name;
-        return n != null && !n.Contains("Undead") && n.Contains("Mage");
+        return _profession.roleFamily == RoleFamily.Aoe;
     }
 
     /// <summary>B4 邻域敌数统计（密度目标选择用，对齐 sim DensityRadiusCells 邻域扫描）。</summary>
@@ -917,6 +916,111 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             var e = _nearbyEnemies[i];
             if (e == null || IsDestroyed(e) || e.CurrentHp <= 0) continue;
             if (Vector2.Distance(e.GetPosition(), center.GetPosition()) <= radiusWorld) count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// B4 角色族因子（对齐 sim SimBrain.ApplyProfessionFactors）：
+    /// 死拼（亡灵 Tank 撤退血低反冲）/ 保命（Machine 被贴身保射程）/ 顶住（Tank 残血守位）/ 压上（远程僵持推进）。
+    /// 构成驱动（roleFamily）+ 阵营差异，默认阈值对齐 sim 配方（0.4/0.35/2格/6格/20格），参数化随训练需要追加。
+    /// </summary>
+    private void ApplyProfessionFactors(ref BehaviorCommand cmd, in FactorContext ctx)
+    {
+        if (_profession == null) return;
+        RoleFamily role = _profession.roleFamily;
+        float cellSize = ctx.CellSize;
+
+        // 死拼（Berserk）：亡灵 Tank 撤退时血低 <40% 反冲最近敌（对齐 sim BerserkHpRatio 0.4）
+        if (role == RoleFamily.Tank && !_profession.isRanged
+            && _self.GetFaction() == Faction.Undead
+            && cmd.Module == BehaviorModule.RetreatMove && ctx.HpRatio < 0.4f)
+        {
+            IDamageable nearest = FindNearestEnemyInPerception();
+            if (nearest != null)
+            {
+                cmd = new BehaviorCommand
+                {
+                    Module = BehaviorModule.MoveTowards,
+                    TargetPos = Vector2XUnity.FromUnity(nearest.GetPosition()),
+                    Speed = _profession.walkSpeed,
+                };
+            }
+        }
+        // 保命（SelfPreserve）：Machine 被近战贴身（<2 格）后撤保射程（对齐 sim SiegeMachine 危险 2 格/后撤 6 格）
+        else if (role == RoleFamily.Machine && _profession.isRanged && !_profession.isStatic
+            && (cmd.Module == BehaviorModule.MoveTowards || cmd.Module == BehaviorModule.RetreatMove))
+        {
+            IDamageable nearest = FindNearestEnemyInPerception();
+            if (nearest != null)
+            {
+                float d = Vector2.Distance(_self.GetPosition(), nearest.GetPosition());
+                if (d < 2f * cellSize)
+                {
+                    Vector2 away = (_self.GetPosition() - nearest.GetPosition()).normalized;
+                    Vector2 target = _self.GetPosition() + away * (6f * cellSize);
+                    cmd = new BehaviorCommand
+                    {
+                        Module = BehaviorModule.MoveTowards,
+                        TargetPos = Vector2XUnity.FromUnity(target),
+                        Speed = _profession.walkSpeed,
+                    };
+                }
+            }
+        }
+        // 顶住（TankHold）：Tank 残血 <35% 且有队友时取消撤退守位（对齐 sim TankHoldHpRatio 0.35）
+        else if (role == RoleFamily.Tank && !_profession.isRanged
+            && cmd.Module == BehaviorModule.RetreatMove && ctx.HpRatio < 0.35f)
+        {
+            cmd = new BehaviorCommand { Module = BehaviorModule.Idle, Duration = 0.8f };
+        }
+        // 压上（PressWhenStalled）：远程散兵感知内无敌但场上有敌且数量不劣势 → 朝敌侧推进（对齐 sim PressWhenStalled，治僵持平局）
+        else if ((role == RoleFamily.Sniper || role == RoleFamily.Aoe) && _profession.isRanged
+            && !ctx.HasFormationSlot && _nearbyEnemies.Count == 0 && _chaseTarget == null
+            && cmd.Module != BehaviorModule.WorkAt)
+        {
+            int enemyCount = CountAliveByFaction(_self.GetFaction(), isEnemy: true);
+            int allyCount = CountAliveByFaction(_self.GetFaction(), isEnemy: false);
+            if (enemyCount > 0 && enemyCount - allyCount <= 2)
+            {
+                Vector2 target = _self.GetPosition() + Vector2.right * (20f * cellSize);   // 人类默认朝 +x 进攻方向
+                cmd = new BehaviorCommand
+                {
+                    Module = BehaviorModule.MoveTowards,
+                    TargetPos = Vector2XUnity.FromUnity(target),
+                    Speed = _profession.walkSpeed,
+                };
+            }
+        }
+    }
+
+    /// <summary>B4 感知范围内最近存活敌（因子用）。</summary>
+    private IDamageable FindNearestEnemyInPerception()
+    {
+        IDamageable nearest = null;
+        float best = float.MaxValue;
+        for (int i = 0; i < _nearbyEnemies.Count; i++)
+        {
+            var e = _nearbyEnemies[i];
+            if (e == null || IsDestroyed(e) || e.CurrentHp <= 0) continue;
+            float d = Vector2.Distance(_self.GetPosition(), e.GetPosition());
+            if (d < best) { best = d; nearest = e; }
+        }
+        return nearest;
+    }
+
+    /// <summary>B4 全场存活单位计数（UnitRegistry，压上因子用）。</summary>
+    private int CountAliveByFaction(Faction myFaction, bool isEnemy)
+    {
+        if (UnitRegistry.Instance == null) return 0;
+        var list = isEnemy ? UnitRegistry.Instance.GetEnemies(myFaction)
+                           : UnitRegistry.Instance.GetUnitsByFaction(myFaction);
+        if (list == null) return 0;
+        int count = 0;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var u = list[i];
+            if (u != null && u.CurrentHp > 0) count++;
         }
         return count;
     }

@@ -37,10 +37,20 @@ MonoBehaviour:
   baseToughness: 50
   toughnessDefenseScale: 0.2
   baseDamageReduce: 0
+  protectPower: 0.2
+  isHeavyArmor: 0
   isCavalry: 1
   chargeDamage: 80
   chargeRangeCells: 4
+  chargeSpeed: 25
   chargePairGap: 0.3
   chargeGroupCooldown: 20
   chargeDamageReduce: 0.7
   fortification: {fileID: 0}
+  ammoMax: 0
+  ammoCostStone: 1
+  ammoCostFireball: 3
+  ammoCostMagic: 5
+  ammoResupplyDelay: 0
+  ammoConservationWeight: 0.5
+  roleFamily: 5
