@@ -211,4 +211,11 @@ public struct TuningSnapshot
 
     // ===== 治疗（3.7 B2 / D3 清理轮提配置，可训练）=====
     public float healHpGate;                   // 治疗触发：友军血比 < 此值
+
+    // ===== 阵型权重表（00 B9 / E1，可训练，champion 真身）=====
+    // 权重 = formationWeights[阵型*12 + 意图*3 + 构成档]（一维扁平，champion 反射仅支持一维数组）。
+    // 构成三档：0=近战>60% / 1=均衡40-60% / 2=远程<40%。阵型序：0=防御 1=冲锋 2=撤退 3=守城；意图序：0=Defense 1=Charge 2=Retreat 3=Sally。
+    // 默认值（E1 定案）：对应意图的阵型权重 1.0，非对应 0.3，不设 0（0 会让某阵型永不选中）。
+    // 注意：struct 字段不能初始化器（C# 9），默认值在 sim SimConfig.DefaultTuning() 与 Unity AttentionTuningConfig.ToSnapshot() 赋值。
+    public float[] formationWeights;
 }

@@ -484,6 +484,19 @@ public class AttentionTuningConfig : ScriptableObject
             ammoConserveRatio = ammoConserveRatio,
             expensiveAmmoReserveRatio = expensiveAmmoReserveRatio,
             healHpGate = healHpGate,
+            // 阵型权重表（00 B9/E1 默认：对应意图 1.0，非对应 0.3，不设 0）
+            formationWeights = DefaultFormationWeights(),
         };
+    }
+
+    /// <summary>阵型权重表默认值（一维扁平，索引 [阵型*12+意图*3+构成]；对应意图=1.0，非对应=0.3）。</summary>
+    private static float[] DefaultFormationWeights()
+    {
+        var w = new float[48];
+        for (int f = 0; f < 4; f++)
+            for (int i = 0; i < 4; i++)
+                for (int c = 0; c < 3; c++)
+                    w[f * 12 + i * 3 + c] = (f == i) ? 1f : 0.3f;
+        return w;
     }
 }
