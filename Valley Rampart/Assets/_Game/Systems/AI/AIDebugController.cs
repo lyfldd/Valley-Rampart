@@ -46,6 +46,9 @@ public class AIDebugController : MonoBehaviour
     // 可复用的缓冲区，避免每帧 GC
     private readonly List<StimulusDebugInfo> _stimuliBuffer = new List<StimulusDebugInfo>();
     private readonly List<AISwitchRecord> _switchBuffer = new List<AISwitchRecord>();
+    // 双列对比（右列）独立缓冲区——左右列每帧各收集一份，避免共享覆盖
+    private readonly List<StimulusDebugInfo> _stimuliBufferCompare = new List<StimulusDebugInfo>();
+    private readonly List<AISwitchRecord> _switchBufferCompare = new List<AISwitchRecord>();
 
     private void Awake()
     {
@@ -119,49 +122,85 @@ public class AIDebugController : MonoBehaviour
     /// </summary>
     public AIDebugSnapshot GetSnapshot()
     {
+        return GetSnapshotFor(SelectedBrain, SelectedGameObject, _stimuliBuffer, _switchBuffer);
+    }
+
+    /// <summary>双列对比快照：选中 NPC 的最近敌对 NPC 的 AI 数据（无对比目标返回 null）。
+    /// UI 用右列渲染（固定窗口滚动），实现"我方 vs 敌方决策对比查看"。</summary>
+    public AIDebugSnapshot? GetCompareSnapshot()
+    {
+        var go = FindNearestEnemyGameObject();
+        if (go == null) return null;
+        var brain = go.GetComponent<NPCBrain>() as IAIDebugInfo;
+        if (brain == null) return null;
+        return GetSnapshotFor(brain, go, _stimuliBufferCompare, _switchBufferCompare);
+    }
+
+    /// <summary>选中 NPC 感知全场中最近敌对 NPC 的 GameObject（双列对比数据源）。</summary>
+    private GameObject FindNearestEnemyGameObject()
+    {
+        if (SelectedGameObject == null || UnitRegistry.Instance == null) return null;
+        var selUnit = SelectedGameObject.GetComponent<UnitController>();
+        if (selUnit == null || !selUnit.IsAlive) return null;
+        var enemies = UnitRegistry.Instance.GetEnemies(selUnit.GetFaction());
+        UnitController nearest = null;
+        float best = float.MaxValue;
+        foreach (var e in enemies)
+        {
+            if (e == null || !e.IsAlive || e == selUnit) continue;
+            float d = Vector2.Distance(e.transform.position, selUnit.transform.position);
+            if (d < best) { best = d; nearest = e; }
+        }
+        if (nearest == null) return null;
+        return nearest.gameObject;
+    }
+
+    /// <summary>通用快照收集（主选择 / 双列对比共用，各自独立 buffer）。</summary>
+    private AIDebugSnapshot GetSnapshotFor(IAIDebugInfo brain, GameObject go,
+        List<StimulusDebugInfo> stimuliBuf, List<AISwitchRecord> switchBuf)
+    {
         var snapshot = new AIDebugSnapshot
         {
-            HasSelection = SelectedBrain != null,
-            TopStimuli = _stimuliBuffer,
-            RecentSwitches = _switchBuffer
+            HasSelection = brain != null,
+            TopStimuli = stimuliBuf,
+            RecentSwitches = switchBuf
         };
 
-        if (SelectedBrain == null)
+        if (brain == null)
         {
-            _stimuliBuffer.Clear();
-            _switchBuffer.Clear();
+            stimuliBuf.Clear();
+            switchBuf.Clear();
             return snapshot;
         }
 
         // 收集基本数据（IAIDebugInfo 接口属性）
-        snapshot.NPCName = SelectedGameObject != null ? SelectedGameObject.name : "Unknown";
-        snapshot.CurrentFocus = SelectedBrain.CurrentFocus;
-        snapshot.CurrentSpectrum = SelectedBrain.CurrentSpectrum;
-        snapshot.CurrentThreatLevel = SelectedBrain.CurrentThreatLevel;
-        snapshot.NearbyEnemyCount = SelectedBrain.NearbyEnemyCount;
-        snapshot.NearbyAllyCount = SelectedBrain.NearbyAllyCount;
-        snapshot.HasProtection = SelectedBrain.HasProtection;
-        snapshot.InSafetyConfirmation = SelectedBrain.InSafetyConfirmation;
-        snapshot.IsInHitCooldown = SelectedBrain.IsInHitCooldown;
+        snapshot.NPCName = go != null ? go.name : "Unknown";
+        snapshot.CurrentFocus = brain.CurrentFocus;
+        snapshot.CurrentSpectrum = brain.CurrentSpectrum;
+        snapshot.CurrentThreatLevel = brain.CurrentThreatLevel;
+        snapshot.NearbyEnemyCount = brain.NearbyEnemyCount;
+        snapshot.NearbyAllyCount = brain.NearbyAllyCount;
+        snapshot.HasProtection = brain.HasProtection;
+        snapshot.InSafetyConfirmation = brain.InSafetyConfirmation;
+        snapshot.IsInHitCooldown = brain.IsInHitCooldown;
 
         // 收集扩展数据（IAIDebugInfo 接口方法）
-        var extended = SelectedBrain as IAIDebugInfoExtended;
+        var extended = brain as IAIDebugInfoExtended;
         if (extended != null)
         {
             snapshot.NPCPosition = extended.DebugPosition;
             snapshot.HPRatio = extended.DebugHPRatio;
-            _stimuliBuffer.Clear();
-            extended.GetTopStimuli(_stimuliBuffer, 5);
-            _switchBuffer.Clear();
-            extended.GetSwitchHistory(_switchBuffer, 5);
+            stimuliBuf.Clear();
+            extended.GetTopStimuli(stimuliBuf, 5);
+            switchBuf.Clear();
+            extended.GetSwitchHistory(switchBuf, 5);
         }
         else
         {
-            snapshot.NPCPosition = SelectedGameObject != null
-                ? (Vector2)SelectedGameObject.transform.position : Vector2.zero;
+            snapshot.NPCPosition = go != null ? (Vector2)go.transform.position : Vector2.zero;
             snapshot.HPRatio = 0f;
-            _stimuliBuffer.Clear();
-            _switchBuffer.Clear();
+            stimuliBuf.Clear();
+            switchBuf.Clear();
         }
 
         return snapshot;
