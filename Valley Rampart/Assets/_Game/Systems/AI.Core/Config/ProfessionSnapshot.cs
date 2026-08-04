@@ -116,6 +116,10 @@ public struct ProfessionSnapshot
     public bool fortPassable;               // 可通行（城门开合）
     public float fortMeleeDamageReduce;     // 工事近战减免（3.6 §4.4：近战攻击工事时减免比例）
 
+    // ===== 多目标攻击（2026-08-04 决策员：箭塔多级升级——每级多一个同时攻击点）=====
+    // 静态塔（箭塔）按此数同时攻击多个目标（0=默认单目标）。Unity 侧 FortificationDef 对应字段需同步。
+    public int multiTargetCount;            // 同时攻击目标数（Lv1=1 / Lv2=2 / Lv3=3）
+
     // ===== 弹药储备/补给（3.7 战争机器火力经济学）=====
     // 仅供战争机器（投掷机/弩炮）用；弓手/弩手等兵种 ammoMax=0 无弹药模型（各自无限弹药）。
     // 三弹型：Stone 石弹（成本最低，自动补给）/ Fireball 火弹 / Magic 魔弹（昂贵，有限储备不自动补）。
@@ -183,6 +187,7 @@ public struct ProfessionSnapshot
         fortBlocksMovement = false,
         fortPassable = false,
         fortMeleeDamageReduce = 0f,
+        multiTargetCount = 0,
         ammoMax = 0,
         ammoCostStone = 1f,
         ammoCostFireball = 3f,
