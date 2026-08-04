@@ -198,4 +198,17 @@ public struct TuningSnapshot
     // ===== 出城迎战（3.7 §4.3 Sally：守城编队城墙健康 + 敌压近 → 出城，可训练）=====
     public float sallyWallHpGate;      // 城墙健康度 ≥ 此值（0-1）才出城
     public float sallyEnemyDistGate;   // 最近敌距 ≤ 此值（世界单位）才出城
+
+    // ===== 战争机器高价值判定（3.7 B10 hv* 因子，D3 清理轮提配置，可训练）=====
+    // 高价值目标 = 残血 < hvKillHpGate / 防御 ≥ hvDefenseGate / 邻域敌数 ≥ hvCrowdGate（AOE 收益）
+    public float hvKillHpGate;
+    public float hvDefenseGate;
+    public float hvCrowdGate;
+
+    // ===== 弹药经济（3.7 B10 / D3 清理轮提配置，可训练）=====
+    public float ammoConserveRatio;            // 惜用触发：石弹 < 此比例 且目标非高价值 → 省弹停火
+    public float expensiveAmmoReserveRatio;    // 昂贵弹（火/魔）初始储备 = ammoMax × 此比例（不自动补）
+
+    // ===== 治疗（3.7 B2 / D3 清理轮提配置，可训练）=====
+    public float healHpGate;                   // 治疗触发：友军血比 < 此值
 }

@@ -191,6 +191,14 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         if (_config == null)
             Debug.LogError("[NPCBrain] 未找到 AttentionTuningConfig！请创建 Resources/Config/AttentionTuningConfig.asset");
 
+        // D3 清理轮：hv*/惜用阈值注入 UnitController（静态塔无 NPCBrain 用默认值，与 champion 默认一致）
+        if (_controller != null)
+        {
+            _controller.HvKillHpGate = _config.hvKillHpGate;
+            _controller.HvDefenseGate = _config.hvDefenseGate;
+            _controller.AmmoConserveRatio = _config.ammoConserveRatio;
+        }
+
         // 初始化记忆组件群（M1 决策核提取：组件吃 TuningSnapshot 快照，接缝 4）
         _threatHysteresis = new ThreatHysteresisComponent(_config.ToSnapshot());
         _protectionHysteresis = new ProtectionHysteresisComponent(_config.ToSnapshot());
@@ -850,11 +858,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         return n != null && (n.Contains("Healer") || n.Contains("Bishop"));
     }
 
-    /// <summary>B2 治疗因子（对齐 sim SimBrain.ApplyHealingFactor）：射程内选最低血友军（hpRatio&lt;70%），
-    /// 治疗量 = attack（CD = attackCD），治疗期间停火守位。返回是否在治疗中。</summary>
+    /// <summary>B2 治疗因子（对齐 sim SimBrain.ApplyHealingFactor）：射程内选最低血友军（hpRatio&lt;healHpGate），
+    /// 治疗量 = attack（CD = attackCD），治疗期间停火守位。返回是否在治疗中。D3 清理轮：血线读 _config.healHpGate。</summary>
     private bool TryHealAlly(in FactorContext ctx)
     {
         float healRangeWorld = ctx.AttackWorldRange;   // 治疗范围 = 攻击范围
+        float healGate = _config != null ? _config.healHpGate : 0.7f;
         IDamageable bestPatient = null;
         float bestHpRatio = float.MaxValue;
         for (int i = 0; i < _nearbyAllies.Count; i++)
@@ -865,7 +874,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             float d = Vector2.Distance(_self.GetPosition(), a.GetPosition());
             if (d > healRangeWorld) continue;
             float hpRatio = a.MaxHp > 0 ? (float)a.CurrentHp / a.MaxHp : 1f;
-            if (hpRatio < 0.7f && hpRatio < bestHpRatio)
+            if (hpRatio < healGate && hpRatio < bestHpRatio)
             {
                 bestHpRatio = hpRatio;
                 bestPatient = a;

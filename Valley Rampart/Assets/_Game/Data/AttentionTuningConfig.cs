@@ -274,6 +274,24 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("最近敌距门槛（世界单位：敌距 ≤ 此值才出城压上；敌远不动）")]
     public float sallyEnemyDistGate = 20f;
 
+    [Header("战争机器高价值判定（3.7 B10 hv* 因子，D3 清理轮提配置，可训练）")]
+    [Tooltip("高价值：目标残血 < 此值（昂贵弹优先打残血补刀）")]
+    public float hvKillHpGate = 0.5f;
+    [Tooltip("高价值：目标防御 ≥ 此值（昂贵弹打重甲收益）")]
+    public float hvDefenseGate = 20f;
+    [Tooltip("高价值：目标邻域敌数 ≥ 此值（AOE 溅射收益，昂贵弹打人群）")]
+    public float hvCrowdGate = 3f;
+
+    [Header("弹药经济（3.7 B10 / D3 清理轮提配置，可训练）")]
+    [Tooltip("惜用触发：石弹 < 此比例且目标非高价值 → 省弹停火（0.3=弹仓 30% 以下）")]
+    public float ammoConserveRatio = 0.3f;
+    [Tooltip("昂贵弹（火/魔）初始储备 = ammoMax × 此比例（有限储备不自动补，1/4 槽=0.25）")]
+    public float expensiveAmmoReserveRatio = 0.25f;
+
+    [Header("治疗（3.7 B2 / D3 清理轮提配置，可训练）")]
+    [Tooltip("治疗触发：友军血比 < 此值视为需要治疗（Healer/Bishop 停火治疗）")]
+    public float healHpGate = 0.7f;
+
     [Header("军队级自动意图阈值（M7：FormationBrain 内置大脑入训，原 Inspector 字段迁移）")]
     [Tooltip("军队级决策间隔（秒，FormationBrain 秒级节奏，原 decisionInterval=1）")]
     public float fbDecisionInterval = 1f;
@@ -460,6 +478,12 @@ public class AttentionTuningConfig : ScriptableObject
             speedChaseBoost = speedChaseBoost,
             sallyWallHpGate = sallyWallHpGate,
             sallyEnemyDistGate = sallyEnemyDistGate,
+            hvKillHpGate = hvKillHpGate,
+            hvDefenseGate = hvDefenseGate,
+            hvCrowdGate = hvCrowdGate,
+            ammoConserveRatio = ammoConserveRatio,
+            expensiveAmmoReserveRatio = expensiveAmmoReserveRatio,
+            healHpGate = healHpGate,
         };
     }
 }

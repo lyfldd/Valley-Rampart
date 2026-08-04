@@ -92,6 +92,11 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>是否弹药耗尽待补给（战争机器无弹停火）。</summary>
     public bool IsAmmoEmpty => AmmoStone <= 0 && AmmoFireball <= 0 && AmmoMagic <= 0;
 
+    // ===== D3 清理轮：hv*/惜用阈值（默认 = champion 默认；NPCBrain.Init 从 AttentionTuningConfig 覆盖）=====
+    public float HvKillHpGate = 0.5f;    // 高价值：残血阈值（tuning.hvKillHpGate）
+    public float HvDefenseGate = 20f;    // 高价值：重甲阈值（tuning.hvDefenseGate）
+    public float AmmoConserveRatio = 0.3f; // 惜用触发：石弹 < 此比例（tuning.ammoConserveRatio）
+
     // ===== 运行时可变属性 =====
     // 从 UnitData 初始化，可被 Buff/装备/升级系统修改；修改时发布 UnitAttributeChangedEvent。
     // 之前直接读 Data（只读 SO）无法支持运行时变化，故改为运行时副本。
@@ -561,7 +566,8 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     /// <summary>B1 弹药评估（对齐 sim SimBrain.SelectAmmo）：返回是否可发射并输出弹型。
     /// 非战争机器（ammoMax=0）恒可发射（职业默认弹型）；战争机器弹药耗尽停火；
-    /// 惜用（ammoConservationWeight）时弹药紧张且目标非高价值 -> 省弹停火；昂贵弹只对高价值目标用。</summary>
+    /// 惜用（ammoConservationWeight）时弹药紧张（石弹 &lt; AmmoConserveRatio）且目标非高价值 -> 省弹停火；
+    /// 昂贵弹只对高价值目标用。D3 清理轮：阈值读字段（NPCBrain 注入 tuning）。</summary>
     public bool SelectAmmo(IDamageable target, out ProjectileType ammoType)
     {
         ammoType = _professionSnapshot.projectileType;
@@ -569,8 +575,8 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (IsAmmoEmpty) return false;                            // 弹药耗尽 -> 停火等补给
         float ammoRatio = _professionSnapshot.ammoMax > 0 ? (float)AmmoStone / _professionSnapshot.ammoMax : 1f;
         bool highValue = IsHighValueTarget(target);
-        // 惜用：弹药紧张（石弹 < 30% 槽）且目标非高价值 -> 省弹停火
-        if (ammoRatio < 0.3f && !highValue && _professionSnapshot.ammoConservationWeight > 0f)
+        // 惜用：弹药紧张（石弹 < AmmoConserveRatio 槽）且目标非高价值 -> 省弹停火
+        if (ammoRatio < AmmoConserveRatio && !highValue && _professionSnapshot.ammoConservationWeight > 0f)
             return false;
         // 弹型选择：高价值目标优先昂贵弹（Fireball/Magic 库存够才用，否则 Stone）
         if (highValue)
@@ -585,13 +591,13 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
 
     /// <summary>B1 目标价值评估（对齐 sim SimBrain.IsHighValueTarget）：残血 / 重甲 / 邻域密集。
-    /// 邻域密集判定（aoe 半径×2 内 ≥3 敌）留待 D3 清理轮随 hv* 因子一起提配置（本轮残血+重甲够用）。</summary>
+    /// D3 清理轮：阈值读字段（NPCBrain 注入 tuning.hv*）；邻域密集需 GridSystem 扫描，与 hvCrowdGate 一起由 NPCBrain 侧提供。</summary>
     public bool IsHighValueTarget(IDamageable target)
     {
         if (target == null || target.CurrentHp <= 0) return false;
         float hpRatio = target.MaxHp > 0 ? (float)target.CurrentHp / target.MaxHp : 0f;
-        if (hpRatio < 0.5f) return true;      // 残血
-        if (target.Defense >= 20) return true; // 重甲
+        if (hpRatio < HvKillHpGate) return true;      // 残血
+        if (target.Defense >= HvDefenseGate) return true; // 重甲
         return false;
     }
 
