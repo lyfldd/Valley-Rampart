@@ -16,3 +16,8 @@ MonoBehaviour:
   chargeFormation: {fileID: 11400000, guid: 34058f22ec9ecf24982427a4e32a2ec6, type: 2}
   retreatFormation: {fileID: 11400000, guid: 7da950d23745805448c962b10cad4d3f, type: 2}
   garrisonFormation: {fileID: 11400000, guid: e5cb0f8fd0b61744a8170fc91387a654, type: 2}
+  formationList:
+  - {fileID: 11400000, guid: ad1264170ac32a5488468a403761ca27, type: 2}
+  - {fileID: 11400000, guid: 34058f22ec9ecf24982427a4e32a2ec6, type: 2}
+  - {fileID: 11400000, guid: 7da950d23745805448c962b10cad4d3f, type: 2}
+  - {fileID: 11400000, guid: e5cb0f8fd0b61744a8170fc91387a654, type: 2}
