@@ -48,6 +48,66 @@ public struct ProfessionSnapshot
     // 静态单位不参与 AI 决策、不移动、不逃逸；有攻击值的按 CD 攻击射程内敌人，attack=0 纯阻挡。
     public bool isStatic;
 
+    // ===== 弹药（3.6 §三：AmmoDef 资产 → 快照拉平，sim 直读）=====
+    // Unity 侧由 NpcProfessionDef.ammo（AmmoDef 引用）在 ToSnapshot 拷贝；harness 侧 JSON 直接配置。
+    public ProjectileType projectileType;   // 弹药类型
+    public int pierceLevel;                 // 穿透等级（int，不设上限；< 工事防御等级 → 不造成伤害）
+    public float aoeRadiusCells;            // 溅射半径（格，0=单体）
+    public float aoeFalloff;                // 溅射衰减 0-1（0=均匀，1=线性衰减到边缘0）
+    public BallisticType ballisticType;     // 弹道类型（弧高 vs 工事高度 → 越墙判定）
+    public float arcHeightCells;            // 弹道弧高（格）
+    public GroundEffectType effectType;     // 命中后地面效果类型（None=无）
+    public float effectRadiusCells;         // 效果区域半径（格）
+    public float effectDuration;            // 效果持续时长（秒）
+    public float effectTickInterval;        // 效果结算间隔（秒）
+    public float effectPower;               // Burn=每tick伤害 / Slow=减速系数 / Heal=每tick治疗
+    public int effectMaxTargets;            // Heal 有限个：区域内最多奶 N 个
+
+    // ===== 韧性（3.6 §4.2）=====
+    // 最终韧性 = baseToughness + defense × toughnessDefenseScale（两端同公式）
+    public float baseToughness;             // 职业基础韧性（弓手 5 / 战士 40 / 骑兵 50）
+    public float toughnessDefenseScale;     // 防御力 → 韧性系数（SO 配置，训练校准）
+
+    // ===== 免伤（3.6 §5.2：免伤词条体系，职业基础因子）=====
+    // 实际免伤 = Σ 各因子（职业基础 + 冲锋免伤 70% + 未来扩展），clamp 到上限
+    public float baseDamageReduce;          // 职业基础免伤（0-1，默认 0）
+
+    // ===== 保护者权重（3.7 保护力加权和，可训练）=====
+    // 保护 = 身边友军 protectPower 加权和 ≥ protectThreshold。训练师学"谁能当保护者"。
+    // 肉盾（盾卫/重装/战士）高，脆皮（弓手/法师/治疗）低；默认 0.2 保证任何兵种都有一定保护力，
+    // 避免缺席某兵种就完全无保护（不硬编码兵种对兵种关系）。
+    public float protectPower;              // 保护者权重（0-1，可训练）
+    /// <summary>重甲标记（3.7）：重装/盾卫等重甲单位，评分统计用（替代职业名字符串硬编码）</summary>
+    public bool isHeavyArmor;
+
+    // ===== 骑兵冲锋（3.6 §5.3，职业级参数，训练可调）=====
+    public bool isCavalry;                  // 是否骑兵（冲锋能力开关）
+    public float chargeDamage;              // 冲锋伤害（特殊技能，80）
+    public float chargeRangeCells;          // 冲锋距离（格，4 格 = 中区块距离）
+    public float chargeSpeed;               // 冲锋突进速度（世界单位/秒，25：快且连续，可训练）
+    public float chargePairGap;             // 组内两次间隔（秒，0.3）
+    public float chargeGroupCooldown;       // 组间隔（秒，20）
+    public float chargeDamageReduce;        // 冲锋过程免伤（0-1，70%）
+
+    // ===== 工事（3.6 §4.4：墙/门/拒马/塔。Unity 侧 FortificationDef → 快照拉平，sim 场景 JSON 直接配）=====
+    public bool isFortification;            // 是否工事
+    public int fortDefenseLevel;            // 防御等级（int，不设上限）
+    public float fortHeightCells;           // 工事高度（拒马矮 0.5 / 城墙高 2 / 塔高 3）
+    public bool fortBlocksMovement;         // 挡移动（墙/拒马）
+    public bool fortPassable;               // 可通行（城门开合）
+    public float fortMeleeDamageReduce;     // 工事近战减免（3.6 §4.4：近战攻击工事时减免比例）
+
+    // ===== 弹药储备/补给（3.7 战争机器火力经济学）=====
+    // 仅供战争机器（投掷机/弩炮）用；弓手/弩手等兵种 ammoMax=0 无弹药模型（各自无限弹药）。
+    // 三弹型：Stone 石弹（成本最低，自动补给）/ Fireball 火弹 / Magic 魔弹（昂贵，有限储备不自动补）。
+    // 发射评估：AI 弹药紧张时提高发射价值门槛（惜用），昂贵弹只对高价值目标（残血/重甲/密集）用。
+    public int ammoMax;                     // 弹容量（石弹槽位最大值，如投掷机 30）
+    public float ammoCostStone;             // 石弹成本（1，最低）
+    public float ammoCostFireball;          // 火弹成本（3）
+    public float ammoCostMagic;             // 魔弹成本（5）
+    public float ammoResupplyDelay;         // 补给延迟（秒，模拟工人从后方搬运往返）
+    public float ammoConservationWeight;    // 惜用权重 0-1（训练可调；弹药紧张时提高发射门槛）
+
     /// <summary>
     /// 默认值（非 NPC 职业单位用；数值对齐 NpcProfessionDef 字段默认值）。
     /// </summary>
@@ -73,5 +133,41 @@ public struct ProfessionSnapshot
         equipmentSlotCount = 0,
         wanderRadiusCells = 2f,
         isStatic = false,
+        projectileType = ProjectileType.Arrow,
+        pierceLevel = 1,
+        aoeRadiusCells = 0f,
+        aoeFalloff = 0f,
+        ballisticType = BallisticType.Lob,
+        arcHeightCells = 0f,
+        effectType = GroundEffectType.None,
+        effectRadiusCells = 0f,
+        effectDuration = 0f,
+        effectTickInterval = 0f,
+        effectPower = 0f,
+        effectMaxTargets = 0,
+        baseToughness = 10f,
+        toughnessDefenseScale = 0.2f,
+        baseDamageReduce = 0f,
+        protectPower = 0.2f,
+        isHeavyArmor = false,
+        isCavalry = false,
+        chargeDamage = 80f,
+        chargeRangeCells = 4f,
+        chargeSpeed = 25f,
+        chargePairGap = 0.3f,
+        chargeGroupCooldown = 20f,
+        chargeDamageReduce = 0.7f,
+        isFortification = false,
+        fortDefenseLevel = 0,
+        fortHeightCells = 1f,
+        fortBlocksMovement = false,
+        fortPassable = false,
+        fortMeleeDamageReduce = 0f,
+        ammoMax = 0,
+        ammoCostStone = 1f,
+        ammoCostFireball = 3f,
+        ammoCostMagic = 5f,
+        ammoResupplyDelay = 0f,
+        ammoConservationWeight = 0.5f,
     };
 }

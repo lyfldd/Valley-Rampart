@@ -29,6 +29,8 @@ public struct TuningSnapshot
     // ===== 保护因子（6.4）=====
     public int protectionFriendThreshold;
     public int protectionLossThreshold;
+    // 3.7 保护力加权和阈值：保护 = 身边友军 protectPower 加权和 ≥ 此值（可训练，替代友军数）
+    public float protectThreshold;
 
     // ===== 威胁衰减 =====
     public float threatDecayTime;
@@ -188,4 +190,12 @@ public struct TuningSnapshot
     public float heatDecayRate;
     public float heatSpreadThreshold;
     public float heatSpreadRatio;
+
+    // ===== 移速决策（3.6 §六：平常移速 walkSpeed / 最大移速 runSpeed，NPC 按因素自主选速，可训练）=====
+    // 追击速度 = walkSpeed + (runSpeed - walkSpeed) × speedChaseBoost（1=追击满速冲刺，0=追击也不提速）
+    public float speedChaseBoost;
+
+    // ===== 出城迎战（3.7 §4.3 Sally：守城编队城墙健康 + 敌压近 → 出城，可训练）=====
+    public float sallyWallHpGate;      // 城墙健康度 ≥ 此值（0-1）才出城
+    public float sallyEnemyDistGate;   // 最近敌距 ≤ 此值（世界单位）才出城
 }

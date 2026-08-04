@@ -5,6 +5,7 @@ using UnityEngine;
 /// 攻击配置（注册攻击时由调用方提供）。
 /// NPC 数据住 NpcProfessionDef（批次3），建筑数据住 BuildingDef.combat。
 /// 调用方（NPCBrain）从 SO 构造此结构传入 DamageSystem。
+/// 弹药/冲锋字段由 NpcProfessionDef.ToSnapshot 拉平（3.6 §三/§五）。
 /// </summary>
 public struct AttackProfile
 {
@@ -13,6 +14,28 @@ public struct AttackProfile
     public float cd;              // 攻击冷却（秒，内部取整到 0.1s 倍数）
     public bool isRanged;         // 是否远程
     public float projectileSpeed; // 弹速（远程用，世界单位/秒）
+
+    // ===== 弹药（3.6 §三：穿透/AOE/弹道/效果）=====
+    public ProjectileType projectileType;
+    public int pierceLevel;               // 穿透等级（< 工事防御 → 不造成伤害）
+    public float aoeRadiusCells;          // 溅射半径（0=单体）
+    public float aoeFalloff;              // 溅射衰减 0-1
+    public BallisticType ballisticType;   // 弹道（弧高 vs 工事高度 → 越墙）
+    public float arcHeightCells;          // 弹道弧高（格）
+    public GroundEffectType effectType;   // 命中后地面效果
+    public float effectRadiusCells;
+    public float effectDuration;
+    public float effectTickInterval;
+    public float effectPower;
+    public int effectMaxTargets;
+
+    // ===== 骑兵冲锋（3.6 §5.3）=====
+    public bool isCavalry;
+    public float chargeDamage;            // 冲锋伤害（80）
+    public float chargeRangeCells;        // 冲锋距离（4 格）
+    public float chargePairGap;           // 组内间隔（0.3s）
+    public float chargeGroupCooldown;     // 组间隔（20s）
+    public float chargeDamageReduce;      // 冲锋免伤（70%）
 }
 
 /// <summary>
@@ -248,22 +271,100 @@ public class DamageSystem : Singleton<DamageSystem>
     // ===== 伤害计算 + 应用（近战/投射物到达共用）=====
 
     /// <summary>
-    /// 伤害计算 + 扣血 + 发布受击事件。
+    /// 伤害计算 + 扣血 + 发布受击事件（3.6 §5.2 免伤词条）。
     /// 百分比减伤：伤害 = 攻击力 × (1 - 护甲/(护甲+K))，RoundToInt + 保底 1。
+    /// 免伤：final × (1 - Σ 目标免伤因子)，clamp 到上限。
     /// 节流：同一 victim 每 EventThrottle 秒最多发一次 UnitDamagedEvent。
     /// </summary>
-    public void ApplyDamage(IDamageable source, IDamageable target, int attack)
+    public int ApplyDamage(IDamageable source, IDamageable target, int attack, float extraDamageReduce = 0f)
     {
-        if (target == null || target.CurrentHp <= 0) return;
+        if (target == null || target.CurrentHp <= 0) return 0;
 
         // 伤害计算（float 内部运算，对外 int，决策 21）
         int finalDamage = CalculateDamage(attack, target.Defense);
+
+        // 免伤词条（3.6 §5.2）：目标基础免伤 + 外部因子（如冲锋免伤）
+        float reduce = Mathf.Clamp01(extraDamageReduce + GetTargetBaseReduce(target));
+        // 冲锋中免伤（3.6 §5.3：突进态 70%）
+        if (target is UnitController charging && charging.IsCharging && charging.Data is NpcProfessionDef cnd)
+            reduce = Mathf.Clamp01(reduce + cnd.chargeDamageReduce);
+        if (reduce > 0f)
+            finalDamage = Mathf.Max(1, Mathf.RoundToInt(finalDamage * (1f - reduce)));
 
         // 扣血（TakeDamage 只扣血，公式已在此算好）
         target.TakeDamage(finalDamage);
 
         // 发布受击事件（节流，决策 7）
         PublishDamagedEvent(target, source, finalDamage);
+        return finalDamage;
+    }
+
+    /// <summary>目标职业基础免伤（3.6 §5.2：NpcProfessionDef.baseDamageReduce）。</summary>
+    private float GetTargetBaseReduce(IDamageable target)
+    {
+        if (target is UnitController uc && uc.Data != null)
+        {
+            var nd = uc.Data as NpcProfessionDef;
+            if (nd != null) return nd.baseDamageReduce;
+        }
+        return 0f;
+    }
+
+    /// <summary>
+    /// 溅射结算（3.6 §3.3 单段 AOE）：以 worldPos 为圆心，aoeRadiusCells 内敌对单位受溅射伤害。
+    /// falloff 衰减：damage × (1 - falloff × dist/radius)。
+    /// </summary>
+    public void ApplyImpact(IDamageable source, Vector2 worldPos, int attack,
+        float aoeRadiusCells, float aoeFalloff)
+    {
+        if (aoeRadiusCells <= 0f || GridSystem.Instance == null) return;
+
+        float cellSize = GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
+        float radiusWorld = aoeRadiusCells * cellSize;
+
+        var units = QueryUnitsInRadius(worldPos, radiusWorld);
+        Faction attackerFaction = source.GetFaction();
+
+        foreach (var unit in units)
+        {
+            if (unit == null || unit.CurrentHp <= 0) continue;
+            if (unit.GetFaction() == attackerFaction || unit.GetFaction() == Faction.None) continue;
+
+            float dist = Vector2.Distance(worldPos, unit.GetPosition());
+            if (dist > radiusWorld) continue;
+
+            float falloff = 1f - aoeFalloff * (dist / radiusWorld);
+            int dmg = Mathf.Max(1, Mathf.RoundToInt(attack * falloff));
+            ApplyDamage(source, unit, dmg);
+        }
+    }
+
+    /// <summary>查 worldPos 半径内单位（空间分区，复用 GridSystem）。</summary>
+    private List<UnitController> QueryUnitsInRadius(Vector2 worldPos, float radiusWorld)
+    {
+        var result = new List<UnitController>();
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
+
+        float cellSize = GridSystem.Instance.Config.cellSize;
+        GridCoord center = GridSystem.Instance.WorldToCoord(worldPos);
+        int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
+
+        for (int dx = -cellRange; dx <= cellRange; dx++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                var coord = new GridCoord(center.x + dx, y);
+                result.AddRange(GridSystem.Instance.GetUnitsInCell(coord));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>击飞入口（3.6 §5.4）：目标受击飞位移 + 打断攻击（由骑兵冲锋触发）。</summary>
+    public void TryKnockback(IDamageable target, Vector2 impactDir, float distanceWorld, float duration)
+    {
+        if (target is UnitController uc)
+            uc.Knockback(impactDir, distanceWorld, duration);
     }
 
     /// <summary>

@@ -23,11 +23,39 @@ public enum DebugSpawnType
     PlayerWarrior,      // 近战士兵
     PlayerArcher,       // 弓箭手
     PlayerCivilian,     // 工人
+    PlayerCavalry,      // 骑兵（3.6 §五：冲锋 + 击飞）
 
     // ===== 敌方（Undead）=====
     EnemyWarrior,       // 敌方近战士兵
     EnemyArcher,        // 敌方弓箭手
     EnemyGeneral,       // 敌方将军（3.0.1_6 §4.3：挂 FormationController + FormationTable_Enemy）
+    EnemyCavalry,       // 敌方骑兵（3.6）
+
+    // ===== 3.7 新职业（己方 Human_Player，验证 M8 全兵种）=====
+    PlayerMage,             // 法师：远程高伤
+    PlayerArchmage,         // 大法师：远程更远
+    PlayerCrossbowman,      // 弩手：远程点杀
+    PlayerHealer,           // 治疗师
+    PlayerHeavyWarrior,     // 重装战士：高防近战
+    PlayerShieldGuard,      // 盾卫：高防抗线
+    PlayerBishop,           // 主教：远程治疗
+
+    // ===== 3.7 机器/工事（己方静态单位）=====
+    PlayerSiegeMachine,     // 投掷机（弹药：石/火/魔）
+    PlayerBallista,         // 弩炮（弹药：重弩矢）
+    PlayerArrowTower,       // 箭塔
+    PlayerBarricade,        // 拒马
+    PlayerWall,             // 城墙
+    PlayerGate,             // 城门
+
+    // ===== 3.7 新职业（敌方 Undead）=====
+    EnemyMage,              // 法师
+    EnemyArchmage,          // 大法师
+    EnemyCrossbowman,       // 弩手
+    EnemyHealer,            // 治疗师
+    EnemyHeavyWarrior,      // 重装战士
+    EnemyShieldGuard,       // 盾卫
+    EnemyBishop,            // 主教
 }
 
 /// <summary>可生成单位的描述（供 UI 渲染按钮）</summary>
@@ -94,10 +122,32 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerWarrior:
             case DebugSpawnType.PlayerArcher:
             case DebugSpawnType.PlayerCivilian:
+            case DebugSpawnType.PlayerCavalry:
+            case DebugSpawnType.PlayerMage:
+            case DebugSpawnType.PlayerArchmage:
+            case DebugSpawnType.PlayerCrossbowman:
+            case DebugSpawnType.PlayerHealer:
+            case DebugSpawnType.PlayerHeavyWarrior:
+            case DebugSpawnType.PlayerShieldGuard:
+            case DebugSpawnType.PlayerBishop:
+            case DebugSpawnType.PlayerSiegeMachine:
+            case DebugSpawnType.PlayerBallista:
+            case DebugSpawnType.PlayerArrowTower:
+            case DebugSpawnType.PlayerBarricade:
+            case DebugSpawnType.PlayerWall:
+            case DebugSpawnType.PlayerGate:
                 return Faction.Human_Player;
             case DebugSpawnType.EnemyWarrior:
             case DebugSpawnType.EnemyArcher:
             case DebugSpawnType.EnemyGeneral:
+            case DebugSpawnType.EnemyCavalry:
+            case DebugSpawnType.EnemyMage:
+            case DebugSpawnType.EnemyArchmage:
+            case DebugSpawnType.EnemyCrossbowman:
+            case DebugSpawnType.EnemyHealer:
+            case DebugSpawnType.EnemyHeavyWarrior:
+            case DebugSpawnType.EnemyShieldGuard:
+            case DebugSpawnType.EnemyBishop:
                 return Faction.Undead;
             default:
                 return Faction.None;
@@ -113,9 +163,31 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerWarrior: return Occupation.Warrior;
             case DebugSpawnType.PlayerArcher: return Occupation.Archer;
             case DebugSpawnType.PlayerCivilian: return Occupation.Civilian;
+            case DebugSpawnType.PlayerCavalry: return Occupation.Cavalry;
+            case DebugSpawnType.PlayerMage: return Occupation.Mage;
+            case DebugSpawnType.PlayerArchmage: return Occupation.Archmage;
+            case DebugSpawnType.PlayerCrossbowman: return Occupation.Crossbowman;
+            case DebugSpawnType.PlayerHealer: return Occupation.Healer;
+            case DebugSpawnType.PlayerHeavyWarrior: return Occupation.HeavyWarrior;
+            case DebugSpawnType.PlayerShieldGuard: return Occupation.ShieldGuard;
+            case DebugSpawnType.PlayerBishop: return Occupation.Bishop;
+            case DebugSpawnType.PlayerSiegeMachine: return Occupation.SiegeMachine;
+            case DebugSpawnType.PlayerBallista: return Occupation.Ballista;
+            case DebugSpawnType.PlayerArrowTower: return Occupation.ArrowTower;
+            case DebugSpawnType.PlayerBarricade: return Occupation.Barricade;
+            case DebugSpawnType.PlayerWall: return Occupation.Wall;
+            case DebugSpawnType.PlayerGate: return Occupation.Gate;
             case DebugSpawnType.EnemyWarrior: return Occupation.Warrior;
             case DebugSpawnType.EnemyArcher: return Occupation.Archer;
             case DebugSpawnType.EnemyGeneral: return Occupation.General;
+            case DebugSpawnType.EnemyCavalry: return Occupation.Cavalry;
+            case DebugSpawnType.EnemyMage: return Occupation.Mage;
+            case DebugSpawnType.EnemyArchmage: return Occupation.Archmage;
+            case DebugSpawnType.EnemyCrossbowman: return Occupation.Crossbowman;
+            case DebugSpawnType.EnemyHealer: return Occupation.Healer;
+            case DebugSpawnType.EnemyHeavyWarrior: return Occupation.HeavyWarrior;
+            case DebugSpawnType.EnemyShieldGuard: return Occupation.ShieldGuard;
+            case DebugSpawnType.EnemyBishop: return Occupation.Bishop;
             default: return Occupation.Civilian;
         }
     }
@@ -129,9 +201,31 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerWarrior: return "己方士兵";
             case DebugSpawnType.PlayerArcher: return "己方弓手";
             case DebugSpawnType.PlayerCivilian: return "己方工人";
+            case DebugSpawnType.PlayerCavalry: return "己方骑兵";
+            case DebugSpawnType.PlayerMage: return "己方法师";
+            case DebugSpawnType.PlayerArchmage: return "己方大法师";
+            case DebugSpawnType.PlayerCrossbowman: return "己方弩手";
+            case DebugSpawnType.PlayerHealer: return "己方治疗师";
+            case DebugSpawnType.PlayerHeavyWarrior: return "己方重装";
+            case DebugSpawnType.PlayerShieldGuard: return "己方盾卫";
+            case DebugSpawnType.PlayerBishop: return "己方主教";
+            case DebugSpawnType.PlayerSiegeMachine: return "己方投掷机";
+            case DebugSpawnType.PlayerBallista: return "己方弩炮";
+            case DebugSpawnType.PlayerArrowTower: return "己方箭塔";
+            case DebugSpawnType.PlayerBarricade: return "己方拒马";
+            case DebugSpawnType.PlayerWall: return "己方城墙";
+            case DebugSpawnType.PlayerGate: return "己方城门";
             case DebugSpawnType.EnemyWarrior: return "敌方士兵";
             case DebugSpawnType.EnemyArcher: return "敌方弓手";
             case DebugSpawnType.EnemyGeneral: return "敌方将军";
+            case DebugSpawnType.EnemyCavalry: return "敌方骑兵";
+            case DebugSpawnType.EnemyMage: return "敌方法师";
+            case DebugSpawnType.EnemyArchmage: return "敌方大法师";
+            case DebugSpawnType.EnemyCrossbowman: return "敌方弩手";
+            case DebugSpawnType.EnemyHealer: return "敌方治疗师";
+            case DebugSpawnType.EnemyHeavyWarrior: return "敌方重装";
+            case DebugSpawnType.EnemyShieldGuard: return "敌方盾卫";
+            case DebugSpawnType.EnemyBishop: return "敌方主教";
             default: return "未知";
         }
     }

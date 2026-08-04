@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: SiegeMachine
   m_EditorClassIdentifier: 
   faction: 1
-  occupation: 0
+  occupation: 13
   walkSpeed: 1.2
   runSpeed: 2.4
   maxHp: 200
@@ -32,4 +32,24 @@ MonoBehaviour:
   professionPullScale: 0.2
   equipmentSlotCount: 0
   wanderRadiusCells: 2
-  isStatic: 0
+  isStatic: 1
+  ammo: {fileID: 11400000, guid: fa269af9a1992754faa5984b59da5f1f, type: 2}
+  baseToughness: 10
+  toughnessDefenseScale: 0.2
+  baseDamageReduce: 0
+  protectPower: 0.2
+  isHeavyArmor: 0
+  isCavalry: 0
+  chargeDamage: 80
+  chargeRangeCells: 4
+  chargeSpeed: 25
+  chargePairGap: 0.3
+  chargeGroupCooldown: 20
+  chargeDamageReduce: 0.7
+  fortification: {fileID: 0}
+  ammoMax: 30
+  ammoCostStone: 1
+  ammoCostFireball: 3
+  ammoCostMagic: 5
+  ammoResupplyDelay: 3
+  ammoConservationWeight: 0.5

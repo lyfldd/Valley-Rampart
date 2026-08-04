@@ -26,6 +26,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
     [SerializeField] private RulerData rulerData;
 
     [Header("========== 君主出生位置 ==========")]
+    [Tooltip("兜底出生位置（地图未就绪/找不到城堡时用）。正常流程：废弃城堡左侧 1 个小区块距离，动态计算")]
     [SerializeField] private Vector2 spawnPosition = new Vector2(0f, 0f);
 
     [Header("========== 运行时状态 ==========")]
@@ -210,13 +211,15 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
         // Step 4: 场景中确实没有君主，代码兜底创建
         // Prefab 已由 LoadManager 阶段1 预加载，无需再 PreloadAll
-        Debug.Log("[RulerController] 场景中未找到君主，通过 UnitFactory 创建...");
-        GameObject rulerGo = LoadManager.Instance.SpawnUnit(rulerData, spawnPosition);
+        // 君主初始位置 = 废弃城堡左侧 1 个小区块距离（固定左边），地图未就绪时回退 Inspector spawnPosition
+        Vector2 spawnPos = ResolveSpawnPosition();
+        Debug.Log($"[RulerController] 场景中未找到君主，通过 UnitFactory 创建（位置={spawnPos}）...");
+        GameObject rulerGo = LoadManager.Instance.SpawnUnit(rulerData, spawnPos);
         if (rulerGo != null)
         {
             monarchUnit = rulerGo.GetComponent<UnitController>();
             Debug.Log($"[RulerController] 君主已创建: "
-                + $"位置={spawnPosition}, "
+                + $"位置={spawnPos}, "
                 + $"HP={monarchUnit.CurrentHp}/{rulerData.maxHp}, "
                 + $"攻击={rulerData.attack}");
         }
@@ -224,6 +227,38 @@ public class RulerController : Singleton<RulerController>, ISaveable
         {
             Debug.LogError("[RulerController] 君主 Prefab 实例化失败！");
         }
+    }
+
+    /// <summary>
+    /// 计算君主出生位置：废弃城堡左侧 1 个小区块距离（固定左边）。
+    /// 城堡占 2 格（CastleCore 占位 localCellX 起），君主取其左侧第 1 格的世界坐标。
+    /// 地图未就绪或找不到城堡时，回退 Inspector 配置的 spawnPosition。
+    /// </summary>
+    private Vector2 ResolveSpawnPosition()
+    {
+        var wm = WorldManager.Instance;
+        var grid = GridSystem.Instance;
+        if (wm != null && wm.ActiveMap != null && grid != null && grid.Config != null)
+        {
+            var map = wm.ActiveMap;
+            int castleIdx = MapGenRules.GetCastleRegionIndex(map.regions.Count);
+            if (castleIdx >= 0 && castleIdx < map.regions.Count)
+            {
+                var region = map.regions[castleIdx];
+                if (region.resources != null)
+                {
+                    foreach (var bp in region.resources)
+                    {
+                        if (bp == null || bp.category != BuildingCategory.CastleCore) continue;
+                        int castleCellX = region.cellStartX + bp.localCellX;   // 城堡起点格
+                        int rulerCellX = castleCellX - 1;                      // 左侧 1 格
+                        float cellSize = grid.Config.cellSize;
+                        return new Vector2((rulerCellX + 0.5f) * cellSize, -3f);
+                    }
+                }
+            }
+        }
+        return spawnPosition;
     }
 
     // 在场景中查找已有的君主单位。

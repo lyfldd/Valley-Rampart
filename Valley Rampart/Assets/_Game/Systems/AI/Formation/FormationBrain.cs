@@ -88,8 +88,15 @@ public class FormationBrain : MonoBehaviour
             && LODSystem.Instance.TryGetNearestCombatHotspot(anchorPos, maxAge, searchRadius, out hotspot);
         float survival = _controller.MemberCount / (float)FormationDef.StandardSize;
 
+        // 3.7 §4.3 Sally 输入：城墙健康度 + 最近敌距/位置（守城编队出城迎战判定）
+        float wallHpRatio = EvaluateWallHpRatio();
+        float enemyDist;
+        Vector2 enemyPos;
+        EvaluateClosestEnemy(out enemyDist, out enemyPos);
+
         // 决策核心（核内纯函数，可测试）：
-        // ① 残编+被压->撤 ② 远程热点+本地无激战->支援 ③ 高价值+敌压近->冲锋 ④ 敌接近->防守 ⑤ 低热度->维持
+        // ① 残编+被压->撤 ② 远程热点+本地无激战->支援 ③ 高价值+敌压近->冲锋
+        // ③.5 守城+城墙健康+敌近->出城迎战(Sally) ④ 敌接近->防守 ⑤ 低热度->维持
         float value = FormationDecisionCore.EvaluateTaskValue(
             _controller.isGarrison,
             _controller.AdvanceTarget != Vector2.zero,
@@ -98,13 +105,62 @@ public class FormationBrain : MonoBehaviour
             retreatGate);
         var decision = FormationDecisionCore.DecideIntent(
             heat, survival, value, hasRemoteHotspot,
+            _controller.isGarrison, wallHpRatio, enemyDist,
             engage, charge, retreatGate,
-            _config != null ? _config.chargeValueGate : 0.6f);
+            _config != null ? _config.chargeValueGate : 0.6f,
+            _config != null ? _config.sallyWallHpGate : 0.5f,
+            _config != null ? _config.sallyEnemyDistGate : 20f);
 
         // 壳执行控制器副作用（推进方向 + 切意图）
         if (decision.ShouldAdvance)
-            _controller.SetAdvanceTarget(hotspot);
+        {
+            // Sally：朝最近敌人推进（出城压上）；支援：朝远程战斗热点推进
+            Vector2 target = decision.Intent == TacticIntent.Sally && enemyDist < float.MaxValue
+                ? enemyPos
+                : hotspot;
+            _controller.SetAdvanceTarget(target);
+        }
         if (decision.Valid)
             _controller.SetIntent(decision.Intent);
+    }
+
+    /// <summary>
+    /// 3.7 §4.3：城墙健康度（0-1）。场景内 Wall/Gate 单位平均血量比；无城墙返回 1（视为健康）。
+    /// 秒级决策调用，FindObjects 扫描开销可接受。
+    /// </summary>
+    private float EvaluateWallHpRatio()
+    {
+        float sum = 0f;
+        int count = 0;
+        var allUnits = FindObjectsByType<UnitController>(FindObjectsSortMode.None);
+        foreach (var u in allUnits)
+        {
+            if (u == null || u.Data == null) continue;
+            Occupation occ = u.Data.occupation;
+            if (occ != Occupation.Wall && occ != Occupation.Gate) continue;
+            sum += u.CurrentHp / (float)Mathf.Max(1, u.MaxHp);
+            count++;
+        }
+        return count > 0 ? sum / count : 1f;
+    }
+
+    /// <summary>3.7 §4.3：最近敌方单位距离（世界单位，相对锚点）与位置（Sally 推进目标）。</summary>
+    private void EvaluateClosestEnemy(out float dist, out Vector2 pos)
+    {
+        dist = float.MaxValue;
+        pos = Vector2.zero;
+        if (_controller.Anchor == null) return;
+        Vector2 anchorPos = _controller.Anchor.position;
+        var allUnits = FindObjectsByType<UnitController>(FindObjectsSortMode.None);
+        foreach (var u in allUnits)
+        {
+            if (u == null || u.Data == null || u.Data.faction == _controller.faction) continue;
+            float d = Vector2.Distance(anchorPos, u.transform.position);
+            if (d < dist)
+            {
+                dist = d;
+                pos = u.transform.position;
+            }
+        }
     }
 }

@@ -55,7 +55,7 @@ MonoBehaviour:
   formationChaseRangeCells: 2
   formationSwitchDebounce: 1
   formationCasualtyDebounce: 1
-  breakThreshold: 0.8
+  breakThreshold: 1.0
   breakReleaseThreshold: 0.7
   breakLevelWeight: 0.5
   breakConfirmUp: 0.3
@@ -94,7 +94,7 @@ MonoBehaviour:
   persistDamageMargin: 0
   persistBenefitWeakDefense: 0.2
   persistSpeedRatio: 1.1
-  persistBenefitSpeed: 0.45
+  persistBenefitSpeed: 0.3
   workResistScale: 0.5
   l2FullPowerThreatGate: 0.3
   l2ResistBase: 0.5
@@ -113,14 +113,14 @@ MonoBehaviour:
   countFactorFullCount: 5
   closeRangeMinRaw: 0.5
   hotspotSupportIntensity: 0.6
-  formationOrderIntensity: 6
+  formationOrderIntensity: 4.5
   formationOrderBoost: 6
-  formationOrderBoostDuration: 2
+  formationOrderBoostDuration: 1.0
   fbDecisionInterval: 1
   fbHeatEngage: 0.3
   fbHeatCharge: 0.6
   fbSurvivalRetreatGate: 0.4
-  fbSupportSearchRadius: 110
+  fbSupportSearchRadius: 150
   fbHotspotMaxAge: 10
   lodActiveThinkHz: 10
   lodSemiThinkHz: 2

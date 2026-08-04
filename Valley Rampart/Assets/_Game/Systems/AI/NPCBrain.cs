@@ -305,6 +305,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             _executor.Execute(in _lastCmd, Time.deltaTime, GetCellSize());
         }
+
+        // 骑兵冲锋状态机（3.6 §5.3 三态：准备→突进→撞击→第二击；每帧推进）
+        TickCharge();
     }
 
     /// <summary>
@@ -486,6 +489,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ④ 攻击链路保留（与 Executor 并行，不进 BehaviorExecutor）
         UpdateCombatRegistration(in ctx);
 
+        // ④b 移速决策（3.6 §六，可训练）：追击中按 speedChaseBoost 提速（平常 walkSpeed / 追击最大 runSpeed）
+        if (_chaseTarget != null && cmd.Module == BehaviorModule.MoveTowards)
+        {
+            cmd.Speed = _profession.walkSpeed
+                + (_profession.runSpeed - _profession.walkSpeed) * _config.speedChaseBoost;
+        }
+
         // ⑤ 缓存 cmd（Execute 在 Update 里每帧调用，持续移动）
         _lastCmd = cmd;
 
@@ -663,6 +673,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// </summary>
     private void UpdateCombatRegistration(in FactorContext ctx)
     {
+        // 骑兵冲锋（3.6 §5.3 三态）：独立于射程攻击，扫感知列表触发（目标在 chargeRange 内即可）
+        TryStartChargeFromPerception(ctx.CellSize);
+
         FocusDecision focus = ctx.FocusDecision;
         bool shouldAttack = false;
         IDamageable targetEnemy = null;
@@ -706,13 +719,34 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             if (!ReferenceEquals(targetEnemy, _currentAttackTarget))
             {
                 StopAttacking();
+                var ammo = _profession.ammo;
                 var profile = new AttackProfile
                 {
                     attack = _profession.attack,
                     range = _profession.attackRange,
                     cd = _profession.attackCD,
                     isRanged = _profession.isRanged,
-                    projectileSpeed = _profession.projectileSpeed
+                    projectileSpeed = _profession.projectileSpeed,
+                    // 弹药（3.6 §三：AmmoDef 拉平）
+                    projectileType = ammo != null ? ammo.ammoType : ProjectileType.Arrow,
+                    pierceLevel = ammo != null ? ammo.pierceLevel : 1,
+                    aoeRadiusCells = ammo != null ? ammo.aoeRadiusCells : 0f,
+                    aoeFalloff = ammo != null ? ammo.aoeFalloff : 0f,
+                    ballisticType = ammo != null ? ammo.ballisticType : BallisticType.Lob,
+                    arcHeightCells = ammo != null ? ammo.arcHeightCells : 0f,
+                    effectType = ammo != null && ammo.effect != null ? ammo.effect.type : GroundEffectType.None,
+                    effectRadiusCells = ammo != null && ammo.effect != null ? ammo.effect.radiusCells : 0f,
+                    effectDuration = ammo != null && ammo.effect != null ? ammo.effect.duration : 0f,
+                    effectTickInterval = ammo != null && ammo.effect != null ? ammo.effect.tickInterval : 0f,
+                    effectPower = ammo != null && ammo.effect != null ? ammo.effect.power : 0f,
+                    effectMaxTargets = ammo != null && ammo.effect != null ? ammo.effect.maxTargets : 0,
+                    // 韧性 + 骑兵冲锋（3.6 §5.3，SO 直读）
+                    isCavalry = _profession.isCavalry,
+                    chargeDamage = _profession.chargeDamage,
+                    chargeRangeCells = _profession.chargeRangeCells,
+                    chargePairGap = _profession.chargePairGap,
+                    chargeGroupCooldown = _profession.chargeGroupCooldown,
+                    chargeDamageReduce = _profession.chargeDamageReduce,
                 };
                 if (DamageSystem.Instance != null && DamageSystem.Instance.RegisterAttack(_self, targetEnemy, profile))
                     _currentAttackTarget = targetEnemy;
@@ -731,6 +765,186 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             DamageSystem.Instance?.Unregister(_self);
             _currentAttackTarget = null;
         }
+    }
+
+    // ===== 骑兵冲锋（3.6 §5.3 四态：0=None 1=准备 2=突进 3=第二击等待；免伤 70% 突进中生效）=====
+
+    /// <summary>本单位的 UnitController（冲锋状态挂在它身上）。</summary>
+    private UnitController SelfUnit => _self as UnitController;
+
+    // 突进状态（状态 2 期间有效）
+    private Vector2 _chargeStart;      // 突进起点（线段扫描基准）
+    private Vector2 _chargeDir;        // 突进方向（单位化）
+    private Vector2 _chargeEnd;        // 突进终点（起点 + dir × chargeRange）
+    private float _chargeTraveled;     // 累计位移
+    private readonly HashSet<UnitController> _chargeHit = new HashSet<UnitController>();  // 已击飞（防重复）
+
+    /// <summary>独立触发冲锋：扫感知列表找 chargeRange 内目标（不等近战射程，冲锋 4 格生效）。</summary>
+    private void TryStartChargeFromPerception(float cellSize)
+    {
+        if (_profession == null || !_profession.isCavalry) return;
+        if (SelfUnit == null || SelfUnit.ChargeState != 0) return;
+        if (Time.time < SelfUnit.ChargeReadyTime) return;
+
+        float rangeWorld = _profession.chargeRangeCells * cellSize;
+        UnitController best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < _nearbyEnemies.Count; i++)
+        {
+            var e = _nearbyEnemies[i];
+            if (e == null || e.CurrentHp <= 0) continue;
+            if (!(e is UnitController uc)) continue;
+            float d = Vector2.Distance(transform.position, uc.transform.position);
+            if (d <= rangeWorld && d < bestDist)
+            {
+                bestDist = d;
+                best = uc;
+            }
+        }
+        if (best != null)
+            TryStartCharge(best, cellSize);
+    }
+
+    /// <summary>触发冲锋：进入准备态（下帧突进）。</summary>
+    private void TryStartCharge(UnitController target, float cellSize)
+    {
+        if (!_profession.isCavalry) return;
+        if (SelfUnit == null || SelfUnit.ChargeState != 0) return;
+        if (Time.time < SelfUnit.ChargeReadyTime) return;
+        if (target == null || !target.IsAlive || target.CurrentHp <= 0) return;
+
+        float rangeWorld = _profession.chargeRangeCells * cellSize;
+        if (Vector2.Distance(transform.position, target.transform.position) > rangeWorld) return;
+
+        SelfUnit.ChargeState = 1;
+        SelfUnit.ChargeTarget = target;
+    }
+
+    /// <summary>
+    /// 每帧推进冲锋状态机（Update 调）：
+    ///   1 准备 → 2 突进（高速连续位移 + 逐帧扫路径击飞）→ 3 第二击等待 → 0 组冷却。
+    /// 3.6 §5.3 穿透冲锋：冲满 chargeRange（4 格）穿过目标到后排，路径上所有敌对单位被击飞（韧性决定距离）。
+    /// </summary>
+    private void TickCharge()
+    {
+        if (_profession == null || !_profession.isCavalry) return;
+        if (SelfUnit == null) return;
+
+        float cellSize = GetCellSize();
+
+        // 第二击等待（chargePairGap 0.3s）
+        if (SelfUnit.ChargeState == 3)
+        {
+            if (Time.time >= SelfUnit.ChargeSecondTime)
+            {
+                var t2 = SelfUnit.ChargeTarget;
+                SelfUnit.ChargeState = 0;
+                SelfUnit.ChargeTarget = null;
+                SelfUnit.ChargeReadyTime = Time.time + _profession.chargeGroupCooldown;
+                if (t2 != null && t2.IsAlive && t2.CurrentHp > 0)
+                    DamageSystem.Instance?.ApplyDamage(_self, t2, (int)_profession.chargeDamage);
+            }
+            return;
+        }
+
+        // 1 准备：锁定方向与终点，下帧开始突进
+        if (SelfUnit.ChargeState == 1)
+        {
+            var t = SelfUnit.ChargeTarget;
+            if (t == null || !t.IsAlive || t.CurrentHp <= 0)
+            {
+                SelfUnit.ChargeState = 0;
+                SelfUnit.ChargeTarget = null;
+                return;
+            }
+            _chargeStart = (Vector2)transform.position;
+            _chargeDir = ((Vector2)t.transform.position - _chargeStart).normalized;
+            if (_chargeDir == Vector2.zero) _chargeDir = Vector2.right;
+            _chargeEnd = _chargeStart + _chargeDir * (_profession.chargeRangeCells * cellSize);
+            _chargeTraveled = 0f;
+            _chargeHit.Clear();
+            SelfUnit.ChargeState = 2;
+            return;
+        }
+
+        // 2 突进：chargeSpeed 高速连续位移（非瞬移），每帧扫上帧→本帧线段击飞
+        if (SelfUnit.ChargeState == 2)
+        {
+            float rangeWorld = _profession.chargeRangeCells * cellSize;
+            float step = _profession.chargeSpeed * Time.deltaTime;
+            float travelBefore = _chargeTraveled;
+            _chargeTraveled += step;
+            bool reachEnd = _chargeTraveled >= rangeWorld;
+            float travel = reachEnd ? rangeWorld : _chargeTraveled;
+
+            Vector2 newPos = _chargeStart + _chargeDir * travel;
+            // 3.7 P1.5：冲锋撞墙即止（城墙阻挡冲锋路径，骑兵不穿墙；拒马=减速带不挡，冲过正常结算）
+            if (SelfUnit.IsBlockedByFortification(newPos))
+            {
+                SelfUnit.ChargeState = 0;
+                SelfUnit.ChargeTarget = null;
+                SelfUnit.ChargeReadyTime = Time.time + _profession.chargeGroupCooldown;
+                return;
+            }
+            SelfUnit.Teleport(newPos);
+
+            // 扫线段（上帧位置 → 本帧位置）内的敌对单位
+            float lastX = _chargeStart.x + _chargeDir.x * travelBefore;
+            float curX = _chargeStart.x + _chargeDir.x * travel;
+            ChargeSweep(Mathf.Min(lastX, curX), Mathf.Max(lastX, curX), cellSize);
+
+            if (reachEnd)
+            {
+                SelfUnit.ChargeState = 3;
+                SelfUnit.ChargeSecondTime = Time.time + _profession.chargePairGap;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 路径击飞（3.6 §5.4）：x1→x2 线段上的敌对单位被击飞（动能+θ 模型，韧性决定距离），
+    /// 主目标首次被撞到时吃冲锋伤害 80。工事/机器免疫，击飞中打断攻击。
+    /// </summary>
+    private void ChargeSweep(float x1, float x2, float cellSize)
+    {
+        var enemies = QueryUnitsInRangeX(x1, x2, cellSize);
+        foreach (var uc in enemies)
+        {
+            if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+            if (ReferenceEquals(uc, SelfUnit)) continue;
+            if (_chargeHit.Contains(uc)) continue;   // 已撞飞过，不重复结算
+            if (uc.GetFaction() == _self.GetFaction() || uc.GetFaction() == Faction.None) continue;
+            if (uc.fortification != null) continue;                              // 工事免疫
+            if (uc.Data is NpcProfessionDef nd && nd.isStatic) continue;         // 机器免疫
+
+            _chargeHit.Add(uc);
+
+            // 击飞（3.6 §5.4：动能+θ 模型，韧性决定距离）
+            CombatRules.ComputeKnockback(_profession.chargeDamage, uc.Toughness,
+                out float distWorld, out float dur);
+            Vector2 kbDir = _chargeDir;
+            if (Random.value > 0.8f) kbDir = -_chargeDir;   // 80% 沿冲击 / 20% 反向
+            DamageSystem.Instance?.TryKnockback(uc, kbDir, distWorld, dur);
+
+            // 主目标吃冲锋伤害 80（首次撞到时结算）
+            if (ReferenceEquals(uc, SelfUnit.ChargeTarget))
+                DamageSystem.Instance?.ApplyDamage(_self, uc, (int)_profession.chargeDamage);
+        }
+    }
+
+    /// <summary>区间查询：x1→x2 范围内格子的单位（穿透冲锋路径扫描）。</summary>
+    private List<UnitController> QueryUnitsInRangeX(float x1, float x2, float cellSize)
+    {
+        var result = new List<UnitController>();
+        if (GridSystem.Instance == null) return result;
+        int c1 = GridSystem.Instance.WorldToCoord(new Vector2(x1, 0)).x;
+        int c2 = GridSystem.Instance.WorldToCoord(new Vector2(x2, 0)).x;
+        for (int cx = c1; cx <= c2; cx++)
+        {
+            for (int y = 0; y <= 1; y++)
+                result.AddRange(GridSystem.Instance.GetUnitsInCell(new GridCoord(cx, y)));
+        }
+        return result;
     }
 
     // ===== 切换历史 =====

@@ -18,7 +18,7 @@ MonoBehaviour:
   runSpeed: 5
   maxHp: 150
   attack: 7
-  defense: 40
+  defense: 45
   attackRange: 1
   attackCD: 1.2
   isRanged: 0

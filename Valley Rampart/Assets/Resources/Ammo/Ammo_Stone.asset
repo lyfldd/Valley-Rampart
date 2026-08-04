@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb56ca60068733843b44ec5b58f39694, type: 3}
+  m_Name: Ammo_Stone
+  m_EditorClassIdentifier: 
+  ammoType: 3
+  pierceLevel: 3
+  aoeRadiusCells: 2
+  aoeFalloff: 0.5
+  ballisticType: 2
+  arcHeightCells: 4
+  effect: {fileID: 0}

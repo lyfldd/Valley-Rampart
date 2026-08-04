@@ -15,7 +15,7 @@ public struct FormationMember
 {
     public NPCBrain Brain;          // 成员大脑（下发军令入口）
     public UnitController Unit;     // 成员单位（存活检测/死亡监听）
-    public Occupation Role;         // 兵种（Warrior 近战 / Archer 弓手）
+    public Occupation Role;         // 兵种（3.7：全兵种入编，按角色族填槽）
     public Vector2Int SlotOffset;   // 当前分配的槽位偏移（cell 单位）
 }
 
@@ -70,6 +70,8 @@ public class FormationController : MonoBehaviour
     private float _royalUntil;
     // 阵型朝向：1=向右进攻（默认），-1=向左进攻。AssignSlots 时 offset.x *= _formationDirection
     private int _formationDirection = 1;
+    /// <summary>自主补员上次扫描时间戳（3.7 §4.2：周期扫描 + 防抖）</summary>
+    private float _lastAutoRecruitTime;
 
     /// <summary>当前意图</summary>
     public TacticIntent CurrentIntent => _currentIntent;
@@ -79,6 +81,8 @@ public class FormationController : MonoBehaviour
     public UnitController GeneralUnit => _generalUnit;
     /// <summary>成员数</summary>
     public int MemberCount => _members.Count;
+    /// <summary>编队成员数上限（标准满编 − 将军位；守城编队无将军，多 1 人补将军槽）</summary>
+    public int MaxMemberCount => FormationDef.StandardSize - (isGarrison ? 0 : 1);
     /// <summary>有效军令强度（3.0.1_8 §七：切换瞬间提强度保底期内返回 boost 值，否则正常值；值住 AttentionTuningConfig）</summary>
     public float EffectiveOrderIntensity => Time.time < _boostUntil
         ? (_config != null ? _config.formationOrderBoost : 6f)
@@ -135,20 +139,27 @@ public class FormationController : MonoBehaviour
     /// <summary>
     /// 初始化为守城编队（无将军，绑城墙锚点）。
     /// 用于运行时 AddComponent 后设置 isGarrison + 锚点（Awake 时 isGarrison 默认 false，_anchor 未设，需显式调）。
+    /// 3.7 P1 审查修复：守城编队也挂 FormationBrain（Sally 出城迎战/守撤意图自决驱动）。
     /// </summary>
     public void InitGarrison(Transform wallAnchor)
     {
         isGarrison = true;
         _anchor = wallAnchor != null ? wallAnchor : transform;
         _generalUnit = null;
+        // 守城编队无将军，但军队级大脑（意图自决）仍需挂载——否则守城意图恒 Defense，
+        // 3.7 §4.3 Sally（守城+城墙健康+敌压近→出城）永远不会触发。
+        var brain = GetComponent<FormationBrain>();
+        if (brain == null) brain = gameObject.AddComponent<FormationBrain>();
+        brain.Init(this);
     }
 
     // ===== 招募（§1.2，绕开 ScheduleCenterStub 空壳自管）=====
 
     /// <summary>
-    /// 招募编队成员（P0 简化：从场景查 Human_Player 阵营士兵，按满编 (3 近战 + 2 弓手) 招）。
-    /// 满编 6 = 1 将军 + 3 近战 + 2 弓手。
-    /// 守城编队（isGarrison=true）招 5 成员（无将军，城墙锚点）。
+    /// 招募编队成员（3.7 §4.1 编队构成自适应：全兵种按角色族优先级填，不要求填满）。
+    /// 角色族顺序：抗线（盾卫/重装/战士）→ 输出（弓手/弩手/法师/大法师）→ 辅助（治疗/主教）→ 机动（骑兵）。
+    /// 上限 = MaxMemberCount（标准满编 − 将军位；守城编队无将军，多 1 人补将军槽）。
+    /// 有可用兵就招，没有就残编——不硬编码固定 3 近 2 弓阵容。
     /// </summary>
     public void RecruitStandard()
     {
@@ -159,38 +170,18 @@ public class FormationController : MonoBehaviour
             return;
         }
 
-        int targetMelee = 3;  // 不含将军
-        int targetArcher = 2;
-        if (isGarrison)
-        {
-            // 守城编队无将军，多招 1 近战补将军槽
-            targetMelee = 4;
-        }
+        int maxMembers = MaxMemberCount;
 
-        int haveMelee = CountRole(Occupation.Warrior);
-        int haveArcher = CountRole(Occupation.Archer);
-
-        // 查场景内未编队的 Human_Player 士兵
+        // 查场景内未编队的同阵营可作战单位（全兵种，按角色族优先级排序）
         var candidates = FindIdleSoldiers();
         foreach (var brain in candidates)
         {
-            if (_members.Count >= FormationDef.StandardSize - (isGarrison ? 0 : 1)) break;
-
-            Occupation role = brain.GetComponent<UnitController>().Data.occupation;
-            if (role == Occupation.Warrior && haveMelee < targetMelee)
-            {
-                AddMember(brain, Occupation.Warrior);
-                haveMelee++;
-            }
-            else if (role == Occupation.Archer && haveArcher < targetArcher)
-            {
-                AddMember(brain, Occupation.Archer);
-                haveArcher++;
-            }
+            if (_members.Count >= maxMembers) break;
+            AddMember(brain, brain.GetComponent<UnitController>().Data.occupation);
         }
 
         ApplyFormation();
-        Debug.Log($"[FormationController] 招募完成：{MemberCount} 成员（近战 {haveMelee}/弓手 {haveArcher}），锚点={(_anchor != null ? _anchor.name : "null")}");
+        Debug.Log($"[FormationController] 自适应招募完成：{MemberCount}/{maxMembers} 成员，锚点={(_anchor != null ? _anchor.name : "null")}");
     }
 
     /// <summary>添加成员并下发军令</summary>
@@ -207,7 +198,10 @@ public class FormationController : MonoBehaviour
         _members.Add(member);
     }
 
-    /// <summary>查找场景内未编队的 Human_Player 士兵（Warrior/Archer）</summary>
+    /// <summary>
+    /// 查找场景内未编队的同阵营可作战单位（3.7 §4.1：全兵种，排除工人/君主/静态工事）。
+    /// 返回按角色族优先级排序（抗线 → 输出 → 辅助 → 机动），招募时优先填抗线前排。
+    /// </summary>
     private List<NPCBrain> FindIdleSoldiers()
     {
         var result = new List<NPCBrain>();
@@ -219,11 +213,94 @@ public class FormationController : MonoBehaviour
             if (unit == null || unit.Data == null) continue;
             // 3.0.1_6 §4.3：招募只招本阵营空闲士兵（敌方将军招 Undead，不抢我方兵）
             if (unit.Data.faction != faction) continue;
-            if (unit.Data.occupation != Occupation.Warrior && unit.Data.occupation != Occupation.Archer) continue;
+            // 3.7：全兵种入编，但排除工人/君主/静态工事（机器/塔/拒马/墙/门不参与编队移动）
+            if (!IsRecruitable(unit.Data.occupation)) continue;
             if (brain.HasFormationSlot) continue;  // 已编队
             result.Add(brain);
         }
+        // 角色族优先级排序（抗线优先，残编时保前排抗线）
+        result.Sort((a, b) =>
+        {
+            int pa = GetRolePriority(a.GetComponent<UnitController>().Data.occupation);
+            int pb = GetRolePriority(b.GetComponent<UnitController>().Data.occupation);
+            return pa.CompareTo(pb);
+        });
         return result;
+    }
+
+    /// <summary>是否可编入（3.7：工人/君主/静态工事排除，其余全兵种可编）</summary>
+    private static bool IsRecruitable(Occupation occ)
+    {
+        switch (occ)
+        {
+            case Occupation.Civilian:      // 工人：非战斗单位
+            case Occupation.Ruler:         // 君主：玩家控制
+            case Occupation.SiegeMachine:  // 静态机器/工事：不参与编队移动
+            case Occupation.Ballista:
+            case Occupation.ArrowTower:
+            case Occupation.CrossbowTower:
+            case Occupation.MagicTower:
+            case Occupation.Barricade:
+            case Occupation.Wall:
+            case Occupation.Gate:
+                return false;
+            default: return true;
+        }
+    }
+
+    /// <summary>角色族优先级（3.7 §4.1：越小越优先。抗线→输出→辅助→机动）</summary>
+    private static int GetRolePriority(Occupation occ)
+    {
+        switch (occ)
+        {
+            case Occupation.ShieldGuard:
+            case Occupation.HeavyWarrior:
+            case Occupation.Warrior:
+                return 0;   // 抗线
+            case Occupation.Archer:
+            case Occupation.Crossbowman:
+            case Occupation.Mage:
+            case Occupation.Archmage:
+                return 1;   // 输出
+            case Occupation.Healer:
+            case Occupation.Bishop:
+                return 2;   // 辅助
+            case Occupation.Cavalry:
+            case Occupation.General:
+                return 3;   // 机动/统帅
+            default: return 4;
+        }
+    }
+
+    /// <summary>近战族（3.7：抗线 + 机动；槽位 MeleeOnly/GeneralOnly 填此类）</summary>
+    private static bool IsMeleeRole(Occupation occ)
+    {
+        switch (occ)
+        {
+            case Occupation.Warrior:
+            case Occupation.HeavyWarrior:
+            case Occupation.ShieldGuard:
+            case Occupation.Cavalry:
+            case Occupation.General:
+                return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>远程族（3.7：输出 + 辅助；槽位 RangedOnly 填此类）</summary>
+    private static bool IsRangedRole(Occupation occ)
+    {
+        switch (occ)
+        {
+            case Occupation.Archer:
+            case Occupation.Crossbowman:
+            case Occupation.Mage:
+            case Occupation.Archmage:
+            case Occupation.Healer:
+            case Occupation.Bishop:
+                return true;
+            default: return false;
+        }
     }
 
     // ===== 阵型应用（查表 + 槽位分配 + 下发军令）=====
@@ -242,9 +319,10 @@ public class FormationController : MonoBehaviour
             return;
         }
 
+        // 3.7：查表改传角色族数量（近战族/远程族），Lookup 按意图+构成匹配度自选阵型
         FormationDef def = isGarrison
             ? formationTable.LookupGarrison()
-            : formationTable.Lookup(_currentIntent, _currentLine, CountRole(Occupation.Warrior), CountRole(Occupation.Archer));
+            : formationTable.Lookup(_currentIntent, _currentLine, CountRoleFamily(true), CountRoleFamily(false));
 
         if (def == null)
         {
@@ -268,13 +346,13 @@ public class FormationController : MonoBehaviour
     /// </summary>
     private void AssignSlots(FormationDef def)
     {
-        // 分两组：近战（含将军算近战，但将军不在此列表）/ 弓手
+        // 3.7：按角色族分组（近战族=抗线+机动，远程族=输出+辅助；替代 P0 只分 Warrior/Archer）
         var melee = new List<FormationMember>();
         var archer = new List<FormationMember>();
         foreach (var m in _members)
         {
-            if (m.Role == Occupation.Archer) archer.Add(m);
-            else melee.Add(m);
+            if (IsRangedRole(m.Role)) archer.Add(m);
+            else melee.Add(m);   // 近战族 + 未分类兜底算近战
         }
 
         bool[] occupied = new bool[def.slots.Length];
@@ -481,8 +559,31 @@ public class FormationController : MonoBehaviour
             Debug.Log("[FormationController] 君主令过期，军令回落（royal 标记清除）。");
         }
 
+        // 3.7 §4.2 自主补员：编队不满员 + 无受击静默期 → 周期扫描补员（战斗状态停止自主组队）
+        float autoRecruitInterval = _config != null ? _config.formationAutoRecruitInterval : 5f;
+        if (Time.time - _lastAutoRecruitTime >= autoRecruitInterval)
+        {
+            _lastAutoRecruitTime = Time.time;
+            TryAutoRecruit();
+        }
+
         // 进攻推进 P0 简化：将军 brain 自驱动（靠威胁焦点），此处不直接操控将军
         // P1：注入 TaskStimulus 到将军 brain（目标=AdvanceTarget）
+    }
+
+    /// <summary>
+    /// 3.7 §4.2 自主补员入口：编队不满员 + 减员静默期已过 + 无待重排 → 走补员。
+    /// 周期由 _config.formationAutoRecruitInterval 控制（Update 内节流）。
+    /// </summary>
+    private void TryAutoRecruit()
+    {
+        if (_members.Count >= MaxMemberCount) return;
+        // 战斗状态停止自主组队：最近一次阵亡在静默期内 → 跳过（无受击 10s 语义，值住 SO）
+        float quiet = _config != null ? _config.formationAutoRecruitQuietSeconds : 10f;
+        if (Time.time - _lastCasualtyTime < quiet) return;
+        // 减员防抖重排未完成 → 先重排再补员
+        if (_pendingReform) return;
+        RecruitReinforcement();
     }
 
     // ===== 解散与状态清理（§15.5 ClearFormationState）=====
@@ -513,43 +614,27 @@ public class FormationController : MonoBehaviour
     }
 
     /// <summary>
-    /// 补充成员（§15.4 补充机制）。
-    /// P0 简化：手动触发（debug 热键）；自动触发（region 热度低+无受击 10s）依赖 LOD，P1 落地。
-    /// 走与初始招募同一流程（从空闲池/场景未编队士兵招）。
+    /// 补充成员（3.7 §4.2 补员机制，全兵种自适应）。
+    /// 走与初始招募同一流程（FindIdleSoldiers 全兵种 + 角色族优先级 + 不填满）。
+    /// 手动触发（debug 热键）与自主补员（Update 周期扫描）共用。
     /// </summary>
     public void RecruitReinforcement()
     {
         var candidates = FindIdleSoldiers();
         if (candidates.Count == 0)
         {
-            Debug.Log("[FormationController] 补员失败：无可招募的空闲士兵。");
+            Debug.Log("[FormationController] 补员失败：无可招募的同阵营空闲单位。");
             return;
         }
 
-        // 按当前缺员补
-        int targetMelee = isGarrison ? 4 : 3;
-        int targetArcher = 2;
-        int haveMelee = CountRole(Occupation.Warrior);
-        int haveArcher = CountRole(Occupation.Archer);
-
+        int maxMembers = MaxMemberCount;
         foreach (var brain in candidates)
         {
-            if (_members.Count >= FormationDef.StandardSize - (isGarrison ? 0 : 1)) break;
-            var unit = brain.GetComponent<UnitController>();
-            Occupation role = unit.Data.occupation;
-            if (role == Occupation.Warrior && haveMelee < targetMelee)
-            {
-                AddMember(brain, Occupation.Warrior);
-                haveMelee++;
-            }
-            else if (role == Occupation.Archer && haveArcher < targetArcher)
-            {
-                AddMember(brain, Occupation.Archer);
-                haveArcher++;
-            }
+            if (_members.Count >= maxMembers) break;
+            AddMember(brain, brain.GetComponent<UnitController>().Data.occupation);
         }
         ApplyFormation();
-        Debug.Log($"[FormationController] 补员完成：{MemberCount} 成员");
+        Debug.Log($"[FormationController] 补员完成：{MemberCount}/{maxMembers} 成员");
     }
 
     private void OnDestroy()
@@ -566,12 +651,13 @@ public class FormationController : MonoBehaviour
 
     // ===== 辅助 =====
 
-    private int CountRole(Occupation role)
+    /// <summary>统计角色族成员数（3.7：melee=true 近战族 / false 远程族，查表选阵用）</summary>
+    private int CountRoleFamily(bool melee)
     {
         int count = 0;
         foreach (var m in _members)
         {
-            if (m.Role == role) count++;
+            if (melee ? IsMeleeRole(m.Role) : IsRangedRole(m.Role)) count++;
         }
         return count;
     }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Barricade
   m_EditorClassIdentifier: 
   faction: 1
-  occupation: 0
+  occupation: 16
   walkSpeed: 0
   runSpeed: 0
   maxHp: 100
@@ -33,3 +33,23 @@ MonoBehaviour:
   equipmentSlotCount: 0
   wanderRadiusCells: 0
   isStatic: 1
+  ammo: {fileID: 0}
+  baseToughness: 10
+  toughnessDefenseScale: 0.2
+  baseDamageReduce: 0
+  protectPower: 0.2
+  isHeavyArmor: 0
+  isCavalry: 0
+  chargeDamage: 80
+  chargeRangeCells: 4
+  chargeSpeed: 25
+  chargePairGap: 0.3
+  chargeGroupCooldown: 20
+  chargeDamageReduce: 0.7
+  fortification: {fileID: 11400000, guid: 8703a8ec46fe398489bc9529fc16d105, type: 2}
+  ammoMax: 0
+  ammoCostStone: 1
+  ammoCostFireball: 3
+  ammoCostMagic: 5
+  ammoResupplyDelay: 0
+  ammoConservationWeight: 0.5

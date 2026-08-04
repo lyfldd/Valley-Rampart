@@ -42,6 +42,21 @@ public class ProjectileManager : Singleton<ProjectileManager>
         public IDamageable attacker;
         public int attack;
         public GameObject visual;
+
+        // ===== 弹药（3.6 §三：穿透/AOE/弹道/效果）=====
+        public int pierceLevel;
+        public BallisticType ballisticType;
+        public float arcHeightCells;
+        public float aoeRadiusCells;
+        public float aoeFalloff;
+        public GroundEffectType effectType;
+        public float effectRadiusCells;
+        public float effectDuration;
+        public float effectTickInterval;
+        public float effectPower;
+        public int effectMaxTargets;
+        // 3.7 P1.2 弹药美术占位：弹丸类型（决定出池着色，复用单一 sprite + 色变）
+        public ProjectileType projectileType;
     }
 
     private readonly List<ProjectileData> _active = new();
@@ -86,6 +101,9 @@ public class ProjectileManager : Singleton<ProjectileManager>
         GameObject visual = GetFromPool();
         visual.transform.position = startPos;
         visual.SetActive(true);
+        // 3.7 P1.2：按弹药类型着色（复用单一 sprite，色变区分箭/弩/石/火/魔）
+        var sr = visual.GetComponent<SpriteRenderer>();
+        if (sr != null) sr.color = GetProjectileColor(profile.projectileType);
 
         _active.Add(new ProjectileData
         {
@@ -96,7 +114,21 @@ public class ProjectileManager : Singleton<ProjectileManager>
             duration = duration,
             attacker = attacker,
             attack = profile.attack,
-            visual = visual
+            visual = visual,
+            // 弹药（3.6 §三）
+            pierceLevel = profile.pierceLevel,
+            ballisticType = profile.ballisticType,
+            arcHeightCells = profile.arcHeightCells,
+            aoeRadiusCells = profile.aoeRadiusCells,
+            aoeFalloff = profile.aoeFalloff,
+            effectType = profile.effectType,
+            effectRadiusCells = profile.effectRadiusCells,
+            effectDuration = profile.effectDuration,
+            effectTickInterval = profile.effectTickInterval,
+            effectPower = profile.effectPower,
+            effectMaxTargets = profile.effectMaxTargets,
+            // 3.7 P1.2：弹药类型（出池着色用）
+            projectileType = profile.projectileType,
         });
     }
 
@@ -142,6 +174,10 @@ public class ProjectileManager : Singleton<ProjectileManager>
     /// </summary>
     private void OnProjectileArrived(ProjectileData p, float hitRadiusWorld)
     {
+        // 越墙判定（3.6 §5）：低抛被工事挡（弧高 ≤ 工事高度），穿透等级决定对墙伤害
+        if (CheckWallBlock(p))
+            return;
+
         // 查 GridSystem 附近格子的单位
         List<UnitController> candidates = QueryNearbyUnits(p.targetPos, hitRadiusWorld);
 
@@ -170,8 +206,56 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (bestTarget != null)
         {
             DamageSystem.Instance?.ApplyDamage(p.attacker, bestTarget, p.attack);
+
+            // 溅射（3.6 §3.3 单段 AOE）：命中点半径内敌对单位
+            if (p.aoeRadiusCells > 0f)
+                DamageSystem.Instance?.ApplyImpact(p.attacker, bestTarget.GetPosition(),
+                    p.attack, p.aoeRadiusCells, p.aoeFalloff);
+
+            // 地面效果落地（3.6 §3.4：火弹灼烧场/魔弹减速场）
+            if (p.effectType != GroundEffectType.None && GroundEffectManager.Instance != null)
+                GroundEffectManager.Instance.SpawnEffect(
+                    p.targetPos, p.attacker,
+                    p.effectType, p.effectRadiusCells, p.effectDuration,
+                    p.effectTickInterval, p.effectPower, p.effectMaxTargets);
         }
         // 无命中 = miss（原目标跑了且无人补位）
+    }
+
+    /// <summary>
+    /// 越墙判定（3.6 §5 抛物线体系）：低抛（Straight/Lob）查射手→落点线段上的工事，
+    /// 弧高 ≤ 工事高度 → 被挡（穿透够则对墙结算伤害，不够则无效）。
+    /// 高抛（HighArc）直接越墙。返回 true=被挡。
+    /// </summary>
+    private bool CheckWallBlock(ProjectileData p)
+    {
+        if (p.ballisticType == BallisticType.HighArc) return false; // 高抛越墙
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
+
+        int startCell = GridSystem.Instance.WorldToCoord(p.startPos).x;
+        int endCell = GridSystem.Instance.WorldToCoord(p.targetPos).x;
+        if (startCell == endCell) return false;
+
+        int dir = startCell < endCell ? 1 : -1;
+        for (int cx = startCell + dir; cx != endCell; cx += dir)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                var list = GridSystem.Instance.GetUnitsInCell(new GridCoord(cx, y));
+                foreach (var unit in list)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || uc.fortification == null) continue;
+                    var fort = uc.fortification;
+                    if (p.arcHeightCells > fort.heightCells) continue; // 弧高够 → 越过该工事
+                    // 被挡：穿透等级决定对墙伤害（3.6 §5.1）
+                    if (p.pierceLevel >= fort.defenseLevel)
+                        DamageSystem.Instance?.ApplyDamage(p.attacker, uc, p.attack);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>查目标位置附近格子内的单位（空间分区，复用 GridSystem）。</summary>
@@ -240,10 +324,28 @@ public class ProjectileManager : Singleton<ProjectileManager>
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = _runtimeSprite;
         sr.sortingOrder = SortingOrder;
-        sr.color = Color.yellow;
+        sr.color = Color.white;   // 3.7 P1.2：出池时按弹药类型着色，此处白底
         go.transform.localScale = Vector3.one * ProjectileScale;
         go.transform.SetParent(transform);
         return go;
+    }
+
+    /// <summary>
+    /// 3.7 P1.2 弹药美术占位：按弹药类型返回占位色（复用单一 sprite + 色变区分弹型）。
+    /// 色值区分度优先（观感次要），美术替换 sprite 后此映射可废弃。
+    /// </summary>
+    private static Color GetProjectileColor(ProjectileType type)
+    {
+        switch (type)
+        {
+            case ProjectileType.Arrow:    return new Color(1f, 0.9f, 0.3f);   // 黄：弓手箭
+            case ProjectileType.Bolt:     return new Color(0.3f, 0.9f, 0.9f); // 青：弩箭
+            case ProjectileType.HeavyBolt: return new Color(0.2f, 0.65f, 0.95f); // 深青：弩炮贯穿矢
+            case ProjectileType.Stone:    return new Color(0.62f, 0.62f, 0.62f); // 灰：投石
+            case ProjectileType.Fireball: return new Color(1f, 0.4f, 0.15f);  // 橙红：火弹（配 Burn 场）
+            case ProjectileType.Magic:    return new Color(0.75f, 0.35f, 0.95f); // 紫：魔弹（配 Slow 场）
+            default:                      return Color.yellow;                // 兜底
+        }
     }
 
     private void EnsureSprite()

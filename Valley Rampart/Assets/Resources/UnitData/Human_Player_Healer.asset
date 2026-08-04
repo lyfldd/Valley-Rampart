@@ -17,7 +17,7 @@ MonoBehaviour:
   walkSpeed: 3
   runSpeed: 6
   maxHp: 70
-  attack: 4
+  attack: 6
   defense: 12
   attackRange: 5
   attackCD: 1.5

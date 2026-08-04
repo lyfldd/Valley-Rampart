@@ -16,7 +16,7 @@ MonoBehaviour:
   occupation: 3
   walkSpeed: 3
   runSpeed: 6
-  maxHp: 100
+  maxHp: 110
   attack: 11
   defense: 20
   attackRange: 1

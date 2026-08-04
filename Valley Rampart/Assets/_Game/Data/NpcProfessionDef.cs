@@ -62,6 +62,67 @@ public class NpcProfessionDef : UnitData
     [Tooltip("静态单位（塔/墙/拒马/弩炮）：不参与 AI 决策、不移动、不逃逸；有攻击值的按 CD 攻击射程内敌人，attack=0 纯阻挡")]
     public bool isStatic = false;
 
+    [Header("弹药（3.6 §三 介质层，AmmoDef 独立资产）")]
+    [Tooltip("弹药行为模板（穿透/AOE/弹道/效果）。null=近战无弹药。ToSnapshot 拉平进快照")]
+    public AmmoDef ammo;
+
+    [Header("韧性（3.6 §4.2）")]
+    [Tooltip("职业基础韧性（弓手 5 / 战士 40 / 骑兵 50）。最终韧性 = base + defense × scale")]
+    public float baseToughness = 10f;
+
+    [Tooltip("防御力 → 韧性系数（SO 配置，训练校准）")]
+    public float toughnessDefenseScale = 0.2f;
+
+    [Header("免伤（3.6 §5.2 免伤词条体系）")]
+    [Tooltip("职业基础免伤（0-1，默认 0）。实际免伤 = Σ 各因子（+ 冲锋免伤 70% 等），clamp 到上限")]
+    public float baseDamageReduce = 0f;
+
+    [Header("保护者权重（3.7 保护力加权和，可训练）")]
+    [Tooltip("保护者权重（0-1）：保护 = 身边友军 protectPower 之和 ≥ protectThreshold。肉盾高/脆皮低；缺兵种也有保护力（不硬编码兵种表）")]
+    public float protectPower = 0.2f;
+    [Tooltip("重甲标记（3.7）：重装/盾卫等重甲单位，评分统计用（替代职业名字符串硬编码）")]
+    public bool isHeavyArmor = false;
+
+    [Header("骑兵冲锋（3.6 §5.3，仅 Cavalry 用）")]
+    [Tooltip("是否骑兵（冲锋能力开关）")]
+    public bool isCavalry = false;
+
+    [Tooltip("冲锋伤害（特殊技能，80）")]
+    public float chargeDamage = 80f;
+
+    [Tooltip("冲锋距离（格，4 格 = 中区块距离）")]
+    public float chargeRangeCells = 4f;
+
+    [Tooltip("冲锋突进速度（世界单位/秒，默认 25：4 格≈0.36s 冲完，快且过程连续）")]
+    public float chargeSpeed = 25f;
+
+    [Tooltip("组内两次间隔（秒，0.3）")]
+    public float chargePairGap = 0.3f;
+
+    [Tooltip("组间隔（秒，20）")]
+    public float chargeGroupCooldown = 20f;
+
+    [Tooltip("冲锋过程免伤（0-1，70%）")]
+    public float chargeDamageReduce = 0.7f;
+
+    [Header("工事（3.6 §4.4，墙/门/拒马/塔用）")]
+    [Tooltip("工事配置（墙/门/拒马/塔资产配此引用；非工事留空）。ToSnapshot 拉平进快照")]
+    public FortificationDef fortification;
+
+    [Header("弹药储备/补给（3.7 战争机器火力经济学，仅投掷机/弩炮用）")]
+    [Tooltip("弹容量（石弹槽位最大值，如投掷机 30）。弓手/弩手等兵种保持 0=无弹药模型")]
+    public int ammoMax = 0;
+    [Tooltip("石弹成本（1，最低，自动补给）")]
+    public float ammoCostStone = 1f;
+    [Tooltip("火弹成本（3，昂贵，有限储备不自动补）")]
+    public float ammoCostFireball = 3f;
+    [Tooltip("魔弹成本（5，昂贵，有限储备不自动补）")]
+    public float ammoCostMagic = 5f;
+    [Tooltip("补给延迟（秒，模拟工人从后方搬运往返）")]
+    public float ammoResupplyDelay = 0f;
+    [Tooltip("惜用权重 0-1（训练可调；弹药紧张时提高发射价值门槛）")]
+    public float ammoConservationWeight = 0.5f;
+
     /// <summary>
     /// 生成核内快照（M1 决策核提取，接缝 4）。
     /// 核内（AI.Core）只吃 ProfessionSnapshot，不引用本 SO。字段机械拷贝，改字段需同步 ProfessionSnapshot。
@@ -91,6 +152,48 @@ public class NpcProfessionDef : UnitData
             equipmentSlotCount = equipmentSlotCount,
             wanderRadiusCells = wanderRadiusCells,
             isStatic = isStatic,
+            // 弹药（AmmoDef → 快照拉平；null 兜底默认值）
+            projectileType = ammo != null ? ammo.ammoType : ProjectileType.Arrow,
+            pierceLevel = ammo != null ? ammo.pierceLevel : 1,
+            aoeRadiusCells = ammo != null ? ammo.aoeRadiusCells : 0f,
+            aoeFalloff = ammo != null ? ammo.aoeFalloff : 0f,
+            ballisticType = ammo != null ? ammo.ballisticType : BallisticType.Lob,
+            arcHeightCells = ammo != null ? ammo.arcHeightCells : 0f,
+            effectType = ammo != null && ammo.effect != null ? ammo.effect.type : GroundEffectType.None,
+            effectRadiusCells = ammo != null && ammo.effect != null ? ammo.effect.radiusCells : 0f,
+            effectDuration = ammo != null && ammo.effect != null ? ammo.effect.duration : 0f,
+            effectTickInterval = ammo != null && ammo.effect != null ? ammo.effect.tickInterval : 0f,
+            effectPower = ammo != null && ammo.effect != null ? ammo.effect.power : 0f,
+            effectMaxTargets = ammo != null && ammo.effect != null ? ammo.effect.maxTargets : 0,
+            // 韧性 + 免伤
+            baseToughness = baseToughness,
+            toughnessDefenseScale = toughnessDefenseScale,
+            baseDamageReduce = baseDamageReduce,
+            // 保护者权重（3.7 保护力加权和）+ 重甲标记
+            protectPower = protectPower,
+            isHeavyArmor = isHeavyArmor,
+            // 骑兵冲锋
+            isCavalry = isCavalry,
+            chargeDamage = chargeDamage,
+            chargeRangeCells = chargeRangeCells,
+            chargeSpeed = chargeSpeed,
+            chargePairGap = chargePairGap,
+            chargeGroupCooldown = chargeGroupCooldown,
+            chargeDamageReduce = chargeDamageReduce,
+            // 工事（FortificationDef → 快照拉平）
+            isFortification = fortification != null,
+            fortDefenseLevel = fortification != null ? fortification.defenseLevel : 0,
+            fortHeightCells = fortification != null ? fortification.heightCells : 1f,
+            fortBlocksMovement = fortification != null && fortification.blocksMovement,
+            fortPassable = fortification != null && fortification.passable,
+            fortMeleeDamageReduce = fortification != null ? fortification.meleeDamageReduce : 0f,
+            // 弹药储备/补给（3.7 战争机器火力经济学）
+            ammoMax = ammoMax,
+            ammoCostStone = ammoCostStone,
+            ammoCostFireball = ammoCostFireball,
+            ammoCostMagic = ammoCostMagic,
+            ammoResupplyDelay = ammoResupplyDelay,
+            ammoConservationWeight = ammoConservationWeight,
         };
     }
 }

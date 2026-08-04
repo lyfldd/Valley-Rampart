@@ -603,8 +603,10 @@ public class AIDebugUIManager : MonoBehaviour
         GameObject wallAnchor = GameObject.Find("WallAnchor_Left");
         if (wallAnchor == null)
         {
-            Debug.LogWarning("[AIDebugUI] 未找到 WallAnchor_Left，无法创建守城编队。");
-            return;
+            // 原 CombatTestSpawner.CreateWallAnchors 已随测试生成器删除，这里按需创建
+            wallAnchor = new GameObject("WallAnchor_Left");
+            wallAnchor.transform.position = new Vector2(-12f, -3f);
+            Debug.Log("[AIDebugUI] 未找到 WallAnchor_Left，已自动创建（-12,-3）。");
         }
         FormationController garrison = null;
         var all = FindObjectsByType<FormationController>(FindObjectsSortMode.None);

@@ -9,25 +9,25 @@ using System.Collections.Generic;
 /// <summary>
 /// 保护因子滞回量化器组件（§9，IMemoryComponent 实现，决策8）。
 /// HysteresisQuantizer 第二实例：Up=[3]/Down=[1]（1-3 滞回带，母文档 §6.4）-> level 0-1 二元。
-/// 输入 nearbyAllyCount，输出 ctx.HasProtection = (level >= 1)。
-/// P0 不扩谱系（保护因子只参与"威胁 2 有保护->谱系 2 谨慎 / 无保护->谱系 4 撤退"判定）。
+/// 3.7 升级：输入从 nearbyAllyCount（友军数）改为 protectPowerSum（保护力加权和），
+/// 阈值 = protectThreshold（可训练）。保护 = 身边友军 protectPower 之和 ≥ 阈值，训练师学"谁当保护者"。
+/// 输出 ctx.HasProtection = (level >= 1)。
 /// </summary>
 public class ProtectionHysteresisComponent : IMemoryComponent
 {
-    // 保护阈值是整数友军数，量化器用 float 输入，此处直接转
-    private int _upThreshold;
-    private int _downThreshold;
+    // 3.7 保护阈值（保护力加权和，float；滞回带用 protectThreshold 上下沿）
+    private float _upThreshold;
+    private float _downThreshold;
     private int _level;
     private float _upTimer;
     private float _downTimer;
 
     public ProtectionHysteresisComponent(TuningSnapshot config)
     {
-        // config.protectionUpThresholds=[3] / protectionDownThresholds=[1]
-        _upThreshold = config.protectionUpThresholds != null && config.protectionUpThresholds.Length > 0
-            ? config.protectionUpThresholds[0] : 3;
-        _downThreshold = config.protectionDownThresholds != null && config.protectionDownThresholds.Length > 0
-            ? config.protectionDownThresholds[0] : 1;
+        // 3.7 保护力加权和阈值（可训练）；滞回带 = 阈值 ± 0.4（保证有缓冲）
+        float prot = config.protectThreshold > 0f ? config.protectThreshold : 1f;
+        _upThreshold = prot;
+        _downThreshold = MathfX.Max(0.1f, prot * 0.6f);
     }
 
     /// <summary>当前是否有保护（level >= 1）</summary>
@@ -35,9 +35,9 @@ public class ProtectionHysteresisComponent : IMemoryComponent
 
     public void Tick(float dt, in FactorContext ctx)
     {
-        // 保护因子无"吃上一帧"约束，直接读本帧 nearbyAllyCount
-        int allyCount = ctx.NearbyAllyCount;
-        int target = allyCount >= _upThreshold ? 1 : (allyCount < _downThreshold ? 0 : _level);
+        // 保护因子无"吃上一帧"约束，直接读本帧保护力加权和
+        float protectSum = ctx.ProtectPowerSum;
+        int target = protectSum >= _upThreshold ? 1 : (protectSum < _downThreshold ? 0 : _level);
 
         if (target > _level)
         {

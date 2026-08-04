@@ -23,6 +23,8 @@ public struct FactorContext
     public float NightFactor;
     public int NearbyEnemyCount;
     public int NearbyAllyCount;
+    /// <summary>3.7 保护力加权和：身边友军 protectPower 之和（替代友军数判保护，训练师学谁当保护者）</summary>
+    public float ProtectPowerSum;
     public float NearestEnemyDist;
     public float PerceptionWorldRadius;
     public float AttackWorldRange;

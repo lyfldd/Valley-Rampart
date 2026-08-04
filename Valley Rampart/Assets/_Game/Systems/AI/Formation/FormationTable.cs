@@ -27,17 +27,59 @@ public class FormationTable : ScriptableObject
     [Tooltip("守城阵型（无将军，弓手上墙 + 近战堵口）")]
     public FormationDef garrisonFormation;
 
+    [Header("3.7 合法阵型列表（编队构成自适应：AI 按构成/意图自选）")]
+    [Tooltip("全部合法阵型（可多个同意图阵型供 AI 按构成选最优）。留空则回退用上方 P0 手配阵型去重")]
+    public List<FormationDef> formationList = new List<FormationDef>();
+
     /// <summary>
-    /// 按意图查阵型（P0 简化：单阵型直查；P1 扩为 Top-N 候选 + 分档权重）。
+    /// 合法阵型列表（3.7 §4.1：LookupAll，供编队构成自适应按意图+构成自选）。
+    /// formationList 非空用列表；空则回退收集 P0 手配阵型（去重），资产无需改造即生效。
+    /// </summary>
+    public FormationDef[] LookupAll()
+    {
+        var list = new List<FormationDef>();
+        if (formationList != null && formationList.Count > 0)
+        {
+            list.AddRange(formationList);
+        }
+        else
+        {
+            if (defenseFormation != null && !list.Contains(defenseFormation)) list.Add(defenseFormation);
+            if (chargeFormation != null && !list.Contains(chargeFormation)) list.Add(chargeFormation);
+            if (retreatFormation != null && !list.Contains(retreatFormation)) list.Add(retreatFormation);
+            if (garrisonFormation != null && !list.Contains(garrisonFormation)) list.Add(garrisonFormation);
+        }
+        return list.ToArray();
+    }
+
+    /// <summary>
+    /// 按意图查阵型（3.7 升级：从合法阵型列表按意图过滤 + 构成匹配度选最优）。
+    /// 构成匹配度 MatchScore：容量匹配（成员数 vs 槽数）+ 角色匹配（近战/远程 vs 槽位约束）。
+    /// formationList 空时回退 P0 单阵型直查。
     /// 守城编队（无将军）直接返回 garrisonFormation，不按意图查。
     /// </summary>
     public FormationDef Lookup(TacticIntent intent, BattleLine line, int meleeCount, int archerCount)
     {
-        // P0：忽略 line/meleeCount/archerCount，按意图直查
-        // 残编由 FormationController 在分配槽位时按 R2 残编紧凑规则压队尾
+        var all = LookupAll();
+        FormationDef best = null;
+        float bestScore = -1f;
+        foreach (var f in all)
+        {
+            if (f == null || f.intent != intent) continue;
+            float score = MatchScore(f, meleeCount, archerCount);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = f;
+            }
+        }
+        if (best != null) return best;
+
+        // 回退：P0 单阵型直查（列表无匹配意图的阵型时）
         switch (intent)
         {
-            case TacticIntent.Charge: return chargeFormation;
+            case TacticIntent.Charge:
+            case TacticIntent.Sally: return chargeFormation;   // 3.7 §4.3：出城迎战复用进攻阵型压上
             case TacticIntent.Retreat: return retreatFormation;
             case TacticIntent.Defense:
             default: return defenseFormation;
@@ -48,5 +90,28 @@ public class FormationTable : ScriptableObject
     public FormationDef LookupGarrison()
     {
         return garrisonFormation;
+    }
+
+    /// <summary>
+    /// 阵型-构成匹配度（0-1，越大越匹配）。
+    /// 容量匹配：槽数越接近成员数越高；角色匹配：近战/远程能填进的槽占比越高。
+    /// </summary>
+    private static float MatchScore(FormationDef f, int meleeCount, int archerCount)
+    {
+        if (f == null || f.slots == null || f.slots.Length == 0) return 0f;
+        int total = meleeCount + archerCount;
+        if (total <= 0) total = 1;
+
+        int meleeSlots = 0, rangedSlots = 0;
+        foreach (var s in f.slots)
+        {
+            if (s.role == SlotRole.MeleeOnly || s.role == SlotRole.GeneralOnly) meleeSlots++;
+            else if (s.role == SlotRole.RangedOnly) rangedSlots++;
+            else { meleeSlots++; rangedSlots++; }   // Any 两可
+        }
+
+        float capacityFit = 1f - Mathf.Abs(f.slots.Length - total) / (float)f.slots.Length;
+        float roleFit = (Mathf.Min(meleeCount, meleeSlots) + Mathf.Min(archerCount, rangedSlots)) / (float)total;
+        return capacityFit * 0.5f + roleFit * 0.5f;
     }
 }

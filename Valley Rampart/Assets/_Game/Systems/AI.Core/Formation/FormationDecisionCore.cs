@@ -58,6 +58,7 @@ public static class FormationDecisionCore
     ///   ① 残编 + 被压 → 撤退（先保住有生力量）
     ///   ② 远处战斗热点 + 本地无激战 → 支援（朝热点推进，ShouldAdvance=true）
     ///   ③ 高价值 + 敌压近 → 冲锋压上（军队敢承受代价）
+    ///   ③.5 守城 + 城墙健康 + 敌压近且近身 → 出城迎战（3.7 §4.3 Sally，ShouldAdvance=true）
     ///   ④ 敌接近 → 防守
     ///   ⑤ 低热度 → 维持现状（Valid=false，不频繁切换）
     /// </summary>
@@ -66,10 +67,15 @@ public static class FormationDecisionCore
         float survival,
         float value,
         bool hasRemoteHotspot,
+        bool isGarrison,
+        float wallHpRatio,
+        float enemyDist,
         float heatEngage,
         float heatCharge,
         float survivalRetreatGate,
-        float chargeValueGate)
+        float chargeValueGate,
+        float sallyWallHpGate,
+        float sallyEnemyDistGate)
     {
         // ① 残编 + 被压 → 撤退
         if (survival < survivalRetreatGate && heat > heatEngage)
@@ -82,6 +88,10 @@ public static class FormationDecisionCore
         // ③ 高价值 + 敌压近 → 冲锋压上（任务价值高，个体撤退被军令压住）
         if (heat > heatCharge && value > chargeValueGate)
             return new FormationIntentDecision { Intent = TacticIntent.Charge, Valid = true };
+
+        // ③.5 3.7 §4.3 守城出城迎战：城墙健康 + 敌压近且近身 → Sally（出城压上，朝敌推进）
+        if (isGarrison && wallHpRatio >= sallyWallHpGate && enemyDist <= sallyEnemyDistGate && heat > heatEngage)
+            return new FormationIntentDecision { Intent = TacticIntent.Sally, ShouldAdvance = true, Valid = true };
 
         // ④ 敌接近 → 防守
         if (heat > heatEngage)

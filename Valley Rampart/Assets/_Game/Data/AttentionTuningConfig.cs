@@ -31,10 +31,12 @@ public class AttentionTuningConfig : ScriptableObject
     public float threatDowngradeConfirmTime = 0.5f;
 
     [Header("保护因子（6.4）")]
-    [Tooltip("友军数达标进入保护（≥此值）")]
+    [Tooltip("友军数达标进入保护（≥此值，旧模型兼容；新模型用保护力加权和 protectThreshold）")]
     public int protectionFriendThreshold = 3;
-    [Tooltip("友军数失效退出保护（<此值）")]
+    [Tooltip("友军数失效退出保护（<此值，旧模型兼容）")]
     public int protectionLossThreshold = 1;
+    [Tooltip("保护力加权和阈值（3.7，可训练）：身边友军 protectPower 之和 ≥ 此值视为有保护。替代友军数判保护")]
+    public float protectThreshold = 1f;
 
     [Header("威胁衰减")]
     [Tooltip("敌人离开后威胁线性衰减到 0 的时间（秒）")]
@@ -260,6 +262,18 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("阵型切换瞬时提强度保底时长（秒，原硬编码 1s）")]
     public float formationOrderBoostDuration = 1f;
 
+    [Header("自主补员（3.7 §4.2 G11：编队不满员 + 无受击静默期 → 周期扫描补员，防硬编码）")]
+    [Tooltip("自主补员扫描间隔（秒，原硬编码 5s）")]
+    public float formationAutoRecruitInterval = 5f;
+    [Tooltip("补员前无受击静默时长（秒：最近一次阵亡/受击后需静默此时间才补员，战斗状态停止自主组队，原硬编码 10s）")]
+    public float formationAutoRecruitQuietSeconds = 10f;
+
+    [Header("出城迎战（3.7 §4.3 Sally：守城编队城墙健康 + 敌压近 → 出城，可训练）")]
+    [Tooltip("城墙健康度门槛（0-1：≥此值才出城；城墙残血固守不出）")]
+    public float sallyWallHpGate = 0.5f;
+    [Tooltip("最近敌距门槛（世界单位：敌距 ≤ 此值才出城压上；敌远不动）")]
+    public float sallyEnemyDistGate = 20f;
+
     [Header("军队级自动意图阈值（M7：FormationBrain 内置大脑入训，原 Inspector 字段迁移）")]
     [Tooltip("军队级决策间隔（秒，FormationBrain 秒级节奏，原 decisionInterval=1）")]
     public float fbDecisionInterval = 1f;
@@ -302,6 +316,10 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("热度扩散系数（邻区获得 热度×此值）")]
     public float heatSpreadRatio = 0.4f;
 
+    [Header("移速决策（3.6 §六，可训练）")]
+    [Tooltip("追击速度提升系数 0-1：追击速度 = walkSpeed + (runSpeed-walkSpeed)×speedChaseBoost。1=追击满速冲刺（骑兵最快），0=追击不提速")]
+    public float speedChaseBoost = 1f;
+
     /// <summary>按优先级获取权重。</summary>
     public float GetPriorityWeight(TaskPriority priority)
     {
@@ -331,6 +349,7 @@ public class AttentionTuningConfig : ScriptableObject
             threatDowngradeConfirmTime = threatDowngradeConfirmTime,
             protectionFriendThreshold = protectionFriendThreshold,
             protectionLossThreshold = protectionLossThreshold,
+            protectThreshold = protectThreshold,
             threatDecayTime = threatDecayTime,
             scheduleRetryInterval = scheduleRetryInterval,
             scheduleRecruitRadiusCells = scheduleRecruitRadiusCells,
@@ -438,6 +457,9 @@ public class AttentionTuningConfig : ScriptableObject
             heatDecayRate = heatDecayRate,
             heatSpreadThreshold = heatSpreadThreshold,
             heatSpreadRatio = heatSpreadRatio,
+            speedChaseBoost = speedChaseBoost,
+            sallyWallHpGate = sallyWallHpGate,
+            sallyEnemyDistGate = sallyEnemyDistGate,
         };
     }
 }

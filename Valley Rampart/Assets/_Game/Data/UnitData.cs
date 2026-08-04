@@ -16,7 +16,20 @@ public enum Occupation
     HeavyWarrior,   // 重装战士：高防近战
     Bishop,         // 主教：远程治疗（人类）
     ShieldGuard,    // 盾卫：高防抗线
-    Archmage        // 大法师：远程高伤（更远射程）
+    Archmage,       // 大法师：远程高伤（更远射程）
+    // ===== 3.6 新增（末尾追加，保持现有枚举 int 值稳定，防资产 occupation 错位）=====
+    Cavalry,        // 骑兵：冲锋 + 击飞（3.6 §五，血与战争机器同级、韧性 50）
+    // ===== 3.7 机器/工事（独立 occupation 防 UnitDataManager faction_occupation key 撞 Ruler）=====
+    SiegeMachine,   // 投掷机（攻城机器）
+    Ballista,       // 弩炮
+    Tower,          // 防御塔（3.7 废弃共用值：三塔拆独立枚举防 UnitDataManager key 去重丢资产，见下）
+    Barricade,      // 拒马
+    Wall,           // 城墙
+    Gate,           // 城门
+    // ===== 3.7 P1.6 三塔拆独立（Tower 共用导致三塔资产 key 冲突/UnitDataManager 去重丢塔，末尾追加防 int 错位）=====
+    ArrowTower,     // 箭塔（ammo=Arrow，独立 key Human_Player_ArrowTower）
+    CrossbowTower,  // 弩塔（ammo=Bolt）
+    MagicTower,     // 魔法塔（ammo=Magic）
 }
 
 // 注意：Faction 枚举已迁入 AI.Core/Ports/Faction.cs（M1 决策核提取，asmdef 边界要求），
