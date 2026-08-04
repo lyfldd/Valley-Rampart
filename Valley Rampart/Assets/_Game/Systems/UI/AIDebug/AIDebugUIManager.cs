@@ -37,9 +37,7 @@ public class AIDebugUIManager : MonoBehaviour
     private VisualElement _tabFormation;
     private VisualElement _aiDebugContent;
     private VisualElement _spawnContent;
-    private VisualElement _spawnButtonsContainer;   // 兼容引用（旧容器，已拆分为阵营两组）
-    private VisualElement _allySpawnButtons;        // 己方单位按钮组（固定窗口滚动）
-    private VisualElement _enemySpawnButtons;       // 敌方单位按钮组（固定窗口滚动）
+    private VisualElement _spawnButtonsContainer;
     private Label _spawnHintText;
     private VisualElement _formationContent;
     private Button _garrisonButton;      // 守城编队（热键 4）
@@ -93,25 +91,6 @@ public class AIDebugUIManager : MonoBehaviour
     private Label _hpTextLabel;
     private Label _npcPositionLabel;
     private Label _nearbyInfoLabel;
-
-    // ===== 双列对比（右列：最近敌对 NPC 的同一组字段，name 后缀 -r）=====
-    private Label _leftTitle;
-    private Label _rightTitle;
-    private Label _focusLayerLabelR;
-    private Label _focusIntensityLabelR;
-    private Label _focusPositionLabelR;
-    private VisualElement _spectrumColorR;
-    private Label _spectrumNameLabelR;
-    private VisualElement _threatColorR;
-    private Label _threatLevelLabelR;
-    private Label _hasProtectionLabelR;
-    private Label _hitCooldownLabelR;
-    private Label[] _stimLabelsR = new Label[5];
-    private Label[] _switchLabelsR = new Label[5];
-    private VisualElement _hpBarFillR;
-    private Label _hpTextLabelR;
-    private Label _npcPositionLabelR;
-    private Label _nearbyInfoLabelR;
 
     // 顶部提示条
     private VisualElement _hintBar;
@@ -265,9 +244,7 @@ public class AIDebugUIManager : MonoBehaviour
         _tabFormation = _root.Q<VisualElement>("tab-formation");
         _aiDebugContent = _root.Q<VisualElement>("ai-debug-content");
         _spawnContent = _root.Q<VisualElement>("spawn-content");
-        _spawnButtonsContainer = _root.Q<VisualElement>("spawn-ally-buttons");   // 兼容引用（旧名已拆，指向己方组）
-        _allySpawnButtons = _root.Q<VisualElement>("spawn-ally-buttons");
-        _enemySpawnButtons = _root.Q<VisualElement>("spawn-enemy-buttons");
+        _spawnButtonsContainer = _root.Q<VisualElement>("spawn-buttons");
         _spawnHintText = _root.Q<Label>("spawn-hint-text");
         _formationContent = _root.Q<VisualElement>("formation-content");
         _garrisonButton = _root.Q<Button>("formation-garrison-button");
@@ -345,31 +322,6 @@ public class AIDebugUIManager : MonoBehaviour
         _hpTextLabel = _root.Q<Label>("hp-text");
         _npcPositionLabel = _root.Q<Label>("npc-position");
         _nearbyInfoLabel = _root.Q<Label>("nearby-info");
-
-        // 双列对比（右列 -r 字段）
-        _leftTitle = _root.Q<Label>("left-title");
-        _rightTitle = _root.Q<Label>("right-title");
-        _focusLayerLabelR = _root.Q<Label>("focus-layer-r");
-        _focusIntensityLabelR = _root.Q<Label>("focus-intensity-r");
-        _focusPositionLabelR = _root.Q<Label>("focus-position-r");
-        _spectrumColorR = _root.Q<VisualElement>("spectrum-color-r");
-        _spectrumNameLabelR = _root.Q<Label>("spectrum-name-r");
-        _threatColorR = _root.Q<VisualElement>("threat-color-r");
-        _threatLevelLabelR = _root.Q<Label>("threat-level-r");
-        _hasProtectionLabelR = _root.Q<Label>("has-protection-r");
-        _hitCooldownLabelR = _root.Q<Label>("hit-cooldown-r");
-        for (int i = 0; i < 5; i++)
-        {
-            _stimLabelsR[i] = _root.Q<Label>($"stim-{i}-r");
-        }
-        for (int i = 0; i < 5; i++)
-        {
-            _switchLabelsR[i] = _root.Q<Label>($"switch-{i}-r");
-        }
-        _hpBarFillR = _root.Q<VisualElement>("hp-bar-fill-r");
-        _hpTextLabelR = _root.Q<Label>("hp-text-r");
-        _npcPositionLabelR = _root.Q<Label>("npc-position-r");
-        _nearbyInfoLabelR = _root.Q<Label>("nearby-info-r");
 
         // 顶部提示条
         _hintBar = _root.Q<VisualElement>("hint-bar");
@@ -729,8 +681,8 @@ public class AIDebugUIManager : MonoBehaviour
     /// <summary>动态生成放置类型按钮（从 AIDebugSpawnController 获取可生成清单）</summary>
     private void BuildSpawnButtons()
     {
-        if (_allySpawnButtons != null) _allySpawnButtons.Clear();
-        if (_enemySpawnButtons != null) _enemySpawnButtons.Clear();
+        if (_spawnButtonsContainer == null) return;
+        _spawnButtonsContainer.Clear();
 
         var types = AIDebugSpawnController.Instance.GetAvailableTypes();
         foreach (var option in types)
@@ -740,25 +692,7 @@ public class AIDebugUIManager : MonoBehaviour
             btn.AddToClassList("spawn-type-button");
             var capturedType = option.Type;
             btn.clicked += () => OnSpawnTypeButtonClicked(capturedType, btn);
-            // 己方/敌方分组（我方一列、敌方一列，固定窗口滚动）
-            var target = option.FactionName == "己方" ? _allySpawnButtons : _enemySpawnButtons;
-            if (target != null) target.Add(btn);
-        }
-    }
-
-    /// <summary>清除所有放置按钮的选中样式（两组都清）。</summary>
-    private void ClearSpawnSelection()
-    {
-        ClearSpawnSelectionIn(_allySpawnButtons);
-        ClearSpawnSelectionIn(_enemySpawnButtons);
-    }
-
-    private void ClearSpawnSelectionIn(VisualElement group)
-    {
-        if (group == null) return;
-        foreach (var child in group.Children())
-        {
-            child.RemoveFromClassList("spawn-selected");
+            _spawnButtonsContainer.Add(btn);
         }
     }
 
@@ -766,8 +700,14 @@ public class AIDebugUIManager : MonoBehaviour
     {
         _selectedSpawnType = type;
 
-        // 更新所有按钮的选中样式（己方/敌方两组）
-        ClearSpawnSelection();
+        // 更新所有按钮的选中样式
+        if (_spawnButtonsContainer != null)
+        {
+            foreach (var child in _spawnButtonsContainer.Children())
+            {
+                child.RemoveFromClassList("spawn-selected");
+            }
+        }
         clickedBtn.AddToClassList("spawn-selected");
 
         // 进入放置模式（隐藏 F1 面板，压栈）
@@ -816,8 +756,14 @@ public class AIDebugUIManager : MonoBehaviour
         _isSpawnMode = false;
         _selectedSpawnType = null;
 
-        // 清除按钮选中样式（己方/敌方两组）
-        ClearSpawnSelection();
+        // 清除按钮选中样式
+        if (_spawnButtonsContainer != null)
+        {
+            foreach (var child in _spawnButtonsContainer.Children())
+            {
+                child.RemoveFromClassList("spawn-selected");
+            }
+        }
 
         // 恢复面板
         UpdatePanelVisibility();
@@ -967,11 +913,9 @@ public class AIDebugUIManager : MonoBehaviour
 
     private void RenderSnapshot(AIDebugSnapshot s)
     {
-        // 左列：选中 NPC
+        // 标题
         if (_npcNameLabel != null)
             _npcNameLabel.text = s.NPCName;
-        if (_leftTitle != null)
-            _leftTitle.text = "选中: " + s.NPCName;
 
         // 焦点
         RenderFocus(s.CurrentFocus);
@@ -990,229 +934,128 @@ public class AIDebugUIManager : MonoBehaviour
 
         // 底部统计
         RenderStats(s);
-
-        // 右列：最近敌对 NPC 对比（固定窗口滚动，滚动补全未展示信息）
-        if (AIDebugController.Instance != null)
-        {
-            var compare = AIDebugController.Instance.GetCompareSnapshot();
-            if (compare.HasValue)
-            {
-                if (_rightTitle != null) _rightTitle.text = "对比: " + compare.Value.NPCName;
-                RenderRightColumn(compare.Value);
-                return;
-            }
-        }
-        ClearRightColumn();
-    }
-
-    /// <summary>右列无对比目标时清空为占位。</summary>
-    private void ClearRightColumn()
-    {
-        if (_rightTitle != null) _rightTitle.text = "对比: 无敌对 NPC";
-        RenderFocusTo(default, clear: true);
-        RenderSpectrumTo(default, clear: true);
-        RenderThreatTo(default, false, false, clear: true);
-        RenderStimuliTo(null);
-        RenderSwitchesTo(null);
-        RenderStatsTo(null);
-    }
-
-    /// <summary>渲染右列（对比 NPC）。右列渲染到 -r 字段。</summary>
-    private void RenderRightColumn(AIDebugSnapshot s)
-    {
-        RenderFocusTo(s.CurrentFocus, right: true);
-        RenderSpectrumTo(s.CurrentSpectrum, right: true);
-        RenderThreatTo(s.CurrentThreatLevel, s.HasProtection, s.IsInHitCooldown, right: true);
-        RenderStimuliTo(s.TopStimuli, right: true);
-        RenderSwitchesTo(s.RecentSwitches, right: true);
-        RenderStatsTo(s, right: true);
     }
 
     private void RenderFocus(Focus focus)
     {
-        RenderFocusTo(focus);
-    }
-
-    /// <summary>焦点渲染到指定列（right=false=左列 / true=右列 -r 字段；clear=清空占位）。</summary>
-    private void RenderFocusTo(Focus focus, bool right = false, bool clear = false)
-    {
-        var layer = right ? _focusLayerLabelR : _focusLayerLabel;
-        var intensity = right ? _focusIntensityLabelR : _focusIntensityLabel;
-        var pos = right ? _focusPositionLabelR : _focusPositionLabel;
-        if (clear || !focus.IsValid)
+        if (focus.IsValid)
         {
-            if (layer != null) layer.text = "无";
-            if (intensity != null) intensity.text = "-";
-            if (pos != null) pos.text = "-";
-            return;
+            if (_focusLayerLabel != null)
+                _focusLayerLabel.text = AISwitchRecord.LayerName(focus.Layer);
+            if (_focusIntensityLabel != null)
+                _focusIntensityLabel.text = focus.Intensity.ToString("F1");
+            if (_focusPositionLabel != null)
+                _focusPositionLabel.text = $"({focus.Position.x:F1}, {focus.Position.y:F1})";
         }
-        if (layer != null) layer.text = AISwitchRecord.LayerName(focus.Layer);
-        if (intensity != null) intensity.text = focus.Intensity.ToString("F1");
-        if (pos != null) pos.text = $"({focus.Position.x:F1}, {focus.Position.y:F1})";
+        else
+        {
+            if (_focusLayerLabel != null) _focusLayerLabel.text = "无";
+            if (_focusIntensityLabel != null) _focusIntensityLabel.text = "-";
+            if (_focusPositionLabel != null) _focusPositionLabel.text = "-";
+        }
     }
 
     private void RenderSpectrum(BehaviorSpectrum spectrum)
     {
-        RenderSpectrumTo(spectrum);
-    }
-
-    /// <summary>谱系渲染到指定列（right=右列 -r；clear=清空占位）。</summary>
-    private void RenderSpectrumTo(BehaviorSpectrum spectrum, bool right = false, bool clear = false)
-    {
-        var color = right ? _spectrumColorR : _spectrumColor;
-        var name = right ? _spectrumNameLabelR : _spectrumNameLabel;
-        if (clear)
-        {
-            if (color != null) color.style.backgroundColor = new Color(0.4f, 0.4f, 0.4f, 1f);
-            if (name != null) name.text = "-";
-            return;
-        }
         int idx = (int)spectrum;
-        if (color != null && idx >= 0 && idx < SpectrumColors.Length)
+        if (_spectrumColor != null && idx >= 0 && idx < SpectrumColors.Length)
         {
-            color.style.backgroundColor = SpectrumColors[idx];
+            _spectrumColor.style.backgroundColor = SpectrumColors[idx];
         }
-        if (name != null && idx >= 0 && idx < SpectrumNames.Length)
+        if (_spectrumNameLabel != null && idx >= 0 && idx < SpectrumNames.Length)
         {
-            name.text = SpectrumNames[idx];
+            _spectrumNameLabel.text = SpectrumNames[idx];
         }
     }
 
     private void RenderThreat(ThreatLevel threatLevel, bool hasProtection, bool isInHitCooldown)
     {
-        RenderThreatTo(threatLevel, hasProtection, isInHitCooldown);
-    }
-
-    /// <summary>威胁渲染到指定列（right=右列 -r；clear=清空占位）。</summary>
-    private void RenderThreatTo(ThreatLevel threatLevel, bool hasProtection, bool isInHitCooldown,
-        bool right = false, bool clear = false)
-    {
-        var color = right ? _threatColorR : _threatColor;
-        var level = right ? _threatLevelLabelR : _threatLevelLabel;
-        var prot = right ? _hasProtectionLabelR : _hasProtectionLabel;
-        var cool = right ? _hitCooldownLabelR : _hitCooldownLabel;
-        if (clear)
-        {
-            if (color != null) color.style.backgroundColor = new Color(0.4f, 0.4f, 0.4f, 1f);
-            if (level != null) level.text = "-";
-            if (prot != null) prot.text = "否";
-            if (cool != null) cool.text = "否";
-            return;
-        }
         int idx = (int)threatLevel;
-        if (color != null && idx >= 0 && idx < ThreatColors.Length)
+        if (_threatColor != null && idx >= 0 && idx < ThreatColors.Length)
         {
-            color.style.backgroundColor = ThreatColors[idx];
+            _threatColor.style.backgroundColor = ThreatColors[idx];
         }
-        if (level != null && idx >= 0 && idx < ThreatNames.Length)
+        if (_threatLevelLabel != null && idx >= 0 && idx < ThreatNames.Length)
         {
-            level.text = $"{idx} {ThreatNames[idx]}";
+            _threatLevelLabel.text = $"{idx} {ThreatNames[idx]}";
         }
-        if (prot != null) prot.text = hasProtection ? "是" : "否";
-        if (cool != null) cool.text = isInHitCooldown ? "是" : "否";
+        if (_hasProtectionLabel != null)
+        {
+            _hasProtectionLabel.text = hasProtection ? "是" : "否";
+        }
+        if (_hitCooldownLabel != null)
+        {
+            _hitCooldownLabel.text = isInHitCooldown ? "是" : "否";
+        }
     }
 
     private void RenderStimuli(List<StimulusDebugInfo> stimuli)
     {
-        RenderStimuliTo(stimuli);
-    }
-
-    /// <summary>刺激源渲染到指定列（right=右列 -r；null=清空）。</summary>
-    private void RenderStimuliTo(List<StimulusDebugInfo> stimuli, bool right = false)
-    {
-        var labels = right ? _stimLabelsR : _stimLabels;
         for (int i = 0; i < 5; i++)
         {
-            if (labels[i] == null) continue;
+            if (_stimLabels[i] == null) continue;
 
             if (stimuli != null && i < stimuli.Count)
             {
                 var stim = stimuli[i];
                 string layerName = AISwitchRecord.LayerName(stim.Layer);
                 string focusMark = stim.IsFocus ? " ★焦点" : "";
-                labels[i].text = $"{i + 1}. [{layerName}] 强度 {stim.Intensity:F1}{focusMark}";
-                labels[i].style.display = DisplayStyle.Flex;
+                _stimLabels[i].text = $"{i + 1}. [{layerName}] 强度 {stim.Intensity:F1}{focusMark}";
+                _stimLabels[i].style.display = DisplayStyle.Flex;
             }
             else
             {
-                labels[i].text = "-";
-                labels[i].style.display = DisplayStyle.None;
+                _stimLabels[i].text = "-";
+                _stimLabels[i].style.display = DisplayStyle.None;
             }
         }
     }
 
     private void RenderSwitches(List<AISwitchRecord> switches)
     {
-        RenderSwitchesTo(switches);
-    }
-
-    /// <summary>切换历史渲染到指定列（right=右列 -r；null=清空）。</summary>
-    private void RenderSwitchesTo(List<AISwitchRecord> switches, bool right = false)
-    {
-        var labels = right ? _switchLabelsR : _switchLabels;
         float currentTime = Time.time;
         for (int i = 0; i < 5; i++)
         {
-            if (labels[i] == null) continue;
+            if (_switchLabels[i] == null) continue;
 
             if (switches != null && i < switches.Count)
             {
                 var record = switches[i];
                 float timeAgo = currentTime - record.Timestamp;
-                labels[i].text = $"[{timeAgo:F1}s前] {record.Description}";
-                labels[i].style.display = DisplayStyle.Flex;
+                _switchLabels[i].text = $"[{timeAgo:F1}s前] {record.Description}";
+                _switchLabels[i].style.display = DisplayStyle.Flex;
             }
             else
             {
-                labels[i].text = "-";
-                labels[i].style.display = DisplayStyle.None;
+                _switchLabels[i].text = "-";
+                _switchLabels[i].style.display = DisplayStyle.None;
             }
         }
     }
 
     private void RenderStats(AIDebugSnapshot s)
     {
-        RenderStatsTo(s);
-    }
-
-    /// <summary>底部统计渲染到指定列（right=右列 -r；null=清空）。</summary>
-    private void RenderStatsTo(AIDebugSnapshot? s, bool right = false)
-    {
-        var hpBar = right ? _hpBarFillR : _hpBarFill;
-        var hpText = right ? _hpTextLabelR : _hpTextLabel;
-        var pos = right ? _npcPositionLabelR : _npcPositionLabel;
-        var nearby = right ? _nearbyInfoLabelR : _nearbyInfoLabel;
-        if (!s.HasValue)
-        {
-            if (hpBar != null) hpBar.style.width = new Length(0f, LengthUnit.Percent);
-            if (hpText != null) hpText.text = "HP: -";
-            if (pos != null) pos.text = "-";
-            if (nearby != null) nearby.text = "敌人 - / 友军 -";
-            return;
-        }
-        var snap = s.Value;
-
         // HP 条
-        if (hpBar != null)
+        if (_hpBarFill != null)
         {
-            float hpPercent = Mathf.Clamp01(snap.HPRatio) * 100f;
-            hpBar.style.width = new Length(hpPercent, LengthUnit.Percent);
+            float hpPercent = Mathf.Clamp01(s.HPRatio) * 100f;
+            _hpBarFill.style.width = new Length(hpPercent, LengthUnit.Percent);
         }
-        if (hpText != null)
+        if (_hpTextLabel != null)
         {
-            hpText.text = $"HP: {(snap.HPRatio * 100f):F0}%";
+            _hpTextLabel.text = $"HP: {(s.HPRatio * 100f):F0}%";
         }
 
         // 位置
-        if (pos != null)
+        if (_npcPositionLabel != null)
         {
-            pos.text = $"({snap.NPCPosition.x:F1}, {snap.NPCPosition.y:F1})";
+            _npcPositionLabel.text = $"({s.NPCPosition.x:F1}, {s.NPCPosition.y:F1})";
         }
 
         // 附近单位
-        if (nearby != null)
+        if (_nearbyInfoLabel != null)
         {
-            nearby.text = $"敌人 {snap.NearbyEnemyCount} / 友军 {snap.NearbyAllyCount}";
+            _nearbyInfoLabel.text = $"敌人 {s.NearbyEnemyCount} / 友军 {s.NearbyAllyCount}";
         }
     }
 
