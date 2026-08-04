@@ -112,6 +112,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private FactorContext _lastCtx;   // 上一帧完整 ctx（调试面板读）
     private BehaviorCommand _lastCmd; // 上一帧 Think 产出的 cmd（Execute 每帧复用）
 
+    // ===== B2 治疗（对齐 sim SimBrain._healTimer）=====
+    private float _healTimer;
+
     /// <summary>
     /// 是否空闲可派任务（3.3.5 资源流转调度中心用）。
     /// 焦点无效 / 焦点是 Wander（漫游）/ Follow（跟随非任务）→ 空闲可派；
@@ -688,6 +691,14 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// </summary>
     private void UpdateCombatRegistration(in FactorContext ctx)
     {
+        // B2 治疗（对齐 sim SimBrain.ApplyHealingFactor）：Healer/Bishop 射程内有低血友军（<70%）时
+        // 用 attack 值治疗并停火（不注册攻击）。职业名判断为最小方案，B4 角色族重构时替换。
+        if (IsHealerRole() && TryHealAlly(ctx))
+        {
+            StopAttacking();
+            return;
+        }
+
         // 骑兵冲锋（3.6 §5.3 三态）：独立于射程攻击，扫感知列表触发（目标在 chargeRange 内即可）
         TryStartChargeFromPerception(ctx.CellSize);
 
@@ -710,8 +721,16 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             }
             // 路径2：编队跟随焦点（FollowStimulus）或无威胁焦点时，感知范围内最近敌人在射程内也开火
             // 解决编队优先（威胁0/1级走FollowAnchor）时弓手站槽位看戏的问题
+            // B4 目标选择（对齐 sim UpdateCombatRegistration 配方驱动）：点杀优先残血/脆皮，密度优先人群，否则最近。
+            // 职业名驱动为最小方案（对齐 sim BuildDefaultProfiles），B4 角色族重构时替换。
             if (!shouldAttack && _nearbyEnemies.Count > 0)
             {
+                bool isSniper = IsSniperRole();
+                bool isDensity = IsDensityRole();
+                IDamageable sniperTarget = null;
+                float sniperBest = float.MaxValue;   // 脆皮优先级分：残血 > 低maxHp
+                IDamageable densityTarget = null;
+                int densityBest = -1;                // 邻域敌人数越多越优先
                 IDamageable nearest = null;
                 float nearestDist = float.MaxValue;
                 for (int i = 0; i < _nearbyEnemies.Count; i++)
@@ -720,13 +739,51 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                     if (e == null || IsDestroyed(e) || e.CurrentHp <= 0) continue;
                     float d = Vector2X.Distance(ctx.SelfPos, Vector2XUnity.FromUnity(e.GetPosition()));
                     if (d < nearestDist) { nearestDist = d; nearest = e; }
+                    if (d > ctx.AttackWorldRange) continue;
+                    if (isSniper)
+                    {
+                        float hpRatio = e.MaxHp > 0 ? (float)e.CurrentHp / e.MaxHp : 1f;
+                        bool isSquishy = e.MaxHp < _profession.maxHp;   // 脆皮（低于自身 maxHp，对齐 SnipeSquishyByMaxHp）
+                        bool isLowHp = hpRatio < 0.3f;                   // 残血（sim：弓手 0.3 / 弩手 0.5，最小方案统一 0.3）
+                        if (isSquishy || isLowHp)
+                        {
+                            float score = isLowHp ? hpRatio : (1f + hpRatio);   // 残血权重最高（分数最低优先）
+                            if (score < sniperBest) { sniperBest = score; sniperTarget = e; }
+                        }
+                    }
+                    if (isDensity)
+                    {
+                        int crowd = CountNearbyEnemies(e, ctx.AttackWorldRange * 0.5f);   // 密度邻域（对齐 DensityRadiusCells≈2 格）
+                        if (crowd > densityBest) { densityBest = crowd; densityTarget = e; }
+                    }
                 }
-                if (nearest != null && nearestDist <= ctx.AttackWorldRange)
+                if (isSniper && sniperTarget != null)
+                {
+                    shouldAttack = true;
+                    targetEnemy = sniperTarget;
+                }
+                else if (isDensity && densityTarget != null && densityBest >= 1)
+                {
+                    // 邻域至少 1 个其他敌人（含自身 ≥2）才算密集人群，否则打最近
+                    shouldAttack = true;
+                    targetEnemy = densityTarget;
+                }
+                else if (nearest != null && nearestDist <= ctx.AttackWorldRange)
                 {
                     shouldAttack = true;
                     targetEnemy = nearest;
                 }
             }
+        }
+
+        // B1 弹药评估（对齐 sim SimBrain.SelectAmmo）：战争机器耗尽停火 / 惜用省弹 / 昂贵弹只对高价值目标。
+        // 非战争机器（ammoMax=0）恒可发射（职业默认弹型）。ammoType 供 AttackProfile 使用。
+        var selfUnit = SelfUnit;
+        ProjectileType ammoType = _profession.ammo != null ? _profession.ammo.ammoType : ProjectileType.Arrow;
+        if (shouldAttack && selfUnit != null && !selfUnit.SelectAmmo(targetEnemy, out ammoType))
+        {
+            StopAttacking();   // 弹药耗尽/惜用省弹 -> 停火等补给
+            shouldAttack = false;
         }
 
         if (shouldAttack)
@@ -742,8 +799,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                     cd = _profession.attackCD,
                     isRanged = _profession.isRanged,
                     projectileSpeed = _profession.projectileSpeed,
-                    // 弹药（3.6 §三：AmmoDef 拉平）
-                    projectileType = ammo != null ? ammo.ammoType : ProjectileType.Arrow,
+                    // 弹药（3.6 §三：AmmoDef 拉平；B1 弹型 = SelectAmmo 选中值）
+                    projectileType = ammoType,
                     pierceLevel = ammo != null ? ammo.pierceLevel : 1,
                     aoeRadiusCells = ammo != null ? ammo.aoeRadiusCells : 0f,
                     aoeFalloff = ammo != null ? ammo.aoeFalloff : 0f,
@@ -764,7 +821,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                     chargeDamageReduce = _profession.chargeDamageReduce,
                 };
                 if (DamageSystem.Instance != null && DamageSystem.Instance.RegisterAttack(_self, targetEnemy, profile))
+                {
                     _currentAttackTarget = targetEnemy;
+                    if (selfUnit != null) selfUnit.ConsumeAmmo(ammoType);   // B1：发射扣弹（对齐 sim）
+                }
             }
         }
         else
@@ -780,6 +840,76 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             DamageSystem.Instance?.Unregister(_self);
             _currentAttackTarget = null;
         }
+    }
+
+    /// <summary>B2 是否治疗职业（Healer/Bishop；对齐 sim Healer/Bishop 配方注册，B4 角色族重构时替换）。</summary>
+    private bool IsHealerRole()
+    {
+        if (_profession == null || !_profession.isRanged || _profession.attack <= 0) return false;
+        string n = _profession.name;
+        return n != null && (n.Contains("Healer") || n.Contains("Bishop"));
+    }
+
+    /// <summary>B2 治疗因子（对齐 sim SimBrain.ApplyHealingFactor）：射程内选最低血友军（hpRatio&lt;70%），
+    /// 治疗量 = attack（CD = attackCD），治疗期间停火守位。返回是否在治疗中。</summary>
+    private bool TryHealAlly(in FactorContext ctx)
+    {
+        float healRangeWorld = ctx.AttackWorldRange;   // 治疗范围 = 攻击范围
+        IDamageable bestPatient = null;
+        float bestHpRatio = float.MaxValue;
+        for (int i = 0; i < _nearbyAllies.Count; i++)
+        {
+            var a = _nearbyAllies[i];
+            if (a == null || a.CurrentHp <= 0) continue;
+            if (ReferenceEquals(a, _self)) continue;
+            float d = Vector2.Distance(_self.GetPosition(), a.GetPosition());
+            if (d > healRangeWorld) continue;
+            float hpRatio = a.MaxHp > 0 ? (float)a.CurrentHp / a.MaxHp : 1f;
+            if (hpRatio < 0.7f && hpRatio < bestHpRatio)
+            {
+                bestHpRatio = hpRatio;
+                bestPatient = a;
+            }
+        }
+        if (bestPatient == null) return false;   // 无低血友军 -> 正常攻击
+
+        float healCd = Mathf.Max(0.1f, _profession.attackCD);
+        if (Time.time - _healTimer >= healCd)
+        {
+            _healTimer = Time.time;
+            bestPatient.Heal(Mathf.Max(1, _profession.attack));
+        }
+        return true;   // 治疗中停火守位（对齐 sim：StopAttacking + Idle）
+    }
+
+    /// <summary>B4 是否点杀职业（人类弓手/弩手；对齐 sim BuildDefaultProfiles 的 SnipeEnabled 配方，角色族重构时替换）。</summary>
+    private bool IsSniperRole()
+    {
+        if (_profession == null || !_profession.isRanged) return false;
+        string n = _profession.name;
+        return n != null && !n.Contains("Undead")
+            && (n.Contains("Crossbowman") || n.Contains("Archer"));
+    }
+
+    /// <summary>B4 是否密度职业（人类 Mage/Archmage；对齐 sim DensityTargetingEnabled 配方，角色族重构时替换）。</summary>
+    private bool IsDensityRole()
+    {
+        if (_profession == null || !_profession.isRanged) return false;
+        string n = _profession.name;
+        return n != null && !n.Contains("Undead") && n.Contains("Mage");
+    }
+
+    /// <summary>B4 邻域敌数统计（密度目标选择用，对齐 sim DensityRadiusCells 邻域扫描）。</summary>
+    private int CountNearbyEnemies(IDamageable center, float radiusWorld)
+    {
+        int count = 0;
+        for (int i = 0; i < _nearbyEnemies.Count; i++)
+        {
+            var e = _nearbyEnemies[i];
+            if (e == null || IsDestroyed(e) || e.CurrentHp <= 0) continue;
+            if (Vector2.Distance(e.GetPosition(), center.GetPosition()) <= radiusWorld) count++;
+        }
+        return count;
     }
 
     // ===== 骑兵冲锋（3.6 §5.3 四态：0=None 1=准备 2=突进 3=第二击等待；免伤 70% 突进中生效）=====

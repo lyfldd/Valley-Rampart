@@ -82,6 +82,16 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>冲锋流程中（结算/第二击等待，免伤 70% 生效，DamageSystem 消费）。</summary>
     public bool IsCharging => ChargeState != 0;
 
+    // ===== B1 弹药经济（3.7 战争机器火力经济学；对齐 sim SimUnit 弹药储备）=====
+    // 仅供战争机器（投掷机/弩炮）用；弓手/弩手等兵种 ammoMax=0 无弹药模型（无限弹药）。
+    // 三弹型：Stone 石弹（自动补给）/ Fireball 火弹 / Magic 魔弹（昂贵，有限储备不自动补）。
+    public int AmmoStone;
+    public int AmmoFireball;
+    public int AmmoMagic;
+    public float AmmoResupplyTimer;   // 石弹补给计时（到 0 补一发）
+    /// <summary>是否弹药耗尽待补给（战争机器无弹停火）。</summary>
+    public bool IsAmmoEmpty => AmmoStone <= 0 && AmmoFireball <= 0 && AmmoMagic <= 0;
+
     // ===== 运行时可变属性 =====
     // 从 UnitData 初始化，可被 Buff/装备/升级系统修改；修改时发布 UnitAttributeChangedEvent。
     // 之前直接读 Data（只读 SO）无法支持运行时变化，故改为运行时副本。
@@ -172,6 +182,14 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         // M1 决策核提取：职业快照缓存（核内吃 ProfessionSnapshot 不吃 SO）
         var profession = data as NpcProfessionDef;
         _professionSnapshot = profession != null ? profession.ToSnapshot() : ProfessionSnapshot.Default;
+
+        // B1 弹药经济初始化（对齐 sim SimWorld.Build）：石弹满槽（ammoMax），昂贵弹（火/魔）有限储备（各 1/4 槽）
+        if (_professionSnapshot.ammoMax > 0)
+        {
+            AmmoStone = _professionSnapshot.ammoMax;
+            AmmoFireball = Mathf.Max(0, _professionSnapshot.ammoMax / 4);
+            AmmoMagic = Mathf.Max(0, _professionSnapshot.ammoMax / 4);
+        }
 
         // 3.7 H4 修复：工事引用从职业配置拷贝（ProjectileManager 越墙判定 / NPCBrain 工事免疫依赖 uc.fortification）
         // 此前无赋值点，导致墙/门/拒马/塔的 fortification 永远 null，阻挡与免疫全部失效。
@@ -416,6 +434,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     private void Update()
     {
+        // B1 弹药补给（对齐 sim SimWorld.TickAmmoResupply）：战争机器石弹缓慢自动恢复（模拟工人搬运往返）
+        TickAmmoResupply();
+
         // 3.7 P1 静态单位攻击（塔/弩炮/投掷机）：射程内最近敌注册攻击，无目标停手。
         // 静态单位无 NPCBrain，本分支是唯一攻击驱动（isStatic 判定开销极小，仅静态 prefab 命中）。
         if (_professionSnapshot.isStatic)
@@ -449,6 +470,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     /// <summary>
     /// 静态单位思考：射程内最近敌 → 注册攻击（换目标才 RegisterAttack，DamageSystem tick 按 CD 驱动）。
+    /// B1：弹药评估（惜用省弹/耗尽停火/昂贵弹只对高价值目标，对齐 sim StaticThinkCore+SelectAmmo）。
     /// 无目标 → 注销停手。attack=0 的纯阻挡工事（墙/拒马/门）天然无目标注册。
     /// </summary>
     private void StaticAttackThink()
@@ -460,11 +482,14 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         IDamageable nearest = FindNearestEnemyInRange();
         if (nearest != null)
         {
+            // B1：弹药评估——弹药耗尽停火等补给；惜用（弹药紧张且目标非高价值）省弹停火
+            if (!SelectAmmo(nearest, out var ammoType)) return;
             if (!ReferenceEquals(nearest, _staticTarget))
             {
                 _staticTarget = nearest;
-                var profile = BuildStaticProfile();
-                DamageSystem.Instance.RegisterAttack(this, nearest, profile);
+                var profile = BuildStaticProfile(ammoType);
+                if (DamageSystem.Instance.RegisterAttack(this, nearest, profile))
+                    ConsumeAmmo(ammoType);   // B1：发射扣弹（对齐 sim SimDamage.ConsumeAmmo）
             }
         }
         else if (_staticTarget != null)
@@ -474,8 +499,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         }
     }
 
-    /// <summary>静态单位攻击配置（从职业快照构造，弹药拉平；对齐 NPCBrain.UpdateCombatRegistration）。</summary>
-    private AttackProfile BuildStaticProfile()
+    /// <summary>静态单位攻击配置（从职业快照构造，弹药拉平；对齐 NPCBrain.UpdateCombatRegistration）。
+    /// B1：ammoType 为 SelectAmmo 选中弹型（高价值目标可切昂贵弹）。</summary>
+    private AttackProfile BuildStaticProfile(ProjectileType ammoType)
     {
         var p = _professionSnapshot;
         return new AttackProfile
@@ -485,7 +511,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             cd = p.attackCD,
             isRanged = p.isRanged,
             projectileSpeed = p.projectileSpeed,
-            projectileType = p.projectileType,
+            projectileType = ammoType,
             pierceLevel = p.pierceLevel,
             aoeRadiusCells = p.aoeRadiusCells,
             aoeFalloff = p.aoeFalloff,
@@ -498,6 +524,75 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             effectPower = p.effectPower,
             effectMaxTargets = p.effectMaxTargets,
         };
+    }
+
+    /// <summary>B1 弹药补给（对齐 sim SimWorld.TickAmmoResupply）：石弹缓慢自动恢复（模拟工人从后方搬运往返），
+    /// 昂贵弹（火/魔）有限储备不自动补（需生产，AI 必须珍惜）。</summary>
+    private void TickAmmoResupply()
+    {
+        if (_professionSnapshot.ammoMax <= 0) return;            // 非战争机器无弹药
+        if (!IsAlive) return;
+        if (_professionSnapshot.ammoResupplyDelay <= 0f) return; // 无补给线
+        if (AmmoStone >= _professionSnapshot.ammoMax) return;    // 石弹满
+        AmmoResupplyTimer += Time.deltaTime;
+        if (AmmoResupplyTimer >= _professionSnapshot.ammoResupplyDelay)
+        {
+            AmmoResupplyTimer = 0f;
+            AmmoStone++;
+        }
+    }
+
+    /// <summary>B1 发射扣弹（对齐 sim SimDamage.ConsumeAmmo）。</summary>
+    public void ConsumeAmmo(ProjectileType type)
+    {
+        switch (type)
+        {
+            case ProjectileType.Fireball:
+                if (AmmoFireball > 0) AmmoFireball--;
+                break;
+            case ProjectileType.Magic:
+                if (AmmoMagic > 0) AmmoMagic--;
+                break;
+            default:
+                if (AmmoStone > 0) AmmoStone--;
+                break;
+        }
+    }
+
+    /// <summary>B1 弹药评估（对齐 sim SimBrain.SelectAmmo）：返回是否可发射并输出弹型。
+    /// 非战争机器（ammoMax=0）恒可发射（职业默认弹型）；战争机器弹药耗尽停火；
+    /// 惜用（ammoConservationWeight）时弹药紧张且目标非高价值 -> 省弹停火；昂贵弹只对高价值目标用。</summary>
+    public bool SelectAmmo(IDamageable target, out ProjectileType ammoType)
+    {
+        ammoType = _professionSnapshot.projectileType;
+        if (_professionSnapshot.ammoMax <= 0) return true;
+        if (IsAmmoEmpty) return false;                            // 弹药耗尽 -> 停火等补给
+        float ammoRatio = _professionSnapshot.ammoMax > 0 ? (float)AmmoStone / _professionSnapshot.ammoMax : 1f;
+        bool highValue = IsHighValueTarget(target);
+        // 惜用：弹药紧张（石弹 < 30% 槽）且目标非高价值 -> 省弹停火
+        if (ammoRatio < 0.3f && !highValue && _professionSnapshot.ammoConservationWeight > 0f)
+            return false;
+        // 弹型选择：高价值目标优先昂贵弹（Fireball/Magic 库存够才用，否则 Stone）
+        if (highValue)
+        {
+            if (AmmoFireball > 0 && _professionSnapshot.effectType != GroundEffectType.None)
+            { ammoType = ProjectileType.Fireball; return true; }
+            if (AmmoMagic > 0)
+            { ammoType = ProjectileType.Magic; return true; }
+        }
+        if (AmmoStone > 0) { ammoType = ProjectileType.Stone; return true; }
+        return false;
+    }
+
+    /// <summary>B1 目标价值评估（对齐 sim SimBrain.IsHighValueTarget）：残血 / 重甲 / 邻域密集。
+    /// 邻域密集判定（aoe 半径×2 内 ≥3 敌）留待 D3 清理轮随 hv* 因子一起提配置（本轮残血+重甲够用）。</summary>
+    public bool IsHighValueTarget(IDamageable target)
+    {
+        if (target == null || target.CurrentHp <= 0) return false;
+        float hpRatio = target.MaxHp > 0 ? (float)target.CurrentHp / target.MaxHp : 0f;
+        if (hpRatio < 0.5f) return true;      // 残血
+        if (target.Defense >= 20) return true; // 重甲
+        return false;
     }
 
     /// <summary>静态单位射程内最近敌对单位（GridSystem 邻近格扫描，y 地面+飞行两层）。</summary>
