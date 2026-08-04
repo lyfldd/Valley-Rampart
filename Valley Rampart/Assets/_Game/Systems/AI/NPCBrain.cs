@@ -543,7 +543,22 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 ? Mathf.Clamp01(_followProvider.Stimulus.Intensity / _config.formationOrderIntensity)
                 : 0f,
             SafetyFactor = ComputeSafetyFactor(hpRatio, homePoint),
+            // D1 修复：保护力加权和（3.7 保护矩阵，ProtectionHysteresisComponent 消费；
+            // 此前不填充恒 0 → HasProtection 恒 false，保护机制是死代码）
+            ProtectPowerSum = SumNearbyProtectPower(),
         };
+    }
+
+    /// <summary>3.7 保护力加权和：身边友军 protectPower 之和（真保护判定输入，替代友军数；对齐 sim SumNearbyProtectPower）。</summary>
+    private float SumNearbyProtectPower()
+    {
+        float sum = 0f;
+        for (int i = 0; i < _nearbyAllies.Count; i++)
+        {
+            var a = _nearbyAllies[i] as IUnitHandle;
+            if (a != null) sum += a.Profession.protectPower;
+        }
+        return sum;
     }
 
     /// <summary>

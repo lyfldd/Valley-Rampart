@@ -204,10 +204,10 @@ public static class CreateCombatAssets
         gate.blocksMovement = true; gate.passable = true; gate.heightCells = 2f; gate.maxHp = 800;
         CreateAsset(gate, FortDir + "/Gate.asset");
 
-        // 拒马 Lv1：减免 20%，挡移动，矮 0.5
+        // 拒马 Lv1：减免 20%，不挡移动（C5 裁决 2026-08-04：拒马=减速带，不硬挡；blocksMovement=false），矮 0.5
         var barricade = ScriptableObject.CreateInstance<FortificationDef>();
         barricade.name = "Barricade"; barricade.defenseLevel = 1; barricade.meleeDamageReduce = 0.2f;
-        barricade.blocksMovement = true; barricade.heightCells = 0.5f; barricade.maxHp = 100;
+        barricade.blocksMovement = false; barricade.heightCells = 0.5f; barricade.maxHp = 100;
         CreateAsset(barricade, FortDir + "/Barricade.asset");
 
         // 箭塔 Lv1：弹药 Arrow

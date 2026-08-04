@@ -558,8 +558,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>
     /// 向指定目标位置移动一步。返回是否已到达。
     /// 击飞中视为已到达（不移动）。工事挡移动（3.6 §2.3）：终点有 blocksMovement 工事 → 停下。
+    /// speedOverride（B3，3.6 §六）：>0 时用该速度（NPCBrain 追击提速 speedChaseBoost 经此生效），
+    /// 否则按 run 选 runSpeed/walkSpeed；速度仍过 EffectiveSpeed（拒马/Slow 场减速）。
     /// </summary>
-    public virtual bool MoveTowards(Vector2 destination, bool run = false)
+    public virtual bool MoveTowards(Vector2 destination, bool run = false, float speedOverride = 0f)
     {
         if (Data == null || !IsAlive) return true;
         if (_knockbackActive) return true;
@@ -568,7 +570,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         // 工事挡移动（3.6 §2.3：墙/拒马挡，城门 passable 不挡）
         if (IsBlockedByFortification(destination)) return true;
 
-        float speed = EffectiveSpeed(run ? RunSpeed : WalkSpeed);
+        float speed = speedOverride > 0f
+            ? EffectiveSpeed(speedOverride)
+            : EffectiveSpeed(run ? RunSpeed : WalkSpeed);
         float step = speed * Time.deltaTime;
 
         Vector2 current = _rb.position;

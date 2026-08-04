@@ -109,7 +109,7 @@ public class BehaviorExecutor
         else
         {
             _arrivedAtFocus = false;
-            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos));
+            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos), speedOverride: _currentSpeed);
         }
     }
 
@@ -146,7 +146,7 @@ public class BehaviorExecutor
             }
             else
             {
-                _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos));
+                _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos), speedOverride: _currentSpeed);
             }
         }
     }
@@ -171,7 +171,7 @@ public class BehaviorExecutor
         else
         {
             _arrivedAtFocus = false;
-            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos));
+            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos), speedOverride: _currentSpeed);
         }
     }
 
@@ -198,7 +198,7 @@ public class BehaviorExecutor
             if (dist > arrivalDist)
             {
                 // 未到槽位 -> 向槽位移动（cell 吸附，1D 横版 y 由 MoveTowards 夹取）
-                _controller.MoveTowards(slotWorld);
+                _controller.MoveTowards(slotWorld, speedOverride: _currentSpeed);
             }
             else
             {
@@ -216,7 +216,7 @@ public class BehaviorExecutor
             if (dist > cmd.KeepDistance + _config.arrivalThreshold * cellSize)
             {
                 // 超出保持距离 -> 靠近
-                _controller.MoveTowards(anchorPos);
+                _controller.MoveTowards(anchorPos, speedOverride: _currentSpeed);
             }
             else
             {
@@ -286,7 +286,7 @@ public class BehaviorExecutor
             }
             else
             {
-                _controller.MoveTowards(_wanderTarget);
+                _controller.MoveTowards(_wanderTarget, speedOverride: _currentSpeed);
             }
         }
     }
