@@ -320,9 +320,11 @@ public class FormationController : MonoBehaviour
         }
 
         // 3.7：查表改传角色族数量（近战族/远程族），Lookup 按意图+构成匹配度自选阵型
+        // T09（00 B9）：传阵型权重表（TuningSnapshot.formationWeights），Lookup 用训练权重×构成匹配度选阵型
         FormationDef def = isGarrison
             ? formationTable.LookupGarrison()
-            : formationTable.Lookup(_currentIntent, _currentLine, CountRoleFamily(true), CountRoleFamily(false));
+            : formationTable.Lookup(_currentIntent, _currentLine, CountRoleFamily(true), CountRoleFamily(false),
+                                    _config != null ? _config.ToSnapshot().formationWeights : null);
 
         if (def == null)
         {

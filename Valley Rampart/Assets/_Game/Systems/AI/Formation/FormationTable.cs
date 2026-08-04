@@ -55,18 +55,27 @@ public class FormationTable : ScriptableObject
     /// <summary>
     /// 按意图查阵型（3.7 升级：从合法阵型列表按意图过滤 + 构成匹配度选最优）。
     /// 构成匹配度 MatchScore：容量匹配（成员数 vs 槽数）+ 角色匹配（近战/远程 vs 槽位约束）。
+    /// T09（00 B9）：可选传 formationWeights（TuningSnapshot 阵型权重表，一维 [阵型*12+意图*3+构成]），
+    /// 选阵型 = 训练权重 × 构成匹配度。weights 为 null/长度不足时回退纯 MatchScore（兼容旧行为）。
     /// formationList 空时回退 P0 单阵型直查。
     /// 守城编队（无将军）直接返回 garrisonFormation，不按意图查。
     /// </summary>
-    public FormationDef Lookup(TacticIntent intent, BattleLine line, int meleeCount, int archerCount)
+    public FormationDef Lookup(TacticIntent intent, BattleLine line, int meleeCount, int archerCount, float[] formationWeights = null)
     {
         var all = LookupAll();
         FormationDef best = null;
         float bestScore = -1f;
-        foreach (var f in all)
+        int tier = ComputeCompositionTier(meleeCount, archerCount);
+        int intentIdx = (int)intent;
+        bool useWeights = formationWeights != null && formationWeights.Length >= 48;
+        for (int i = 0; i < all.Length; i++)
         {
+            var f = all[i];
             if (f == null || f.intent != intent) continue;
-            float score = MatchScore(f, meleeCount, archerCount);
+            float match = MatchScore(f, meleeCount, archerCount);
+            float score = match;
+            if (useWeights)
+                score = formationWeights[i * 12 + intentIdx * 3 + tier] * (1f + match);   // 训练权重 × (1+匹配度)
             if (score > bestScore)
             {
                 bestScore = score;
@@ -84,6 +93,17 @@ public class FormationTable : ScriptableObject
             case TacticIntent.Defense:
             default: return defenseFormation;
         }
+    }
+
+    /// <summary>构成档（T09 权重第三维）：近战>60%→0 / 均衡40-60%→1 / 远程<40%→2。</summary>
+    private static int ComputeCompositionTier(int meleeCount, int archerCount)
+    {
+        int total = meleeCount + archerCount;
+        if (total <= 0) return 1;
+        float meleeRatio = meleeCount / (float)total;
+        if (meleeRatio > 0.6f) return 0;
+        if (meleeRatio < 0.4f) return 2;
+        return 1;
     }
 
     /// <summary>守城编队专用查表（无将军，城墙锚点）</summary>
