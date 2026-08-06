@@ -22,12 +22,17 @@ public class AcademyBuilding : MonoBehaviour, IBuildingComponent
 
     private Building _building;
 
+    /// <summary>研究项目列表配置（P2-1 消耗定值；Resources/Config/ResearchProjectList.asset）。</summary>
+    private ResearchProjectList _projectList;
+
     public IReadOnlyList<ResearchProject> Queue => queue;
 
     public void Init(Building building)
     {
         _building = building;
-        // P1：仅数据结构落地。研究进度推进/完成判定在 P2 接入（ResearchProject.durationDays 天驱动，对齐训练队列）。
+        _projectList = Resources.Load<ResearchProjectList>("Config/ResearchProjectList");
+        // P1-P2-1：列表/消耗定值落地（金+研究时长）。研究进度推进/完成判定仍在 P2 后续接入
+        // （ResearchProject.durationDays 天驱动，对齐训练队列）；当前仅保留队列数据结构，不强行实现完整进度条。
     }
 
     /// <summary>是否空闲（无进行中项目）。</summary>
@@ -68,6 +73,27 @@ public class AcademyBuilding : MonoBehaviour, IBuildingComponent
     {
         queue.Remove(project);
     }
+
+    /// <summary>
+    /// 获取当前可研究项目列表（P2-1）。
+    /// 规则：researchLevel &gt; currentTechLevel（尚未研究）且 researchLevel ≤ 科技模块等级（研究等级 ≤ 模块等级）。
+    /// 科技模块等级由 KingdomManager 提供（Science 模块）。未加载列表时返回空列表。
+    /// </summary>
+    public List<ResearchProject> GetAvailableProjects(int currentTechLevel)
+    {
+        var result = new List<ResearchProject>();
+        if (_projectList == null || _projectList.projects == null) return result;
+        int moduleLevel = KingdomManager.Instance != null
+            ? KingdomManager.Instance.GetModuleLevel(ModuleType.Science)
+            : int.MaxValue;
+        for (int i = 0; i < _projectList.projects.Length; i++)
+        {
+            var p = _projectList.projects[i];
+            if (p.researchLevel > currentTechLevel && p.researchLevel <= moduleLevel)
+                result.Add(p);
+        }
+        return result;
+    }
 }
 
 /// <summary>
@@ -79,6 +105,7 @@ public struct ResearchProject
 {
     public string id;              // 研究方向 id（P2 定值）
     public string displayName;     // 显示名（P2 定值）
+    public int researchLevel;      // 研究方向等级（1/2/3 科技 Lv；P2-1 新增，供 GetAvailableProjects 匹配）
     public int durationDays;       // 研究时长（天，P2 定值）
     public ResourcePack cost;      // 研究消耗（金+时长，P2 定值）
 }

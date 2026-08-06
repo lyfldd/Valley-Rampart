@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b167df6e3b60e942b4216f59fd76216, type: 3}
+  m_Name: ResearchProjectList
+  m_EditorClassIdentifier: 
+  projects:
+  - id: TechLv1
+    displayName: "\u79D1\u6280Lv1\u7814\u7A76"
+    researchLevel: 1
+    durationDays: 3
+    cost:
+      gold: 50
+      stone: 0
+      wood: 0
+      food: 0
+  - id: TechLv2
+    displayName: "\u79D1\u6280Lv2\u7814\u7A76"
+    researchLevel: 2
+    durationDays: 5
+    cost:
+      gold: 100
+      stone: 0
+      wood: 0
+      food: 0
+  - id: TechLv3
+    displayName: "\u79D1\u6280Lv3\u7814\u7A76"
+    researchLevel: 3
+    durationDays: 8
+    cost:
+      gold: 200
+      stone: 0
+      wood: 0
+      food: 0
