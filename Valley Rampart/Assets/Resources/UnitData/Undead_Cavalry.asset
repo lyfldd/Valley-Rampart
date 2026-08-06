@@ -40,7 +40,7 @@ MonoBehaviour:
   protectPower: 0.2
   isHeavyArmor: 0
   isCavalry: 1
-  chargeDamage: 80
+  chargeDamage: 40
   chargeRangeCells: 4
   chargeSpeed: 25
   chargePairGap: 0.3

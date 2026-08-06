@@ -131,6 +131,12 @@ public struct ProfessionSnapshot
     public float ammoResupplyDelay;         // 补给延迟（秒，模拟工人从后方搬运往返）
     public float ammoConservationWeight;    // 惜用权重 0-1（训练可调；弹药紧张时提高发射门槛）
 
+    // ===== 战争机器乘员（改动②：弩炮/投掷机需工人操作）=====
+    // crewRequired > 0 时，机器需 crewRequired 个友方工人（attack<=0 且 roleFamily==None）在
+    // crewRadiusCells 半径内才可发射/移动（操作战争机器任务）。工人不足则停火停机。
+    public int crewRequired;                // 需几名工人（0=不需要，恒可工作）
+    public float crewRadiusCells;           // 工人操作半径（格，工人在旁即算操作）
+
     /// <summary>
     /// 默认值（非 NPC 职业单位用；数值对齐 NpcProfessionDef 字段默认值）。
     /// </summary>
@@ -194,5 +200,8 @@ public struct ProfessionSnapshot
         ammoCostMagic = 5f,
         ammoResupplyDelay = 0f,
         ammoConservationWeight = 0.5f,
+        // 战争机器乘员（默认 0=不需工人）
+        crewRequired = 0,
+        crewRadiusCells = 0f,
     };
 }

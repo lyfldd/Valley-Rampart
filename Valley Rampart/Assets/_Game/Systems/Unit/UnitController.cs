@@ -30,6 +30,29 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public UnitData Data { get; private set; }
     public int CurrentHp { get; private set; }
 
+    // ===== 3.5 P0 步骤4：运行时职业覆盖（转职用，不污染共享 UnitData SO）=====
+    private int _runtimeOccupation = -1;   // -1 = 未设置，回退 Data.occupation
+    /// <summary>有效职业（优先运行时覆盖，否则 Data.occupation）。</summary>
+    public Occupation EffectiveOccupation => _runtimeOccupation >= 0 ? (Occupation)_runtimeOccupation : (Data != null ? Data.occupation : Occupation.Civilian);
+    /// <summary>设置运行时职业（TrainingSystem 转职用；随 UnitSaveData.occupation 持久化）。</summary>
+    public void SetOccupation(Occupation occ) { _runtimeOccupation = (int)occ; }
+
+    // ===== 3.5 P1 生活状态：饱食 / 幸福 / 装备（随 UnitSaveData v2 持久化）=====
+    /// <summary>个体饱食度（0-100）。由 SatietySystem 每日结算，0 扣血 / 80+ 回血。</summary>
+    public int Satiety;
+    /// <summary>个体幸福度（0-100）。由 HappinessSystem 多因素结算，整体幸福 = 全体平均。</summary>
+    public int IndividualHappiness = 50;
+    /// <summary>已穿戴装备 id（null=无；穿戴后属性修正 + 职业转变，见 EquipmentSystem）。</summary>
+    public string EquipId;
+
+    /// <summary>初始化生活状态（新建单位调用；SatietySystem/HappinessSystem/存档读档共用）。</summary>
+    public void InitLifeState(int satiety, int happiness, string equipId)
+    {
+        Satiety = Mathf.Clamp(satiety, 0, 100);
+        IndividualHappiness = Mathf.Clamp(happiness, 0, 100);
+        EquipId = string.IsNullOrEmpty(equipId) ? null : equipId;
+    }
+
     // ===== 工事（3.6 §4.4：墙/门/拒马/塔对象配此引用，越墙判定/移动阻挡用）=====
     // 瞬态配置字段，不入存档（用户约束：存档不做 AI/NPC 相关）
     [Tooltip("工事配置（墙/门/拒马/塔对象配此引用；非工事单位留空）")]
@@ -73,8 +96,8 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         return Time.time < _slowUntil ? baseSpeed * (1f - _slowFactor) : baseSpeed;
     }
 
-    // ===== 骑兵冲锋（3.6 §5.3 状态：0=None 1=冲锋结算 3=第二击等待）=====
-    // 穿透冲锋 = 瞬间位移 + 路径击飞（NPCBrain.ImpactCharge），无逐帧突进态
+    // ===== 骑兵冲锋（3.6 §5.3 状态：0=None 1=准备 2=突进① 3=停顿 4=突进②；双连击）=====
+    // 穿透冲锋 = 分两段位移 + 路径击飞（NPCBrain.TickCharge），无物理碰撞
     public int ChargeState;
     public UnitController ChargeTarget;
     public float ChargeReadyTime;   // 组冷却截止
@@ -93,8 +116,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public bool IsAmmoEmpty => AmmoStone <= 0 && AmmoFireball <= 0 && AmmoMagic <= 0;
 
     // ===== D3 清理轮：hv*/惜用阈值（默认 = champion 默认；NPCBrain.Init 从 AttentionTuningConfig 覆盖）=====
-    public float HvKillHpGate = 0.5f;    // 高价值：残血阈值（tuning.hvKillHpGate）
-    public float HvDefenseGate = 20f;    // 高价值：重甲阈值（tuning.hvDefenseGate）
+    public float HvKillHpGate = 0.3f;    // 高价值：残血阈值（tuning.hvKillHpGate，champion 0.3）
+    public float HvDefenseGate = 33f;    // 高价值：重甲阈值（tuning.hvDefenseGate，champion 33）
+    public float HvCrowdGate = 5.5f;     // 高价值：邻域敌数阈值（tuning.hvCrowdGate，champion 5.5；AOE 溅射收益）
     public float AmmoConserveRatio = 0.3f; // 惜用触发：石弹 < 此比例（tuning.ammoConserveRatio）
 
     // ===== 运行时可变属性 =====
@@ -203,6 +227,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             fortification = profession.fortification;
         }
 
+        // 3.5 P1：初始化生活状态（饱食起始默认；幸福起始 50；无装备）
+        int startSatiety = 80;
+        if (KingdomManager.Instance != null && KingdomManager.Instance.Config != null)
+            startSatiety = KingdomManager.Instance.Config.satietyStart;
+        InitLifeState(startSatiety, 50, null);
+
         UnitRegistry.Instance.Register(this);
 
         // 分配唯一 SaveId 并注册为可存档对象
@@ -236,8 +266,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         var data = new UnitSaveData
         {
+            saveDataVersion = 2,
             faction = (int)Data.faction,
-            occupation = (int)Data.occupation,
+            occupation = (int)EffectiveOccupation,
             currentHp = CurrentHp,
             maxHp = MaxHp,
             attack = Attack,
@@ -245,13 +276,17 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             walkSpeed = WalkSpeed,
             runSpeed = RunSpeed,
             posX = transform.position.x,
-            posY = transform.position.y
+            posY = transform.position.y,
+            // v2：饱食 / 幸福 / 装备（3.5 P1）
+            satiety = Satiety,
+            happiness = IndividualHappiness,
+            equipId = EquipId
         };
         return new SavePayload
         {
             typeName = typeof(UnitSaveData).AssemblyQualifiedName,
             json = JsonUtility.ToJson(data),
-            version = 1
+            version = 2
         };
     }
 
@@ -267,6 +302,19 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         WalkSpeed = data.walkSpeed;
         RunSpeed = data.runSpeed;
         // 位置已在 SpawnFromSave 时由 UnitFactory.SpawnUnit 设置
+
+        // v2 兼容：v1 存档缺生活字段 → 给默认值（饱食=config 起始，幸福=50，无装备）
+        if (data.saveDataVersion >= 2)
+        {
+            InitLifeState(data.satiety, data.happiness, data.equipId);
+        }
+        else
+        {
+            int startSatiety = 80;
+            if (KingdomManager.Instance != null && KingdomManager.Instance.Config != null)
+                startSatiety = KingdomManager.Instance.Config.satietyStart;
+            InitLifeState(startSatiety, 50, null);
+        }
     }
 
     // ===== 战斗系统（3.4 重构）=====
@@ -425,8 +473,13 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (Data == null || !IsAlive || distanceWorld <= 0f) return;
 
         _knockbackDir = impactDir.normalized;
-        _knockbackStartX = _rb.position.x;
-        _knockbackStartY = _rb.position.y;
+        // 地面基准 Y 只在首次受击时抓取：弧线中再被撞（二次击飞）不覆盖基准，
+        // 保证抛物线最终落回地面基准线（y=-3），避免基准被抬高后悬空。
+        if (!_knockbackActive)
+        {
+            _knockbackStartX = _rb.position.x;
+            _knockbackStartY = _rb.position.y;
+        }
         _knockbackDistance = distanceWorld;
         _knockbackDuration = Mathf.Max(0.1f, duration);
         _knockbackElapsed = 0f;
@@ -444,6 +497,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
         // 3.7 P1 静态单位攻击（塔/弩炮/投掷机）：射程内最近敌注册攻击，无目标停手。
         // 静态单位无 NPCBrain，本分支是唯一攻击驱动（isStatic 判定开销极小，仅静态 prefab 命中）。
+        // 改动②：crewRequired>0 的战争机器优先路由（先于 isStatic）——需工人操作才可发射/移动。
+        if (_professionSnapshot.crewRequired > 0)
+        {
+            CrewMachineThinkCore();
+            return;   // 乘员战争机器不走击飞（机器免疫，sim 同语义）
+        }
         if (_professionSnapshot.isStatic)
         {
             StaticAttackThink();
@@ -591,21 +650,67 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
 
     /// <summary>B1 目标价值评估（对齐 sim SimBrain.IsHighValueTarget）：残血 / 重甲 / 邻域密集。
-    /// D3 清理轮：阈值读字段（NPCBrain 注入 tuning.hv*）；邻域密集需 GridSystem 扫描，与 hvCrowdGate 一起由 NPCBrain 侧提供。</summary>
+    /// D3 清理轮：阈值读字段（NPCBrain 注入 tuning.hv*）；邻域密集用 GridSystem 邻近格扫描（对齐 sim AOE 溅射半径）。</summary>
     public bool IsHighValueTarget(IDamageable target)
     {
         if (target == null || target.CurrentHp <= 0) return false;
         float hpRatio = target.MaxHp > 0 ? (float)target.CurrentHp / target.MaxHp : 0f;
         if (hpRatio < HvKillHpGate) return true;      // 残血
         if (target.Defense >= HvDefenseGate) return true; // 重甲
+        // 邻域密集（AOE 收益）：aoe 半径内 ≥ hvCrowdGate 个敌人（对齐 sim IsHighValueTarget：crowdRadius=aoeRadiusCells*2）
+        if (HvCrowdGate > 0f && _professionSnapshot.aoeRadiusCells > 0f)
+        {
+            float aoeWorld = _professionSnapshot.aoeRadiusCells * 2f * GetCellSize();
+            int crowd = CountNearbyHostiles(target, aoeWorld);
+            if (crowd >= HvCrowdGate) return true;
+        }
         return false;
+    }
+
+    /// <summary>统计目标邻域 aoeWorld 半径内的敌对单位数（GridSystem 邻近格扫描，对齐 sim crowd 计数）。</summary>
+    private int CountNearbyHostiles(IDamageable center, float aoeWorld)
+    {
+        if (GridSystem.Instance == null || center == null) return 0;
+        float cellSize = GetCellSize();
+        int cellRange = Mathf.Max(1, Mathf.CeilToInt(aoeWorld / cellSize));
+        Vector2 centerPos = center.GetPosition();
+        GridCoord centerCoord = GridSystem.Instance.WorldToCoord(centerPos);
+        int count = 0;
+        for (int dx = -cellRange; dx <= cellRange; dx++)
+        {
+            for (int dy = 0; dy <= 1; dy++)
+            {
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(centerCoord.x + dx, dy));
+                foreach (var unit in units)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+                    if (uc.GetFaction() == GetFaction() || uc.GetFaction() == Faction.None) continue;
+                    if (Vector2.Distance(centerPos, uc.transform.position) <= aoeWorld) count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// <summary>网格 cellSize（GridSystem 未就绪时回退 1）。</summary>
+    private float GetCellSize()
+    {
+        return (GridSystem.Instance != null && GridSystem.Instance.Config != null)
+            ? GridSystem.Instance.Config.cellSize : 1f;
     }
 
     /// <summary>静态单位射程内最近敌对单位（GridSystem 邻近格扫描，y 地面+飞行两层）。</summary>
     private IDamageable FindNearestEnemyInRange()
     {
+        return FindNearestEnemy(_professionSnapshot.attackRange * GetCellSize());
+    }
+
+    /// <summary>指定 rangeWorld 半径内最近敌对单位（GridSystem 邻近格扫描）。</summary>
+    private IDamageable FindNearestEnemy(float rangeWorld)
+    {
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return null;
         float cellSize = GridSystem.Instance.Config.cellSize;
-        float rangeWorld = _professionSnapshot.attackRange * cellSize;
         GridCoord center = GridSystem.Instance.WorldToCoord(_rb.position);
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
 
@@ -632,6 +737,106 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         }
         return nearest;
     }
+
+    /// <summary>
+    /// 乘员战争机器（改动②，对齐 sim SimBrain.CrewMachineThinkCore）：需 crewRequired 个友方工人
+    /// （同阵营、存活、attack<=0 且 roleFamily==None）在 crewRadiusCells×cellSize 内才可发射 + 缓慢移动；
+    /// 工人不足则停火停机。只在 crewRequired>0 时调用（先于 isStatic 路由）。
+    /// </summary>
+    private void CrewMachineThinkCore()
+    {
+        if (DamageSystem.Instance == null || GridSystem.Instance == null) return;
+
+        int crew = CountCrewWorkers();
+        bool crewed = crew >= _professionSnapshot.crewRequired;
+
+        // 开火目标：射程内最近敌；reposition 目标：感知内最近敌（射程外也朝其推进，进射程再开火）
+        IDamageable fireTarget = FindNearestEnemy(_professionSnapshot.attackRange * GetCellSize());
+        IDamageable moveTarget = FindNearestEnemy(_professionSnapshot.perceptionRadius * GetCellSize());
+
+        // 机器当作特殊建筑：必须有工人操作才可开火（改动②：工人门控发射）
+        bool canFire = false;
+        if (crewed && fireTarget != null && _professionSnapshot.attack > 0)
+        {
+            float d = Vector2.Distance(_rb.position, fireTarget.GetPosition());
+            if (d <= _professionSnapshot.attackRange * GetCellSize() && SelectAmmo(fireTarget, out var ammoType))
+            {
+                canFire = true;
+                if (!ReferenceEquals(fireTarget, _staticTarget))
+                {
+                    _staticTarget = fireTarget;
+                    var profile = BuildStaticProfile(ammoType);
+                    if (DamageSystem.Instance.RegisterAttack(this, fireTarget, profile))
+                        ConsumeAmmo(ammoType);   // B1：发射扣弹
+                }
+            }
+        }
+        if (!canFire)
+        {
+            // 工人不足或射程外/耗弹：停火（不移动走下方 Idle 判定）
+            if (_staticTarget != null)
+            {
+                _staticTarget = null;
+                DamageSystem.Instance.Unregister(this);
+            }
+        }
+        // 移动：有工人操作朝感知内最近敌缓慢推进（reposition，速度 = walkSpeed 缓慢，改动④）；工人不足则 Idle 停机
+        if (crewed && moveTarget != null)
+            MoveTowards(moveTarget.GetPosition(), speedOverride: _professionSnapshot.walkSpeed);
+    }
+
+    /// <summary>统计操作半径内可用工人数（同阵营、存活、attack<=0 且 roleFamily==None）。</summary>
+    private int CountCrewWorkers()
+    {
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return 0;
+        float cellSize = GetCellSize();
+        float crewRadius = _professionSnapshot.crewRadiusCells * cellSize;
+        GridCoord center = GridSystem.Instance.WorldToCoord(_rb.position);
+        int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
+        int count = 0;
+        for (int dx = -cellRange; dx <= cellRange; dx++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                foreach (var unit in units)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+                    if (ReferenceEquals(uc, this)) continue;
+                    if (uc.GetFaction() != GetFaction()) continue;   // 同阵营
+                    if (!IsWorker(uc)) continue;                     // attack<=0 且 roleFamily==None
+                    if (Vector2.Distance(_rb.position, uc.transform.position) > crewRadius) continue;
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// <summary>是否纯工人（attack&lt;=0 且 roleFamily==None，对齐 sim CrewMachineThinkCore 工人判定，复用 Civilian 工人）。</summary>
+    private static bool IsWorker(UnitController uc)
+    {
+        var nd = uc.Data as NpcProfessionDef;
+        if (nd != null) return nd.attack <= 0 && nd.roleFamily == RoleFamily.None;
+        return uc.Attack <= 0;
+    }
+
+    /// <summary>是否需工人操作（改动②：crewRequired&gt;0 的战争机器单位）。供调度中心派工人用。</summary>
+    public bool IsCrewMachine => _professionSnapshot.crewRequired > 0;
+
+    /// <summary>缺几名工人（0=已满编/不需工人）。供调度中心（ScheduleCenterStub.DispatchCrew）按缺口派工人。</summary>
+    public int CrewDeficit()
+    {
+        if (!IsCrewMachine) return 0;
+        return Mathf.Max(0, _professionSnapshot.crewRequired - CountCrewWorkers());
+    }
+
+    /// <summary>附近是否有敌（有敌情才派工人操作，供调度中心做敌情门控，避免锁死工人）。</summary>
+    public bool HasNearbyEnemy(float rangeWorld) => FindNearestEnemy(rangeWorld) != null;
+
+    /// <summary>机器感知范围内是否有敌（敌情门控默认用感知半径）。</summary>
+    public bool HasNearbyEnemy() => HasNearbyEnemy(_professionSnapshot.perceptionRadius * GetCellSize());
 
     /// <summary>
     /// 按方向移动。run=true 使用 runSpeed，否则使用 walkSpeed。
@@ -781,6 +986,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 [System.Serializable]
 public class UnitSaveData
 {
+    public int saveDataVersion = 1;
     public int faction;
     public int occupation;
     public int currentHp;
@@ -791,4 +997,8 @@ public class UnitSaveData
     public float runSpeed;
     public float posX;
     public float posY;
+    // ===== v2（3.5 P1）：饱食 / 幸福 / 装备 =====
+    public int satiety = 80;
+    public int happiness = 50;
+    public string equipId;
 }

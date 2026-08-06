@@ -123,6 +123,12 @@ public class NpcProfessionDef : UnitData
     [Tooltip("惜用权重 0-1（训练可调；弹药紧张时提高发射价值门槛）")]
     public float ammoConservationWeight = 0.5f;
 
+    [Header("战争机器乘员（改动②：弩炮/投掷机需工人操作）")]
+    [Tooltip("需几名工人操作（0=不需工人，恒可工作）。Catapult/Ballista=2")]
+    public int crewRequired = 0;
+    [Tooltip("工人操作半径（格）。工人在此半径内即算操作机器")]
+    public float crewRadiusCells = 0f;
+
     [Header("角色族（B4 构成驱动非职业驱动，00 B2 定案）")]
     [Tooltip("角色族（Tank 顶住/Sniper 点杀/Aoe 密度/Support 治疗/Mobility 冲锋/Machine 重火力）。目标选择/治疗按族走，不按职业名硬编码")]
     public RoleFamily roleFamily = RoleFamily.None;
@@ -199,6 +205,9 @@ public class NpcProfessionDef : UnitData
             ammoCostMagic = ammoCostMagic,
             ammoResupplyDelay = ammoResupplyDelay,
             ammoConservationWeight = ammoConservationWeight,
+            // 战争机器乘员（改动②）
+            crewRequired = crewRequired,
+            crewRadiusCells = crewRadiusCells,
         };
     }
 }

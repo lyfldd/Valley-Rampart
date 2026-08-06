@@ -23,8 +23,31 @@ public enum BuildingState
 /// 地图预置建筑（树/矿/裂隙/主城）由 BuildingFactory 实例化，isPlayerBuilt=false；
 /// 玩家建造由 BuildController 实例化，isPlayerBuilt=true。
 /// </summary>
-public class Building : MonoBehaviour, IInteractable, IDamageable
+public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
 {
+    // ===== ISaveable（3.5 实施计划 P0 步骤3）=====
+    /// <summary>全局唯一存档 ID（Building_{guid}）。Awake 分配，读档时由 BuildingFactory.SpawnFromSave 覆盖。</summary>
+    public string SaveId { get; private set; }
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Scene;
+
+    private void Awake()
+    {
+        if (string.IsNullOrEmpty(SaveId))
+        {
+            SaveId = $"Building_{System.Guid.NewGuid():N}";
+            SaveManager.Instance?.RegisterSaveable(this);
+        }
+    }
+
+    /// <summary>用存档里的 SaveId 覆盖 Awake 分配的新 GUID（读档时由 BuildingFactory 调）。</summary>
+    public void OverrideSaveId(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        string oldId = SaveId;
+        SaveId = id;
+        SaveManager.Instance?.ChangeSaveId(oldId, id, this);
+    }
+
     // ===== 占位 =====
     [Header("占位")]
     public GridCoord coord;
@@ -83,6 +106,98 @@ public class Building : MonoBehaviour, IInteractable, IDamageable
 
     /// <summary>阵营。</summary>
     public Faction GetFaction() => faction;
+
+    /// <summary>
+    /// 是否被足够工人操作（改动② 战争机器乘员：Catapult 建筑层 crew 机制）。
+    /// crewRequired<=0 恒 true（不需工人）；否则统计 crewRadiusCells 半径内同阵营纯工人（attack<=0 且 roleFamily==None，复用 Civilian）。
+    /// 供建筑/防御攻击驱动（CombatComponent 落点）在发射前门控——工人不足则停火停机。
+    /// </summary>
+    public bool HasEnoughCrew()
+    {
+        if (def == null || def.crewRequired <= 0) return true;
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
+        float cellSize = GridSystem.Instance.Config.cellSize;
+        float crewRadius = def.crewRadiusCells * cellSize;
+        GridCoord center = GridSystem.Instance.WorldToCoord(transform.position);
+        int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
+        int count = 0;
+        for (int dx = -cellRange; dx <= cellRange; dx++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                foreach (var unit in units)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+                    if (uc.GetFaction() != faction) continue;
+                    var nd = uc.Data as NpcProfessionDef;
+                    if (nd != null && !(nd.attack <= 0 && nd.roleFamily == RoleFamily.None)) continue;
+                    if (Vector2.Distance(transform.position, uc.transform.position) > crewRadius) continue;
+                    count++;
+                }
+            }
+        }
+        return count >= def.crewRequired;
+    }
+
+    /// <summary>缺几名工人（0=已满编/不需工人）。供调度中心（ScheduleCenterStub.DispatchCrew）按缺口派工人到建筑旁。</summary>
+    public int CrewDeficit()
+    {
+        if (def == null || def.crewRequired <= 0) return 0;
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return def.crewRequired;
+        float cellSize = GridSystem.Instance.Config.cellSize;
+        float crewRadius = def.crewRadiusCells * cellSize;
+        GridCoord center = GridSystem.Instance.WorldToCoord(transform.position);
+        int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
+        int count = 0;
+        for (int dx = -cellRange; dx <= cellRange; dx++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                foreach (var unit in units)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+                    if (uc.GetFaction() != faction) continue;
+                    var nd = uc.Data as NpcProfessionDef;
+                    if (nd != null && !(nd.attack <= 0 && nd.roleFamily == RoleFamily.None)) continue;
+                    if (Vector2.Distance(transform.position, uc.transform.position) > crewRadius) continue;
+                    count++;
+                }
+            }
+        }
+        return Mathf.Max(0, def.crewRequired - count);
+    }
+
+    /// <summary>附近是否有敌（有敌情才派工人操作，供调度中心做敌情门控，避免锁死工人）。</summary>
+    public bool HasNearbyEnemy() => HasNearbyEnemy(def != null ? def.combat.range : 8f);
+
+    /// <summary>附近是否有敌（指定探测范围）。</summary>
+    public bool HasNearbyEnemy(float rangeWorld)
+    {
+        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
+        float cellSize = GridSystem.Instance.Config.cellSize;
+        int range = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
+        GridCoord center = GridSystem.Instance.WorldToCoord(transform.position);
+        for (int dx = -range; dx <= range; dx++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                foreach (var unit in units)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || !uc.IsAlive) continue;
+                    if (uc.GetFaction() == faction) continue;   // 非友方 = 敌
+                    if (Vector2.Distance(transform.position, uc.transform.position) > rangeWorld) continue;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// 恢复血量（建筑不回血，空实现）。首版不触发，后续对接资源系统时按需实装。
@@ -270,6 +385,55 @@ public class Building : MonoBehaviour, IInteractable, IDamageable
         float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
         RulerController.Instance?.Refund(def.cost, ratio);
         Die(DeathCause.Demolished);
+    }
+
+    // ===== ISaveable 实现（3.5 实施计划 P0 步骤3）=====
+
+    public SavePayload SaveState()
+    {
+        var storage = GetComponent<StorageComponent>();
+        var producer = GetComponent<ProducerComponent>();
+        var data = new BuildingSaveData
+        {
+            defId = def != null ? def.id : "",
+            coordX = coord.x,
+            level = level,
+            hp = hp,
+            maxHp = maxHp,
+            faction = (int)faction,
+            state = (int)state,
+            cellWidth = cellWidth,
+            sourceType = (int)sourceType,
+            storedAmount = storage != null ? storage.storedAmount : 0,
+            byproductType = producer != null ? (int)producer.ByproductType : 0,
+            byproductAmount = producer != null ? producer.ByproductAmount : 0
+        };
+        return new SavePayload
+        {
+            typeName = typeof(BuildingSaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(BuildingSaveData).AssemblyQualifiedName) return;
+        var data = JsonUtility.FromJson<BuildingSaveData>(payload.json);
+
+        level = Mathf.Max(1, data.level);
+        maxHp = Mathf.Max(1, data.maxHp);
+        hp = Mathf.Clamp(data.hp, 0, maxHp);
+
+        var storage = GetComponent<StorageComponent>();
+        if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
+
+        var producer = GetComponent<ProducerComponent>();
+        if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
+
+        // 网格占用恢复（Spawning 已占用，此处兜底幂等）
+        if (GridSystem.Instance != null)
+            GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), this);
     }
 
     // ===== 战斗（3.4 实现 IDamageable）=====

@@ -196,6 +196,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             _controller.HvKillHpGate = _config.hvKillHpGate;
             _controller.HvDefenseGate = _config.hvDefenseGate;
+            _controller.HvCrowdGate = _config.hvCrowdGate;
             _controller.AmmoConserveRatio = _config.ammoConserveRatio;
         }
 
@@ -719,6 +720,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
         if (_profession.attack > 0)  // 战斗单位才攻击
         {
+            // 改动③「懵」：被骑兵撞飞期间（1.2s）禁攻击（对齐 sim UpdateCombatRegistration：IsKnockedBack -> StopAttacking + return）
+            if (SelfUnit != null && SelfUnit.IsKnockedBack)
+            {
+                StopAttacking();
+                return;
+            }
+
             // 路径1：威胁焦点 + 在射程内（原逻辑）
             if (focus.IsValid && focus.Focus is ThreatStimulus ts
                 && ts.Enemy != null && ts.Enemy.IsAlive && ts.Enemy.CurrentHp > 0)
@@ -1025,7 +1033,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         return count;
     }
 
-    // ===== 骑兵冲锋（3.6 §5.3 四态：0=None 1=准备 2=突进 3=第二击等待；免伤 70% 突进中生效）=====
+    // ===== 骑兵冲锋（3.6 §5.3 五态：0=None 1=准备 2=突进① 3=停顿 4=突进②；免伤 70% 突进中生效）=====
 
     /// <summary>本单位的 UnitController（冲锋状态挂在它身上）。</summary>
     private UnitController SelfUnit => _self as UnitController;
@@ -1080,8 +1088,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
     /// <summary>
     /// 每帧推进冲锋状态机（Update 调）：
-    ///   1 准备 → 2 突进（高速连续位移 + 逐帧扫路径击飞）→ 3 第二击等待 → 0 组冷却。
-    /// 3.6 §5.3 穿透冲锋：冲满 chargeRange（4 格）穿过目标到后排，路径上所有敌对单位被击飞（韧性决定距离）。
+    ///   1 准备 → 2 突进①（高速连续位移 + 扫路径击飞）→ 3 停顿（chargePairGap）→ 4 突进②（同①）→ 0 组冷却。
+    /// 3.6 §5.3 穿透冲锋双连击：两段各冲满 chargeRange（4 格），路径上所有敌对单位被击飞（韧性决定距离）。
     /// </summary>
     private void TickCharge()
     {
@@ -1089,23 +1097,17 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         if (SelfUnit == null) return;
 
         float cellSize = GetCellSize();
+        float now = Time.time;
 
-        // 第二击等待（chargePairGap 0.3s）
+        // 3 停顿：两段冲锋之间的短暂间隔（chargePairGap 0.3s）→ 续接突进②
         if (SelfUnit.ChargeState == 3)
         {
-            if (Time.time >= SelfUnit.ChargeSecondTime)
-            {
-                var t2 = SelfUnit.ChargeTarget;
-                SelfUnit.ChargeState = 0;
-                SelfUnit.ChargeTarget = null;
-                SelfUnit.ChargeReadyTime = Time.time + _profession.chargeGroupCooldown;
-                if (t2 != null && t2.IsAlive && t2.CurrentHp > 0)
-                    DamageSystem.Instance?.ApplyDamage(_self, t2, (int)_profession.chargeDamage);
-            }
+            if (now >= SelfUnit.ChargeSecondTime)
+                BeginChargeSegment2();
             return;
         }
 
-        // 1 准备：锁定方向与终点，下帧开始突进
+        // 1 准备：锁定方向与终点，下帧开始突进①
         if (SelfUnit.ChargeState == 1)
         {
             var t = SelfUnit.ChargeTarget;
@@ -1125,9 +1127,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             return;
         }
 
-        // 2 突进：chargeSpeed 高速连续位移（非瞬移），每帧扫上帧→本帧线段击飞
-        if (SelfUnit.ChargeState == 2)
+        // 2 突进① / 4 突进②：chargeSpeed 高速连续位移（非瞬移），每帧扫上帧→本帧线段击飞
+        if (SelfUnit.ChargeState == 2 || SelfUnit.ChargeState == 4)
         {
+            bool isSecond = SelfUnit.ChargeState == 4;
             float rangeWorld = _profession.chargeRangeCells * cellSize;
             float step = _profession.chargeSpeed * Time.deltaTime;
             float travelBefore = _chargeTraveled;
@@ -1141,7 +1144,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             {
                 SelfUnit.ChargeState = 0;
                 SelfUnit.ChargeTarget = null;
-                SelfUnit.ChargeReadyTime = Time.time + _profession.chargeGroupCooldown;
+                SelfUnit.ChargeReadyTime = now + _profession.chargeGroupCooldown;
                 return;
             }
             SelfUnit.Teleport(newPos);
@@ -1153,15 +1156,43 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
             if (reachEnd)
             {
-                SelfUnit.ChargeState = 3;
-                SelfUnit.ChargeSecondTime = Time.time + _profession.chargePairGap;
+                if (isSecond)
+                {
+                    // 突进② 结束 → 组冷却
+                    SelfUnit.ChargeState = 0;
+                    SelfUnit.ChargeTarget = null;
+                    SelfUnit.ChargeReadyTime = now + _profession.chargeGroupCooldown;
+                }
+                else
+                {
+                    // 突进① 结束 → 短暂停顿后突进②
+                    SelfUnit.ChargeState = 3;
+                    SelfUnit.ChargeSecondTime = now + _profession.chargePairGap;
+                }
             }
         }
     }
 
+    /// <summary>续接第二段冲锋：从当前位置重新索敌（主目标存活则重瞄，否则续向原方向）。</summary>
+    private void BeginChargeSegment2()
+    {
+        var t = SelfUnit.ChargeTarget;
+        _chargeStart = (Vector2)transform.position;
+        if (t != null && t.IsAlive && t.CurrentHp > 0)
+        {
+            _chargeDir = ((Vector2)t.transform.position - _chargeStart).normalized;
+            if (_chargeDir == Vector2.zero) _chargeDir = Vector2.right;
+        }
+        // 目标已死/被击飞出范围 → 续向原方向
+        _chargeEnd = _chargeStart + _chargeDir * (_profession.chargeRangeCells * GetCellSize());
+        _chargeTraveled = 0f;
+        _chargeHit.Clear();   // 第二段重新结算路径（双连击：同路径单位二段再撞飞）
+        SelfUnit.ChargeState = 4;
+    }
+
     /// <summary>
-    /// 路径击飞（3.6 §5.4）：x1→x2 线段上的敌对单位被击飞（动能+θ 模型，韧性决定距离），
-    /// 主目标首次被撞到时吃冲锋伤害 80。工事/机器免疫，击飞中打断攻击。
+    /// 路径击飞（3.6 §5.4）：x1→x2 线段上的敌对单位被击飞（动能+θ 模型，韧性决定距离）。
+    /// 3.6 §5.3 穿透冲锋：路径上所有敌对单位都吃冲锋伤害（chargeDamage=80）。工事/机器免疫，击飞打断攻击。
     /// </summary>
     private void ChargeSweep(float x1, float x2, float cellSize)
     {
@@ -1184,9 +1215,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             if (Random.value > 0.8f) kbDir = -_chargeDir;   // 80% 沿冲击 / 20% 反向
             DamageSystem.Instance?.TryKnockback(uc, kbDir, distWorld, dur);
 
-            // 主目标吃冲锋伤害 80（首次撞到时结算）
-            if (ReferenceEquals(uc, SelfUnit.ChargeTarget))
-                DamageSystem.Instance?.ApplyDamage(_self, uc, (int)_profession.chargeDamage);
+            // 3.6 §5.3 穿透冲锋：路径上所有敌对单位都吃冲锋伤害（穿透群伤）
+            DamageSystem.Instance?.ApplyDamage(_self, uc, (int)_profession.chargeDamage);
         }
     }
 

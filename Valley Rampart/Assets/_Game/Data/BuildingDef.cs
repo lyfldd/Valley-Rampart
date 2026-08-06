@@ -23,11 +23,21 @@ public class BuildingDef : ScriptableObject
     public Vector2Int footprint;       // 占用小区块尺寸 (w,h)，1D 地图 h 暂不用
     public TerrainType[] allowedTerrain;
 
+    [Header("模块归属（3.5 §2.2 归属原则）")]
+    [Tooltip("所属王国模块。Civil=土木/Production=生产/Livelihood=民生/Military=军事/Commerce=商业/Science=科技。用于模块级解锁判定")]
+    public ModuleType moduleType;       // 3.5：建筑归属模块（模块级解锁门槛依据）
+
     [Header("行为标记")]
     public bool isObstacle;            // 是否阻挡移动/寻路（城墙=是；资源点=否）
     public ProducerConfig producer;    // 非空 = 生成物（产资源 or 产单位）
     public CombatConfig combat;        // 非空 = 防御建筑（攻击属性，交 3.5/3.4）
     public BuildingLevel[] levels;     // 升级档位
+
+    [Header("战争机器乘员（改动②：投掷机需工人操作；对齐 NpcProfessionDef.crewRequired）")]
+    [Tooltip("需几名工人操作（0=不需工人，恒可工作）。Catapult=2")]
+    public int crewRequired = 0;
+    [Tooltip("工人操作半径（格）。工人在此半径内即算操作机器（运作战争机器任务）")]
+    public float crewRadiusCells = 0f;
 
     [Header("产能（3.3.4 批次5）")]
     [Tooltip("产出资源类型（producer.kind==Resource 时用）")]

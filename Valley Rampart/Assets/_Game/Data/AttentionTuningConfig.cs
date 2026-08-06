@@ -78,7 +78,7 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("Caution 态威胁加成（叠加到 rawFactor，目标落威胁 1 区间 [0.25,0.5)，不负责原地）")]
     public float stateThreatBias = 0.3f;
     [Tooltip("基础警戒时长（秒，3.0.1_1 §6.4）")]
-    public float baseCautionTime = 5f;
+    public float baseCautionTime = 1.2f;
     [Tooltip("基础恢复时长（秒，3.0.1_1 §6.5）")]
     public float baseRecoveryTime = 10f;
     [Tooltip("Probe 态敏感度放大系数")]
@@ -117,10 +117,10 @@ public class AttentionTuningConfig : ScriptableObject
     public float formationCasualtyDebounce = 1f;
 
     [Header("破阵博弈（3.0.1_4 §4.3）")]
-    [Tooltip("破阵升阈：breakScore 持续 > 此值进入破阵（威胁层胜出）")]
-    public float breakThreshold = 1.0f;
-    [Tooltip("破阵降阈：breakScore 持续 < 此值归队（滞回带内保持当前状态）")]
-    public float breakReleaseThreshold = 0.7f;
+    [Tooltip("破阵升阈：breakScore 持续 > 此值进入破阵（威胁层胜出）。champion T03 站槽：1.0→3.0（更难破阵、编队持久站槽）")]
+    public float breakThreshold = 3.0f;
+    [Tooltip("破阵降阈：breakScore 持续 < 此值归队（滞回带内保持当前状态）。champion：0.7→1.8（随升阈同步，保滞回带）")]
+    public float breakReleaseThreshold = 1.8f;
     [Tooltip("威胁等级加成权重（levelWeight）：1+threatLevel×此值，默认 0.5")]
     public float breakLevelWeight = 0.5f;
     [Tooltip("破阵升级确认（秒，持续超过升阈的时间）")]
@@ -275,12 +275,12 @@ public class AttentionTuningConfig : ScriptableObject
     public float sallyEnemyDistGate = 20f;
 
     [Header("战争机器高价值判定（3.7 B10 hv* 因子，D3 清理轮提配置，可训练）")]
-    [Tooltip("高价值：目标残血 < 此值（昂贵弹优先打残血补刀）")]
-    public float hvKillHpGate = 0.5f;
-    [Tooltip("高价值：目标防御 ≥ 此值（昂贵弹打重甲收益）")]
-    public float hvDefenseGate = 20f;
-    [Tooltip("高价值：目标邻域敌数 ≥ 此值（AOE 溅射收益，昂贵弹打人群）")]
-    public float hvCrowdGate = 3f;
+    [Tooltip("高价值：目标残血 < 此值（昂贵弹优先打残血补刀）。champion T10 昂贵弹惜用：0.5→0.3（更残血才算高价值）")]
+    public float hvKillHpGate = 0.3f;
+    [Tooltip("高价值：目标防御 ≥ 此值（昂贵弹打重甲收益）。champion：20→33（更高防御才算重甲高价值）")]
+    public float hvDefenseGate = 33f;
+    [Tooltip("高价值：目标邻域敌数 ≥ 此值（AOE 溅射收益，昂贵弹打人群）。champion：3→5.5（更密集才算群集高价值）")]
+    public float hvCrowdGate = 5.5f;
 
     [Header("弹药经济（3.7 B10 / D3 清理轮提配置，可训练）")]
     [Tooltip("惜用触发：石弹 < 此比例且目标非高价值 → 省弹停火（0.3=弹仓 30% 以下）")]
@@ -291,6 +291,10 @@ public class AttentionTuningConfig : ScriptableObject
     [Header("治疗（3.7 B2 / D3 清理轮提配置，可训练）")]
     [Tooltip("治疗触发：友军血比 < 此值视为需要治疗（Healer/Bishop 停火治疗）")]
     public float healHpGate = 0.7f;
+
+    [Header("阵型权重表（T09 阵型选择，champion 真身，可训练）")]
+    [Tooltip("一维扁平 [阵型*12+意图*3+构成档]，48 项。阵型序 0=防御 1=冲锋 2=撤退 3=守城；意图序 0=Defense 1=Charge 2=Retreat 3=Sally；构成三档 0=近战>60% 1=均衡 2=远程<40%。champion 修正：cand=Charge 时 防御/冲锋候选 1.0，其余 0.3（对应意图高/非对应低，0 不设防永不选中）")]
+    public float[] formationWeights = ChampionFormationWeights();
 
     [Header("军队级自动意图阈值（M7：FormationBrain 内置大脑入训，原 Inspector 字段迁移）")]
     [Tooltip("军队级决策间隔（秒，FormationBrain 秒级节奏，原 decisionInterval=1）")]
@@ -484,8 +488,8 @@ public class AttentionTuningConfig : ScriptableObject
             ammoConserveRatio = ammoConserveRatio,
             expensiveAmmoReserveRatio = expensiveAmmoReserveRatio,
             healHpGate = healHpGate,
-            // 阵型权重表（00 B9/E1 默认：对应意图 1.0，非对应 0.3，不设 0）
-            formationWeights = DefaultFormationWeights(),
+            // 阵型权重表（00 B9/E1 默认：对应意图 1.0，非对应 0.3，不设 0；champion 已训出真身存 formationWeights 字段）
+            formationWeights = formationWeights != null ? formationWeights : DefaultFormationWeights(),
         };
     }
 
@@ -498,5 +502,21 @@ public class AttentionTuningConfig : ScriptableObject
                 for (int c = 0; c < 3; c++)
                     w[f * 12 + i * 3 + c] = (f == i) ? 1f : 0.3f;
         return w;
+    }
+
+    /// <summary>阵型权重表 champion 真身（T09 训出，来自 champion/tuning.champion.json formationWeights，48 项）。</summary>
+    private static float[] ChampionFormationWeights()
+    {
+        return new float[48]
+        {
+            // f0 防御：intent0 Defense=0.3 / intent1 Charge=1.0 / intent2 Retreat=0.3 / intent3 Sally=0.3
+            0.3f,0.3f,0.3f, 1f,1f,1f, 0.3f,0.3f,0.3f, 0.3f,0.3f,0.3f,
+            // f1 冲锋：intent0=1.0 / intent1=0.3 / intent2=0.3 / intent3=0.3
+            1f,1f,1f, 0.3f,0.3f,0.3f, 0.3f,0.3f,0.3f, 0.3f,0.3f,0.3f,
+            // f2 撤退：intent0=1.0 / intent1=1.0 / intent2=1.0 / intent3=0.3
+            1f,1f,1f, 1f,1f,1f, 1f,1f,1f, 0.3f,0.3f,0.3f,
+            // f3 守城：全 0.3
+            0.3f,0.3f,0.3f, 0.3f,0.3f,0.3f, 0.3f,0.3f,0.3f, 0.3f,0.3f,0.3f,
+        };
     }
 }

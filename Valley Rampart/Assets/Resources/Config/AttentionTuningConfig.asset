@@ -35,7 +35,7 @@ MonoBehaviour:
   holdPositionIntensity: 0.6
   stateTaskDiscount: 0.3
   stateThreatBias: 0.3
-  baseCautionTime: 5
+  baseCautionTime: 1.2
   baseRecoveryTime: 10
   probeSensitivityBoost: 1.5
   baseRetreatCells: 2
@@ -55,8 +55,8 @@ MonoBehaviour:
   formationChaseRangeCells: 2
   formationSwitchDebounce: 1
   formationCasualtyDebounce: 1
-  breakThreshold: 1.0
-  breakReleaseThreshold: 0.7
+  breakThreshold: 3.0
+  breakReleaseThreshold: 1.8
   breakLevelWeight: 0.5
   breakConfirmUp: 0.3
   breakConfirmDown: 0.5
@@ -134,3 +134,62 @@ MonoBehaviour:
   heatDecayRate: 0.05
   heatSpreadThreshold: 0.6
   heatSpreadRatio: 0.4
+  speedChaseBoost: 1
+  sallyWallHpGate: 0.5
+  sallyEnemyDistGate: 20
+  hvKillHpGate: 0.3
+  hvDefenseGate: 33
+  hvCrowdGate: 5.5
+  ammoConserveRatio: 0.3
+  expensiveAmmoReserveRatio: 0.25
+  healHpGate: 0.7
+  formationWeights:
+  - 0.3
+  - 0.3
+  - 0.3
+  - 1
+  - 1
+  - 1
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 1
+  - 1
+  - 1
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
+  - 0.3
