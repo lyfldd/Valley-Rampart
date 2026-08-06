@@ -139,6 +139,10 @@ public struct TuningSnapshot
     // ===== 工作因子（3.0.1_8 §八）=====
     public float workResistScale;
 
+    // ===== 王国任务恢复（7.8 T-K/T-R，任务挂起/恢复）=====
+    public float taskResumeDelay;       // 任务恢复延迟（秒，挂起后超时才可能恢复）
+    public float taskResumeThreshold;   // 任务恢复阈值（威胁降到其下才恢复）
+
     // ===== L2 连续仲裁常数（3.0.1_8 §五）=====
     public float l2FullPowerThreatGate;
     public float l2ResistBase;

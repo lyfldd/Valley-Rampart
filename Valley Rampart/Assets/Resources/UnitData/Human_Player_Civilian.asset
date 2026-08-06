@@ -16,7 +16,7 @@ MonoBehaviour:
   occupation: 4
   walkSpeed: 3
   runSpeed: 6
-  maxHp: 80
+  maxHp: 100
   attack: 0
   defense: 0
   attackRange: 0
@@ -24,8 +24,8 @@ MonoBehaviour:
   isRanged: 0
   projectileSpeed: 0
   perceptionRadius: 4
-  threatSensitivity: 1.5
-  courage: 30
+  threatSensitivity: 0.6
+  courage: 60
   obedience: 40
   retreatThresholdOffset: -0.5
   maxHitCount: 3
@@ -53,4 +53,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 0

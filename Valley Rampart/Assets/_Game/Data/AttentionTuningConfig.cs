@@ -171,8 +171,8 @@ public class AttentionTuningConfig : ScriptableObject
     public float safetyRetreatGate = 0.3f;
 
     [Header("放弃任务因子（3.0.1_8 §六，防风筝无谓追击）")]
-    [Tooltip("放弃判定阈值：AbandonTaskFactor > 此值 → 放弃追击回归编队")]
-    public float abandonThreshold = 0.5f;
+    [Tooltip("放弃判定阈值：AbandonTaskFactor > 此值 → 放弃追击回归编队。同时作王国任务（T-K/T-R）威胁权衡线：threat > 此值 → 任务挂起工人逃跑。champion 7.8：0.5→0.8（调高让低威胁继续采集）")]
+    public float abandonThreshold = 0.8f;
     [Tooltip("可击杀收益：目标血量 < abandonKillHpGate 时 +此值（残血值得追）")]
     public float abandonBenefitKillable = 0.6f;
     [Tooltip("军令收益：FormationFactor × 此值（编队要求追击时降低放弃倾向）")]
@@ -213,6 +213,12 @@ public class AttentionTuningConfig : ScriptableObject
     [Header("工作因子（3.0.1_8 §八，任务投入抗打断）")]
     [Tooltip("工作抵抗系数：effectiveThreat 削减 = WorkFactor × 此值（半效 0.5，正在干关键活更抗打断）")]
     public float workResistScale = 0.5f;
+
+    [Header("王国任务恢复（7.8 T-K/T-R，任务挂起/恢复）")]
+    [Tooltip("任务恢复延迟：工人挂起后需超此时长（秒）才可能恢复（T-R）。champion 7.8 默认 2.0")]
+    public float taskResumeDelay = 2f;
+    [Tooltip("任务恢复阈值：威胁降到此值以下才恢复（T-R）。champion 7.8 默认 0.3")]
+    public float taskResumeThreshold = 0.3f;
 
     [Header("L2 连续仲裁常数（3.0.1_8 §五，防硬编码）")]
     [Tooltip("低威胁→FullPower 警戒线：ThreatFactor < 此值直接全力执行（原硬编码 0.3）")]
@@ -441,6 +447,8 @@ public class AttentionTuningConfig : ScriptableObject
             persistSpeedRatio = persistSpeedRatio,
             persistBenefitSpeed = persistBenefitSpeed,
             workResistScale = workResistScale,
+            taskResumeDelay = taskResumeDelay,
+            taskResumeThreshold = taskResumeThreshold,
             l2FullPowerThreatGate = l2FullPowerThreatGate,
             l2ResistBase = l2ResistBase,
             l2FormationResistScale = l2FormationResistScale,

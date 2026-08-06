@@ -332,4 +332,31 @@ public class AIDebugSpawnController : MonoBehaviour
         fc.RecruitStandard();
         Debug.Log($"[AIDebugSpawn] {(fc.faction == Faction.Undead ? "敌方" : "己方")}将军已编组，招募满编。");
     }
+
+    // ===== 王国任务（7.8 T-K/T-R）验证辅助 =====
+
+    /// <summary>
+    /// 给指定工人 GameObject 领取王国任务（若未挂 WorkerTask 则自动添加）。
+    /// 供 Play 验证用：对已生成的工人 Assign(Gather/Transport/源/目标/时长)。
+    /// </summary>
+    public void AssignKingdomTask(GameObject workerGo, WorkerTaskType type, float sourceX, float destX, float workDuration)
+    {
+        if (workerGo == null) return;
+        var task = workerGo.GetComponent<WorkerTask>();
+        if (task == null) task = workerGo.AddComponent<WorkerTask>();
+        task.Assign(type, sourceX, destX, workDuration);
+        Debug.Log($"[AIDebugSpawn] 任务分配: {workerGo.name} {type} source={sourceX} dest={destX} dur={workDuration}");
+    }
+
+    /// <summary>
+    /// 生成一个工人并领取王国任务（一步到位，供 Play 验证）。
+    /// 返回生成结果（含 Spawned 对象）。
+    /// </summary>
+    public DebugSpawnResult SpawnCivilianWithTask(Vector2 worldPos, WorkerTaskType type, float sourceX, float destX, float workDuration)
+    {
+        var result = Spawn(DebugSpawnType.PlayerCivilian, worldPos);
+        if (result.Success)
+            AssignKingdomTask(result.Spawned, type, sourceX, destX, workDuration);
+        return result;
+    }
 }

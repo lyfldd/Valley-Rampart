@@ -181,6 +181,20 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     public float DebugSafetyUrge => _safetyProvider.Stimulus.Intensity;
     public Vector2 DebugHomePoint => Vector2XUnity.ToUnity(_lastCtx.HomePoint);
 
+    // ===== 王国任务（T-K/T-R，对齐 harness SimBrain）=====
+
+    /// <summary>是否王国任务工人（T-K/T-R）：移动由 WorkerTask 独占，普通决策核不分发移动。</summary>
+    public bool IsKingdomTaskWorker;
+
+    /// <summary>威胁因子（上一帧 rawFactor，连续 0-1，映射训练侧 ThreatFactor）。</summary>
+    public float ThreatFactor => _lastRaw;
+
+    /// <summary>全局调参 SO（WorkerTask 读 abandonThreshold/taskResume*/arrivalThreshold）。</summary>
+    public AttentionTuningConfig Config => _config;
+
+    /// <summary>归巢点世界坐标（WorkerTask 挂起逃跑用，经 HomePointProvider 解析）。</summary>
+    public Vector2 HomePointWorld => _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
+
     // ===== 初始化 =====
     public void Init(NpcProfessionDef profession)
     {
@@ -313,7 +327,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         }
 
         // Execute 每帧调用（用最近一次 Think 产出的 cmd，持续移动）
-        if (_executor != null)
+        // 王国任务工人（T-K/T-R）：移动由 WorkerTask 独占，跳过普通 Executor 移动，
+        // 否则 Working 时工人被普通决策核（wander/逃跑）拉离采集点（对齐 SimBrain.IsKingdomTaskWorker）。
+        // 注意：Think 仍跑（保证 ThreatFactor 刷新），只跳过移动 Execute。
+        if (_executor != null && !IsKingdomTaskWorker)
         {
             _executor.Execute(in _lastCmd, Time.deltaTime, GetCellSize());
         }

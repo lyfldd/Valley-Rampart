@@ -21,6 +21,7 @@ MonoBehaviour:
   threatDowngradeConfirmTime: 0.5
   protectionFriendThreshold: 3
   protectionLossThreshold: 1
+  protectThreshold: 1
   threatDecayTime: 3
   scheduleRetryInterval: 3
   scheduleRecruitRadiusCells: 3
@@ -55,7 +56,7 @@ MonoBehaviour:
   formationChaseRangeCells: 2
   formationSwitchDebounce: 1
   formationCasualtyDebounce: 1
-  breakThreshold: 3.0
+  breakThreshold: 3
   breakReleaseThreshold: 1.8
   breakLevelWeight: 0.5
   breakConfirmUp: 0.3
@@ -77,7 +78,7 @@ MonoBehaviour:
   safetyNightWeight: 0.35
   safetyWoundWeight: 0.45
   safetyRetreatGate: 0.3
-  abandonThreshold: 0.5
+  abandonThreshold: 0.8
   abandonBenefitKillable: 0.6
   abandonBenefitOrder: 0.4
   abandonCostWounded: 0.4
@@ -96,6 +97,8 @@ MonoBehaviour:
   persistSpeedRatio: 1.1
   persistBenefitSpeed: 0.3
   workResistScale: 0.5
+  taskResumeDelay: 2
+  taskResumeThreshold: 0.3
   l2FullPowerThreatGate: 0.3
   l2ResistBase: 0.5
   l2FormationResistScale: 0.4
@@ -115,26 +118,9 @@ MonoBehaviour:
   hotspotSupportIntensity: 0.6
   formationOrderIntensity: 4.5
   formationOrderBoost: 6
-  formationOrderBoostDuration: 1.0
-  fbDecisionInterval: 1
-  fbHeatEngage: 0.3
-  fbHeatCharge: 0.6
-  fbSurvivalRetreatGate: 0.4
-  fbSupportSearchRadius: 150
-  fbHotspotMaxAge: 10
-  lodActiveThinkHz: 10
-  lodSemiThinkHz: 2
-  lodSleepThinkHz: 0.5
-  lodActiveRadius: 1
-  lodSemiRadius: 2
-  lodDowngradeIdleTime: 30
-  heatHitGain: 0.4
-  heatEnemyEnterGain: 0.2
-  heatAllyRetreatGain: 0.05
-  heatDecayRate: 0.05
-  heatSpreadThreshold: 0.6
-  heatSpreadRatio: 0.4
-  speedChaseBoost: 1
+  formationOrderBoostDuration: 1
+  formationAutoRecruitInterval: 5
+  formationAutoRecruitQuietSeconds: 10
   sallyWallHpGate: 0.5
   sallyEnemyDistGate: 20
   hvKillHpGate: 0.3
@@ -193,3 +179,22 @@ MonoBehaviour:
   - 0.3
   - 0.3
   - 0.3
+  fbDecisionInterval: 1
+  fbHeatEngage: 0.3
+  fbHeatCharge: 0.6
+  fbSurvivalRetreatGate: 0.4
+  fbSupportSearchRadius: 150
+  fbHotspotMaxAge: 10
+  lodActiveThinkHz: 10
+  lodSemiThinkHz: 2
+  lodSleepThinkHz: 0.5
+  lodActiveRadius: 1
+  lodSemiRadius: 2
+  lodDowngradeIdleTime: 30
+  heatHitGain: 0.4
+  heatEnemyEnterGain: 0.2
+  heatAllyRetreatGain: 0.05
+  heatDecayRate: 0.05
+  heatSpreadThreshold: 0.6
+  heatSpreadRatio: 0.4
+  speedChaseBoost: 1
