@@ -50,7 +50,13 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         Debug.Log($"[PopulationSystem] 开局人口 = {PopulationCount}");
     }
 
-    /// <summary>每日结算（DayCycleSettlement 统一入口调用）。</summary>
+    /// <summary>每日结算（DayCycleSettlement 统一入口调用）。
+    /// 3.5 P0-1 补全三层生育前置：
+    ///   ① 全局：幸福>threshold 且 平均饱食>threshold（已有）
+    ///   ② 房屋：王国房屋剩余容量 > 0（房屋满=禁止生育，硬前置）
+    ///   ③ 个体：单对 10 天冷却（birthPairCooldownDays，计数制下作全局冷却对齐）
+    /// 随机配对 = 现有 PopulationCount/birthCouplesDivisor 对数模型（计数制抽象）。
+    /// </summary>
     public void OnNewDay()
     {
         var cfg = LifeConfig();
@@ -62,20 +68,30 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         if (SatietySystem.Instance != null)
             AvgSatiety = SatietySystem.Instance.GetAverageSatiety();
 
+        int pairCooldown = cfg.birthPairCooldownDays > 0 ? cfg.birthPairCooldownDays : cfg.birthIntervalDays;
+
         BirthCooldownDays--;
         if (BirthCooldownDays > 0) return;
 
-        // 生育条件：幸福>60 且 平均饱食>50（真实值）
+        // ② 房屋硬前置：王国房屋剩余容量 > 0（房屋满 = 禁止生育）
+        bool hasHouse = false;
+        if (HappinessSystem.Instance != null)
+        {
+            int houseCapacity = HappinessSystem.Instance.GetTotalHouseCapacity();
+            hasHouse = houseCapacity > PopulationCount;   // 剩余容量 > 0
+        }
+
+        // ① 全局条件：幸福>60 且 平均饱食>50（真实值）
         bool happy = AvgHappiness > cfg.birthHappinessThreshold;
         bool fed = AvgSatiety > cfg.birthSatietyThreshold;
-        if (!happy || !fed)
+        if (!happy || !fed || !hasHouse)
         {
             // 条件不满足则重置冷却，待下轮再评估
-            BirthCooldownDays = cfg.birthIntervalDays;
+            BirthCooldownDays = pairCooldown;
             return;
         }
 
-        // 每 2 人每 5 天 +1（人口/2 = 对数）；三层惩罚2：幸福低 → 人口增长因子降低
+        // ③ 随机配对：每 2 人生育（人口/2 = 对数）；三层惩罚2：幸福低 → 人口增长因子降低
         int couples = PopulationCount / cfg.birthCouplesDivisor;
         int growthFactor = HappinessSystem.Instance != null
             ? Mathf.RoundToInt(HappinessSystem.Instance.GetPopulationGrowthFactor() * 100f)
@@ -86,9 +102,15 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             int gain = growthFactor >= 100 ? 1 : (Random.value * 100f < growthFactor ? 1 : 0);
             PopulationCount += gain;
             if (gain > 0)
-                Debug.Log($"[PopulationSystem] 生育 +1，人口 → {PopulationCount}（出生=无职业废人；幸福因子{growthFactor}%）");
+                Debug.Log($"[PopulationSystem] 生育 +1，人口 → {PopulationCount}（出生=无职业废人；幸福因子{growthFactor}%；房屋容量{GetCurrentHouseCapacity()}）");
         }
-        BirthCooldownDays = cfg.birthIntervalDays;
+        BirthCooldownDays = pairCooldown;
+    }
+
+    /// <summary>当前王国房屋总容量（供生育日志/调试；无 HappinessSystem 返回 0）。</summary>
+    private int GetCurrentHouseCapacity()
+    {
+        return HappinessSystem.Instance != null ? HappinessSystem.Instance.GetTotalHouseCapacity() : 0;
     }
 
     // ===== ISaveable, Global =====

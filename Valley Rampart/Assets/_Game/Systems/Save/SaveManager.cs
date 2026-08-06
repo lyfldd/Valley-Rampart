@@ -26,7 +26,7 @@ public class SaveManager : Singleton<SaveManager>
     public string CurrentSlotId { get; private set; }
 
     public bool AutoSaveEnabled { get; set; } = true;
-    public int AutoSaveIntervalDays { get; set; } = 3;
+    public int AutoSaveIntervalDays { get; set; } = 1;   // 3.5 P0-7：每日自动存档
 
     private int _daysSinceLastAutoSave;
 
@@ -507,6 +507,6 @@ public class SaveManager : Singleton<SaveManager>
     private class GameSettings
     {
         public bool autoSaveEnabled = true;
-        public int autoSaveIntervalDays = 3;
+        public int autoSaveIntervalDays = 1;   // 3.5 P0-7：每日自动存档
     }
 }

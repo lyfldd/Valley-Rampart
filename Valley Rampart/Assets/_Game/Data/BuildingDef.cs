@@ -45,6 +45,12 @@ public class BuildingDef : ScriptableObject
     [Tooltip("是否为资源点（原始矿洞/树林/农田）。true=自身不产出，仅作工具放置前置（批次6）")]
     public bool isResourceNode = false;
 
+    [Header("产能并发与训练（3.5 P0-5：3.5.4 建筑数据卡 §8.2/§8.4）")]
+    [Tooltip("产能建筑并发工人数（0=不限/默认，允许任意数量工人同时操作该建筑）")]
+    public int concurrentWorkers = 0;
+    [Tooltip("训练建筑训练槽位（Lv1=1 / Lv2=2 / Lv3=3，其他=0）。等级缩放由升级档位 phase 处理，P1 训练队列接入")]
+    public int trainingSlots = 0;
+
     [Tooltip("解锁所需主城等级（1=修复后即可建，2/3=主城升级后解锁）")]
     public int unlockLevel = 1;
 

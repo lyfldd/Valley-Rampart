@@ -20,8 +20,12 @@ public class KingdomConfig : ScriptableObject
     public int birthHappinessThreshold = 60;   // 整体幸福 > 此值才生育
     public int birthSatietyThreshold = 50;     // 平均饱食 > 此值才生育
     public int birthCouplesDivisor = 2;        // 人口/2 = 对数
-    public int birthIntervalDays = 5;          // 每对每 5 天 +1 人
+    public int birthIntervalDays = 5;          // 每对每 5 天 +1 人（旧档占位，已被 birthPairCooldownDays 对齐取代）
     public int birthCooldownDefault = 5;       // 初始冷却天数（占位）
+    [Tooltip("3.5 P0-1：单对生育冷却天数（文档 10 天单对冷却）。计数制下作为全局生育冷却倒计时对齐")]
+    public int birthPairCooldownDays = 10;     // 3.5 P0-1：单对 10 天冷却
+    [Tooltip("3.5 P0-1：NPC 死亡整体幸福跌幅系数 K（avgHappiness ×= (1 - K/当前人口)），防雪崩")]
+    public float deathHappinessK = 0.5f;       // 3.5 P0-1：死亡扣幸福 K=0.5
 
     [Header("每日耗粮（饱食结算，占位；§10）")]
     public int unemployedDailyFood = 1;        // 无职业废人/工人日耗粮

@@ -71,6 +71,8 @@ MonoBehaviour:
   birthCouplesDivisor: 2
   birthIntervalDays: 5
   birthCooldownDefault: 5
+  birthPairCooldownDays: 10
+  deathHappinessK: 0.5
   unemployedDailyFood: 1
   soldierDailyFood: 2
   generalDailyFood: 3
@@ -112,7 +114,6 @@ MonoBehaviour:
   timeScales:
   - 1
   - 2
-  - 4
   byproductOrePerUnit: 5
   byproductCrystalCapacity: 20
   byproductFireOilCapacity: 20

@@ -38,7 +38,8 @@ public class SatietySystem : Singleton<SatietySystem>
         return _config;
     }
 
-    /// <summary>是否属于需要饱食的 NPC（排除纯工事/战争机器，它们非活体）。</summary>
+    /// <summary>是否属于需要饱食的 NPC（排除纯工事/战争机器/君主，它们非受治平民）。
+    /// 3.5 P0-4：君主不参与饱食/不吃粮（仅指挥移动，不耗粮）。</summary>
     public static bool IsNpc(Occupation occ)
     {
         switch (occ)
@@ -52,6 +53,7 @@ public class SatietySystem : Singleton<SatietySystem>
             case Occupation.Tower:
             case Occupation.SiegeMachine:
             case Occupation.Ballista:
+            case Occupation.Ruler:   // 3.5 P0-4：君主不耗粮
                 return false;
             default:
                 return true;

@@ -39,6 +39,8 @@ MonoBehaviour:
   levels: []
   outputResource: 0
   isResourceNode: 0
+  concurrentWorkers: 0
+  trainingSlots: 1
   unlockLevel: 3
   interactableType: 0
   isPlayerBuilt: 1

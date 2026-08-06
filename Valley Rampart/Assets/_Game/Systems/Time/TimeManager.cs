@@ -65,6 +65,17 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>当前季节的日落时刻。</summary>
     public float SunsetHour => GetSunset(CurrentSeason);
 
+    // ===== 3.5 P0-6：时间倍速（仅 1x/2x）+ 战斗降速 =====
+
+    /// <summary>当前游戏倍速（仅 1x/2x 两档，受 KingdomConfig.timeScales 约束）。</summary>
+    public float CurrentTimeScale { get; private set; } = 1f;
+    /// <summary>支持的倍速档位（KingdomConfig.timeScales；未配置回退 {1,2}）。</summary>
+    private float[] _allowedScales = { 1f, 2f };
+    /// <summary>战斗降速中（有敌人被感知）→ 强制 1x，禁止加速。</summary>
+    public bool IsCombatSlowed { get; private set; }
+    /// <summary>玩家上次请求的倍速（战斗降速结束后恢复此值，默认 1x）。</summary>
+    private float _pendingScale = 1f;
+
     protected override void Awake()
     {
         base.Awake();
@@ -82,7 +93,28 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         Debug.Log($"[TimeManager] 初始化: 第{CurrentDay}天 {CurrentTimeOfDay:0.0}点 "
             + $"季节={CurrentSeason} 时段={CurrentPhase} ({secondsPerDay}s/天, {daysPerSeason}天/季)");
 
+        // 3.5 P0-6：加载倍速档位（KingdomConfig.timeScales，仅 1x/2x）
+        var kc = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        if (kc != null && kc.timeScales != null && kc.timeScales.Length > 0)
+        {
+            _allowedScales = new float[kc.timeScales.Length];
+            for (int i = 0; i < kc.timeScales.Length; i++)
+                _allowedScales[i] = Mathf.Max(1f, kc.timeScales[i]);
+        }
+
         SaveManager.Instance.RegisterSaveable(this);
+    }
+
+    private void Start()
+    {
+        // 3.5 P0-6：敌人跨区块进入 → 战斗降速（强制 1x）
+        EventBus.Subscribe<EnemyEnteredRegionEvent>(OnEnemyEnteredRegion);
+    }
+
+    protected override void OnDestroy()
+    {
+        base.OnDestroy();
+        EventBus.Unsubscribe<EnemyEnteredRegionEvent>(OnEnemyEnteredRegion);
     }
 
     /// <summary>从 WorldSystem.Config.time 读取时间规则。config 不可用时用默认值兜底。</summary>
@@ -106,6 +138,10 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     {
         if (GameStateManager.Instance == null) return;
         if (GameStateManager.Instance.CurrentState != GameState.Playing) return;
+
+        // 3.5 P0-6：战斗降速中 → 检测敌人是否全部清除，清除则恢复玩家请求倍速（战斗结束恢复 2x）
+        if (IsCombatSlowed && !HasActiveEnemies())
+            ExitCombatSlow();
 
         AdvanceTime(Time.deltaTime);
     }
@@ -233,6 +269,81 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     public void SetDaysPerSeason(int days)
     {
         daysPerSeason = Mathf.Max(1, days);
+    }
+
+    // ===== 3.5 P0-6：倍速控制 + 战斗降速 =====
+
+    /// <summary>
+    /// 设置游戏倍速（仅允许 KingdomConfig.timeScales 档位，如 {1,2}）。
+    /// 战斗降速中（IsCombatSlowed）→ 强制 1x，忽略加速请求。
+    /// 暂停（Time.timeScale==0）时不覆盖，避免把暂停解冻成 1x。
+    /// </summary>
+    public void SetTimeScale(float scale)
+    {
+        float clamped = ClampToAllowedScale(scale);
+        CurrentTimeScale = clamped;
+        _pendingScale = clamped;   // 记录玩家请求倍速（战斗结束后恢复用）
+
+        // 战斗降速强制 1x；暂停态（0）不覆盖，避免解冻暂停
+        if (IsCombatSlowed || Mathf.Approximately(Time.timeScale, 0f)) return;
+        Time.timeScale = clamped;
+        Debug.Log($"[TimeManager] 倍速 → {clamped}x");
+    }
+
+    /// <summary>进入战斗降速（敌人被感知）：强制 1x，后续加速请求被忽略。</summary>
+    private void EnterCombatSlow()
+    {
+        if (IsCombatSlowed) return;
+        IsCombatSlowed = true;
+        CurrentTimeScale = 1f;
+        if (!Mathf.Approximately(Time.timeScale, 0f))
+            Time.timeScale = 1f;
+        Debug.Log("[TimeManager] 战斗降速：敌人靠近，强制 1x");
+    }
+
+    /// <summary>退出战斗降速（敌人清除）：恢复玩家请求倍速（战斗结束恢复 2x）。</summary>
+    private void ExitCombatSlow()
+    {
+        IsCombatSlowed = false;
+        CurrentTimeScale = _pendingScale;
+        if (!Mathf.Approximately(Time.timeScale, 0f))
+            Time.timeScale = _pendingScale;
+        Debug.Log($"[TimeManager] 战斗结束，恢复 → {_pendingScale}x");
+    }
+
+    /// <summary>当前是否仍有存活敌人（Undead 阵营）。供战斗降速结束判定。</summary>
+    private bool HasActiveEnemies()
+    {
+        if (UnitRegistry.Instance == null) return false;
+        var all = UnitRegistry.Instance.GetAllUnits();
+        for (int i = 0; i < all.Count; i++)
+        {
+            var u = all[i];
+            if (u == null || u.Data == null) continue;
+            if (u.Data.faction == Faction.Undead && u.IsAlive) return true;
+        }
+        return false;
+    }
+
+    /// <summary>敌人跨区块进入（威胁升整 region）→ 战斗降速。3.5 P0-6。</summary>
+    private void OnEnemyEnteredRegion(EnemyEnteredRegionEvent evt)
+    {
+        EnterCombatSlow();
+    }
+
+    /// <summary>把请求倍速吸附到最近允许档位（最小 1x）。</summary>
+    private float ClampToAllowedScale(float scale)
+    {
+        if (_allowedScales == null || _allowedScales.Length == 0) return Mathf.Max(1f, scale);
+        float best = 1f;
+        float bestDiff = float.MaxValue;
+        for (int i = 0; i < _allowedScales.Length; i++)
+        {
+            float s = Mathf.Max(1f, _allowedScales[i]);
+            float diff = Mathf.Abs(s - scale);
+            if (diff < bestDiff) { bestDiff = diff; best = s; }
+        }
+        return best;
     }
 
     // ===== ISaveable 实现 =====

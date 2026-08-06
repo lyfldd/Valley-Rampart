@@ -45,6 +45,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>已穿戴装备 id（null=无；穿戴后属性修正 + 职业转变，见 EquipmentSystem）。</summary>
     public string EquipId;
 
+    /// <summary>
+    /// 上次生育天数（3.5 P0-1：个体生育冷却记录，-999=可生育）。
+    /// 计数制人口系统当前用全局 BirthCooldownDays 对齐，本字段为实体制预留并随 UnitSaveData 持久化。
+    /// </summary>
+    public int LastBirthDay = -999;
+
     /// <summary>初始化生活状态（新建单位调用；SatietySystem/HappinessSystem/存档读档共用）。</summary>
     public void InitLifeState(int satiety, int happiness, string equipId)
     {
@@ -242,6 +248,11 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         // 通知外界有新单位生成（UI/仇恨/存档可订阅）
         EventBus.Publish(new UnitSpawnedEvent(this));
 
+        // 3.5 P0-2：出生即注册空间分区（静态工事/墙体无移动，不注册则永不入格，
+        // 敌人在 GridSystem 感知不到墙体、IsBlockedByFortification 也查不到 → 城墙机制失效）。
+        // 移动单位随后续移动 UpdateGridPosition 幂等覆盖，无副作用。
+        UpdateGridPosition();
+
         Debug.Log($"[UnitController] 初始化: {data.faction}_{data.occupation} "
             + $"(HP: {CurrentHp}/{MaxHp}, ATK: {Attack}, DEF: {Defense})");
     }
@@ -266,7 +277,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         var data = new UnitSaveData
         {
-            saveDataVersion = 2,
+            saveDataVersion = 3,
             faction = (int)Data.faction,
             occupation = (int)EffectiveOccupation,
             currentHp = CurrentHp,
@@ -280,13 +291,15 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             // v2：饱食 / 幸福 / 装备（3.5 P1）
             satiety = Satiety,
             happiness = IndividualHappiness,
-            equipId = EquipId
+            equipId = EquipId,
+            // v3：个体上次生育天数（3.5 P0-1）
+            lastBirthDay = LastBirthDay
         };
         return new SavePayload
         {
             typeName = typeof(UnitSaveData).AssemblyQualifiedName,
             json = JsonUtility.ToJson(data),
-            version = 2
+            version = 3
         };
     }
 
@@ -315,6 +328,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                 startSatiety = KingdomManager.Instance.Config.satietyStart;
             InitLifeState(startSatiety, 50, null);
         }
+
+        // v3 兼容：v3+ 存档恢复个体生育天数；旧档缺字段 → 默认 -999（可生育，JsonUtility 兜底）
+        LastBirthDay = data.saveDataVersion >= 3 ? data.lastBirthDay : -999;
     }
 
     // ===== 战斗系统（3.4 重构）=====
@@ -1001,4 +1017,6 @@ public class UnitSaveData
     public int satiety = 80;
     public int happiness = 50;
     public string equipId;
+    // ===== v3（3.5 P0-1）：个体上次生育天数（-999=可生育；旧档缺字段 JsonUtility 给默认 -999）=====
+    public int lastBirthDay = -999;
 }

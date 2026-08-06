@@ -33,7 +33,7 @@ MonoBehaviour:
     baseGold: 200
     baseStone: 200
     baseWood: 200
-    baseFood: 200
+    baseFood: 300
     factorGrowthPerSeason: 0.25
   season:
     seasons:
@@ -50,4 +50,4 @@ MonoBehaviour:
       sunriseHour: 7
       sunsetHour: 17
   save:
-    autoSaveIntervalDays: 3
+    autoSaveIntervalDays: 1

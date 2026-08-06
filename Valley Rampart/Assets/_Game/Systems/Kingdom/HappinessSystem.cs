@@ -29,12 +29,46 @@ public class HappinessSystem : Singleton<HappinessSystem>
         base.Awake();
         if (_instance != this) return;
         _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        // 3.5 P0-1：订阅单位死亡事件，NPC 阵亡 → 整体幸福扣减（防雪崩）
+        EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
+    }
+
+    protected override void OnDestroy()
+    {
+        if (_instance != this) return;
+        base.OnDestroy();
+        EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
     }
 
     private KingdomConfig Cfg()
     {
         if (_config == null) _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
         return _config;
+    }
+
+    // ===== 3.5 P0-1：NPC 死亡 → 整体幸福扣减（防雪崩）=====
+
+    /// <summary>
+    /// 单位死亡事件处理器。我方 NPC（非工事/非君主）阵亡 → 整体幸福按公式扣减：
+    /// avgHappiness ×= (1 - K/当前人口)，K=deathHappinessK（SO 可调，默认 0.5）。
+    /// 连死按当前人口实时重算（分母随人口递减），避免一次性/雪崩式扣光。
+    /// </summary>
+    private void OnUnitDied(UnitDiedEvent evt)
+    {
+        if (evt.Faction != Faction.Human_Player) return;
+        var uc = evt.Unit as UnitController;
+        if (uc == null || uc.Data == null) return;
+        if (!SatietySystem.IsNpc(uc.EffectiveOccupation)) return;   // 非 NPC（工事/君主）不扣幸福
+
+        var cfg = Cfg();
+        if (cfg == null) return;
+        int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
+        if (population <= 0) return;   // 无人口基数，无从扣减
+
+        float k = cfg.deathHappinessK > 0f ? cfg.deathHappinessK : 0.5f;
+        OverallHappiness *= (1f - k / population);
+        OverallHappiness = Mathf.Clamp(OverallHappiness, 0f, 100f);
+        Debug.Log($"[HappinessSystem] NPC 阵亡，整体幸福 ×= (1 - {k}/{population}) → {OverallHappiness:F1}");
     }
 
     /// <summary>
@@ -122,6 +156,17 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// <summary>房屋容量是否足够容纳当前人口（§五 有房住）。房屋容量 = Σ房屋Lv容量（3/5/8，§13.14）。</summary>
     private bool HasEnoughHousing(KingdomConfig cfg)
     {
+        int capacity = GetTotalHouseCapacity();
+        int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
+        return capacity >= population;
+    }
+
+    /// <summary>
+    /// 王国房屋总容量（Σ活动房屋 Lv 容量 3/5/8，§13.14）。
+    /// 3.5 P0-1：PopulationSystem 生育硬前置用——剩余容量 > 0 才允许出生（房屋满=禁止生育）。
+    /// </summary>
+    public int GetTotalHouseCapacity()
+    {
         int capacity = 0;
         if (BuildingRegistry.Instance != null)
         {
@@ -134,8 +179,7 @@ public class HappinessSystem : Singleton<HappinessSystem>
                 capacity += GetHouseCapacity(b.level);
             }
         }
-        int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
-        return capacity >= population;
+        return capacity;
     }
 
     /// <summary>房屋 Lv 容量（§13.14：Lv1=3 / Lv2=5 / Lv3=8）。</summary>
