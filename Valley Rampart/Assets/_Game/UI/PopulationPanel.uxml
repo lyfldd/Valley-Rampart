@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/PopulationPanel.uss" />
+    <ui:VisualElement name="population-root" class="population-root">
+        <ui:VisualElement name="population-panel" class="population-panel">
+            <!-- 标题行（可拖动窗口把手）+ 关闭按钮 -->
+            <ui:VisualElement name="drag-handle" class="population-header">
+                <ui:Label name="population-title" text="人口" class="population-title" />
+                <ui:Button name="population-close-button" text="×" class="population-close" />
+            </ui:VisualElement>
+
+            <!-- 统计数据：人口 / 平均饱食 / 整体幸福 / 生育冷却 -->
+            <ui:VisualElement name="population-stats" class="population-stats">
+                <ui:VisualElement name="stat-population" class="stat-row">
+                    <ui:Label name="stat-label-population" text="人口数" class="stat-label" />
+                    <ui:Label name="population-value" text="0" class="stat-value" />
+                </ui:VisualElement>
+                <ui:VisualElement name="stat-satiety" class="stat-row">
+                    <ui:Label name="stat-label-satiety" text="平均饱食" class="stat-label" />
+                    <ui:Label name="satiety-value" text="-" class="stat-value" />
+                </ui:VisualElement>
+                <ui:VisualElement name="stat-happiness" class="stat-row">
+                    <ui:Label name="stat-label-happiness" text="整体幸福" class="stat-label" />
+                    <ui:Label name="happiness-value" text="-" class="stat-value" />
+                </ui:VisualElement>
+                <ui:VisualElement name="stat-birth" class="stat-row">
+                    <ui:Label name="stat-label-birth" text="生育冷却" class="stat-label" />
+                    <ui:Label name="birth-cooldown-value" text="-" class="stat-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

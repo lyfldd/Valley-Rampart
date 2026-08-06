@@ -1,0 +1,85 @@
+/* ===== PopulationPanel 人口面板 ===== */
+
+.population-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+}
+
+.population-panel {
+    width: 360px;
+    background-color: var(--color-bg-panel);
+    border-radius: 10px;
+    padding: 20px;
+    align-items: stretch;
+    border-width: 1px;
+    border-color: rgb(60, 60, 80);
+}
+
+/* ===== 标题区（可拖动窗口把手） ===== */
+.population-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 80);
+    cursor: grab;
+}
+
+.population-header:active {
+    cursor: grabbing;
+}
+
+.population-title {
+    font-size: 22px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+}
+
+.population-close {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-radius: 4px;
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.population-close:hover {
+    background-color: var(--color-button-hover);
+    color: var(--color-danger);
+}
+
+/* ===== 统计数据 ===== */
+.population-stats {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.stat-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    background-color: rgb(28, 28, 40);
+    border-radius: 6px;
+}
+
+.stat-label {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+}
+
+.stat-value {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+}

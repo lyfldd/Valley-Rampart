@@ -24,6 +24,7 @@ MonoBehaviour:
     food: 0
   footprint: {x: 1, y: 1}
   allowedTerrain: 00000000
+  moduleType: 0
   isObstacle: 1
   producer:
     kind: 0
@@ -36,6 +37,9 @@ MonoBehaviour:
     range: 5
     damageType: 0
   levels: []
+  outputResource: 0
+  isResourceNode: 0
+  unlockLevel: 1
   interactableType: 0
   isPlayerBuilt: 1
   isDestructible: 1

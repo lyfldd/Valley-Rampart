@@ -35,6 +35,7 @@ public class AIDebugUIManager : MonoBehaviour
     private VisualElement _tabAIDebug;
     private VisualElement _tabSpawn;
     private VisualElement _tabFormation;
+    private VisualElement _tabKingdom;
     private VisualElement _aiDebugContent;
     private VisualElement _spawnContent;
     private ScrollView _spawnScroll;
@@ -46,12 +47,22 @@ public class AIDebugUIManager : MonoBehaviour
     private Button _garrisonButton;      // 守城编队（热键 4）
     private Button _disbandButton;       // 解散将军编队（热键 5）
     private Button _killTestButton;      // 残编测试（热键 7）
+    private VisualElement _kingdomContent;
+    private Button _infiniteResourceButton;   // 无限资源开关按钮
+    private Label _kingdomStatusHint;         // 王国 Tab 状态提示（主菜单时提示不可用）
 
     // 放置模式状态
     private bool _isSpawnMode = false;
     private bool _isSpawnTabActive = false;      // 当前是否激活"放置士兵"Tab
     private bool _isFormationTabActive = false;  // 当前是否激活"编队操作"Tab
+    private bool _isKingdomTabActive = false;    // 当前是否激活"王国"Tab
     private DebugSpawnType? _selectedSpawnType = null;
+
+    // 王国 Tab：无限资源调试
+    private bool _isInfiniteResourceEnabled = false;  // 无限资源开关
+    private float _infiniteRefreshTimer = 0f;          // 补满刷新计时
+    private const float InfiniteRefreshInterval = 0.5f; // 补满刷新间隔（秒，低刷新节奏）
+    private const int InfiniteResourceTarget = 99999;  // 资源补满目标值
 
     // 左上角 AI 状态面板
     private VisualElement _statusPanelRoot;
@@ -83,6 +94,10 @@ public class AIDebugUIManager : MonoBehaviour
     private Label _threatLevelLabel;
     private Label _hasProtectionLabel;
     private Label _hitCooldownLabel;
+
+    // 生活状态（3.5 P1：饱食 / 幸福）
+    private Label _satietyLabel;
+    private Label _happinessLabel;
 
     // 刺激源排行
     private Label[] _stimLabels = new Label[5];
@@ -262,6 +277,7 @@ public class AIDebugUIManager : MonoBehaviour
         _tabAIDebug = _root.Q<VisualElement>("tab-ai-debug");
         _tabSpawn = _root.Q<VisualElement>("tab-spawn");
         _tabFormation = _root.Q<VisualElement>("tab-formation");
+        _tabKingdom = _root.Q<VisualElement>("tab-kingdom");
         _aiDebugContent = _root.Q<VisualElement>("ai-debug-content");
         _spawnContent = _root.Q<VisualElement>("spawn-content");
         _spawnScroll = _root.Q<ScrollView>("spawn-scroll");
@@ -273,6 +289,9 @@ public class AIDebugUIManager : MonoBehaviour
         _garrisonButton = _root.Q<Button>("formation-garrison-button");
         _disbandButton = _root.Q<Button>("formation-disband-button");
         _killTestButton = _root.Q<Button>("formation-kill-test-button");
+        _kingdomContent = _root.Q<VisualElement>("kingdom-content");
+        _infiniteResourceButton = _root.Q<Button>("kingdom-infinite-resource-button");
+        _kingdomStatusHint = _root.Q<Label>("kingdom-status-hint");
 
         if (_tabAIDebug != null)
             _tabAIDebug.RegisterCallback<ClickEvent>(OnTabAIDebugClicked);
@@ -280,6 +299,13 @@ public class AIDebugUIManager : MonoBehaviour
             _tabSpawn.RegisterCallback<ClickEvent>(OnTabSpawnClicked);
         if (_tabFormation != null)
             _tabFormation.RegisterCallback<ClickEvent>(OnTabFormationClicked);
+        if (_tabKingdom != null)
+            _tabKingdom.RegisterCallback<ClickEvent>(OnTabKingdomClicked);
+
+        // 王国 Tab：无限资源开关
+        if (_infiniteResourceButton != null)
+            _infiniteResourceButton.clicked += OnInfiniteResourceButtonClicked;
+        UpdateInfiniteResourceButtonState();
 
         // 编队操作（热键 4/5/7 迁入）
         if (_garrisonButton != null) _garrisonButton.clicked += OnGarrisonClicked;
@@ -328,6 +354,10 @@ public class AIDebugUIManager : MonoBehaviour
         _threatLevelLabel = _root.Q<Label>("threat-level");
         _hasProtectionLabel = _root.Q<Label>("has-protection");
         _hitCooldownLabel = _root.Q<Label>("hit-cooldown");
+
+        // 生活状态（3.5 P1：饱食 / 幸福）
+        _satietyLabel = _root.Q<Label>("satiety-value");
+        _happinessLabel = _root.Q<Label>("happiness-value");
 
         // 刺激源排行
         for (int i = 0; i < 5; i++)
@@ -379,6 +409,9 @@ public class AIDebugUIManager : MonoBehaviour
 
         bool isDebugMode = AIDebugController.Instance.IsDebugMode;
 
+        // ===== 王国 Tab：无限资源补满（放在调试模式判断之前，关闭面板后仍持续生效）=====
+        UpdateInfiniteResource();
+
         // 调试模式关闭时，隐藏所有面板
         if (!isDebugMode)
         {
@@ -418,9 +451,9 @@ public class AIDebugUIManager : MonoBehaviour
 
             // ESC 由 UIManager.HandleEscape() 通过栈条目处理，此处不重复
         }
-        else if (_isSpawnTabActive || _isFormationTabActive)
+        else if (_isSpawnTabActive || _isFormationTabActive || _isKingdomTabActive)
         {
-            // 放置士兵/编队操作 Tab 激活时，禁用 AI 可视化功能（不处理 NPC 选择）
+            // 放置士兵/编队操作/王国 Tab 激活时，禁用 AI 可视化功能（不处理 NPC 选择）
             // 只处理退出放置模式（右键/ESC 由栈条目处理）
         }
         else
@@ -592,21 +625,117 @@ public class AIDebugUIManager : MonoBehaviour
         SwitchTab(2);
     }
 
-    /// <summary>三 Tab 切换：0=AI 可视化，1=放置士兵，2=编队操作。</summary>
+    private void OnTabKingdomClicked(ClickEvent evt)
+    {
+        if (_isSpawnMode) return;
+        SwitchTab(3);
+    }
+
+    /// <summary>四 Tab 切换：0=AI 可视化，1=放置士兵，2=编队操作，3=王国。</summary>
     private void SwitchTab(int index)
     {
         _isSpawnTabActive = index == 1;
         _isFormationTabActive = index == 2;
+        _isKingdomTabActive = index == 3;
 
         // 内容区显隐
         if (_aiDebugContent != null) _aiDebugContent.style.display = index == 0 ? DisplayStyle.Flex : DisplayStyle.None;
         if (_spawnContent != null) _spawnContent.style.display = index == 1 ? DisplayStyle.Flex : DisplayStyle.None;
         if (_formationContent != null) _formationContent.style.display = index == 2 ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_kingdomContent != null) _kingdomContent.style.display = index == 3 ? DisplayStyle.Flex : DisplayStyle.None;
 
         // Tab 高亮（放置模式下非放置 Tab 置灰）
         SetTabActive(_tabAIDebug, index == 0);
         SetTabActive(_tabSpawn, index == 1);
         SetTabActive(_tabFormation, index == 2);
+        SetTabActive(_tabKingdom, index == 3);
+    }
+
+    // ===== 王国 Tab：无限资源 =====
+
+    /// <summary>无限资源开关按钮点击：切换开关状态，并刷新按钮文案/可用性。</summary>
+    private void OnInfiniteResourceButtonClicked()
+    {
+        // 主菜单/未进游戏（RulerController 不可用）时禁止开启
+        if (!_isInfiniteResourceEnabled && RulerController.Instance == null)
+        {
+            Debug.LogWarning("[AIDebugUI] 无限资源：RulerController 不可用（主菜单/未进游戏），无法开启。");
+            UpdateInfiniteResourceButtonState();
+            return;
+        }
+
+        _isInfiniteResourceEnabled = !_isInfiniteResourceEnabled;
+        _infiniteRefreshTimer = 0f;  // 立即触发一次补满
+        UpdateInfiniteResourceButtonState();
+
+        if (_isInfiniteResourceEnabled)
+            Debug.Log("[AIDebugUI] 无限资源：已开启");
+        else
+            Debug.Log("[AIDebugUI] 无限资源：已关闭");
+    }
+
+    /// <summary>刷新无限资源按钮的文案与可用性（RulerController 不可用时禁用 + 提示）。</summary>
+    private void UpdateInfiniteResourceButtonState()
+    {
+        bool usable = RulerController.Instance != null;
+
+        if (_infiniteResourceButton != null)
+        {
+            _infiniteResourceButton.text = _isInfiniteResourceEnabled ? "无限资源：开" : "无限资源：关";
+            _infiniteResourceButton.SetEnabled(usable);
+        }
+
+        if (_kingdomStatusHint != null)
+        {
+            // 只在开启失败且不可用时显示提示；其它情况清空
+            _kingdomStatusHint.text = (!usable && !_isInfiniteResourceEnabled) ? "当前不在游戏中，无限资源不可用。" : "";
+        }
+    }
+
+    /// <summary>每帧驱动无限资源补满（低刷新节奏，避免每帧刷屏）。</summary>
+    private void UpdateInfiniteResource()
+    {
+        if (_isInfiniteResourceEnabled)
+        {
+            // 主菜单/未进游戏：RulerController 不可用，自动关闭
+            if (RulerController.Instance == null)
+            {
+                _isInfiniteResourceEnabled = false;
+                UpdateInfiniteResourceButtonState();
+                return;
+            }
+
+            _infiniteRefreshTimer += Time.deltaTime;
+            if (_infiniteRefreshTimer >= InfiniteRefreshInterval)
+            {
+                _infiniteRefreshTimer = 0f;
+                TopUpResources();
+            }
+        }
+    }
+
+    /// <summary>把君主六类资源全部补满到目标值（"无限"：扣完后下帧又补满）。</summary>
+    private void TopUpResources()
+    {
+        var ruler = RulerController.Instance;
+        if (ruler == null) return;
+
+        TopUpResource(ruler, ResourceType.Gold);
+        TopUpResource(ruler, ResourceType.Stone);
+        TopUpResource(ruler, ResourceType.Wood);
+        TopUpResource(ruler, ResourceType.Food);
+        TopUpResource(ruler, ResourceType.SpecialFood);
+        TopUpResource(ruler, ResourceType.Meat);
+    }
+
+    /// <summary>单个资源补满到目标值（低于目标才补，走公共 ModifyResource 统一入口）。</summary>
+    private void TopUpResource(RulerController ruler, ResourceType type)
+    {
+        int current = ruler.GetResource(type);
+        if (current < InfiniteResourceTarget)
+        {
+            ruler.ModifyResource(type, true, InfiniteResourceTarget - current);
+        }
     }
 
     private void SetTabActive(VisualElement tab, bool active)
@@ -971,6 +1100,9 @@ public class AIDebugUIManager : MonoBehaviour
         // 威胁等级
         RenderThreat(s.CurrentThreatLevel, s.HasProtection, s.IsInHitCooldown);
 
+        // 生活状态（饱食 / 幸福）
+        RenderLifeState(s);
+
         // 刺激源排行
         RenderStimuli(s.TopStimuli);
 
@@ -1032,6 +1164,15 @@ public class AIDebugUIManager : MonoBehaviour
         {
             _hitCooldownLabel.text = isInHitCooldown ? "是" : "否";
         }
+    }
+
+    /// <summary>渲染生活状态（饱食/幸福）。纯工事（非活体 NPC）显示 "—"。</summary>
+    private void RenderLifeState(AIDebugSnapshot s)
+    {
+        if (_satietyLabel != null)
+            _satietyLabel.text = s.IsNpc ? s.Satiety.ToString() : "—";
+        if (_happinessLabel != null)
+            _happinessLabel.text = s.IsNpc ? s.IndividualHappiness.ToString() : "—";
     }
 
     private void RenderStimuli(List<StimulusDebugInfo> stimuli)
@@ -1109,6 +1250,10 @@ public class AIDebugUIManager : MonoBehaviour
         if (_selectNpcButton != null)
         {
             _selectNpcButton.clicked -= OnSelectNpcButtonClicked;
+        }
+        if (_infiniteResourceButton != null)
+        {
+            _infiniteResourceButton.clicked -= OnInfiniteResourceButtonClicked;
         }
         if (_titleBar != null)
         {

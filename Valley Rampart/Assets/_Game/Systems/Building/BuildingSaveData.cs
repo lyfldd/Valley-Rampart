@@ -24,4 +24,7 @@ public struct BuildingSaveData
     public int cellWidth;
     public int sourceType;      // (int)BuildingType
     public int storedAmount;    // StorageComponent.storedAmount（无则 0）
+    // 3.5 步骤6：矿洞副产（水晶/火油）本地存储（无则 0）。旧档缺字段 → 默认 0，向前兼容。
+    public int byproductType;   // (int)ResourceType 副产类型（0=Gold 无副产）
+    public int byproductAmount; // 副产已存数量
 }

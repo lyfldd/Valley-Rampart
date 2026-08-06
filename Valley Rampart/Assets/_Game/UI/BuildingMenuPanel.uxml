@@ -4,23 +4,24 @@
     <ui:Style src="project://database/Assets/_Game/UI/BuildingMenuPanel.uss" />
     <ui:VisualElement name="menu-root" class="menu-root">
         <ui:VisualElement name="menu-panel" class="menu-panel">
-            <!-- 标题行 -->
-            <ui:VisualElement name="menu-header" class="menu-header">
+            <!-- 标题行（可拖动窗口把手） -->
+            <ui:VisualElement name="drag-handle" class="menu-header">
                 <ui:Label text="建造菜单" class="menu-title" />
                 <ui:Button name="menu-close" text="×" class="menu-close" />
             </ui:VisualElement>
 
-            <!-- 分类 Tab 行（Defense / Production / Economy / Wall / Special）-->
+            <!-- 模块 Tab 行（3.5 六大经营模块：土木/生产/民生/军事/商业/科技）-->
             <ui:VisualElement name="category-tabs" class="category-tabs">
-                <ui:Button name="tab-defense" text="防御" class="tab-button tab-button--active" />
-                <ui:Button name="tab-production" text="产能" class="tab-button" />
-                <ui:Button name="tab-economy" text="经济" class="tab-button" />
-                <ui:Button name="tab-wall" text="城墙" class="tab-button" />
-                <ui:Button name="tab-special" text="特殊" class="tab-button" />
+                <ui:Button name="tab-civil" text="土木" class="tab-button tab-button--active" />
+                <ui:Button name="tab-production" text="生产" class="tab-button" />
+                <ui:Button name="tab-livelihood" text="民生" class="tab-button" />
+                <ui:Button name="tab-military" text="军事" class="tab-button" />
+                <ui:Button name="tab-commerce" text="商业" class="tab-button" />
+                <ui:Button name="tab-science" text="科技" class="tab-button" />
             </ui:VisualElement>
 
-            <!-- 建筑条目容器（C# 动态填充）-->
-            <ui:VisualElement name="building-list" class="building-list" />
+            <!-- 建筑条目容器：ScrollView 保证建筑多时可真正滚动（C# 动态填充 contentContainer）-->
+            <ui:ScrollView name="building-list" class="building-list" />
 
             <!-- 底部提示 -->
             <ui:VisualElement name="menu-hint-row" class="menu-hint-row">

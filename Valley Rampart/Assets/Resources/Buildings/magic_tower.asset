@@ -12,18 +12,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
   m_Name: magic_tower
   m_EditorClassIdentifier: 
-  id: magic_tower
+  id: MagicTower
   displayName: "\u9B54\u6CD5\u5854"
-  description: "\u9B54\u6CD5\u653B\u51FB\u9632\u5FA1\u5EFA\u7B51"
+  description: "AOE \u9B54\u6CD5\u4F24\u5BB3\u9632\u5FA1\u5EFA\u7B51"
   faction: 1
   role: 0
   cost:
-    gold: 150
-    stone: 0
-    wood: 50
+    gold: 10
+    stone: 20
+    wood: 0
     food: 0
   footprint: {x: 1, y: 1}
   allowedTerrain: 
+  moduleType: 0
   isObstacle: 1
   producer:
     kind: 0

@@ -60,6 +60,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
     public int Stone { get; private set; }
     public int Wood { get; private set; }
     public int Food { get; private set; }
+    // ===== 3.5 P1 粮大类子资源（§13.11 特殊食物/肉；君主国库跟踪，供饱食/贸易用）=====
+    public int SpecialFood { get; private set; }
+    public int Meat { get; private set; }
 
     // 统治者名字（新建游戏时玩家输入，存档恢复时从 RulerSaveData 读取）
     public string RulerName { get; private set; } = "无名君主";
@@ -360,6 +363,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
         Stone = 0;
         Wood = 0;
         Food = 0;
+        SpecialFood = 0;
+        Meat = 0;
         Debug.Log("[RulerController] ResetState: 引用已清除，资源归零");
     }
 
@@ -413,6 +418,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     // ===== 资源包批量操作（3.3.1 P7，供 BuildController / BuildingPanel 用）=====
 
+    /// <summary>公共资源读取（供王国经济系统/贸易查询当前持有量）。</summary>
+    public int GetResource(ResourceType type) => GetResourceValue(type);
+
     /// <summary>单资源是否足够（供 UI 造价行逐项高亮用）。</summary>
     public bool HasAmount(ResourceType type, int amount)
     {
@@ -453,6 +461,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
             ResourceType.Stone => Stone,
             ResourceType.Wood => Wood,
             ResourceType.Food => Food,
+            ResourceType.SpecialFood => SpecialFood,
+            ResourceType.Meat => Meat,
             _ => 0
         };
     }
@@ -466,6 +476,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
             case ResourceType.Stone: Stone = value; break;
             case ResourceType.Wood: Wood = value; break;
             case ResourceType.Food: Food = value; break;
+            case ResourceType.SpecialFood: SpecialFood = value; break;
+            case ResourceType.Meat: Meat = value; break;
         }
     }
 
@@ -529,7 +541,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
             gold = Gold,
             stone = Stone,
             wood = Wood,
-            food = Food
+            food = Food,
+            specialFood = SpecialFood,
+            meat = Meat
         };
         return new SavePayload
         {
@@ -552,6 +566,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
         Stone = data.stone;
         Wood = data.wood;
         Food = data.food;
+        SpecialFood = data.specialFood;
+        Meat = data.meat;
     }
 }
 
@@ -565,4 +581,7 @@ public class RulerSaveData
     public int stone;
     public int wood;
     public int food;
+    // ===== 3.5 P1（v1 兼容：旧档缺字段 JsonUtility 给默认 0）=====
+    public int specialFood;
+    public int meat;
 }

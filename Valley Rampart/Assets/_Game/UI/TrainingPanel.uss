@@ -1,0 +1,166 @@
+/* ===== TrainingPanel 训练面板 ===== */
+
+.training-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.training-panel {
+    width: 420px;
+    max-height: 82%;
+    background-color: var(--color-bg-panel);
+    border-radius: 10px;
+    padding: 20px;
+    align-items: stretch;
+    border-width: 1px;
+    border-color: rgb(60, 60, 80);
+}
+
+/* ===== 标题区（可拖动窗口把手） ===== */
+.training-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 80);
+    cursor: grab;
+}
+
+.training-header:active {
+    cursor: grabbing;
+}
+
+.training-title {
+    font-size: 22px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+}
+
+.training-close {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-radius: 4px;
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.training-close:hover {
+    background-color: var(--color-button-hover);
+    color: var(--color-danger);
+}
+
+/* ===== 空提示 ===== */
+.training-empty-hint {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    text-align: center;
+    padding: 24px 0;
+}
+
+/* ===== 训练项列表（长列表可滚动） ===== */
+.training-list {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: scroll;
+}
+
+/* ===== 单个训练项卡片 ===== */
+.training-card {
+    margin-bottom: 10px;
+    padding: 12px;
+    background-color: rgb(28, 28, 40);
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgb(60, 60, 75);
+}
+
+.training-card-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.training-card-title {
+    font-size: 18px;
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+}
+
+.training-card-days {
+    font-size: var(--font-size-small);
+    color: var(--color-accent);
+    -unity-font-style: bold;
+}
+
+.training-card-cost {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    margin-bottom: 8px;
+}
+
+.training-card-empty {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    padding: 4px 0;
+}
+
+/* ===== 可训单位区 ===== */
+.training-card-units {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.training-unit-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    padding: 6px 8px;
+    background-color: rgb(38, 38, 52);
+    border-radius: 4px;
+}
+
+.training-unit-name {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    flex-grow: 1;
+}
+
+.training-btn {
+    height: 32px;
+    min-width: 72px;
+    margin-left: 8px;
+    font-size: var(--font-size-label);
+    color: var(--color-bg-dark);
+    background-color: var(--color-accent);
+    border-radius: 4px;
+    border-width: 0;
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.training-btn:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.training-btn:active {
+    background-color: var(--color-button-hover);
+}
+
+.training-btn:disabled {
+    background-color: var(--color-disabled);
+    color: rgb(100, 100, 100);
+}

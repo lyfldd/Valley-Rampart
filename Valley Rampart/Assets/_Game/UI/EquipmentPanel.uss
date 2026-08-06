@@ -1,0 +1,185 @@
+/* ===== EquipmentPanel 装备厂装备管理面板 ===== */
+
+.equipment-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+}
+
+.equipment-panel {
+    width: 520px;
+    max-height: 80%;
+    background-color: var(--color-bg-panel);
+    border-radius: 10px;
+    padding: 20px;
+    align-items: stretch;
+    border-width: 1px;
+    border-color: rgb(60, 60, 80);
+}
+
+/* ===== 标题区（可拖动窗口把手） ===== */
+.equipment-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 80);
+    cursor: grab;
+}
+
+.equipment-header:active {
+    cursor: grabbing;
+}
+
+.equipment-title {
+    font-size: 22px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+}
+
+.equipment-close {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-radius: 4px;
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.equipment-close:hover {
+    background-color: var(--color-button-hover);
+    color: var(--color-danger);
+}
+
+/* ===== 提示 ===== */
+.equipment-hint {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    white-space: normal;
+    margin-bottom: 12px;
+}
+
+/* ===== 装备列表（滚动容器） ===== */
+.equipment-list {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+}
+
+/* ===== 空提示 ===== */
+.equipment-empty-hint {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+    -unity-text-align: middle-center;
+    padding: 24px 0;
+}
+
+/* ===== 单个装备卡片 ===== */
+.equipment-card {
+    flex-direction: column;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background-color: rgb(28, 28, 40);
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgb(55, 55, 75);
+}
+
+.equipment-card-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.equipment-card-name {
+    font-size: 18px;
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+}
+
+.equipment-card-profession {
+    font-size: var(--font-size-small);
+    color: var(--color-accent);
+}
+
+.equipment-card-mods {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    white-space: normal;
+    margin-bottom: 8px;
+}
+
+/* ===== 单位行 ===== */
+.equipment-units {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.equipment-unit-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.equipment-unit-name {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    flex-grow: 1;
+}
+
+.equipment-unit-equip {
+    height: 32px;
+    min-width: 64px;
+    margin-left: 6px;
+    font-size: var(--font-size-small);
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 4px;
+    border-width: 0;
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.equipment-unit-equip:hover {
+    background-color: var(--color-button-hover);
+}
+
+.equipment-unit-equip:active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+/* 卸下按钮：次要危险操作 */
+.equipment-unit-unequip {
+    height: 32px;
+    min-width: 64px;
+    margin-left: 6px;
+    font-size: var(--font-size-small);
+    color: var(--color-text-primary);
+    background-color: rgb(80, 60, 60);
+    border-radius: 4px;
+    border-width: 0;
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.equipment-unit-unequip:hover {
+    background-color: var(--color-danger);
+}
+
+.equipment-card-empty {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    padding: 4px 0;
+}

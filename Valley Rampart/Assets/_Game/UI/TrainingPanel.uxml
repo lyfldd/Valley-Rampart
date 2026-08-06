@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/TrainingPanel.uss" />
+    <ui:VisualElement name="training-root" class="training-root">
+        <ui:VisualElement name="training-panel" class="training-panel">
+            <!-- 标题行（可拖动窗口把手）：训练设施名 + 等级 + 关闭按钮 -->
+            <ui:VisualElement name="drag-handle" class="training-header">
+                <ui:Label name="training-title" text="训练" class="training-title" />
+                <ui:Button name="training-close-button" text="×" class="training-close" />
+            </ui:VisualElement>
+
+            <!-- 空提示（无训练定义 / 无人可训时显示，由代码切换） -->
+            <ui:Label name="training-empty-hint" text="暂无可用训练项目" class="training-empty-hint" />
+
+            <!-- 训练项列表（动态构建：目标职业 + 消耗 + 可训单位行） -->
+            <ui:VisualElement name="training-list" class="training-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

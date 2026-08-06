@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/EquipmentPanel.uss" />
+    <ui:VisualElement name="equipment-root" class="equipment-root">
+        <ui:VisualElement name="equipment-panel" class="equipment-panel">
+            <!-- 标题行（可拖动窗口把手）：装备厂名 + 等级 + 关闭按钮 -->
+            <ui:VisualElement name="drag-handle" class="equipment-header">
+                <ui:Label name="equipment-title" text="装备管理" class="equipment-title" />
+                <ui:Button name="equipment-close-button" text="×" class="equipment-close" />
+            </ui:VisualElement>
+
+            <!-- 规则提示 -->
+            <ui:Label name="equipment-hint" text="为对应职业的幸存单位穿戴装备：叠加属性并触发职业转变。每个单位同一时间只能穿戴一件。" class="equipment-hint" />
+
+            <!-- 装备列表（动态构建，每张卡片：名称 + 适配职业 + 属性 + 可装备/已装备单位） -->
+            <ui:VisualElement name="equipment-list" class="equipment-list" />
+
+            <!-- 空提示（无装备定义时显示） -->
+            <ui:Label name="equipment-empty-hint" text="暂无可用装备" class="equipment-empty-hint" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

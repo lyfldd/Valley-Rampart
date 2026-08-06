@@ -106,7 +106,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     void GenerateWorld(int worldSeed, WorldSize size, int difficulty)
     {
         // 清理旧建筑对象（重新生成地图时销毁残留，3.3.4 修复）
-        BuildingFactory.ClearAllBuildings();
+        BuildingFactory.Instance.ClearAllBuildings();
 
         // seed=0 时随机生成一个
         if (worldSeed == 0) worldSeed = Random.Range(1, int.MaxValue);
@@ -131,7 +131,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         EventBus.Publish(new MapGeneratedEvent(0, true));
 
         // 3.3 批次0: BuildingPlaceholder → Building 实例化（解除 3.2.2 断裂）
-        BuildingFactory.InstantiateFromMap(playerMap);
+        BuildingFactory.Instance.InstantiateFromMap(playerMap);
 
         Debug.Log($"[WorldManager] 世界生成完成: seed={worldSeed}, size={size}, " +
                   $"difficulty={difficulty}, 地图数={_world.maps.Count}");

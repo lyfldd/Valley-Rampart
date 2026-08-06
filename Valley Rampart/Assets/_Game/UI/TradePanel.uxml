@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/TradePanel.uss" />
+    <ui:VisualElement name="trade-root" class="trade-root">
+        <ui:VisualElement name="trade-panel" class="trade-panel">
+            <!-- 标题行（可拖动窗口把手）：市场等级 + 关闭按钮 -->
+            <ui:VisualElement name="drag-handle" class="trade-header">
+                <ui:Label name="trade-title" text="市场贸易" class="trade-title" />
+                <ui:Button name="trade-close-button" text="×" class="trade-close" />
+            </ui:VisualElement>
+
+            <!-- 规则提示 -->
+            <ui:Label name="trade-hint" text="卖出损汇率、买入加价（不对称兑换）。额度按资源档位独立，每日刷新。" class="trade-hint" />
+
+            <!-- 资源交易列表（动态构建，每行：名称 + 持有/额度 + 卖出/买入） -->
+            <ui:VisualElement name="trade-resource-list" class="trade-resource-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

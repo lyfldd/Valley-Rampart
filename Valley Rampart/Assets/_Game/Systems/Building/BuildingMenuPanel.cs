@@ -3,23 +3,38 @@ using UnityEngine;
 using UnityEngine.UIElements;
 
 /// <summary>
-/// 建造菜单面板（3.3 第六节 + 文档 2.1 流程）。挂 SampleScene 上。
-/// 按 BuildingRole 分组列出 isPlayerBuilt=true 的 BuildingDef，显示造价，点"建造"进入建造模式。
-/// 通过 UIManager 打开/关闭，也支持 B 键快捷开关。
+/// 建造菜单面板（3.3 第六节 + 3.5 六模块 + 文档 2.1 流程）。挂 SampleScene 上。
+/// 按 ModuleType（土木/生产/民生/军事/商业/科技）分组列出 isPlayerBuilt=true 的 BuildingDef，
+/// 显示造价，点"建造"进入建造模式。列表用 ScrollView 支持真正滚动；标题栏可拖动窗口。
+///
+/// <para>刷新策略：事件驱动（B 键 ToggleBuildMenuPressedEvent）+ 打开时重建（EnsureDefsLoaded）。</para>
+/// <para>解锁判定：KingdomManager.Instance.IsBuildingUnlocked(def)（模块级 + 特殊建筑）；KingdomManager 为 null 时回退显示全部 isPlayerBuilt。</para>
+/// <para>通过 UIManager 打开/关闭，也支持 B 键快捷开关。</para>
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class BuildingMenuPanel : MonoBehaviour, IUIPanel
 {
     private bool _buttonsBound;
     private bool _eventBound;
-    private BuildingRole _currentTab = BuildingRole.Defense;
+    private ModuleType _currentTab = ModuleType.Civil;
 
     // ===== 缓存引用 =====
     private Button _closeBtn;
-    private VisualElement _buildingList;
-    private readonly Dictionary<BuildingRole, Button> _tabs = new Dictionary<BuildingRole, Button>();
+    private ScrollView _buildingList;
+    private readonly Dictionary<ModuleType, Button> _tabs = new Dictionary<ModuleType, Button>();
     private readonly List<BuildingDef> _allBuildable = new List<BuildingDef>();
     private bool _defLoaded;
+
+    /// <summary>六大模块展示顺序（与 ModuleType 枚举一致）。</summary>
+    private static readonly ModuleType[] ModuleOrder =
+    {
+        ModuleType.Civil,
+        ModuleType.Production,
+        ModuleType.Livelihood,
+        ModuleType.Military,
+        ModuleType.Commerce,
+        ModuleType.Science,
+    };
 
     // ===== IUIPanel =====
 
@@ -27,7 +42,7 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
     {
         if (!_buttonsBound) BindButtons();
         EnsureDefsLoaded();
-        SwitchTab(BuildingRole.Defense);
+        SwitchTab(ModuleType.Civil);
         RefreshAllEnabled();
         SetVisible(true);
     }
@@ -44,15 +59,15 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
 
     // ===== 标签页切换 =====
 
-    private void SwitchTab(BuildingRole role)
+    private void SwitchTab(ModuleType module)
     {
-        _currentTab = role;
+        _currentTab = module;
         // 更新 tab 高亮
         foreach (var kv in _tabs)
         {
             if (kv.Value == null) continue;
             RemoveClass(kv.Value, "tab-button--active");
-            if (kv.Key == role) AddClass(kv.Value, "tab-button--active");
+            if (kv.Key == module) AddClass(kv.Value, "tab-button--active");
         }
         // 重建列表
         RebuildList();
@@ -90,19 +105,28 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         _closeBtn = root.Q<Button>("menu-close");
         if (_closeBtn != null) _closeBtn.clicked += OnCloseClicked;
 
-        _buildingList = root.Q<VisualElement>("building-list");
+        _buildingList = root.Q<ScrollView>("building-list");
 
-        _tabs[BuildingRole.Defense] = root.Q<Button>("tab-defense");
-        _tabs[BuildingRole.Production] = root.Q<Button>("tab-production");
-        _tabs[BuildingRole.Economy] = root.Q<Button>("tab-economy");
-        _tabs[BuildingRole.Wall] = root.Q<Button>("tab-wall");
-        _tabs[BuildingRole.Special] = root.Q<Button>("tab-special");
+        _tabs[ModuleType.Civil] = root.Q<Button>("tab-civil");
+        _tabs[ModuleType.Production] = root.Q<Button>("tab-production");
+        _tabs[ModuleType.Livelihood] = root.Q<Button>("tab-livelihood");
+        _tabs[ModuleType.Military] = root.Q<Button>("tab-military");
+        _tabs[ModuleType.Commerce] = root.Q<Button>("tab-commerce");
+        _tabs[ModuleType.Science] = root.Q<Button>("tab-science");
 
-        if (_tabs[BuildingRole.Defense] != null) _tabs[BuildingRole.Defense].clicked += () => SwitchTab(BuildingRole.Defense);
-        if (_tabs[BuildingRole.Production] != null) _tabs[BuildingRole.Production].clicked += () => SwitchTab(BuildingRole.Production);
-        if (_tabs[BuildingRole.Economy] != null) _tabs[BuildingRole.Economy].clicked += () => SwitchTab(BuildingRole.Economy);
-        if (_tabs[BuildingRole.Wall] != null) _tabs[BuildingRole.Wall].clicked += () => SwitchTab(BuildingRole.Wall);
-        if (_tabs[BuildingRole.Special] != null) _tabs[BuildingRole.Special].clicked += () => SwitchTab(BuildingRole.Special);
+        foreach (var module in ModuleOrder)
+        {
+            if (_tabs[module] != null)
+            {
+                var m = module; // 局部捕获，避免闭包共享
+                _tabs[module].clicked += () => SwitchTab(m);
+            }
+        }
+
+        // 标题栏拖动（可拖动窗口，不破坏关闭按钮点击）
+        var panel = root.Q<VisualElement>("menu-panel");
+        var handle = root.Q<VisualElement>("drag-handle");
+        if (panel != null && handle != null) UIDragHelper.Attach(panel, handle);
 
         _buttonsBound = true;
     }
@@ -180,17 +204,17 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
     private void RebuildList()
     {
         if (_buildingList == null) return;
-        _buildingList.Clear();
+        var container = _buildingList.contentContainer;
+        container.Clear();
 
         var ruler = RulerController.Instance;
 
         int count = 0;
         foreach (var def in _allBuildable)
         {
-            if (def.role != _currentTab) continue;
-            // 主城等级过滤（3.3.4 批次7）
-            int castleLv = BuildController.Instance != null ? BuildController.Instance.CastleLevel : 0;
-            if (def.unlockLevel > castleLv) continue;  // 主城等级不足，不显示
+            if (def.moduleType != _currentTab) continue;
+            // 解锁判定：3.5 改用 KingdomManager 模块级/特殊建筑判定；KingdomManager 为 null 时回退显示全部
+            if (KingdomManager.Instance != null && !KingdomManager.Instance.IsBuildingUnlocked(def)) continue;
             BuildCard(def, ruler);
             count++;
         }
@@ -199,11 +223,19 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         {
             var empty = new VisualElement { name = "empty-hint-wrap" };
             empty.AddToClassList("empty-list-hint");
-            var lbl = new Label("本分类暂无可用建筑") { name = "empty-hint" };
+            // 主城未修复（castleLevel=0）时明确引导，避免"空面板"无解释
+            bool castleNotRepaired = KingdomManager.Instance != null && KingdomManager.Instance.CastleLevel < 1;
+            string hint = castleNotRepaired
+                ? "请先修复主城（点击废弃城堡）以解锁建造"
+                : "该模块暂无可用建筑（需升级主城 / 模块等级解锁）";
+            var lbl = new Label(hint) { name = "empty-hint", text = hint };
             lbl.AddToClassList("empty-list-hint-text");
             empty.Add(lbl);
-            _buildingList.Add(empty);
+            container.Add(empty);
         }
+
+        // 滚动回顶部，避免切换 tab 后停留在旧位置
+        _buildingList.verticalScroller.value = 0f;
     }
 
     private void BuildCard(BuildingDef def, RulerController ruler)
@@ -250,7 +282,7 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         AddCostItem(costRow, "粮", def.cost.food, ResourceType.Food, ruler);
         card.Add(costRow);
 
-        _buildingList.Add(card);
+        _buildingList.contentContainer.Add(card);
     }
 
     // ===== 辅助 =====

@@ -3,22 +3,40 @@
     <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
     <ui:Style src="project://database/Assets/_Game/UI/ResourceHUD.uss" />
     <ui:VisualElement name="resource-hud-root" class="resource-hud-root">
+        <!-- 整体幸福度徽标（主菜单/未进游戏时由代码隐藏） -->
+        <ui:Label name="happiness-badge" text="幸福 -" class="happiness-badge" />
+
+        <!-- 国库资源行（6 项：金/石/木/粮 + 特殊食物/肉，flex-wrap 两行排列） -->
         <ui:VisualElement name="resource-row" class="resource-row">
             <ui:VisualElement name="res-gold" class="res-item">
                 <ui:VisualElement name="res-icon-gold" class="res-icon res-icon--gold" />
+                <ui:Label name="res-name-gold" text="金" class="res-name" />
                 <ui:Label name="res-value-gold" text="0" class="res-value" />
             </ui:VisualElement>
             <ui:VisualElement name="res-stone" class="res-item">
                 <ui:VisualElement name="res-icon-stone" class="res-icon res-icon--stone" />
+                <ui:Label name="res-name-stone" text="石" class="res-name" />
                 <ui:Label name="res-value-stone" text="0" class="res-value" />
             </ui:VisualElement>
             <ui:VisualElement name="res-wood" class="res-item">
                 <ui:VisualElement name="res-icon-wood" class="res-icon res-icon--wood" />
+                <ui:Label name="res-name-wood" text="木" class="res-name" />
                 <ui:Label name="res-value-wood" text="0" class="res-value" />
             </ui:VisualElement>
             <ui:VisualElement name="res-food" class="res-item">
                 <ui:VisualElement name="res-icon-food" class="res-icon res-icon--food" />
+                <ui:Label name="res-name-food" text="粮" class="res-name" />
                 <ui:Label name="res-value-food" text="0" class="res-value" />
+            </ui:VisualElement>
+            <ui:VisualElement name="res-special-food" class="res-item">
+                <ui:VisualElement name="res-icon-special-food" class="res-icon res-icon--special-food" />
+                <ui:Label name="res-name-special-food" text="特殊食物" class="res-name" />
+                <ui:Label name="res-value-special-food" text="0" class="res-value" />
+            </ui:VisualElement>
+            <ui:VisualElement name="res-meat" class="res-item">
+                <ui:VisualElement name="res-icon-meat" class="res-icon res-icon--meat" />
+                <ui:Label name="res-name-meat" text="肉" class="res-name" />
+                <ui:Label name="res-value-meat" text="0" class="res-value" />
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

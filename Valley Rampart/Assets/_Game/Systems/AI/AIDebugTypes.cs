@@ -126,6 +126,13 @@ public struct AIDebugSnapshot
     public bool InSafetyConfirmation;
     /// <summary>是否在受击冷却中</summary>
     public bool IsInHitCooldown;
+    // ===== 生活状态（3.5 P1：饱食 / 幸福，仅活体 NPC 有效）=====
+    /// <summary>是否为活体 NPC（非纯工事/战争机器，SatietySystem.IsNpc）。纯工事为 false。</summary>
+    public bool IsNpc;
+    /// <summary>饱食度（0-100，仅 IsNpc=true 时有效）。</summary>
+    public int Satiety;
+    /// <summary>个体幸福（0-100，仅 IsNpc=true 时有效）。</summary>
+    public int IndividualHappiness;
     /// <summary>刺激源排行榜（前 5）</summary>
     public List<StimulusDebugInfo> TopStimuli;
     /// <summary>最近切换历史（前 5）</summary>

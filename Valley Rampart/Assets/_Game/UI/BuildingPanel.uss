@@ -18,7 +18,7 @@
     border-color: rgb(60, 60, 80);
 }
 
-/* ===== 标题区 ===== */
+/* ===== 标题区（可拖动窗口把手） ===== */
 .header-row {
     flex-direction: row;
     justify-content: space-between;
@@ -27,6 +27,11 @@
     padding-bottom: 12px;
     border-bottom-width: 1px;
     border-bottom-color: rgb(60, 60, 80);
+    cursor: grab;
+}
+
+.header-row:active {
+    cursor: grabbing;
 }
 
 .title-block {
@@ -180,6 +185,23 @@
 
 .action-button--danger:hover {
     background-color: rgb(180, 70, 70);
+}
+
+/* ===== 功能区（3.5 建筑级功能） ===== */
+.function-area {
+    margin-top: 4px;
+}
+
+.function-title {
+    font-size: var(--font-size-small);
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-bottom: 6px;
+}
+
+.function-rows {
+    flex-direction: column;
+    align-items: stretch;
 }
 
 .spacer {

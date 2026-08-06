@@ -164,6 +164,19 @@ public class AIDebugController : MonoBehaviour
             _switchBuffer.Clear();
         }
 
+        // 收集生活状态（3.5 P1：饱食/幸福）。仅活体 NPC（非纯工事）有效，纯工事显示 "—"。
+        var unit = SelectedGameObject != null ? SelectedGameObject.GetComponent<UnitController>() : null;
+        if (unit != null && unit.Data != null)
+        {
+            snapshot.IsNpc = SatietySystem.IsNpc(unit.EffectiveOccupation);
+            snapshot.Satiety = unit.Satiety;
+            snapshot.IndividualHappiness = unit.IndividualHappiness;
+        }
+        else
+        {
+            snapshot.IsNpc = false;
+        }
+
         return snapshot;
     }
 

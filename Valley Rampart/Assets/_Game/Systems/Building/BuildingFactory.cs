@@ -1,15 +1,28 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 地图预置建筑工厂（3.3 批次0）。把 MapData 中的 BuildingPlaceholder 转为运行时 Building 实例。
-/// 在 WorldManager.GenerateWorld 末尾调用，解除 3.2.2 地图建筑断裂。
+/// 建筑工厂（3.3 批次0 + 3.5 实施计划 P0 步骤3）。
+/// 职责拆为两块：
+///   1) 地图预置建筑实例化（BuildingPlaceholder → Building，WorldManager.GenerateWorld 调）。
+///   2) 存档重建（ISaveableSpawner，前缀 "Building_"，读档时由 SaveManager 调 SpawnFromSave）。
 ///
-/// 流程：遍历 regions → resources（含 CastleCore）+ riftCellX →
-/// 查 BuildingMappingTable → 实例化 Building → MarkOccupied → Register → 发事件。
+/// 3.5 步骤3：static class → Singleton<BuildingFactory>，并实现 ISaveableSpawner。
+/// 调用方统一走 BuildingFactory.Instance.X（WorldManager / BuildController 已同步）。
 /// </summary>
-public static class BuildingFactory
+public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 {
+    public string SaveIdPrefix => "Building_";
+
     private static BuildingMappingTable _mappingTable;
+    private static BuildingDef[] _allDefsCache;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        if (_instance != this) return;
+        _mappingTable = Resources.Load<BuildingMappingTable>("Buildings/BuildingMappingTable");
+    }
 
     static BuildingMappingTable GetMappingTable()
     {
@@ -18,11 +31,23 @@ public static class BuildingFactory
         return _mappingTable;
     }
 
-    /// <summary>
-    /// 把 MapData 的所有 BuildingPlaceholder 转为 Building 实例。
-    /// 在 WorldManager.GenerateWorld 末尾调用（3.2.2 第 12.1 节）。
-    /// </summary>
-    public static int InstantiateFromMap(MapData map)
+    /// <summary>按 id 查找 BuildingDef（Resources/Buildings 下全部资产，缓存）。存档重建用。</summary>
+    public static BuildingDef FindDefById(string defId)
+    {
+        if (string.IsNullOrEmpty(defId)) return null;
+        if (_allDefsCache == null)
+            _allDefsCache = Resources.LoadAll<BuildingDef>("Buildings");
+        if (_allDefsCache == null) return null;
+        for (int i = 0; i < _allDefsCache.Length; i++)
+            if (_allDefsCache[i] != null && _allDefsCache[i].id == defId)
+                return _allDefsCache[i];
+        return null;
+    }
+
+    // ===== 地图预置建筑实例化 =====
+
+    /// <summary>把 MapData 的所有 BuildingPlaceholder 转为 Building 实例。</summary>
+    public int InstantiateFromMap(MapData map)
     {
         if (map == null || map.regions == null) return 0;
 
@@ -38,7 +63,6 @@ public static class BuildingFactory
         {
             var region = map.regions[i];
 
-            // 1. resources 列表（含 ResourceProducer / ResourcePickup / SpecialPoint / CastleCore）
             if (region.resources != null)
             {
                 foreach (var ph in region.resources)
@@ -48,7 +72,6 @@ public static class BuildingFactory
                 }
             }
 
-            // 2. 裂隙（不在 resources 列表里，单独处理）
             if (region.riftCellX >= 0)
             {
                 var riftPh = new BuildingPlaceholder
@@ -69,20 +92,11 @@ public static class BuildingFactory
         return created;
     }
 
-    /// <summary>把单个 BuildingPlaceholder 转为 Building 实例。</summary>
     static bool CreateBuilding(BuildingPlaceholder ph, Region region)
     {
-        if (ph == null)
-        {
-            Debug.LogWarning("[BuildingFactory] 跳过 null placeholder (regionIdx=" + (region != null ? region.regionIndex.ToString() : "?") + ")");
-            return false;
-        }
+        if (ph == null) return false;
         var table = GetMappingTable();
-        if (table == null)
-        {
-            Debug.LogWarning("[BuildingFactory] 映射表缺失，跳过 placeholder=" + ph.type);
-            return false;
-        }
+        if (table == null) return false;
         var def = table.Get(ph.type);
         if (def == null)
         {
@@ -90,20 +104,30 @@ public static class BuildingFactory
             return false;
         }
 
-        // 全局小区块坐标
         int globalCellX = region.cellStartX + ph.localCellX;
         var coord = new GridCoord(globalCellX, 0);
         int phCellWidth = (ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
 
-        // 世界坐标（多格建筑中心偏移：localCellX 是左上角，中心在 localCellX + (cellWidth-1)/2）
         float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
         Vector3 worldPos = GridSystem.Instance != null
             ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
             : new Vector3(globalCellX * cs, -3f, 0);
         if (phCellWidth > 1)
-            worldPos.x += (phCellWidth - 1) / 2f * cs;  // 多格居中（3.3.4 修复视觉重叠）
+            worldPos.x += (phCellWidth - 1) / 2f * cs;
 
-        // 实例化 GameObject（用 def.prefab 或空壳 + 占位视觉）
+        // 复用通用实例化（含组件挂载/占用/注册/事件）
+        return Instance.CreateBuildingInstance(def, ph.type, coord, phCellWidth, worldPos,
+                                               isPlayerBuilt: false, ph.grade, ph.isConsumable,
+                                               initialState: ph.type == BuildingType.CastleCore ? BuildingState.Abandoned : BuildingState.Active);
+    }
+
+    /// <summary>按占用/注册/挂件/发事件创建 Building 实例。供地图与玩家放置共用逻辑（BuildController 保留自身放置路径）。</summary>
+    public bool CreateBuildingInstance(BuildingDef def, BuildingType sourceType, GridCoord coord, int cellWidth,
+                                       Vector3 worldPos, bool isPlayerBuilt, ResourceGrade grade, bool isConsumable,
+                                       BuildingState initialState)
+    {
+        if (def == null) return false;
+
         GameObject go;
         if (def.prefab != null)
         {
@@ -111,134 +135,155 @@ public static class BuildingFactory
         }
         else
         {
-            // 无 prefab 时创建空壳 + 占位彩色方块（3.3.4 问题12）
-            go = new GameObject($"Building_{ph.type}_{globalCellX}");
+            go = new GameObject($"Building_{def.id}_{coord.x}");
             go.transform.position = worldPos;
-            BuildingVisual.ApplyPlaceholder(go, ph.type, def.role);
+            BuildingVisual.ApplyPlaceholder(go, sourceType, def.role);
         }
 
-        // 确保有 Building 组件（注意：Building 没有 [RequireComponent]，因为 Collider2D 是抽象类，Unity 不能自动补）
         var b = go.GetComponent<Building>();
         if (b == null)
         {
             b = go.AddComponent<Building>();
             if (b == null)
             {
-                Debug.LogError($"[BuildingFactory] 添加 Building 组件失败！type={ph.type}, go={go.name}");
+                Debug.LogError($"[BuildingFactory] 添加 Building 组件失败！id={def.id}");
                 Object.DestroyImmediate(go);
                 return false;
             }
         }
 
-        // 直接内联初始化 Building 字段（避免 InitFromPlaceholder 内部 NRE 或 getter/回调链上的单例时序问题）
+        // 内联初始化
         try
         {
-            // 1. 基础字段
             b.def = def;
             b.coord = coord;
-            b.isPlayerBuilt = false;           // 地图预置建筑 → false
-            b.sourceType = ph.type;
-            b.grade = ph.grade;
-            b.cellWidth = phCellWidth;  // phCellWidth 已提前计算（worldPos 偏移用）
+            b.isPlayerBuilt = isPlayerBuilt;
+            b.sourceType = sourceType;
+            b.grade = grade;
+            b.cellWidth = cellWidth;
             b.level = 1;
-
-            // 2. faction + isObstacle
             b.faction = def.faction;
             b.isObstacle = def.isObstacle;
 
-            // 3. HP：gradeScale 缩放 combat.maxHp；任何异常都给默认 100 不掉链子
             int baseHp = 100;
             try
             {
                 if (def.combat.maxHp > 0) baseHp = def.combat.maxHp;
-                float scale = def.GetGradeScale(ph.grade);
+                float scale = def.GetGradeScale(grade);
                 baseHp = Mathf.Max(1, Mathf.RoundToInt(baseHp * Mathf.Max(0.1f, scale)));
             }
             catch (System.Exception ex)
             {
-                Debug.LogWarning($"[BuildingFactory] HP计算降级为默认 100（def={def.id}, grade={ph.grade}）: {ex.Message}");
+                Debug.LogWarning($"[BuildingFactory] HP计算降级为默认 100（def={def.id}, grade={grade}）: {ex.Message}");
                 baseHp = 100;
             }
             b.maxHp = baseHp;
             b.hp = baseHp;
-
-            // 主城初始废弃态（3.3.4 批次7）
-            if (ph.type == BuildingType.CastleCore)
-                b.state = BuildingState.Abandoned;
+            b.state = initialState;
         }
         catch (System.Exception ex)
         {
-            // 走到这里说明 Building 某个字段赋值访问了非预期东西
-            Debug.LogError($"[BuildingFactory] Building基础字段内联初始化失败：type={ph.type}, def={def.id}, regionIdx={region.regionIndex}, err={ex}");
+            Debug.LogError($"[BuildingFactory] Building字段初始化失败：id={def.id}, err={ex}");
             Object.DestroyImmediate(go);
             return false;
         }
 
-        // 确保有 Collider2D（InteractionManager OverlapPoint 需要）
         if (go.GetComponent<Collider2D>() == null)
         {
-            // size 局部 1x1，由 Building.UpdateVisual 的 localScale 统一缩放到世界尺寸（3.3.4 修复误触+碰撞盒缺失）
             var col = go.AddComponent<BoxCollider2D>();
             col.size = Vector2.one;
         }
 
-        // 注册占用 + 注册表 + 事件（防御性：单例不存在时只打一条 Warning，不抛异常）
-        try
-        {
-            if (GridSystem.Instance != null)
-                GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, b.cellWidth), b);
-        }
+        try { if (GridSystem.Instance != null) GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), b); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] MarkOccupiedFootprint 失败: " + ex.Message); }
 
-        try
-        {
-            if (BuildingRegistry.Instance != null)
-                BuildingRegistry.Instance.Register(b);
-        }
+        try { if (BuildingRegistry.Instance != null) BuildingRegistry.Instance.Register(b); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Registry.Register 失败: " + ex.Message); }
 
-        try
-        {
-            // 按 def 配置挂行为组件（3.3.4 批次4 组件化架构）
-            AttachComponents(b, def);
-        }
+        try { AttachComponents(b, def); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] AttachComponents 失败: " + ex.Message); }
 
-        try
-        {
-            EventBus.Publish(new BuildingPlacedEvent(b));
-        }
+        try { EventBus.Publish(new BuildingPlacedEvent(b)); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
 
         return true;
     }
 
-    /// <summary>按 BuildingDef 配置挂行为组件（3.3.4 批次4）。Producer/Storage 见批次5。供 BuildingFactory 和 BuildController 共用。</summary>
-    public static void AttachComponents(Building b, BuildingDef def)
+    /// <summary>按 BuildingDef 配置挂行为组件（Producer/Storage/Combat/Pickup/Rift/CastleCore）。供 BuildingFactory 和 BuildController 共用。</summary>
+    public void AttachComponents(Building b, BuildingDef def)
     {
         if (b == null || def == null) return;
-        // Producer + Storage（产能建筑，非资源点；3.3.4 批次5）
         if (def.producer.rate > 0f && def.producer.kind == ProduceKind.Resource && !def.isResourceNode)
         {
             b.gameObject.AddComponent<StorageComponent>()?.Init(b);
             b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
         }
-        // Combat（防御建筑，具体逻辑接 3.4/3.5）
         if (def.combat.attack > 0)
             b.gameObject.AddComponent<CombatComponent>()?.Init(b);
-        // Pickup（一次性采集：宝箱/木头堆/石头堆）
         if (def.isConsumable)
             b.gameObject.AddComponent<PickupComponent>()?.Init(b);
-        // Rift（裂隙，接 3.7 波次）
         if (b.sourceType == BuildingType.Rift)
             b.gameObject.AddComponent<RiftComponent>()?.Init(b);
-        // CastleCore（主城，批次7 做最小实现）
         if (b.sourceType == BuildingType.CastleCore)
             b.gameObject.AddComponent<CastleCoreComponent>()?.Init(b);
     }
 
-    /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。销毁 GameObject + 清 Registry。</summary>
-    public static void ClearAllBuildings()
+    // ===== ISaveableSpawner（3.5 步骤3：读档重建）=====
+
+    /// <summary>读档重建单栋建筑：按 defId 重建 + 恢复 level/hp/storedAmount + 网格占用。</summary>
+    public void SpawnFromSave(ModuleSaveEntry entry)
+    {
+        if (entry == null || string.IsNullOrEmpty(entry.json)) return;
+        BuildingSaveData data;
+        try { data = JsonUtility.FromJson<BuildingSaveData>(entry.json); }
+        catch (System.Exception ex) { Debug.LogError($"[BuildingFactory] BuildingSaveData 反序列化失败: {ex}"); return; }
+
+        var def = FindDefById(data.defId);
+        if (def == null)
+        {
+            Debug.LogWarning($"[BuildingFactory] 读档重建失败：未找到 BuildingDef id={data.defId}，跳过。");
+            return;
+        }
+
+        var coord = new GridCoord(data.coordX, 0);
+        int cellWidth = data.cellWidth > 0 ? data.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
+        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
+        Vector3 worldPos = GridSystem.Instance != null
+            ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
+            : new Vector3(coord.x * cs, -3f, 0);
+        if (cellWidth > 1)
+            worldPos.x += (cellWidth - 1) / 2f * cs;
+
+        BuildingState state = (BuildingState)data.state;
+        if (def.sourceType == BuildingType.CastleCore && state == BuildingState.Abandoned)
+            state = BuildingState.Active;   // 主城修复后读档不应回到废墟（castoeLevel≥1）
+
+        bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, cellWidth, worldPos,
+                                         isPlayerBuilt: true, (ResourceGrade)0, false, state);
+        if (!ok) return;
+
+        var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) : null;
+        if (b == null)
+        {
+            Debug.LogWarning($"[BuildingFactory] 读档重建后未取到 Building（coord={coord.x}），跳过状态恢复。");
+            return;
+        }
+
+        // 覆盖 SaveId（否则 SaveManager 找不到该 saveId 分发 LoadState）
+        b.OverrideSaveId(entry.saveId);
+
+        // 恢复核心状态（level/hp/maxHp/storedAmount/副产）
+        b.level = Mathf.Max(1, data.level);
+        b.maxHp = Mathf.Max(1, data.maxHp);
+        b.hp = Mathf.Clamp(data.hp, 0, b.maxHp);
+        var storage = b.GetComponent<StorageComponent>();
+        if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
+        var producer = b.GetComponent<ProducerComponent>();
+        if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
+    }
+
+    /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。</summary>
+    public void ClearAllBuildings()
     {
         if (BuildingRegistry.Instance == null) return;
         var all = BuildingRegistry.Instance.All;
@@ -247,7 +292,7 @@ public static class BuildingFactory
             if (all[i] != null && all[i].gameObject != null)
             {
                 if (Application.isPlaying) Object.Destroy(all[i].gameObject);
-                else Object.DestroyImmediate(all[i].gameObject);  // 编辑模式立即销毁
+                else Object.DestroyImmediate(all[i].gameObject);
             }
         }
         BuildingRegistry.Instance.Clear();

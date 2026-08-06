@@ -120,6 +120,15 @@ public class TeardownManager : Singleton<TeardownManager>
             DifficultyManager.Instance.ResetState();
         if (RulerController.Instance != null)
             RulerController.Instance.ResetState();
+        // 3.5 王国系统（数据层/存档状态重置；KingdomManager/PopulationSystem 原缺失，一并补齐）
+        if (KingdomManager.Instance != null)
+            KingdomManager.Instance.ResetState();
+        if (PopulationSystem.Instance != null)
+            PopulationSystem.Instance.ResetState();
+        if (RanchSystem.Instance != null)
+            RanchSystem.Instance.ResetState();
+        if (SiegeProductionSystem.Instance != null)
+            SiegeProductionSystem.Instance.ResetState();
         if (WorldManager.Instance != null)
             WorldManager.Instance.ResetState();
         if (SaveManager.Instance != null)

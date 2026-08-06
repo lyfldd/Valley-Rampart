@@ -4,8 +4,8 @@
     <ui:Style src="project://database/Assets/_Game/UI/BuildingPanel.uss" />
     <ui:VisualElement name="building-root" class="building-root">
         <ui:VisualElement name="building-panel" class="building-panel">
-            <!-- 标题行：名称 + 等级 + 关闭按钮 -->
-            <ui:VisualElement name="header-row" class="header-row">
+            <!-- 标题行（可拖动窗口把手）：名称 + 等级 + 关闭按钮 -->
+            <ui:VisualElement name="drag-handle" class="header-row">
                 <ui:VisualElement name="title-block" class="title-block">
                     <ui:Label name="building-name" text="建筑名称" class="building-name" />
                     <ui:Label name="building-level" text="Lv.1" class="building-level" />
@@ -68,6 +68,12 @@
                     <ui:Label text="障碍" class="info-label" />
                     <ui:Label name="obstacle-value" text="否" class="info-value" />
                 </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 功能区（3.5 建筑级功能，按建筑类型动态渲染，无功能时整块隐藏） -->
+            <ui:VisualElement name="function-area" class="function-area">
+                <ui:Label text="功能区" class="function-title" />
+                <ui:VisualElement name="function-rows" class="function-rows" />
             </ui:VisualElement>
 
             <ui:VisualElement class="spacer" />

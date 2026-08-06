@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   faction: 1
   occupation: 0
-  walkSpeed: 25
-  runSpeed: 40
+  walkSpeed: 50
+  runSpeed: 120
   maxHp: 100
   attack: 10
   defense: 5

@@ -1,0 +1,125 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a95d457ae7217b54c86dd2c706e8a050, type: 3}
+  m_Name: KingdomConfig
+  m_EditorClassIdentifier: 
+  castleUpgradeCosts:
+  - gold: 2
+    stone: 6
+    wood: 10
+    food: 6
+  - gold: 10
+    stone: 20
+    wood: 30
+    food: 20
+  - gold: 20
+    stone: 36
+    wood: 50
+    food: 36
+  - gold: 40
+    stone: 60
+    wood: 80
+    food: 60
+  - gold: 70
+    stone: 90
+    wood: 120
+    food: 90
+  - gold: 120
+    stone: 140
+    wood: 180
+    food: 140
+  merchantQuotas:
+  - resourceLevel: 1
+    amountPerCycle: 20
+    refreshDays: 3
+  - resourceLevel: 2
+    amountPerCycle: 12
+    refreshDays: 3
+  - resourceLevel: 3
+    amountPerCycle: 10
+    refreshDays: 4
+  - resourceLevel: 4
+    amountPerCycle: 4
+    refreshDays: 5
+  - resourceLevel: 5
+    amountPerCycle: 4
+    refreshDays: 6
+  - resourceLevel: 6
+    amountPerCycle: 2
+    refreshDays: 6
+  - resourceLevel: 7
+    amountPerCycle: 2
+    refreshDays: 7
+  - resourceLevel: 8
+    amountPerCycle: 6
+    refreshDays: 4
+  - resourceLevel: 9
+    amountPerCycle: 4
+    refreshDays: 4
+  initialPopulation: 10
+  birthHappinessThreshold: 60
+  birthSatietyThreshold: 50
+  birthCouplesDivisor: 2
+  birthIntervalDays: 5
+  birthCooldownDefault: 5
+  unemployedDailyFood: 1
+  soldierDailyFood: 2
+  generalDailyFood: 3
+  mageHealerDailyFood: 2
+  eliteDailyFood: 3
+  satietyStart: 80
+  satietyDecayPerDay: 15
+  satietyRegenThreshold: 80
+  satietyRegenPerDay: 8
+  satietyHurtThreshold: 0
+  satietyHurtPerDay: 6
+  hungerHappinessThreshold: 30
+  hungerHappinessPenalty: 2
+  feedSatietyThreshold: 80
+  foodRestoreGrain: 5
+  foodRestoreSpecial: 8
+  foodRestoreMeat: 20
+  foodHappinessGrain: 0
+  foodHappinessSpecial: 1
+  foodHappinessMeat: 3
+  headTaxPerPerson: 0.5
+  buildingTaxRate: 0.1
+  commercialTaxPerLevel: 1
+  lowHappinessTaxFloor: 0.5
+  foodToGoldIn: 4
+  goldToFoodOut: 3
+  tradeSellUnitsPerGold: 040000000300000002000000020000000100000001000000010000000200000002000000
+  tradeBuyUnitsPerGold: 030000000200000001000000010000000100000001000000010000000100000001000000
+  marketMaxTradeLevel: 040000000600000009000000
+  happinessSatietyWeight: 0.4
+  happinessHouseWeight: 0.2
+  happinessChurchWeight: 0.15
+  happinessHospitalWeight: 0.15
+  happinessTaxWeight: 0.1
+  happinessFoodQualityWeight: 0.1
+  happinessBase: 50
+  happinessSatietyBonusMax: 30
+  happinessTaxPenaltyMax: 20
+  timeScales:
+  - 1
+  - 2
+  - 4
+  byproductOrePerUnit: 5
+  byproductCrystalCapacity: 20
+  byproductFireOilCapacity: 20
+  ranchCapacity: 10
+  ranchFeedPerAnimal: 1
+  ranchMeatHappiness: 3
+  goldMineGoldPerDay: 2
+  kingdomSecondsPerDay: 180
+  generalLimit: 2
+  hospitalRecoveryBonus: 5

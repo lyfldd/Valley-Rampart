@@ -19,6 +19,7 @@ public class TopLeftHUD : MonoBehaviour
     private Label _timeLabel;
     private Label _dayLabel;
     private Label _seasonLabel;
+    private Button _populationButton;
     private bool _labelsBound;
 
     private UnitController _monarch;
@@ -83,6 +84,8 @@ public class TopLeftHUD : MonoBehaviour
         _timeLabel = root.Q<Label>("time-text");
         _dayLabel = root.Q<Label>("day-text");
         _seasonLabel = root.Q<Label>("season-text");
+        _populationButton = root.Q<Button>("population-button");
+        if (_populationButton != null) _populationButton.clicked += OnPopulationClicked;
 
         _labelsBound = true;
     }
@@ -165,6 +168,18 @@ public class TopLeftHUD : MonoBehaviour
         if (tm == null) return;
         UpdateDayText(tm.CurrentDay);
         UpdateSeasonText(tm.CurrentSeason);
+    }
+
+    /// <summary>「人口」按钮：推送 PopulationPanel 入栈。</summary>
+    private void OnPopulationClicked()
+    {
+        var popPanel = FindObjectOfType<PopulationPanel>();
+        if (popPanel == null)
+        {
+            Debug.LogWarning("[TopLeftHUD] 未找到 PopulationPanel（场景缺少挂载 PopulationPanel + UIDocument 的 GameObject）");
+            return;
+        }
+        UIManager.Instance?.Push(popPanel, new Interactor(Faction.Human_Player, Vector3.zero));
     }
 
     private void OnDayChanged(TimeDayChangedEvent evt)

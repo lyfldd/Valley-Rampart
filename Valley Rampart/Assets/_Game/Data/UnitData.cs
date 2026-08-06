@@ -30,6 +30,10 @@ public enum Occupation
     ArrowTower,     // 箭塔（ammo=Arrow，独立 key Human_Player_ArrowTower）
     CrossbowTower,  // 弩塔（ammo=Bolt）
     MagicTower,     // 魔法塔（ammo=Magic）
+    // ===== 3.5 P0 生活职业（末尾追加保持 int 稳定；§13.5/§13.12）=====
+    Unemployed,     // 无职业废人：吃粮（1/日）不干活，须训练转职（出生默认）
+    Worker,         // 工人：采集/建造/维修（3.5 训练所转职目标；原 Civilian 亦可视为工人）
+    Porter,         // 搬运工：运粮/搬运（3.5 训练所转职目标）
 }
 
 // 注意：Faction 枚举已迁入 AI.Core/Ports/Faction.cs（M1 决策核提取，asmdef 边界要求），

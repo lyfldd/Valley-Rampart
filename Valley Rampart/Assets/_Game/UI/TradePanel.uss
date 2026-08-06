@@ -1,0 +1,147 @@
+/* ===== TradePanel 市场贸易面板 ===== */
+
+.trade-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+}
+
+.trade-panel {
+    width: 420px;
+    background-color: var(--color-bg-panel);
+    border-radius: 10px;
+    padding: 20px;
+    align-items: stretch;
+    border-width: 1px;
+    border-color: rgb(60, 60, 80);
+}
+
+/* ===== 标题区（可拖动窗口把手） ===== */
+.trade-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 80);
+    cursor: grab;
+}
+
+.trade-header:active {
+    cursor: grabbing;
+}
+
+.trade-title {
+    font-size: 22px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+}
+
+.trade-close {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-radius: 4px;
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.trade-close:hover {
+    background-color: var(--color-button-hover);
+    color: var(--color-danger);
+}
+
+/* ===== 规则提示 ===== */
+.trade-hint {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    white-space: normal;
+    margin-bottom: 12px;
+}
+
+/* ===== 资源交易列表 ===== */
+.trade-resource-list {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.trade-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    background-color: rgb(28, 28, 40);
+    border-radius: 6px;
+}
+
+.trade-row-name {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+    width: 56px;
+}
+
+.trade-row-holding {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+    flex-grow: 1;
+}
+
+.trade-row-hint {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+}
+
+.trade-btn {
+    height: 36px;
+    min-width: 64px;
+    margin-left: 6px;
+    font-size: var(--font-size-small);
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 4px;
+    border-width: 0;
+    transition-property: background-color;
+    transition-duration: 0.15s;
+}
+
+.trade-btn:hover {
+    background-color: var(--color-button-hover);
+}
+
+.trade-btn:active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.trade-btn:disabled {
+    background-color: var(--color-disabled);
+    color: rgb(100, 100, 100);
+}
+
+.trade-btn--sell:hover {
+    background-color: rgb(120, 70, 40);
+}
+
+.trade-btn--sell:active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}
+
+.trade-btn--buy:hover {
+    background-color: rgb(60, 110, 70);
+}
+
+.trade-btn--buy:active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+}

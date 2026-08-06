@@ -183,7 +183,7 @@ public class BuildController : Singleton<BuildController>
 
         GridSystem.Instance.MarkOccupiedFootprint(coord, b.cellWidth, b);
         BuildingRegistry.Instance?.Register(b);
-        BuildingFactory.AttachComponents(b, _selectedDef);  // 玩家建造也挂组件（3.3.4 批次5）
+        BuildingFactory.Instance.AttachComponents(b, _selectedDef);  // 玩家建造也挂组件（3.3.4 批次5）
         EventBus.Publish(new BuildingPlacedEvent(b));
 
         Debug.Log($"[BuildController] 放置 {_selectedDef.id} at cell {coord.x}");

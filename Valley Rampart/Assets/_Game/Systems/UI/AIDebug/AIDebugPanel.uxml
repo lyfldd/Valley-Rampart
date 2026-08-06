@@ -25,6 +25,9 @@
                     <ui:VisualElement name="tab-formation" class="tab-button">
                         <ui:Label text="编队操作" class="tab-label" />
                     </ui:VisualElement>
+                    <ui:VisualElement name="tab-kingdom" class="tab-button">
+                        <ui:Label text="王国" class="tab-label" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- Tab 内容：AI 可视化（原面板） -->
@@ -48,6 +51,14 @@
                     <ui:Button name="formation-garrison-button" text="守城编队（热键4）" class="dev-button" />
                     <ui:Button name="formation-disband-button" text="解散将军编队（热键5）" class="dev-button" />
                     <ui:Button name="formation-kill-test-button" text="残编测试（热键7）" class="dev-button" />
+                </ui:VisualElement>
+
+                <!-- Tab 内容：王国（君主资源调试） -->
+                <ui:VisualElement name="kingdom-content" class="tab-content" style="display: none;">
+                    <ui:Label text="无限资源" class="dev-hint-title" />
+                    <ui:Label text="开启后将持续把君主资源补满（金币/石材/木材/食物/特殊食物/肉）。" class="dev-hint" />
+                    <ui:Button name="kingdom-infinite-resource-button" text="无限资源：关" class="dev-button" />
+                    <ui:Label name="kingdom-status-hint" text="" class="dev-hint kingdom-status-hint" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -115,6 +126,21 @@
                             <ui:VisualElement class="field-row">
                                 <ui:Label text="受击冷却：" class="field-label" />
                                 <ui:Label name="hit-cooldown" text="否" class="field-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- 生活状态（3.5 P1：饱食/幸福；纯工事显示 "—"） -->
+                    <ui:VisualElement name="life-section" class="section">
+                        <ui:Label text="▸ 生活状态" class="section-title" />
+                        <ui:VisualElement class="section-body">
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="饱食：" class="field-label" />
+                                <ui:Label name="satiety-value" text="—" class="field-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="field-row">
+                                <ui:Label text="幸福：" class="field-label" />
+                                <ui:Label name="happiness-value" text="—" class="field-value" />
                             </ui:VisualElement>
                         </ui:VisualElement>
                     </ui:VisualElement>

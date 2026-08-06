@@ -31,6 +31,22 @@ public class GameBootstrap : MonoBehaviour
         // 注册场景级生成器到 SaveManager，使 UnitFactory 产出的单位能被存档系统追踪
         SaveManager.Instance.RegisterSpawner(UnitFactory.Instance);
 
+        // 3.5 P0 步骤3：注册建筑重建 spawner（读档时 Building_ 前缀条目由 BuildingFactory 重建）
+        SaveManager.Instance.RegisterSpawner(BuildingFactory.Instance);
+
+        // 3.5：确保王国系统单例存在（KingdomManager 自注册存档；PopulationSystem 见步骤5）
+        _ = KingdomManager.Instance;
+        _ = PopulationSystem.Instance;
+        _ = DayCycleSettlement.Instance;   // 每日结算统一入口（订阅 TimeDayChangedEvent）
+        // 3.5 P1：王国经济深度系统（饱食/幸福/税收/贸易/牧场）
+        _ = SatietySystem.Instance;
+        _ = HappinessSystem.Instance;
+        _ = TaxSystem.Instance;
+        _ = TradeSystem.Instance;
+        _ = RanchSystem.Instance;
+        _ = EquipmentSystem.Instance;
+        _ = SiegeProductionSystem.Instance;
+
         // 订阅配置加载完成事件（替代已废弃的 UnitDataLoadedEvent，见引导书 3.2 节）
         EventBus.Subscribe<ConfigsLoadedEvent>(OnConfigsLoaded);
     }
@@ -113,6 +129,11 @@ public class GameBootstrap : MonoBehaviour
             //   4. GameStateManager.SetState(Playing)
             LoadManager.Instance.InitializeNewGame(config);
             SaveManager.Instance.ResetAutoSaveCounter();
+
+            // 3.5 步骤5：新建游戏设置开局人口（KingdomConfig）
+            var kingdomConfig = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+            if (kingdomConfig != null)
+                PopulationSystem.Instance.SetInitialPopulation(kingdomConfig.initialPopulation);
             Debug.Log($"[GameBootstrap] 应用新建游戏配置: "
                 + $"ruler={config.rulerName}, seed={config.mapSeed}, difficulty={config.difficulty}");
 

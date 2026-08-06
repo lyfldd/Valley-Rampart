@@ -26,5 +26,7 @@
             <ui:Label name="time-text" text="06:00 · 黎明" class="time-text" />
             <ui:Label name="season-text" text="春" class="season-text" />
         </ui:VisualElement>
+        <!-- 人口入口按钮（打开 PopulationPanel） -->
+        <ui:Button name="population-button" text="人口" class="pop-button" />
     </ui:VisualElement>
 </ui:UXML>

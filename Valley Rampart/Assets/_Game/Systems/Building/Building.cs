@@ -381,7 +381,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
     /// <summary>拆除建筑（由 BuildingPanel 调）。按 HP 比例返还造价资源。</summary>
     public void Demolish()
     {
-        if (!isPlayerBuilt || def == null || !def.isDestructible) return;
+        if (!isPlayerBuilt || def == null || !def.isDestructible || def.isResourceNode) return;
         float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
         RulerController.Instance?.Refund(def.cost, ratio);
         Die(DeathCause.Demolished);

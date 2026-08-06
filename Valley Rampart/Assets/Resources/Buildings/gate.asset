@@ -24,6 +24,7 @@ MonoBehaviour:
     food: 0
   footprint: {x: 1, y: 1}
   allowedTerrain: 
+  moduleType: 0
   isObstacle: 1
   producer:
     kind: 0
