@@ -94,6 +94,8 @@ public class KingdomConfig : ScriptableObject
     [Header("金矿（§13.3 直接产金入国库，SO 可调）")]
     [Tooltip("金矿每日产金数（金=货币不占存储，直接进国库 RulerController.Gold）")]
     public int goldMineGoldPerDay = 2;            // 金矿每日产金
+    [Tooltip("3.5 P1-21：税务所（原金矿）独立产金每日数，与 TaxSystem 并存（TaxSystem 管人头/商业税，税务所管独立产金）")]
+    public int taxOfficeGoldPerDay = 2;           // 税务所独立产金（>0 优先于 goldMineGoldPerDay）
     [Tooltip("1 天秒数（与 TimeManager 白天120/黄昏30/夜晚30 同步，用于 rate 换算）")]
     public int kingdomSecondsPerDay = 180;        // 1 天秒数
 

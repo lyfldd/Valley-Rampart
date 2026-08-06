@@ -315,10 +315,8 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     private bool HasActiveEnemies()
     {
         if (UnitRegistry.Instance == null) return false;
-        var all = UnitRegistry.Instance.GetAllUnits();
-        for (int i = 0; i < all.Count; i++)
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
         {
-            var u = all[i];
             if (u == null || u.Data == null) continue;
             if (u.Data.faction == Faction.Undead && u.IsAlive) return true;
         }

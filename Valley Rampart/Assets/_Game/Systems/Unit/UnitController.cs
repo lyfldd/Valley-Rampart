@@ -64,6 +64,13 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     [Tooltip("工事配置（墙/门/拒马/塔对象配此引用；非工事单位留空）")]
     public FortificationDef fortification;
 
+    /// <summary>
+    /// 3.5 P1-13 城门昼夜开关运行时覆盖（可空）。null=用共享 FortificationDef.passable；
+    /// 有值=覆盖可通行状态（GateController 昼夜/玩家控制写入）。
+    /// 因 FortificationDef 是共享 SO（改它污染所有城门），故用运行时覆盖，不污染资产。
+    /// </summary>
+    public bool? FortificationPassableOverride;
+
     /// <summary>最终韧性 = 职业基础韧性 + 防御 × 系数（3.6 §4.2，骑兵冲击反制）。</summary>
     public float Toughness
     {
@@ -937,7 +944,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         {
             var uc = unit as UnitController;
             if (uc == null || uc == this || uc.fortification == null) continue;
-            if (uc.fortification.blocksMovement && !uc.fortification.passable)
+            // 3.5 P1-13：城门 passable 用运行时覆盖（昼夜开关），否则用共享 SO 值
+            bool passable = uc.FortificationPassableOverride ?? uc.fortification.passable;
+            if (uc.fortification.blocksMovement && !passable)
                 return true;
         }
         return false;

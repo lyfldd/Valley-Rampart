@@ -38,10 +38,18 @@ public class ScheduleCenterStub : MonoBehaviour
     [Tooltip("测试用砍树任务位置（白天派发 B 级任务）")]
     public Transform treeTarget;
 
-    private readonly HashSet<StorageComponent> _transporting = new HashSet<StorageComponent>();
+    private readonly Dictionary<StorageComponent, HashSet<NPCBrain>> _transporting = new Dictionary<StorageComponent, HashSet<NPCBrain>>();
     // 机器（单位/建筑）-> 已派工人的名单（续命其操作任务，防堆叠）
     private readonly Dictionary<object, List<NPCBrain>> _crewAssignments = new Dictionary<object, List<NPCBrain>>();
     private float _assignTimer;
+
+    // 3.5 §8.3：任务优先级映射 SO（修复S > 建造/生产A > 搬运B > 养殖/挑水/产金C），数据驱动
+    private TaskPriorityConfig _priorityConfig;
+
+    private void Awake()
+    {
+        _priorityConfig = Resources.Load<TaskPriorityConfig>("Config/TaskPriorityConfig");
+    }
 
     private void Update()
     {
@@ -52,8 +60,17 @@ public class ScheduleCenterStub : MonoBehaviour
         // 昼夜节律：夜间停发 B/C 户外任务（§7 输入端一致性）
         if (IsNight()) return;
 
+        // 3.5 §8.3 优先级派发：空闲工人优先接高优先级任务（S>A>B>C，同优先级 FIFO）。
+        // 当前已落地搬运（B）；修复(S)/建造(A)/生产(A)/养殖/挑水/产金(C) 任务源在 P1 任务调度扩展中接入，
+        // 届时统一走 DispatchByPriority 派发，本中心只按优先级排序 + 空闲工人优先高优先级。
         DispatchTransport();
         DispatchCrew();
+    }
+
+    /// <summary>查任务类型优先级（TaskPriorityConfig SO；未配置回退 B）。供派发处统一取值，禁止硬编码优先级。</summary>
+    private TaskPriority GetPriority(KingdomTaskType type)
+    {
+        return _priorityConfig != null ? _priorityConfig.Get(type) : TaskPriority.B;
     }
 
     /// <summary>夜间判定（TimeManager 未挂载=白天，行为不变）</summary>
@@ -65,14 +82,25 @@ public class ScheduleCenterStub : MonoBehaviour
     }
 
     /// <summary>
-    /// 搬运派发（3.3.5）：遍历产能建筑，存储达标且无搬运中任务的 → 派空闲工人。
-    /// 任务完成（Harvest 清空存储）→ 标记自动释放。
+    /// 搬运派发（3.3.5 + 3.5 P1-8 分批）。遍历产能建筑，存储达标且未满配 → 派空闲工人。
+    /// 分批：源建筑产出 &gt; 携带量时，按 ceil(stored/carry) 补派多个工人，每趟各搬一次携带量
+    /// （BehaviorExecutor 到达调 HarvestCarry 限量搬，剩余留待下轮）。优先级查 TaskPriorityConfig（B）。
     /// </summary>
     private void DispatchTransport()
     {
-        // 清理已完成搬运标记（建筑存储被 Harvest 清空 / 建筑销毁）
+        // 清理已无效搬运记录（建筑销毁 / 无产出 / 已派工人全失效）
         if (_transporting.Count > 0)
-            _transporting.RemoveWhere(s => s == null || s.storedAmount <= 0);
+        {
+            var stale = new List<StorageComponent>();
+            foreach (var kv in _transporting)
+            {
+                var s = kv.Key;
+                kv.Value.RemoveWhere(w => w == null);
+                if (s == null || !s.IsReadyToHarvest() || kv.Value.Count == 0)
+                    stale.Add(s);
+            }
+            for (int i = 0; i < stale.Count; i++) _transporting.Remove(stale[i]);
+        }
 
         var storages = FindObjectsOfType<StorageComponent>();
         if (storages.Length == 0) return;
@@ -81,39 +109,49 @@ public class ScheduleCenterStub : MonoBehaviour
         var npcs = FindObjectsOfType<NPCBrain>();
         if (npcs.Length == 0) return;
 
+        TaskPriority transportPriority = GetPriority(KingdomTaskType.Transport);
+
         foreach (var storage in storages)
         {
             if (storage == null) continue;
             if (!storage.IsReadyToHarvest()) continue;      // 无产出不搬
-            if (_transporting.Contains(storage)) continue;  // 已有搬运中任务，防重复派发
+            if (storage.storedAmount <= 0) continue;
 
-            // 找空闲工人（IsIdleForTask：无进行中任务/战斗）
-            NPCBrain worker = null;
-            for (int i = 0; i < npcs.Length; i++)
+            if (!_transporting.TryGetValue(storage, out var assigned))
             {
-                if (npcs[i] != null && npcs[i].IsIdleForTask)
-                {
-                    worker = npcs[i];
-                    break;
-                }
+                assigned = new HashSet<NPCBrain>();
+                _transporting[storage] = assigned;
             }
-            if (worker == null) return;  // 无空闲工人，等下 tick
+            assigned.RemoveWhere(w => w == null);
 
-            // 派发搬运任务（B 级，目标=建筑位置，issuer=StorageComponent 供 L3 透传 HarvestTarget）
+            // 分批：需要搬运批次数 = ceil(存量 / 携带量)；已派数不足则补派
+            int carry = storage.GetCarryAmount();
+            int batches = Mathf.Max(1, Mathf.CeilToInt(storage.storedAmount / (float)carry));
+            int need = batches - assigned.Count;
+            if (need <= 0) continue;
+
             var building = storage.GetComponent<Building>();
             Vector2 pos = building != null ? (Vector2)building.transform.position : (Vector2)storage.transform.position;
-            worker.AddTaskStimulus(new TaskStimulus(
-                TaskPriority.B, Vector2XUnity.FromUnity(pos), transportIntensity,
-                expiry: Time.time + transportExpiry, issuer: storage));
-            _transporting.Add(storage);
-            Debug.Log($"[调度中心] 派发搬运任务 → {worker.name} @ {pos}（{storage.resourceType} 存量 {storage.storedAmount}）");
+
+            for (int i = 0; i < npcs.Length && need > 0; i++)
+            {
+                var worker = npcs[i];
+                if (worker == null || !worker.IsIdleForTask || assigned.Contains(worker)) continue;
+                worker.AddTaskStimulus(new TaskStimulus(
+                    transportPriority, Vector2XUnity.FromUnity(pos), transportIntensity,
+                    expiry: Time.time + transportExpiry, issuer: storage));
+                assigned.Add(worker);
+                need--;
+            }
+            if (assigned.Count > 0)
+                Debug.Log($"[调度中心] 派发搬运任务 → {assigned.Count} 工人 @ {pos}（{storage.resourceType} 存量 {storage.storedAmount}，分批{batches}）");
         }
     }
 
     /// <summary>是否搬运中（BuildingPanel 显示收取状态用）</summary>
     public bool IsTransporting(StorageComponent storage)
     {
-        return storage != null && _transporting.Contains(storage);
+        return storage != null && _transporting.ContainsKey(storage);
     }
 
     /// <summary>

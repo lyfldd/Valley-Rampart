@@ -45,10 +45,17 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         UpdateByproductConfig();
 
         // 金矿：金=货币不占存储，直接产金入国库（rate 由 KingdomConfig 每日产金换算，SO 可调）
+        // 3.5 P1-21：税务所（原金矿）独立产金，与 TaxSystem 并存——优先 taxOfficeGoldPerDay，否则 goldMineGoldPerDay
         if (_resourceType == ResourceType.Gold)
         {
             var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
-            int perDay = cfg != null && cfg.goldMineGoldPerDay > 0 ? cfg.goldMineGoldPerDay : 2;
+            int perDay = 0;
+            if (cfg != null && cfg.taxOfficeGoldPerDay > 0)
+                perDay = cfg.taxOfficeGoldPerDay;                       // 税务所独立产金
+            else if (cfg != null && cfg.goldMineGoldPerDay > 0)
+                perDay = cfg.goldMineGoldPerDay;                        // 金矿产金（兜底）
+            else
+                perDay = 2;
             int secondsPerDay = cfg != null && cfg.kingdomSecondsPerDay > 0 ? cfg.kingdomSecondsPerDay : 180;
             _rate = perDay / (float)secondsPerDay;
         }

@@ -226,6 +226,9 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             b.gameObject.AddComponent<RiftComponent>()?.Init(b);
         if (b.sourceType == BuildingType.CastleCore)
             b.gameObject.AddComponent<CastleCoreComponent>()?.Init(b);
+        // 3.5 P1-22：科技模块建筑（学院/工坊）挂研究单项目队列组件
+        if (def.moduleType == ModuleType.Science)
+            b.gameObject.AddComponent<AcademyBuilding>()?.Init(b);
     }
 
     // ===== ISaveableSpawner（3.5 步骤3：读档重建）=====

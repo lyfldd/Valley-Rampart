@@ -50,6 +50,12 @@ public class WorkerTask : MonoBehaviour
     public bool Suspended;     // T-R：被打断挂起
     public float SuspendedAt;
 
+    // ===== 搬运携带量（3.5.3 §3.1 / 3.5 前置缺口 §2.2；P1-8）=====
+    /// <summary>本次搬运的资源类型（取货点 source 的产出类型）。</summary>
+    public ResourceType CarryResource;
+    /// <summary>本次搬运一次携带量（资源类型 → 携带量查 ResourceCarryConfig SO，数据驱动）。</summary>
+    public int CarryAmount;
+
     /// <summary>任务是否推进中（非终态）。</summary>
     public bool Active => State != WorkerTaskState.Completed && State != WorkerTaskState.Abandoned;
 
@@ -86,13 +92,20 @@ public class WorkerTask : MonoBehaviour
     /// <summary>
     /// 领取任务（对齐训练侧 SimWorld 装配 SimTask + 置 worker.Brain.IsKingdomTaskWorker）。
     /// 分配即标记工人为任务工人（移动独占）；TaskWorkerTotal 累计。
+    /// 搬运任务经此重载传入 carryResource，携带量由 ResourceCarryConfig SO 查表填充（P1-8）。
     /// </summary>
     public void Assign(WorkerTaskType type, float sourceX, float destX, float workDuration)
+        => Assign(type, sourceX, destX, workDuration, ResourceType.Gold);
+
+    /// <summary>带资源类型的领取（P1-8：搬运携带量）。</summary>
+    public void Assign(WorkerTaskType type, float sourceX, float destX, float workDuration, ResourceType carryResource)
     {
         Type = type;
         SourceX = sourceX;
         DestX = destX;
         WorkDuration = workDuration;
+        CarryResource = carryResource;
+        CarryAmount = GetCarryAmount(carryResource);   // 数据驱动：携带量查 SO
         State = WorkerTaskState.Assigned;
         WorkElapsed = 0f;
         Suspended = false;
@@ -101,6 +114,15 @@ public class WorkerTask : MonoBehaviour
 
         // 任务工人移动独占：NPCBrain 据此跳过普通决策核移动（对齐 SimBrain.IsKingdomTaskWorker）
         if (_brain != null) _brain.IsKingdomTaskWorker = true;
+    }
+
+    /// <summary>按资源类型查一次搬运携带量（ResourceCarryConfig SO，P1-8）。</summary>
+    private static ResourceCarryConfig _carryConfig;
+    private static int GetCarryAmount(ResourceType type)
+    {
+        if (_carryConfig == null)
+            _carryConfig = Resources.Load<ResourceCarryConfig>("Config/ResourceCarryConfig");
+        return _carryConfig != null ? _carryConfig.GetCarryAmount(type) : 10;
     }
 
     /// <summary>把任务标记为失败放弃（工人阵亡等外部原因调用，双保险）。</summary>

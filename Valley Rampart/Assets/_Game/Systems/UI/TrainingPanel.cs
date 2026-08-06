@@ -201,7 +201,8 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
     private void OnTrainClicked(UnitController unit, TrainingDef def)
     {
         if (TrainingSystem.Instance == null) return;
-        if (TrainingSystem.Instance.TryTrain(unit, def))
+        // P1-10：传入所属训练建筑实例，供槽位管理（排队/训练中）
+        if (TrainingSystem.Instance.TryTrain(unit, def, _building))
             Refresh();
         else
             Debug.Log("[TrainingPanel] 训练失败（起始职业不符 / 资源不足 / 将军已达上限）");

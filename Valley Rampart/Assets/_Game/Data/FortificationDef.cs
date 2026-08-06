@@ -36,4 +36,8 @@ public class FortificationDef : ScriptableObject
 
     [Tooltip("工事血量（可被消耗：近战 + 高穿透弹药）")]
     public int maxHp = 100;
+
+    [Header("城门昼夜开关（3.5.4 §8.4；P1-13）")]
+    [Tooltip("城门 playerOverride 超时重置时长（分钟）：每次昼夜事件后玩家若 N 分钟未手动操作 → 清除覆盖，恢复昼夜自动。占位可调。")]
+    public float gateOverrideTimeoutMinutes = 5f;
 }

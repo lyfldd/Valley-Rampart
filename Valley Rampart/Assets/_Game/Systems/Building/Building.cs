@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>建筑生命周期状态（3.3.4 批次3）。</summary>
@@ -69,6 +70,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
     public int hp;
     public int maxHp;
     public ResourceGrade grade = ResourceGrade.Normal;
+
+    // ===== 3.5 P1-15 当前在册工人（3.5.3 §7.4 / 3.5.4 §8.5）=====
+    // 本建筑当前服务的通用工人引用列表。建筑被摧毁时由 Die() 扫描 → 工人逃出存活。
+    // 由 ScheduleCenter 派发工人时登记 / 工人离开时移除（P1 任务调度扩展接入）。
+    [Tooltip("当前在册工人（建筑被摧毁时逃出存活）。ScheduleCenter 派工时登记")]
+    public readonly List<UnitController> currentWorkers = new List<UnitController>();
 
     // ===== 状态机 + 进度系统（3.3.4 批次3）=====
     [Header("生命周期")]
@@ -452,10 +459,20 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
     /// <summary>
     /// 死亡处理。3.4 改造：加 DeathCause 参数区分拆除/被击杀；
     /// 改发 UnitDiedEvent（BuildingDestroyedEvent 退役）。
+    /// 3.5 P1-15：扫描 currentWorkers → 工人逃出存活（位置 +1 格偏移，变无任务状态，不死亡）。
+    /// 3.5 P1-10：训练建筑摧毁 → 通知 TrainingSystem 释放训练中居民（回退无职业，资源不退）。
     /// </summary>
     public void Die(DeathCause cause = DeathCause.Killed)
     {
         state = BuildingState.Dead;
+
+        // 3.5 P1-15：在册工人逃出存活（先于 FreeFootprint/Destroy 执行，避免引用失效）
+        EscapeWorkers();
+
+        // 3.5 P1-10：训练建筑摧毁 → 训练队列中断回退（居民存活、资源不退）
+        if (TrainingSystem.Instance != null)
+            TrainingSystem.Instance.OnBuildingDestroyed(this);
+
         GridSystem.Instance?.FreeFootprint(coord, cellWidth);
         BuildingRegistry.Instance?.Unregister(this);
 
@@ -469,5 +486,44 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
         ));
 
         Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// 3.5 P1-15 工人逃出（3.5.3 §7.4 / 3.5.4 §8.5）：建筑被摧毁时当前在册工人存活。
+    /// 每个工人：① 清除任务状态（变 Idle）② 位置 +1 格偏移逃离（避免卡在废墟格）③ 不死亡。
+    /// 逃出后可被 ScheduleCenter 重新派发任务。
+    /// </summary>
+    private void EscapeWorkers()
+    {
+        if (currentWorkers == null || currentWorkers.Count == 0) return;
+        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize : 2.26f;
+        int idx = 0;
+        for (int i = currentWorkers.Count - 1; i >= 0; i--)
+        {
+            var w = currentWorkers[i];
+            if (w == null) { currentWorkers.RemoveAt(i); continue; }
+            if (!w.IsAlive) { currentWorkers.RemoveAt(i); continue; }
+
+            // ① 清除任务状态（变 Idle）：若为王国任务工人，标记其任务终止
+            var task = w.GetComponent<WorkerTask>();
+            if (task != null) task.Abandon();
+            var brain = w.GetComponent<NPCBrain>();
+            if (brain != null)
+            {
+                // 释放搬运任务（issuer=StorageComponent）与 crew 任务（issuer=本建筑），变 Idle 可被重新派发
+                var storage = GetComponent<StorageComponent>();
+                if (storage != null) brain.RemoveTaskStimulus(storage);
+                brain.RemoveTaskStimulus(this);
+            }
+
+            // ② 位置 +1 格偏移逃离（逐工人递增偏移，避免重叠）
+            int dir = (idx % 2 == 0) ? 1 : -1;   // 交替左右偏移
+            int cells = (idx / 2) + 1;
+            Vector2 escape = (Vector2)transform.position + new Vector2(dir * cells * cellSize, 0f);
+            w.Teleport(escape);
+            currentWorkers.RemoveAt(i);
+            idx++;
+        }
     }
 }

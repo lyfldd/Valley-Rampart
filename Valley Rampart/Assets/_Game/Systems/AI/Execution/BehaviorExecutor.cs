@@ -164,8 +164,14 @@ public class BehaviorExecutor
             {
                 _arrivedAtFocus = true;
                 // 3.3.5 资源流转：搬运任务到达 → Harvest 入国库（原占位"原地待机"扩展）
+                // 3.5 P1-8 搬运携带量：源建筑产出 > 携带量时分批多次搬运（每次 HarvestCarry ≤ 携带量，剩余留待下轮）。
                 if (cmd.HarvestTarget != null)
-                    cmd.HarvestTarget.Harvest();
+                {
+                    if (cmd.HarvestTarget is StorageComponent sc)
+                        sc.HarvestCarry();   // 限量搬运（按资源类型携带量，ResourceCarryConfig SO）
+                    else
+                        cmd.HarvestTarget.Harvest();
+                }
             }
         }
         else

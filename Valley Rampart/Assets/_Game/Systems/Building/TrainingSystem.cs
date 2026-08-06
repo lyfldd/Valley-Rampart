@@ -14,6 +14,106 @@ public class TrainingSystem : Singleton<TrainingSystem>
     private TrainingConfig _config;
     private readonly Dictionary<string, List<TrainingDef>> _byBuilding = new Dictionary<string, List<TrainingDef>>();
 
+    // ===== 3.5 P1-10 训练队列（3.5.1 §4.3 / §12.2）=====
+    // 每训练建筑一队列：排队中(inTraining=false) + 训练中(inTraining=true)。
+    // 槽位 = BuildingDef.trainingSlots（Lv1=1/Lv2=2/Lv3=3，其他回退 1）。
+    // 训练中建筑被摧毁 → 不退款、居民存活回退无职业居民（OnBuildingDestroyed）。
+    private readonly Dictionary<Building, TrainingQueue> _queues = new Dictionary<Building, TrainingQueue>();
+
+    /// <summary>单训练建筑队列（排队 + 训练中）。</summary>
+    private class TrainingQueue
+    {
+        public readonly List<TrainingQueueEntry> Entries = new List<TrainingQueueEntry>();
+        public int ActiveCount;   // 训练中条目数（占用槽位）
+    }
+
+    /// <summary>单条训练请求（排队中或训练中）。</summary>
+    private class TrainingQueueEntry
+    {
+        public UnitController unit;
+        public TrainingDef def;
+        public int startDay;      // 开始训练的游戏天数（仅训练中条目有效）
+        public bool inTraining;   // true=占用槽位训练中；false=排队等待空槽
+    }
+
+    private void Update()
+    {
+        // 每日推进训练完成（天数驱动，costDays 天完成转职）
+        if (TimeManager.Instance == null) return;
+        int day = TimeManager.Instance.CurrentDay;
+        if (_queues.Count == 0) return;
+
+        foreach (var kv in _queues)
+        {
+            var q = kv.Value;
+            if (q == null || q.Entries.Count == 0) continue;
+            // 从后往前完成训练中条目，避免改列表
+            for (int i = q.Entries.Count - 1; i >= 0; i--)
+            {
+                var e = q.Entries[i];
+                if (!e.inTraining || e.unit == null) continue;
+                if (day - e.startDay >= e.def.costDays)
+                {
+                    CompleteTraining(q, e);
+                }
+            }
+            // 排队条目晋升空槽（有槽位则把队首排队条目转训练中）
+            if (q.ActiveCount < SlotCount(kv.Key)) TryPromote(q, day);
+        }
+    }
+
+    /// <summary>把队首排队条目晋升为训练中（若有空槽）。</summary>
+    private void TryPromote(TrainingQueue q, int day)
+    {
+        if (q == null) return;
+        for (int i = 0; i < q.Entries.Count; i++)
+        {
+            var e = q.Entries[i];
+            if (e.inTraining) continue;
+            e.inTraining = true;
+            e.startDay = day;
+            q.ActiveCount++;
+            return;
+        }
+    }
+
+    /// <summary>训练完成：改职业 + 出队 + 车牌空槽（由后续 Update 晋升排队条目）。</summary>
+    private void CompleteTraining(TrainingQueue q, TrainingQueueEntry e)
+    {
+        if (e.unit != null && e.unit.Data != null)
+        {
+            e.unit.SetOccupation(e.def.toOccupation);
+            Debug.Log($"[TrainingSystem] 训练完成：{e.def.fromOccupation} → {e.def.toOccupation}（{e.def.buildingId}，耗金{e.def.costGold} 水晶{e.def.costCrystal}）");
+        }
+        q.ActiveCount = Mathf.Max(0, q.ActiveCount - 1);
+        q.Entries.Remove(e);
+    }
+
+    /// <summary>训练建筑槽位数（BuildingDef.trainingSlots；≤0 回退 1）。</summary>
+    private static int SlotCount(Building building)
+    {
+        if (building != null && building.def != null && building.def.trainingSlots > 0)
+            return building.def.trainingSlots;
+        return 1;
+    }
+
+    /// <summary>
+    /// 训练中断回退（3.5.1 §4.3 / 3.5.4 §8.6；P1-10）。训练建筑被摧毁时由 Building.Die 通知。
+    /// 该建筑所有训练中 + 排队居民：已投入资源不退、中断训练、occupation 回退无职业居民（Unemployed）、不死亡。
+    /// </summary>
+    public void OnBuildingDestroyed(Building building)
+    {
+        if (building == null || !_queues.TryGetValue(building, out var q)) return;
+        for (int i = 0; i < q.Entries.Count; i++)
+        {
+            var e = q.Entries[i];
+            if (e == null || e.unit == null) continue;
+            e.unit.SetOccupation(Occupation.Unemployed);   // 回退无职业居民（代码现状枚举 Unemployed=无职业居民）
+            Debug.Log($"[TrainingSystem] 训练中断回退：{e.def.fromOccupation} 目标 {e.def.toOccupation} → 居民（建筑被毁，资源不退，存活）");
+        }
+        _queues.Remove(building);
+    }
+
     protected override void Awake()
     {
         base.Awake();
@@ -47,10 +147,17 @@ public class TrainingSystem : Singleton<TrainingSystem>
     private static readonly List<TrainingDef> s_empty = new List<TrainingDef>();
 
     /// <summary>
-    /// 执行转职（P0 数据层）：校验起职 + 金 → 扣费 → 改 occupation。
-    /// 返回是否成功。NPC 视觉/站桩行为后置（IWorkerTaskExecutor）。
+    /// 训练请求（P1-10 队列管理）。校验起职 + 资源 → 扣费 → 入队列（有空槽立即开始，否则排队）。
+    /// 训练期间居民保持原职业，costDays 天完成才转职（Update 推进）。
+    /// 若训练建筑被摧毁，已投入资源不退、居民回退无职业（OnBuildingDestroyed）。
     /// </summary>
     public bool TryTrain(UnitController unit, TrainingDef def)
+    {
+        return TryTrain(unit, def, FindTrainingBuilding(def.buildingId));
+    }
+
+    /// <summary>带训练建筑实例的入队版本（TrainingPanel 传其所属设施，用于槽位管理）。</summary>
+    public bool TryTrain(UnitController unit, TrainingDef def, Building building)
     {
         if (unit == null || unit.Data == null) return false;
         Occupation cur = unit.EffectiveOccupation;
@@ -75,13 +182,45 @@ public class TrainingSystem : Singleton<TrainingSystem>
         if (def.toOccupation == Occupation.General && !CanTrainGeneral())
             return false;
 
+        // 扣费（训练中断不退还，故入队即扣）
         RulerController.Instance.ModifyResource(ResourceType.Gold, false, def.costGold);
         if (def.costCrystal > 0)
             RulerController.Instance.ModifyResource(ResourceType.Crystal, false, def.costCrystal);
-        unit.SetOccupation(def.toOccupation);
-        Debug.Log($"[TrainingSystem] 转职完成：{def.fromOccupation} → {def.toOccupation}（{def.buildingId}，耗金{def.costGold} 水晶{def.costCrystal}，{def.costDays}天）");
-        // P0：训练时长/队列/NPC 表演后置，固化数据结构先行。
+
+        // 入队列（P1-10）：有空槽立即开始训练，否则排队
+        if (!_queues.TryGetValue(building, out var q))
+        {
+            q = new TrainingQueue();
+            _queues[building] = q;
+        }
+        var entry = new TrainingQueueEntry { unit = unit, def = def, inTraining = false };
+        q.Entries.Add(entry);
+        if (q.ActiveCount < SlotCount(building))
+        {
+            entry.inTraining = true;
+            entry.startDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+            q.ActiveCount++;
+            Debug.Log($"[TrainingSystem] 开始训练：{def.fromOccupation} → {def.toOccupation}（{def.buildingId}，耗金{def.costGold} 水晶{def.costCrystal}，{def.costDays}天，{q.ActiveCount}/{SlotCount(building)}槽）");
+        }
+        else
+        {
+            Debug.Log($"[TrainingSystem] 训练排队：{def.fromOccupation} → {def.toOccupation}（{def.buildingId}，空槽不足，排队 #{q.Entries.Count}）");
+        }
         return true;
+    }
+
+    /// <summary>按训练定义 buildingId 找活动训练建筑实例（旧无参调用兼容；无则返回 null=无槽位限制）。</summary>
+    private Building FindTrainingBuilding(string buildingId)
+    {
+        if (string.IsNullOrEmpty(buildingId) || BuildingRegistry.Instance == null) return null;
+        var all = BuildingRegistry.Instance.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b == null || b.def == null || !b.IsActive) continue;
+            if (b.def.id == buildingId) return b;
+        }
+        return null;
     }
 
     /// <summary>
