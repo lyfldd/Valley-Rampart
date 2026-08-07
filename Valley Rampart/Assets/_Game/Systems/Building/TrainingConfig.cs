@@ -19,7 +19,7 @@ public struct TrainingDef
 {
     [Tooltip("训练设施建筑 id（训练所=TrainingGround，练兵场=Barracks）")]
     public string buildingId;
-    public Occupation fromOccupation;   // 起始职业（如 Unemployed）
+    public Occupation fromOccupation;   // 起始职业（如 Resident）
     public Occupation toOccupation;     // 目标职业（如 Worker/Porter）
     public int costGold;                // 训练消耗金（§10 金1）
     public int costCrystal;             // 训练消耗水晶（§10 法师/治疗师 水晶1；无则0）

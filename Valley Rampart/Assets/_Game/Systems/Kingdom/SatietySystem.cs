@@ -54,6 +54,7 @@ public class SatietySystem : Singleton<SatietySystem>
             case Occupation.SiegeMachine:
             case Occupation.Ballista:
             case Occupation.Ruler:   // 3.5 P0-4：君主不耗粮
+            case Occupation.Vagrant: // 3.5.1 §5.2（E-S1）：王国领域外流浪汉不耗国会粮，不参与王国平均
                 return false;
             default:
                 return true;

@@ -99,7 +99,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
 
     /// <summary>
     /// 训练中断回退（3.5.1 §4.3 / 3.5.4 §8.6；P1-10）。训练建筑被摧毁时由 Building.Die 通知。
-    /// 该建筑所有训练中 + 排队居民：已投入资源不退、中断训练、occupation 回退无职业居民（Unemployed）、不死亡。
+    /// 该建筑所有训练中 + 排队居民：已投入资源不退、中断训练、occupation 回退无职业居民（Resident）、不死亡。
     /// </summary>
     public void OnBuildingDestroyed(Building building)
     {
@@ -108,7 +108,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         {
             var e = q.Entries[i];
             if (e == null || e.unit == null) continue;
-            e.unit.SetOccupation(Occupation.Unemployed);   // 回退无职业居民（代码现状枚举 Unemployed=无职业居民）
+            e.unit.SetOccupation(Occupation.Resident);   // 回退无职业居民（3.5.1 E-S1：Unemployed 已改名 Resident）
             Debug.Log($"[TrainingSystem] 训练中断回退：{e.def.fromOccupation} 目标 {e.def.toOccupation} → 居民（建筑被毁，资源不退，存活）");
         }
         _queues.Remove(building);

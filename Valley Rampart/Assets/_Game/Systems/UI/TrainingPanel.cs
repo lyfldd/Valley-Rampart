@@ -269,9 +269,11 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
     {
         switch (occ)
         {
-            case Occupation.Unemployed: return "无职业";
+            case Occupation.Resident: return "居民";
             case Occupation.Worker: return "工人";
             case Occupation.Porter: return "搬运工";
+            case Occupation.Vagrant: return "流浪汉";
+            case Occupation.Child: return "小孩";
             case Occupation.General: return "将军";
             case Occupation.Archer: return "弓箭手";
             case Occupation.Warrior: return "战士";
