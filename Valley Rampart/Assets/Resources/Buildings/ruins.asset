@@ -24,6 +24,7 @@ MonoBehaviour:
     food: 0
   footprint: {x: 1, y: 1}
   allowedTerrain: 0100000002000000
+  moduleType: 0
   isObstacle: 0
   producer:
     kind: 0
@@ -36,9 +37,17 @@ MonoBehaviour:
     range: 0
     damageType: 0
   levels: []
+  crewRequired: 0
+  crewRadiusCells: 0
+  outputResource: 0
+  isResourceNode: 0
+  concurrentWorkers: 0
+  trainingSlots: 0
+  unlockLevel: 1
   interactableType: 0
   isPlayerBuilt: 0
   isDestructible: 1
+  maxHp: 200
   sourceType: 8
   isConsumable: 0
   gradeScale:

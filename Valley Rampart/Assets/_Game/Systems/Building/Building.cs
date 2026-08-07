@@ -265,11 +265,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
         faction = def.faction;
         isObstacle = def.isObstacle;
 
-        // HP：有 combat（maxHp>0）用 combat.maxHp × gradeScale，否则默认 100
+        // HP：统一入口 = def.maxHp（3.5.1 E-S10）× gradeScale；防御建筑 combat.maxHp 与主层同值
         float scale;
         try { scale = def.GetGradeScale(grade); }
         catch { scale = 1f; }
-        int baseHp = def.combat.maxHp > 0 ? def.combat.maxHp : 100;
+        int baseHp = def.maxHp > 0 ? def.maxHp : 100;
         maxHp = Mathf.Max(1, Mathf.RoundToInt(baseHp * Mathf.Max(0.1f, scale)));
         hp = maxHp;
     }

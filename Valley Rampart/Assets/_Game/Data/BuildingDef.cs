@@ -58,6 +58,9 @@ public class BuildingDef : ScriptableObject
     public InteractableType interactableType;
     public bool isPlayerBuilt = true;  // false = 地图预置（不可拆/不可移）
     public bool isDestructible = true;
+    [Tooltip("建筑 HP 统一入口（3.5.1 E-S10）：所有建筑 HP 基准值（再乘 gradeScale）。" +
+             "防御建筑 combat.maxHp 与本值同值（战斗属性仍归 combat）；非战斗建筑不再走默认100硬编码")]
+    public int maxHp = 100;
 
     [Header("地图预置映射（3.3.1 P6）")]
     [Tooltip("能由哪种地图 BuildingPlaceholder 转换来。None=只能玩家建造")]

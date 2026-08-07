@@ -165,17 +165,16 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             b.faction = def.faction;
             b.isObstacle = def.isObstacle;
 
-            int baseHp = 100;
+            // HP：统一入口 = def.maxHp（3.5.1 E-S10）× gradeScale
+            int baseHp = def.maxHp > 0 ? def.maxHp : 100;
             try
             {
-                if (def.combat.maxHp > 0) baseHp = def.combat.maxHp;
                 float scale = def.GetGradeScale(grade);
                 baseHp = Mathf.Max(1, Mathf.RoundToInt(baseHp * Mathf.Max(0.1f, scale)));
             }
             catch (System.Exception ex)
             {
-                Debug.LogWarning($"[BuildingFactory] HP计算降级为默认 100（def={def.id}, grade={grade}）: {ex.Message}");
-                baseHp = 100;
+                Debug.LogWarning($"[BuildingFactory] HP计算降级为 def.maxHp 无缩放（def={def.id}, grade={grade}）: {ex.Message}");
             }
             b.maxHp = baseHp;
             b.hp = baseHp;
