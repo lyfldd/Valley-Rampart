@@ -189,11 +189,12 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     }
 
     /// <summary>每日结算（DayCycleSettlement 统一入口调用）。
-    /// 三层生育前置：
-    ///   ① 全局：幸福>threshold 且 平均饱食>threshold
-    ///   ② 房屋：王国房屋剩余容量 > 0（房屋满=禁止生育，硬前置）
-    ///   ③ 个体：单对 10 天冷却（birthPairCooldownDays）
-    /// E-S5 前暂为计数对数模型过渡；E-S5 改为实体随机配对 + 生成 Child 实体。
+    /// 3.5.1 §4.2 繁殖实体化（E-S5）：三层硬前置 + 随机配对 + 生成 Child 实体。
+    ///   ① 全局条件：整体幸福 &gt; 60 且 平均饱食 &gt; 50
+    ///   ② 房屋条件：王国房屋剩余容量 &gt; 0（房屋满 = 禁止生育，硬前置）
+    ///   ③ 个体条件：从冷却期外的成年居民池随机抽 2 人配对（lastBirthDay + birthPairCooldownDays &lt;= 当前天）
+    /// 配对成功 → 两人 lastBirthDay 同步当天 → 进房表演（占位：日志）→ 房屋旁生成 1 个 Child 实体。
+    /// 全局节奏：BirthCooldownDays 倒计时间隔一次生育（防多对同日连生）。
     /// </summary>
     public void OnNewDay()
     {
@@ -229,24 +230,64 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             return;
         }
 
-        // ③ 随机配对（E-S5 前的过渡：对数模型）；幸福低 → 人口增长因子降低
-        int couples = PopulationCount / Mathf.Max(1, cfg.birthCouplesDivisor);
+        // ③ 随机配对：冷却期外的成年居民池抽 2 人
+        int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        var candidates = new List<UnitController>();
+        for (int i = 0; i < _entities.Count; i++)
+        {
+            var u = _entities[i];
+            if (u == null || !u.IsAlive) continue;
+            if (u.EffectiveOccupation != Occupation.Resident) continue;   // 配对池 = 成年居民
+            if (u.LastBirthDay + pairCooldown > currentDay) continue;    // 个体冷却中
+            candidates.Add(u);
+        }
+
+        // 幸福惩罚：增长因子 < 100% 时按概率折算（幸福低 → 生育概率降低）
         int growthFactor = HappinessSystem.Instance != null
             ? Mathf.RoundToInt(HappinessSystem.Instance.GetPopulationGrowthFactor() * 100f)
             : 100;
-        if (couples >= 1 && growthFactor >= 1)
+
+        bool tryBirth = candidates.Count >= 2 && growthFactor >= 1
+            && (growthFactor >= 100 || Random.value * 100f < growthFactor);
+
+        if (tryBirth)
         {
-            bool gain = growthFactor >= 100 || Random.value * 100f < growthFactor;
-            if (gain)
-                Debug.Log($"[PopulationSystem] 生育条件达成（E-S5 将生成 Child 实体；幸福因子{growthFactor}%；房屋容量{GetCurrentHouseCapacity()}）");
+            // 随机抽 2 人（不放回）
+            int a = Random.Range(0, candidates.Count);
+            int b = Random.Range(1, candidates.Count);
+            if (b == a) b = 0;
+            var parentA = candidates[a];
+            var parentB = candidates[b];
+            parentA.LastBirthDay = currentDay;
+            parentB.LastBirthDay = currentDay;
+
+            // 进房表演（占位：日志 + 房屋旁生成）→ 出来两人 + 一小孩
+            Vector2 birthPos = GetBirthPosition();
+            GameObject childGo = UnitFactory.Instance != null
+                ? UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Child, birthPos)
+                : null;
+            if (childGo != null)
+                Debug.Log($"[PopulationSystem] 繁殖：两居民进房表演 → +1 小孩 @ {birthPos}（幸福因子{growthFactor}%；人口 → {PopulationCount}）");
+            else
+                Debug.LogError("[PopulationSystem] 繁殖失败：Child 单位生成失败（缺 Human_Player_Child 资产/Prefab？）");
         }
         BirthCooldownDays = pairCooldown;
     }
 
-    /// <summary>当前王国房屋总容量（供生育日志/调试；无 HappinessSystem 返回 0）。</summary>
-    private int GetCurrentHouseCapacity()
+    /// <summary>生育落点：第一栋激活房屋旁（进房表演出口）；无房屋回退王国锚点。</summary>
+    private Vector2 GetBirthPosition()
     {
-        return HappinessSystem.Instance != null ? HappinessSystem.Instance.GetTotalHouseCapacity() : 0;
+        if (BuildingRegistry.Instance != null)
+        {
+            var all = BuildingRegistry.Instance.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var b = all[i];
+                if (b == null || b.def == null || !b.IsActive || b.def.id != "House") continue;
+                return new Vector2(b.transform.position.x + 1f, b.transform.position.y);
+            }
+        }
+        return WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
     }
 
     // ===== ISaveable, Global =====
