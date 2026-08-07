@@ -1,12 +1,16 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 人口系统（3.5 实施计划 P0 步骤5，数据层先行；Singleton + ISaveable, Global）。
-/// 生育事件：每日结算，条件（整体幸福>60 且 平均饱食>50）→ 每 2 人每 5 天 +1（birthCooldownDays 计数）。
-/// 出生 = 无职业废人（吃粮不干活，须训练转职）。
+/// 人口系统（3.5.1 实体化核心；Singleton + ISaveable, Global）。
 ///
-/// P0 占位：幸福/饱食输入暂用占位常量（等 AI 定后接真实值）；出生仅改人口计数，
-/// 具体新生 Unit 生成（含房屋容量占用）后置 AI/民政系统。PopulationSaveData 保留 count/cooldown。
+/// 3.5.1 §3.2 实体化（E-S2）：人口从计数制改为实体制——本系统维护王国领域内 NPC 实体注册表，
+/// PopulationCount 为注册表派生值（不再独立维护）。生育/出生/长大/招募/转职/死亡均通过注册表增删实体。
+///   - 注册范围：Human_Player 的君主/居民/小孩/工人/军事职业（不含机器工事；Vagrant 在王国领域外不计入，招募抵达后才注册）
+///   - 自动注册：订阅 UnitSpawnedEvent（合格实体入表）/ UnitDiedEvent（死亡出表）
+///   - 存档：实体本体走各自 UnitController 的 UnitSaveData（Scene 阶段），读档时 SpawnFromSave 触发事件自动回表
+///
+/// 生育事件：每日结算，三层前置（全局幸福/饱食 + 房屋容量 + 个体冷却），见 OnNewDay。
 /// </summary>
 public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
 {
@@ -15,16 +19,22 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
 
     private KingdomConfig _config;
 
-    /// <summary>人口数（无性别，每 2 人 5 天 1 人）。</summary>
-    public int PopulationCount { get; private set; }
+    // ===== 3.5.1 E-S2：实体注册表（王国领域内 NPC 实体）=====
+    private readonly List<UnitController> _entities = new List<UnitController>();
 
-    /// <summary>生育冷却倒计时（天，到 0 且满足条件即 +1）。</summary>
+    /// <summary>王国人口数 = 实体注册表数量（3.5.1 §3.2 派生值，不再独立维护）。</summary>
+    public int PopulationCount => _entities.Count;
+
+    /// <summary>实体注册表只读视图（饱食/幸福/生育/交互共用同一实体集合，§8.2）。</summary>
+    public IReadOnlyList<UnitController> Entities => _entities;
+
+    /// <summary>生育冷却倒计时（天，到 0 且满足条件即结算配对）。</summary>
     public int BirthCooldownDays { get; private set; }
 
-    /// <summary>平均饱食（P1 接真实值：SatietySystem 平均）。</summary>
+    /// <summary>平均饱食（SatietySystem 平均）。</summary>
     public float AvgSatiety { get; private set; } = 50f;
 
-    /// <summary>平均幸福（P1 接真实值：HappinessSystem 整体幸福）。</summary>
+    /// <summary>平均幸福（HappinessSystem 整体幸福）。</summary>
     public float AvgHappiness { get; private set; } = 50f;
 
     protected override void Awake()
@@ -34,6 +44,20 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
         BirthCooldownDays = LifeConfig().birthCooldownDefault;
         SaveManager.Instance.RegisterSaveable(this);
+
+        // E-S2：出生/死亡事件驱动注册表增删
+        EventBus.Subscribe<UnitSpawnedEvent>(OnUnitSpawned);
+        EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
+    }
+
+    protected override void OnDestroy()
+    {
+        if (_instance == this)
+        {
+            EventBus.Unsubscribe<UnitSpawnedEvent>(OnUnitSpawned);
+            EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
+        }
+        base.OnDestroy();
     }
 
     private KingdomConfig LifeConfig()
@@ -42,27 +66,97 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         return _config;
     }
 
-    /// <summary>初始化人口（新建游戏开局 10 人，§13.5）。</summary>
+    // ===== 实体注册表管理（3.5.1 §3.2）=====
+
+    /// <summary>该职业是否属于王国人口实体（机器/工事/领域外流浪汉不计入；君主计入，§3.3 开局 10 含君主）。</summary>
+    public static bool IsPopulationOccupation(Occupation occ)
+    {
+        switch (occ)
+        {
+            case Occupation.SiegeMachine:
+            case Occupation.Ballista:
+            case Occupation.Tower:
+            case Occupation.ArrowTower:
+            case Occupation.CrossbowTower:
+            case Occupation.MagicTower:
+            case Occupation.Barricade:
+            case Occupation.Wall:
+            case Occupation.Gate:
+            case Occupation.Vagrant:   // 王国领域外（营地），招募抵达王国后才转居民入表（§4.1）
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    /// <summary>单位是否合格入册（我方 + 存活 + 人口职业）。</summary>
+    public static bool IsPopulationEntity(UnitController unit)
+    {
+        if (unit == null || unit.Data == null) return false;
+        if (unit.Data.faction != Faction.Human_Player) return false;
+        if (!unit.IsAlive) return false;
+        return IsPopulationOccupation(unit.EffectiveOccupation);
+    }
+
+    /// <summary>是否已注册。</summary>
+    public bool IsRegistered(UnitController unit)
+    {
+        return unit != null && _entities.Contains(unit);
+    }
+
+    /// <summary>注册实体入册（幂等；不合格实体拒绝入册）。返回是否入册成功。</summary>
+    public bool RegisterEntity(UnitController unit)
+    {
+        if (!IsPopulationEntity(unit)) return false;
+        if (_entities.Contains(unit)) return false;
+        _entities.Add(unit);
+        Debug.Log($"[PopulationSystem] 实体入册：{unit.EffectiveOccupation} @ {unit.transform.position}，人口 → {_entities.Count}");
+        return true;
+    }
+
+    /// <summary>实体出册（死亡/离开王国领域）。</summary>
+    public void UnregisterEntity(UnitController unit)
+    {
+        if (unit == null) return;
+        if (_entities.Remove(unit))
+            Debug.Log($"[PopulationSystem] 实体出册：{unit.EffectiveOccupation}，人口 → {_entities.Count}");
+    }
+
+    // ===== 事件驱动增删 =====
+
+    private void OnUnitSpawned(UnitSpawnedEvent evt)
+    {
+        RegisterEntity(evt.Unit);
+    }
+
+    private void OnUnitDied(UnitDiedEvent evt)
+    {
+        var uc = evt.Unit as UnitController;
+        if (uc != null) UnregisterEntity(uc);
+    }
+
+    // ===== 开局（E-S3 接实体生成；此处保留冷却初始化）=====
+
+    /// <summary>初始化人口系统（新建游戏）。实体生成见 SpawnInitialEntities（E-S3）。</summary>
     public void SetInitialPopulation(int count)
     {
-        PopulationCount = Mathf.Max(0, count);
         BirthCooldownDays = LifeConfig() != null ? LifeConfig().birthCooldownDefault : 5;
-        Debug.Log($"[PopulationSystem] 开局人口 = {PopulationCount}");
+        Debug.Log($"[PopulationSystem] 开局人口系统就绪（目标实体数 {count}，实体由 SpawnInitialEntities 生成）");
     }
 
     /// <summary>每日结算（DayCycleSettlement 统一入口调用）。
-    /// 3.5 P0-1 补全三层生育前置：
-    ///   ① 全局：幸福>threshold 且 平均饱食>threshold（已有）
+    /// 三层生育前置：
+    ///   ① 全局：幸福>threshold 且 平均饱食>threshold
     ///   ② 房屋：王国房屋剩余容量 > 0（房屋满=禁止生育，硬前置）
-    ///   ③ 个体：单对 10 天冷却（birthPairCooldownDays，计数制下作全局冷却对齐）
-    /// 随机配对 = 现有 PopulationCount/birthCouplesDivisor 对数模型（计数制抽象）。
+    ///   ③ 个体：单对 10 天冷却（birthPairCooldownDays）
+    /// E-S5 前暂为计数对数模型过渡；E-S5 改为实体随机配对 + 生成 Child 实体。
     /// </summary>
     public void OnNewDay()
     {
         var cfg = LifeConfig();
         if (cfg == null) return;
 
-        // P1：接真实值（占位常量已替换）——整体幸福读 HappinessSystem，平均饱食读 SatietySystem
+        // 接真实值——整体幸福读 HappinessSystem，平均饱食读 SatietySystem
         if (HappinessSystem.Instance != null)
             AvgHappiness = HappinessSystem.Instance.OverallHappiness;
         if (SatietySystem.Instance != null)
@@ -91,18 +185,16 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             return;
         }
 
-        // ③ 随机配对：每 2 人生育（人口/2 = 对数）；三层惩罚2：幸福低 → 人口增长因子降低
-        int couples = PopulationCount / cfg.birthCouplesDivisor;
+        // ③ 随机配对（E-S5 前的过渡：对数模型）；幸福低 → 人口增长因子降低
+        int couples = PopulationCount / Mathf.Max(1, cfg.birthCouplesDivisor);
         int growthFactor = HappinessSystem.Instance != null
             ? Mathf.RoundToInt(HappinessSystem.Instance.GetPopulationGrowthFactor() * 100f)
             : 100;
         if (couples >= 1 && growthFactor >= 1)
         {
-            // 幸福因子 < 100 时按概率/比例折算增量（幸福 50 → 增量为 50%）
-            int gain = growthFactor >= 100 ? 1 : (Random.value * 100f < growthFactor ? 1 : 0);
-            PopulationCount += gain;
-            if (gain > 0)
-                Debug.Log($"[PopulationSystem] 生育 +1，人口 → {PopulationCount}（出生=无职业废人；幸福因子{growthFactor}%；房屋容量{GetCurrentHouseCapacity()}）");
+            bool gain = growthFactor >= 100 || Random.value * 100f < growthFactor;
+            if (gain)
+                Debug.Log($"[PopulationSystem] 生育条件达成（E-S5 将生成 Child 实体；幸福因子{growthFactor}%；房屋容量{GetCurrentHouseCapacity()}）");
         }
         BirthCooldownDays = pairCooldown;
     }
@@ -114,13 +206,15 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     }
 
     // ===== ISaveable, Global =====
+    // 实体本体由各自 UnitController（UnitSaveData，Scene 阶段）持久化；
+    // 读档时 UnitFactory.SpawnFromSave → UnitSpawnedEvent → 注册表自动重建。
 
     public SavePayload SaveState()
     {
         var data = new PopulationSaveData
         {
-            saveDataVersion = 1,
-            populationCount = PopulationCount,
+            saveDataVersion = 2,
+            populationCount = PopulationCount,   // 诊断快照（实体制下为派生值）
             birthCooldownDays = BirthCooldownDays,
             avgSatiety = AvgSatiety,
             avgHappiness = AvgHappiness
@@ -137,17 +231,17 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     {
         if (payload.typeName != typeof(PopulationSaveData).AssemblyQualifiedName) return;
         var data = JsonUtility.FromJson<PopulationSaveData>(payload.json);
-        PopulationCount = Mathf.Max(0, data.populationCount);
+        // 实体制：不再恢复计数（PopulationCount 由注册表派生，读档单位 SpawnFromSave 自动入表）
         BirthCooldownDays = Mathf.Max(0, data.birthCooldownDays);
         AvgSatiety = data.avgSatiety;
         AvgHappiness = data.avgHappiness;
-        Debug.Log($"[PopulationSystem] 读档恢复：人口 {PopulationCount}，生育冷却 {BirthCooldownDays} 天");
+        Debug.Log($"[PopulationSystem] 读档恢复：生育冷却 {BirthCooldownDays} 天（人口实体随单位读档回表）");
     }
 
     /// <summary>返回主菜单时重置。</summary>
     public void ResetState()
     {
-        PopulationCount = 0;
+        _entities.Clear();
         BirthCooldownDays = LifeConfig() != null ? LifeConfig().birthCooldownDefault : 5;
         AvgSatiety = 50f;
         AvgHappiness = 50f;
