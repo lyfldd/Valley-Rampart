@@ -223,6 +223,43 @@ public class GridSystem : Singleton<GridSystem>
         }
     }
 
+    // ===== 城墙内判定（QQQ.2 T8 / DR-21：多段城墙/无城墙都支持）=====
+
+    /// <summary>
+    /// 该世界点是否在城墙内（任一段城墙 footprint 覆盖，双表示兼容）。
+    /// ① 建筑层：占用该格的 Building 且 def.role == Wall（Active 未毁）；
+    /// ② 单位层：该格有 Occupation.Wall + fortification.blocksMovement 的存活单位（3.5 实体化城墙）。
+    /// 城墙被摧毁（hp≤0/非 Active）→ 对应段不再贡献 wallFactor；无城墙恒 false（靠距离/友军/威胁判定）。
+    /// </summary>
+    public bool IsInsideWall(Vector2 worldPos)
+    {
+        if (config == null) return false;
+        var coord = WorldToCoord(worldPos);
+
+        // ① 建筑层
+        var b = GetOccupant(coord);
+        if (b != null && b.def != null && b.def.role == BuildingRole.Wall
+            && b.IsActive && b.CurrentHp > 0)
+            return true;
+
+        // ② 单位层（实体化城墙/城门——城门 passable 不贡献安全，仅硬挡的城墙算）
+        // 零 GC：直接遍历 cell.Units（GetUnitsInCell 每次 new List，NPC 每 think 查会打 GC）
+        if (_cells.TryGetValue(coord, out var wallCell))
+        {
+            var units = wallCell.Units;
+            for (int i = 0; i < units.Count; i++)
+            {
+                var uc = units[i] as UnitController;
+                if (uc == null || !uc.IsAlive || uc.fortification == null) continue;
+                if (!uc.fortification.blocksMovement) continue;  // 城门/拒马不算城墙内
+                var nd = uc.Data as NpcProfessionDef;
+                if (nd != null && nd.occupation == Occupation.Wall)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     // ===== 地形查询（3.3.1 P1 / C4）=====
 
     /// <summary>查询某格地形。由 coord.x → 大区块索引 → Region.terrain。</summary>

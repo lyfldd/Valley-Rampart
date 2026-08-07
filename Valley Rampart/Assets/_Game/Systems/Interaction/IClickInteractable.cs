@@ -84,15 +84,25 @@ public static class InteractPriority
 /// <summary>头顶交互语句（交互语言，3.5.1 §6.1）：轻量 TextMesh 气泡，自动消失。</summary>
 public static class OverheadSpeech
 {
-    private const float DEFAULT_DURATION = 2.5f;
+    /// <summary>气泡显示时长（秒，2.5s 自动消失；OverheadSpeechManager 空槽计时共用）。</summary>
+    public const float BubbleDuration = 2.5f;
     private const float LOCAL_Y_OFFSET = 1.4f;
+    private const string BUBBLE_NAME = "OverheadSpeech";
 
-    /// <summary>在单位头顶显示一句交互语（自动销毁）。host 为 null 静默跳过。</summary>
-    public static void Show(Transform host, string text, float duration = DEFAULT_DURATION)
+    /// <summary>
+    /// 在单位头顶显示一句交互语（QQQ.2 §需求1 / DR-6：每单位复用覆盖）。
+    /// 每单位只保留 1 个气泡，新说话先销毁旧气泡再显示新的，不叠加。
+    /// 连点丢话可接受（旧的被覆盖）。host 为 null 静默跳过。
+    /// </summary>
+    public static void Show(Transform host, string text, float duration = BubbleDuration)
     {
         if (host == null || string.IsNullOrEmpty(text)) return;
 
-        var go = new GameObject("OverheadSpeech");
+        // 复用覆盖：销毁该单位旧的头顶气泡（避免叠加）
+        var old = host.Find(BUBBLE_NAME);
+        if (old != null) UnityEngine.Object.Destroy(old.gameObject);
+
+        var go = new GameObject(BUBBLE_NAME);
         go.transform.SetParent(host, false);
         go.transform.localPosition = new Vector3(0f, LOCAL_Y_OFFSET, 0f);
 

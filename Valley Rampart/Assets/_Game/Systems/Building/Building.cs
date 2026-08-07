@@ -24,7 +24,7 @@ public enum BuildingState
 /// 地图预置建筑（树/矿/裂隙/主城）由 BuildingFactory 实例化，isPlayerBuilt=false；
 /// 玩家建造由 BuildController 实例化，isPlayerBuilt=true。
 /// </summary>
-public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
+public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, ITaskSource
 {
     // ===== ISaveable（3.5 实施计划 P0 步骤3）=====
     /// <summary>全局唯一存档 ID（Building_{guid}）。Awake 分配，读档时由 BuildingFactory.SpawnFromSave 覆盖。</summary>
@@ -76,6 +76,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
     // 由 ScheduleCenter 派发工人时登记 / 工人离开时移除（P1 任务调度扩展接入）。
     [Tooltip("当前在册工人（建筑被摧毁时逃出存活）。ScheduleCenter 派工时登记")]
     public readonly List<UnitController> currentWorkers = new List<UnitController>();
+
+    // ===== QQQ.2 T19：一次性资源点采集锁定（RES-A4 / DR-11）=====
+    // 玩家点击确认采集后置 true（锁定防重复派发）；采集完成/中断后复位可再点击（RES-A2）。
+    // 不入档（QQQ.3 D14：读档后回未锁态可重新点击，进度重置语义一致）。
+    [Tooltip("是否已确认采集（一次性资源点锁定中，防连点/重复派发）")]
+    public bool isBeingGathered;
 
     // ===== 状态机 + 进度系统（3.3.4 批次3）=====
     [Header("生命周期")]
@@ -257,8 +263,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
         state = BuildingState.Active;
     }
 
-    /// <summary>按 BuildingDef 应用属性（含 gradeScale 缩放）。</summary>
-    void ApplyDef()
+    /// <summary>按 BuildingDef 应用属性（含 gradeScale 缩放）。public 供 BuildingFactory.SpawnFromSave 读档后按 grade 重算（QQQ.3 B8-5）。</summary>
+    public void ApplyDef()
     {
         if (def == null) return;
 
@@ -318,6 +324,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
         state = BuildingState.Active;
         UpdateVisual();
         EventBus.Publish(new BuildingActivatedEvent(this));
+        RegisterWithTaskScheduler();   // QQQ.2 T17：转 Active 注册任务源
     }
 
     /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 cellWidth 缩放。</summary>
@@ -413,7 +420,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
             sourceType = (int)sourceType,
             storedAmount = storage != null ? storage.storedAmount : 0,
             byproductType = producer != null ? (int)producer.ByproductType : 0,
-            byproductAmount = producer != null ? producer.ByproductAmount : 0
+            byproductAmount = producer != null ? producer.ByproductAmount : 0,
+            grade = (int)grade   // QQQ.3 B8-5 / LC-B2：grade 入档
         };
         return new SavePayload
         {
@@ -429,6 +437,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
         var data = JsonUtility.FromJson<BuildingSaveData>(payload.json);
 
         level = Mathf.Max(1, data.level);
+
+        // QQQ.3 B8-5 / LC-B2：grade 恢复 + 重算属性（修复读档后产能永久降贫瘠档 rate×0.7）。
+        // 先设 grade 再 ApplyDef ⇒ maxHp 按新等级重算；随后恢复保存的 hp（clamp 到新 maxHp，不因 ApplyDef 重置满血）。
+        grade = (ResourceGrade)data.grade;
+        ApplyDef();
         maxHp = Mathf.Max(1, data.maxHp);
         hp = Mathf.Clamp(data.hp, 0, maxHp);
 
@@ -475,6 +488,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
 
         GridSystem.Instance?.FreeFootprint(coord, cellWidth);
         BuildingRegistry.Instance?.Unregister(this);
+        // QQQ.2 T17：从任务调度器注销（清指向本建筑的在派任务）
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
+        // QQQ.3 B8-9 / LC-B8：Die 显式注销 Saveable（否则 _saveables 留残留条目，本应主动清理而非等兜底）
+        if (SaveManager.Instance != null) SaveManager.Instance.UnregisterSaveable(this);
 
         // 3.4：改发 UnitDiedEvent（建筑也走此事件，BuildingDestroyedEvent 退役）
         EventBus.Publish(new UnitDiedEvent(
@@ -486,6 +503,46 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
         ));
 
         Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// QQQ.2 T19 / DR-11：一次性资源点采集完成生命周期（由 TaskScheduler.Gather 完成时调）。
+    /// 三步：①释放网格占用（GridSystem.Free）②从 BuildingRegistry 移除 ③对象池 Despawn（不直接 Destroy）。
+    /// 采集任务由调度器派发，工人 Working 计时到后触发；资源入国库已在调度器 ExecuteCompletion 完成。
+    /// </summary>
+    public void OnGatherCompleted()
+    {
+        if (def == null || !def.isConsumable) return;
+        isBeingGathered = false;
+
+        // ① 释放网格占用
+        GridSystem.Instance?.FreeFootprint(coord, cellWidth);
+        // ①b QQQ.2 T8 / DR-21：采集后空地加入闲逛锚点池（王国多锚点之一，持久）
+        WanderAnchorPool.Instance.RegisterFreeSpot(transform.position);
+        // ② 从注册表移除
+        BuildingRegistry.Instance?.Unregister(this);
+        // 从任务调度器注销（清可能残留的在派任务）
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
+        // 存档注销（防 SaveManager 残留条目）
+        if (SaveManager.Instance != null) SaveManager.Instance.UnregisterSaveable(this);
+        // ③ 对象池回收（DR-11：不直接 Destroy，与 UnitFactory 一致）
+        if (BuildingFactory.Instance != null)
+            BuildingFactory.Instance.ReturnBuildingToPool(this);
+        else
+            Destroy(gameObject);
+        Debug.Log($"[Building] 一次性资源点 {def.id} 采集完成，已回收。");
+    }
+
+    /// <summary>
+    /// QQQ.2 T19 / DR-11：玩家确认采集一次性资源点（BuildingPanel 采集按钮调）。
+    /// 锁定 isBeingGathered（RES-A4 防连点/重复派发），调度器下 tick 派发 Gather 任务。
+    /// </summary>
+    public void StartGather()
+    {
+        if (def == null || !def.isConsumable || !IsActive) return;
+        if (isBeingGathered) return;   // UI-A4：已确认/采集中，防连点
+        isBeingGathered = true;
+        Debug.Log($"[Building] 确认采集：{def.id}（预计 {def.gatherSeconds:F0} 秒），锁定待派发。");
     }
 
     /// <summary>
@@ -505,9 +562,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
             if (w == null) { currentWorkers.RemoveAt(i); continue; }
             if (!w.IsAlive) { currentWorkers.RemoveAt(i); continue; }
 
-            // ① 清除任务状态（变 Idle）：若为王国任务工人，标记其任务终止
-            var task = w.GetComponent<WorkerTask>();
-            if (task != null) task.Abandon();
+            // ① 清除任务状态（变 Idle）：任务记录在 TaskScheduler（WorkerTask 已内化，无组件）——放弃该工人的在派任务
+            if (TaskScheduler.HasInstance && w.npcId != 0)
+                TaskScheduler.Instance.AbandonTask(w.npcId);
             var brain = w.GetComponent<NPCBrain>();
             if (brain != null)
             {
@@ -525,5 +582,94 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable
             currentWorkers.RemoveAt(i);
             idx++;
         }
+    }
+
+    // ===== ITaskSource 实现（QQQ.2 §10.1/§10.3，DR-16）=====
+
+    [Header("任务调度（QQQ.2 T17）")]
+    [Tooltip("存储达标触发搬运阈值（存量 ≥ capacity×此值 发布 Transport）")]
+    public float transportThreshold = 0.8f;
+    [Tooltip("水网缺水阈值（Stored < 此值 农场发布 WaterHaul）")]
+    public float waterThreshold = 20f;
+
+    /// <summary>任务源世界坐标（建筑坐标）。</summary>
+    public Vector2 SourcePos => transform.position;
+
+    /// <summary>任务源是否有效（未被销毁且已 Active）。</summary>
+    public bool IsValid => this != null && state == BuildingState.Active;
+
+    /// <summary>
+    /// 按建筑类型声明任务（QQQ.2 §10.3 / DR-16）：
+    ///   ① 一次性资源点被确认采集（isBeingGathered）→ Gather（destType=Treasury）
+    ///   ② 生产建筑无工人在场且未满 → Production（destType=None）
+    ///   ③ 有存储且存量 ≥ capacity×transportThreshold → Transport（destType=NearestWarehouse）
+    ///   ④ 农场缺水（水网 Stored<waterThreshold）→ WaterHaul（destType=WaterNetwork）
+    /// 军事/其他不在此扩。无条件返回 false。
+    /// </summary>
+    public bool TryAdvertiseTask(out KingdomTask task)
+    {
+        task = null;
+        var producer = GetComponent<ProducerComponent>();
+        var storage = GetComponent<StorageComponent>();
+        var sched = TaskScheduler.Instance;
+
+        // ① 采集：一次性资源点（isConsumable）被玩家确认采集 → Gather 任务（QQQ.2 T19 / DR-11）
+        if (def != null && def.isConsumable && isBeingGathered)
+        {
+            task = new KingdomTask(KingdomTaskType.Gather, this);
+            task.destType = KingdomDestType.Treasury;
+            var ga = new GatherTaskArgs
+            {
+                resourceType = def.outputResource,
+                amount = sched != null ? sched.gatherAmount : 5,
+                gatherSeconds = def.gatherSeconds
+            };
+            task.args = ga;
+            return true;
+        }
+
+        // ② 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：自动产水入网，不派生产任务）
+        if (producer != null
+            && !producer.IsWell
+            && (storage == null || !storage.IsFull)
+            && (sched == null || !sched.HasWorkerAssigned(this)))
+        {
+            task = new KingdomTask(KingdomTaskType.Production, this);
+            task.destType = KingdomDestType.None;
+            return true;
+        }
+
+        // ③ 搬运：存储达标且存量>0 → 搬运任务
+        if (storage != null && storage.capacity > 0 && storage.storedAmount > 0
+            && storage.storedAmount >= storage.capacity * transportThreshold)
+        {
+            task = new KingdomTask(KingdomTaskType.Transport, this);
+            task.destType = KingdomDestType.NearestWarehouse;
+            return true;
+        }
+
+        // ④ 挑水：仅农场（产粮耗水）在水网缺水时发挑水任务（伐木/采石/矿洞不耗水，不派）
+        if (producer != null && producer.OutputResource == ResourceType.Food
+            && WaterNetwork.Instance != null && WaterNetwork.Instance.Stored < waterThreshold)
+        {
+            task = new KingdomTask(KingdomTaskType.WaterHaul, this);
+            task.destType = KingdomDestType.WaterNetwork;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>注册到调度器回调（Building 纳入任务派发）。</summary>
+    public void OnRegister() { }
+
+    /// <summary>从调度器注销回调。</summary>
+    public void OnUnregister() { }
+
+    /// <summary>建筑转 Active 时注册到任务调度器（IsValid 才注册）。</summary>
+    private void RegisterWithTaskScheduler()
+    {
+        if (TaskScheduler.HasInstance && state == BuildingState.Active)
+            TaskScheduler.Instance.Register(this);
     }
 }

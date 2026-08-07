@@ -40,8 +40,10 @@ public class SaveManager : Singleton<SaveManager>
 
     private void Start()
     {
-        // 订阅天数变化事件，用于自动存档
-        EventBus.Subscribe<TimeDayChangedEvent>(OnDayChanged);
+        // 订阅每日结算完成事件，用于自动存档（QQQ.3 B8-2 / LC-G5 / D10）
+        // 改订阅 DaySettledEvent 而非 TimeDayChangedEvent：确保"每日结算先执行、自动存档后执行"，
+        // 不依赖 EventBus 订阅先后（旧逻辑从主菜单进游戏时自动存档先于结算，存档抢到结算前状态）。
+        EventBus.Subscribe<DaySettledEvent>(OnDaySettled);
 
         // 订阅状态变化，用于 GameOver 时标记存档已结束
         EventBus.Subscribe<GameStateChangedEvent>(OnGameStateChanged);
@@ -50,11 +52,11 @@ public class SaveManager : Singleton<SaveManager>
     protected override void OnDestroy()
     {
         base.OnDestroy();
-        EventBus.Unsubscribe<TimeDayChangedEvent>(OnDayChanged);
+        EventBus.Unsubscribe<DaySettledEvent>(OnDaySettled);
         EventBus.Unsubscribe<GameStateChangedEvent>(OnGameStateChanged);
     }
 
-    private void OnDayChanged(TimeDayChangedEvent evt)
+    private void OnDaySettled(DaySettledEvent evt)
     {
         if (!AutoSaveEnabled || string.IsNullOrEmpty(CurrentSlotId)) return;
 
@@ -291,7 +293,6 @@ public class SaveManager : Singleton<SaveManager>
 
         try
         {
-            CurrentSlotId = slotId;
             _daysSinceLastAutoSave = 0;
 
             string json = File.ReadAllText(path);
@@ -310,6 +311,11 @@ public class SaveManager : Singleton<SaveManager>
                 Debug.LogError($"[SaveManager] 存档版本 {root.saveVersion} 高于当前支持 {CurrentSaveVersion}，拒绝加载。");
                 return false;
             }
+
+            // 全部校验通过后才设 CurrentSlotId（QQQ.3 B8-4 / LC-G3 修复）
+            // 修复点：旧逻辑先设 CurrentSlotId 再校验，读档失败进 GameOver 时 MarkCurrentSaveFinished
+            // 会把高版本存档永久打死档（换新版本也读不了）。改为校验通过后再设，拒绝的存档不被标记结束。
+            CurrentSlotId = slotId;
 
             // 阶段 1: 全局模块恢复
             DistributePayloads(root.modules, SaveLoadPhase.Global);

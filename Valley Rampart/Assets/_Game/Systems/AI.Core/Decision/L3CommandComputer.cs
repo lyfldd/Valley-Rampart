@@ -60,8 +60,12 @@ public static class L3CommandComputer
                 }
                 else
                 {
-                    // 战略撤退：TargetPos = HomePoint
-                    cmd.TargetPos = posture.MoveTarget;  // = HomePoint
+                    // 战略撤退：目标 = 最近安全锚点（RetreatToSafeAnchor，QQQ.2 T8 / DR-21）
+                    // 低分态 NPCBrain 已把 ctx.SafeAnchorPos 解析为池中最近安全锚点（边界遇敌往内撤，
+                    // 不再硬回城堡中心）；高分/编队撤退时 = HomePoint（与原语义一致）。
+                    cmd.TargetPos = (ctx.SafeAnchorPos != Vector2X.zero)
+                        ? ctx.SafeAnchorPos
+                        : posture.MoveTarget;  // = HomePoint
                 }
                 cmd.Speed = RetreatFormulas.RetreatSpeed(prof.courage, walkSpeed);
                 break;
@@ -97,11 +101,15 @@ public static class L3CommandComputer
                     : 0f;
                 break;
 
-            case BehaviorModule.Wander:  // 3.0.1_4 §6.3 漫游：中心=HomePoint，半径/停留由 Executor 管理
-                cmd.TargetPos = posture.Focus.TargetPos;  // = HomePoint（漫游中心）
+            case BehaviorModule.Wander:  // 3.0.1_4 §6.3 漫游：中心=锚点（池抽），半径/停留由 Executor 管理
+                cmd.TargetPos = posture.Focus.TargetPos;  // = WanderStimulusProvider 从锚点池抽的锚点
                 cmd.Speed = walkSpeed;
                 cmd.Duration = ctx.Config.wanderStayTime;
-                cmd.WanderRadius = prof.wanderRadiusCells * cellSize;
+                // QQQ.2 T8 / DR-21：Wander 半径按 SafetyScore 档位（Score 高半径大，0.4→4格 / 0.6→8格），
+                // 取代原固定职业半径（解决"安全时也只在 HomePoint 小范围转"）
+                cmd.WanderRadius = SafetyScoreFormulas.WanderRadiusCells(
+                    ctx.SafetyScore, ctx.Config.wanderThreshold,
+                    ctx.Config.wanderRadiusMinCells, ctx.Config.wanderRadiusMaxCells) * cellSize;
                 break;
         }
 

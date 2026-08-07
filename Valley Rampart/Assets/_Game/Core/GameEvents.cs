@@ -238,6 +238,16 @@ public readonly struct TimeDayChangedEvent
     }
 }
 
+// 每日结算完成事件（QQQ.3 B8-2 / LC-G5 修复，D10）。由 DayCycleSettlement 在结算全部完成后发布。
+// SaveManager 自动存档改订阅本事件，使"结算先、存档后"的顺序显式化，不依赖 EventBus 订阅先后。
+// 修复点：旧逻辑 SaveManager 在主菜单场景先订阅 TimeDayChangedEvent，DayCycleSettlement 进 GameScene 才订阅，
+// 从主菜单进游戏时自动存档先于结算执行，存档抢到"结算前"状态；读档后当天结算永不补跑。
+public readonly struct DaySettledEvent
+{
+    public readonly int Day;
+    public DaySettledEvent(int day) { Day = day; }
+}
+
 // 时段变化事件。白天↔夜晚等切换时由 TimeManager 发布。
 // 订阅者可据此触发敌人刷新、光照切换、BGM 变化等。
 public readonly struct TimePhaseChangedEvent

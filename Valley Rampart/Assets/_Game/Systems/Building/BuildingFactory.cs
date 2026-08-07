@@ -202,6 +202,13 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         try { AttachComponents(b, def); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] AttachComponents 失败: " + ex.Message); }
 
+        // QQQ.2 T17：直接以 Active 态创建的建筑（地图预置/读档）注册到任务调度器
+        if (initialState == BuildingState.Active && TaskScheduler.HasInstance)
+        {
+            try { TaskScheduler.Instance.Register(b); }
+            catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Register TaskScheduler 失败: " + ex.Message); }
+        }
+
         try { EventBus.Publish(new BuildingPlacedEvent(b)); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
 
@@ -261,7 +268,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             state = BuildingState.Active;   // 主城修复后读档不应回到废墟（castoeLevel≥1）
 
         bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, cellWidth, worldPos,
-                                         isPlayerBuilt: true, (ResourceGrade)0, false, state);
+                                         isPlayerBuilt: true, (ResourceGrade)data.grade, false, state);
         if (!ok) return;
 
         var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) : null;
@@ -273,6 +280,10 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
         // 覆盖 SaveId（否则 SaveManager 找不到该 saveId 分发 LoadState）
         b.OverrideSaveId(entry.saveId);
+
+        // QQQ.3 B8-5 / LC-B2：grade 恢复后按新等级重算属性（修复读档后产能永久降贫瘠档 rate×0.7）
+        b.grade = (ResourceGrade)data.grade;
+        b.ApplyDef();
 
         // 恢复核心状态（level/hp/maxHp/storedAmount/副产）
         b.level = Mathf.Max(1, data.level);
@@ -298,5 +309,27 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             }
         }
         BuildingRegistry.Instance.Clear();
+    }
+
+    // ===== 对象池回收（QQQ.2 T19 / DR-11：一次性资源点采集后走池，不直接 Destroy）=====
+
+    /// <summary>
+    /// 回收一次性资源点建筑到对象池（由 Building.OnGatherCompleted 调）。
+    /// 建筑对象池按 def.id 分桶复用：出池时 CreateBuildingInstance 会重新初始化全字段，状态天然全新。
+    /// 采集后资源点应消失不留贴图——若复用于其他资源点，位置/占用在出池时重建。
+    /// </summary>
+    private readonly Dictionary<string, Stack<Building>> _pool = new Dictionary<string, Stack<Building>>();
+
+    public void ReturnBuildingToPool(Building b)
+    {
+        if (b == null || b.def == null) return;
+        string key = b.def.id;
+        if (!_pool.TryGetValue(key, out var stack))
+        {
+            stack = new Stack<Building>();
+            _pool[key] = stack;
+        }
+        b.gameObject.SetActive(false);
+        stack.Push(b);
     }
 }

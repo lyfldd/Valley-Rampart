@@ -253,6 +253,12 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         _dayTimer = (CurrentTimeOfDay / 24f) * secondsPerDay;
         CurrentPhase = CalculatePhase(CurrentTimeOfDay, CurrentSeason);
 
+        // QQQ.3 B8-6 / LC-G4：重置倍速/战斗降速，防止上局 2x/降速残留到新局
+        CurrentTimeScale = 1f;
+        _pendingScale = 1f;
+        IsCombatSlowed = false;
+        Time.timeScale = 1f;
+
         Debug.Log($"[TimeManager] ResetState: 第{CurrentDay}天 {CurrentTimeOfDay:0.0}点 "
             + $"季节={CurrentSeason} 时段={CurrentPhase}");
     }

@@ -33,6 +33,9 @@ public class HitCooldownStateMachine : IMemoryComponent
     private float _cautionDuration;
     private float _recoveryDuration;
 
+    // QQQ.2 T8 / DR-21：SafetyScore 缓存（GetActiveStimuli 读，低分不驻留交撤退）
+    private float CachedSafetyScore;
+
     // 池化复用：HoldPositionStimulus 单实例 + 缓存单元素列表（零 GC）
     private readonly HoldPositionStimulus _holdStimulus = new HoldPositionStimulus();
     private readonly List<IStimulus> _cachedHoldList;
@@ -55,6 +58,7 @@ public class HitCooldownStateMachine : IMemoryComponent
         // 缓存当前位置/配置供 GetActiveStimuli 用（Tick 在 GetActiveStimuli 前调用）
         CachedSelfPos = ctx.SelfPos;
         CachedConfig = ctx.Config;
+        CachedSafetyScore = ctx.SafetyScore;   // QQQ.2 T8：低分不驻留，交撤退/回城
 
         switch (_state)
         {
@@ -105,6 +109,9 @@ public class HitCooldownStateMachine : IMemoryComponent
     public IReadOnlyList<IStimulus> GetActiveStimuli()
     {
         if (_state != HitCooldownState.Caution) return StimulusPool.Empty;
+        // QQQ.2 T8 / DR-21：低安全分不驻留——SafetyScore < wanderThreshold 时不注入 HoldPosition，
+        // 让 Safety/Retreat 拉力撤往最近安全锚点（驻留只用于城内安全区警戒恢复）。
+        if (CachedSafetyScore < CachedConfig.wanderThreshold) return StimulusPool.Empty;
 
         // 更新池化实例字段（不 new）
         _holdStimulus.Position = CachedSelfPos;

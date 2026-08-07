@@ -209,6 +209,49 @@ public class TrainingSystem : Singleton<TrainingSystem>
         return true;
     }
 
+    /// <summary>
+    /// 从居民池自动取一个符合起始职业的居民入队（QQQ.2 §需求3 / DR-3：不列出具体 NPC）。
+    /// 先按 fromOccupation 匹配可训项，再随机取一个空闲居民。
+    /// </summary>
+    public bool TryTrainFromPool(Building building, Occupation toOccupation)
+    {
+        if (building == null || building.def == null) return false;
+        var trainings = GetTrainings(building.def.id);
+        if (trainings == null || trainings.Count == 0) return false;
+
+        // 找到该目标职业对应的训练定义（起始职业）
+        TrainingDef def = default;
+        bool found = false;
+        for (int i = 0; i < trainings.Count; i++)
+        {
+            if (trainings[i].toOccupation == toOccupation)
+            {
+                def = trainings[i];
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+
+        // 收集全部符合起始职业的空闲居民
+        var pool = new List<UnitController>();
+        if (UnitRegistry.Instance != null)
+        {
+            foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+            {
+                if (unit == null || unit.Data == null) continue;
+                if (unit.Data.faction != Faction.Human_Player) continue;
+                if (unit.EffectiveOccupation != def.fromOccupation) continue;
+                if (!unit.IsAlive) continue;
+                pool.Add(unit);
+            }
+        }
+        if (pool.Count == 0) return false;
+
+        var chosen = pool[Random.Range(0, pool.Count)];
+        return TryTrain(chosen, def, building);
+    }
+
     /// <summary>按训练定义 buildingId 找活动训练建筑实例（旧无参调用兼容；无则返回 null=无槽位限制）。</summary>
     private Building FindTrainingBuilding(string buildingId)
     {
@@ -221,6 +264,96 @@ public class TrainingSystem : Singleton<TrainingSystem>
             if (b.def.id == buildingId) return b;
         }
         return null;
+    }
+
+    // ===== QQQ.2 §需求3 / DR-3：训练 UI 数据查询（可训练人数 + 队列 + 正在训练）=====
+
+    /// <summary>某训练建筑当前可训练人数（王国空闲居民数，且起始职业匹配该设施可训项）。</summary>
+    public int GetTrainableCount(Building building)
+    {
+        var trainings = building != null && building.def != null ? GetTrainings(building.def.id) : null;
+        if (trainings == null || trainings.Count == 0) return 0;
+        // 收集该设施全部起始职业
+        var fromSet = new HashSet<Occupation>();
+        for (int i = 0; i < trainings.Count; i++) fromSet.Add(trainings[i].fromOccupation);
+        int count = 0;
+        if (UnitRegistry.Instance == null) return 0;
+        foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (unit == null || unit.Data == null) continue;
+            if (unit.Data.faction != Faction.Human_Player) continue;
+            if (!unit.IsAlive) continue;
+            if (fromSet.Contains(unit.EffectiveOccupation)) count++;
+        }
+        return count;
+    }
+
+    /// <summary>某训练建筑当前训练队列清单（目标职业 × 数量，含排队 + 训练中）。</summary>
+    public List<KeyValuePair<Occupation, int>> GetQueueSummary(Building building)
+    {
+        var result = new List<KeyValuePair<Occupation, int>>();
+        if (building == null || !_queues.TryGetValue(building, out var q) || q.Entries.Count == 0) return result;
+        var map = new Dictionary<Occupation, int>();
+        for (int i = 0; i < q.Entries.Count; i++)
+        {
+            var e = q.Entries[i];
+            if (e == null) continue;
+            map[e.def.toOccupation] = map.TryGetValue(e.def.toOccupation, out var c) ? c + 1 : 1;
+        }
+        foreach (var kv in map) result.Add(kv);
+        return result;
+    }
+
+    /// <summary>某训练建筑当前正在训练人数（占用槽位的训练中条目数）。</summary>
+    public int GetActiveCount(Building building)
+    {
+        if (building == null || !_queues.TryGetValue(building, out var q)) return 0;
+        return q.ActiveCount;
+    }
+
+    /// <summary>某训练建筑支持的职业白名单（TrainingConfig.supportedOccupations；空则回退 GetTrainings 去重目标职业）。</summary>
+    public Occupation[] GetSupportedOccupations(Building building)
+    {
+        if (building != null && building.def != null && _config != null && _config.supportedOccupations != null
+            && _config.supportedOccupations.Length > 0)
+            return _config.supportedOccupations;
+        // 回退：该设施可训项的目标职业
+        var trainings = building != null && building.def != null ? GetTrainings(building.def.id) : null;
+        if (trainings == null || trainings.Count == 0) return new Occupation[0];
+        var set = new List<Occupation>();
+        var seen = new HashSet<Occupation>();
+        for (int i = 0; i < trainings.Count; i++)
+        {
+            if (seen.Add(trainings[i].toOccupation)) set.Add(trainings[i].toOccupation);
+        }
+        return set.ToArray();
+    }
+
+    /// <summary>某目标职业的训练时长（TrainingConfig.trainDurationDays 按 supportedOccupations 对齐；0 则回退 DR-12 默认）。</summary>
+    public float GetTrainDuration(Building building, Occupation to)
+    {
+        if (building != null && building.def != null && _config != null && _config.supportedOccupations != null
+            && _config.trainDurationDays != null)
+        {
+            var occs = _config.supportedOccupations;
+            for (int i = 0; i < occs.Length && i < _config.trainDurationDays.Length; i++)
+            {
+                if (occs[i] == to && _config.trainDurationDays[i] > 0f) return _config.trainDurationDays[i];
+            }
+        }
+        // DR-12 默认：居民→工人 1 天 / →士兵 2 天 / →高阶 3 天
+        switch (to)
+        {
+            case Occupation.Worker:
+            case Occupation.Porter:
+                return 1f;
+            case Occupation.Warrior:
+            case Occupation.Archer:
+            case Occupation.Crossbowman:
+                return 2f;
+            default:
+                return 3f;
+        }
     }
 
     /// <summary>

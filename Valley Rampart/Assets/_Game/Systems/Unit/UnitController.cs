@@ -30,6 +30,13 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public UnitData Data { get; private set; }
     public int CurrentHp { get; private set; }
 
+    // ===== QQQ.2 T17：NPC 唯一 ID（任务调度器 _npcTaskMap 键）+ 死亡事件 =====
+    /// <summary>NPC 唯一 ID（出池时由 Initialize 重新分配，每次生成唯一）。</summary>
+    public int npcId;
+    private static int s_nextNpcId = 1;
+    /// <summary>NPC 死亡事件（传 npcId）。TaskScheduler 订阅用清指派。</summary>
+    public static event System.Action<int> OnUnitDied;
+
     // ===== 3.5 P0 步骤4：运行时职业覆盖（转职用，不污染共享 UnitData SO）=====
     private int _runtimeOccupation = -1;   // -1 = 未设置，回退 Data.occupation
     /// <summary>有效职业（优先运行时覆盖，否则 Data.occupation）。</summary>
@@ -42,8 +49,6 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public int Satiety;
     /// <summary>个体幸福度（0-100）。由 HappinessSystem 多因素结算，整体幸福 = 全体平均。</summary>
     public int IndividualHappiness = 50;
-    /// <summary>已穿戴装备 id（null=无；穿戴后属性修正 + 职业转变，见 EquipmentSystem）。</summary>
-    public string EquipId;
 
     /// <summary>
     /// 上次生育天数（3.5 P0-1：个体生育冷却记录，-999=可生育）。
@@ -62,12 +67,17 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// </summary>
     public bool IsVagrantRecruited;
 
+    /// <summary>
+    /// 出生营地坐标（QQQ.2 T11 / DR-7）：SpawnVagrantNear 写入出生营地位置。
+    /// 未招募流浪汉的 HomePoint = 本值（在营地附近游荡，不朝王国走）；招募后切换王国锚点。
+    /// </summary>
+    public Vector2 BirthCampPos;
+
     /// <summary>初始化生活状态（新建单位调用；SatietySystem/HappinessSystem/存档读档共用）。</summary>
-    public void InitLifeState(int satiety, int happiness, string equipId)
+    public void InitLifeState(int satiety, int happiness)
     {
         Satiety = Mathf.Clamp(satiety, 0, 100);
         IndividualHappiness = Mathf.Clamp(happiness, 0, 100);
-        EquipId = string.IsNullOrEmpty(equipId) ? null : equipId;
     }
 
     // ===== 工事（3.6 §4.4：墙/门/拒马/塔对象配此引用，越墙判定/移动阻挡用）=====
@@ -216,12 +226,49 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
 
     /// <summary>
+    /// 出池洗涤（QQQ.3 B8-3 / LC-N1）：对象池复用前显式重置所有瞬态字段，
+    /// 防止新生儿带着上辈子的职业/生育冷却/成长计数/招募标记/冲锋/减速/击飞/静态目标。
+    /// 由 Initialize 首行调用（出池总是走 Initialize，无需在池层额外 Reset）。
+    /// </summary>
+    public virtual void ResetForReuse()
+    {
+        npcId = 0;                      // QQQ.2 T17：NPC ID 复位，Initialize 重新分配
+        _runtimeOccupation = -1;        // 职业回退 Data.occupation
+        LastBirthDay = -999;            // 生育冷却复位（可生育）
+        ChildGrowthDays = 0;            // 成长计数清零
+        IsVagrantRecruited = false;     // 招募标记清零
+        BirthCampPos = Vector2.zero;    // QQQ.2 T11：出生营地坐标清零（池化复用防串）
+        ChargeState = 0;                // 冲锋态复位
+        ChargeTarget = null;
+        ChargeReadyTime = 0f;
+        ChargeSecondTime = 0f;
+        _slowFactor = 0f;               // 减速复位
+        _slowUntil = 0f;
+        _knockbackActive = false;       // 击飞复位
+        _knockbackDir = Vector2.zero;
+        _staticTarget = null;           // 静态目标复位
+        FortificationPassableOverride = null; // 城门昼夜覆盖复位
+        AmmoStone = 0;                  // 弹药复位（由 Initialize 按职业重新装填）
+        AmmoFireball = 0;
+        AmmoMagic = 0;
+        AmmoResupplyTimer = 0f;
+        Satiety = 0;                    // 生活状态由 InitLifeState 重新初始化
+        IndividualHappiness = 50;
+    }
+
+    /// <summary>
     /// 由 UnitFactory 调用，注入配置数据并初始化运行时状态。
     /// 同时向 UnitRegistry 注册自己，并发布 UnitSpawnedEvent 通知外界。
     /// </summary>
     public virtual void Initialize(UnitData data)
     {
+        // QQQ.3 B8-3 / LC-N1：出池洗涤——重置所有瞬态字段，防止复用污染（职业/生育冷却/成长/招募/冲锋/减速/击飞/静态目标）
+        ResetForReuse();
+
         Data = data;
+
+        // QQQ.2 T17：分配唯一 NPC ID（任务调度器派发/查询用）
+        npcId = s_nextNpcId++;
 
         // 从配置初始化运行时可变属性
         MaxHp = data.maxHp;
@@ -255,7 +302,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         int startSatiety = 80;
         if (KingdomManager.Instance != null && KingdomManager.Instance.Config != null)
             startSatiety = KingdomManager.Instance.Config.satietyStart;
-        InitLifeState(startSatiety, 50, null);
+        InitLifeState(startSatiety, 50);
 
         UnitRegistry.Instance.Register(this);
 
@@ -295,7 +342,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         var data = new UnitSaveData
         {
-            saveDataVersion = 3,
+            saveDataVersion = 4,
             faction = (int)Data.faction,
             occupation = (int)EffectiveOccupation,
             currentHp = CurrentHp,
@@ -306,20 +353,22 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             runSpeed = RunSpeed,
             posX = transform.position.x,
             posY = transform.position.y,
-            // v2：饱食 / 幸福 / 装备（3.5 P1）
+            // v2：饱食 / 幸福（3.5 P1）
             satiety = Satiety,
             happiness = IndividualHappiness,
-            equipId = EquipId,
             // v3：个体上次生育天数（3.5 P0-1）+ 成长计数/招募标记（3.5.1 E-S4）
             lastBirthDay = LastBirthDay,
             childGrowthDays = ChildGrowthDays,
-            isVagrantRecruit = IsVagrantRecruited
+            isVagrantRecruit = IsVagrantRecruited,
+            // v4：出生营地坐标（QQQ.2 T11 / DR-7：未招募流浪汉 HomePoint=营地）
+            birthCampX = BirthCampPos.x,
+            birthCampY = BirthCampPos.y
         };
         return new SavePayload
         {
             typeName = typeof(UnitSaveData).AssemblyQualifiedName,
             json = JsonUtility.ToJson(data),
-            version = 3
+            version = 4
         };
     }
 
@@ -336,23 +385,27 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         RunSpeed = data.runSpeed;
         // 位置已在 SpawnFromSave 时由 UnitFactory.SpawnUnit 设置
 
-        // v2 兼容：v1 存档缺生活字段 → 给默认值（饱食=config 起始，幸福=50，无装备）
+        // v2 兼容：v1 存档缺生活字段 → 给默认值（饱食=config 起始，幸福=50）
         if (data.saveDataVersion >= 2)
         {
-            InitLifeState(data.satiety, data.happiness, data.equipId);
+            InitLifeState(data.satiety, data.happiness);
         }
         else
         {
             int startSatiety = 80;
             if (KingdomManager.Instance != null && KingdomManager.Instance.Config != null)
                 startSatiety = KingdomManager.Instance.Config.satietyStart;
-            InitLifeState(startSatiety, 50, null);
+            InitLifeState(startSatiety, 50);
         }
 
         // v3 兼容：v3+ 存档恢复个体生育天数/成长计数/招募标记；旧档缺字段 → 默认值（JsonUtility 兜底）
         LastBirthDay = data.saveDataVersion >= 3 ? data.lastBirthDay : -999;
         ChildGrowthDays = data.saveDataVersion >= 3 ? data.childGrowthDays : 0;
         IsVagrantRecruited = data.saveDataVersion >= 3 && data.isVagrantRecruit;
+        // v4 兼容：出生营地坐标（QQQ.2 T11 / DR-7）；旧档无 → zero（未招募流浪汉 HomePoint 回落王国锚点）
+        BirthCampPos = data.saveDataVersion >= 4
+            ? new Vector2(data.birthCampX, data.birthCampY)
+            : Vector2.zero;
     }
 
     // ===== 战斗系统（3.4 重构）=====
@@ -483,6 +536,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             null,                          // Killer（TakeDamage 无 source，此处为 null）
             DeathCause.Killed              // Cause（战斗致死）
         ));
+
+        // QQQ.2 T17：通知任务调度器该 NPC 死亡（清其指派）
+        if (npcId != 0) OnUnitDied?.Invoke(npcId);
 
         // 再从注册中心注销
         UnitRegistry.Instance.Unregister(this);
@@ -1106,8 +1162,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>
     /// 按当前状态从对话池随机抽取一句（QQQ.1 需求5）。
     /// 状态优先级：受伤(hp&lt;40%) &gt; 饥饿(satiety&lt;30) &gt; 正常。对应状态池为空时回退到正常池。
+    /// public 供 NPCBrain 空闲自动说话（QQQ.2 T2 / DR-10）与点击对话共用。
     /// </summary>
-    string PickTalkLine()
+    public string PickTalkLine()
     {
         bool hungry = Satiety < 30;
         bool injured = MaxHp > 0 && (float)CurrentHp / MaxHp < 0.4f;
@@ -1308,12 +1365,14 @@ public class UnitSaveData
     public float runSpeed;
     public float posX;
     public float posY;
-    // ===== v2（3.5 P1）：饱食 / 幸福 / 装备 =====
+    // ===== v2（3.5 P1）：饱食 / 幸福 =====
     public int satiety = 80;
     public int happiness = 50;
-    public string equipId;
     // ===== v3（3.5 P0-1 + 3.5.1 E-S4）：个体生育/成长/招募标记（旧档缺字段 JsonUtility 给默认值）=====
     public int lastBirthDay = -999;
     public int childGrowthDays;      // 小孩成长天数事件计数（E-S4）
     public bool isVagrantRecruit;    // 流浪汉招募走回标记（E-S4）
+    // ===== v4（QQQ.2 T11 / DR-7）：出生营地坐标（未招募流浪汉 HomePoint=营地）=====
+    public float birthCampX;
+    public float birthCampY;
 }

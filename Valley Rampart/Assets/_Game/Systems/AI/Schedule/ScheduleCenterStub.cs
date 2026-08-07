@@ -95,7 +95,8 @@ public class ScheduleCenterStub : MonoBehaviour
             foreach (var kv in _transporting)
             {
                 var s = kv.Key;
-                kv.Value.RemoveWhere(w => w == null);
+                // QQQ.3 B8-8 / LC-N5：用 !IsAlive 而非 == null（池化下死单位引用非 null，== null 永不释放 ⇒ 搬运永久卡死）
+                kv.Value.RemoveWhere(w => w == null || !w.IsAlive);
                 if (s == null || !s.IsReadyToHarvest() || kv.Value.Count == 0)
                     stale.Add(s);
             }
@@ -122,7 +123,8 @@ public class ScheduleCenterStub : MonoBehaviour
                 assigned = new HashSet<NPCBrain>();
                 _transporting[storage] = assigned;
             }
-            assigned.RemoveWhere(w => w == null);
+            // QQQ.3 B8-8 / LC-N5：用 !IsAlive 而非 == null（池化下死单位引用非 null）
+            assigned.RemoveWhere(w => w == null || !w.IsAlive);
 
             // 分批：需要搬运批次数 = ceil(存量 / 携带量)；已派数不足则补派
             int carry = storage.GetCarryAmount();

@@ -27,4 +27,6 @@ public struct BuildingSaveData
     // 3.5 步骤6：矿洞副产（水晶/火油）本地存储（无则 0）。旧档缺字段 → 默认 0，向前兼容。
     public int byproductType;   // (int)ResourceType 副产类型（0=Gold 无副产）
     public int byproductAmount; // 副产已存数量
+    // QQQ.3 B8-5 / LC-B2：grade 入档（修复读档后产能建筑永久降贫瘠档 rate×0.7）。
+    public int grade;           // (int)ResourceGrade 资源等级（仅资源点建筑有效；旧档缺字段→默认 0=Barren 但由 SpawnFromSave 兜底 Normal）
 }

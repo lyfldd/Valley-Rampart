@@ -10,11 +10,27 @@
                 <ui:Button name="training-close-button" text="×" class="training-close" />
             </ui:VisualElement>
 
-            <!-- 空提示（无训练定义 / 无人可训时显示，由代码切换） -->
+            <!-- 空提示（无训练定义时显示，由代码切换） -->
             <ui:Label name="training-empty-hint" text="暂无可用训练项目" class="training-empty-hint" />
 
-            <!-- 训练项列表（动态构建：目标职业 + 消耗 + 可训单位行） -->
-            <ui:VisualElement name="training-list" class="training-list" />
+            <!-- 三块信息概览（QQQ.2 §需求3：可训练人数 / 队列 / 正在训练） -->
+            <ui:VisualElement name="training-summary" class="training-summary">
+                <ui:VisualElement class="training-summary-row">
+                    <ui:Label text="可训练人数" class="training-summary-label" />
+                    <ui:Label name="training-trainable-value" text="0" class="training-summary-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="training-summary-row">
+                    <ui:Label text="训练队列" class="training-summary-label" />
+                    <ui:Label name="training-queue-value" text="空" class="training-summary-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="training-summary-row">
+                    <ui:Label text="正在训练" class="training-summary-label" />
+                    <ui:Label name="training-active-value" text="0" class="training-summary-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- 训练职业按钮区（不列出具体 NPC，点按钮从居民池自动入队） -->
+            <ui:VisualElement name="training-train-buttons" class="training-train-buttons" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

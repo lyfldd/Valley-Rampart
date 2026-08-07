@@ -56,6 +56,20 @@ public struct FactorContext
     /// <summary>工作因子（连续 0-1）：当前任务投入强度（3.0.1_8 §八，焦点=TaskStimulus 按优先级归一化）。高 → L2 抗打断</summary>
     public float WorkFactor;
 
+    // ===== QQQ.2 T8 / DR-21 统一安全系数（合并 SafetyStimulus/ThreatHysteresis/Caution 的空闲分布决策）=====
+    /// <summary>
+    /// 统一安全系数（DR-21 公式，NPCBrain ⓪ 组装）：
+    /// baseSafety + wallFactor×wallWeight + armyFactor×armyWeight + kingdomDistanceFactor
+    /// - ThreatFactor×threatPenaltyScale - NightFactor×nightPenaltyScale。
+    /// 决定：是否 Wander（≥ wanderThreshold）/ Wander 半径（L3 按档位）/ SafetyStimulus 拉力 / 撤退目标（低分→安全锚点）。
+    /// </summary>
+    public float SafetyScore;
+    /// <summary>
+    /// 撤退安全锚点（RetreatToSafeAnchor）：SafetyScore < wanderThreshold 时由 WanderAnchorPool 解析的最近安全锚点；
+    /// 高分时 = HomePoint（正常归巢/漫游语义）。L3 战略撤退与 SafetyStimulus 低分拉力共用。
+    /// </summary>
+    public Vector2X SafeAnchorPos;
+
     // ===== ② 记忆组件 FillContext 写入 =====
     public HitCooldownState CurrentState;
     public int HitCount;

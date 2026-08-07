@@ -105,7 +105,8 @@ public class PausePanel : MonoBehaviour
     private void Resume()
     {
         SetPanelVisible(false);
-        Time.timeScale = 1f;
+        // QQQ.3 B8-6 / LC-G2：用 TimeManager.CurrentTimeScale 恢复（勿硬编码 1f，否则 2x 下暂停再恢复变 1x）
+        Time.timeScale = TimeManager.Instance != null ? TimeManager.Instance.CurrentTimeScale : 1f;
         GameStateManager.Instance.SetState(GameState.Playing);
     }
 

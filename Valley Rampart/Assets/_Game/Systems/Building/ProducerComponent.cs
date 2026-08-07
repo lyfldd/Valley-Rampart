@@ -14,6 +14,9 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     private float _rate;
     private ResourceType _resourceType;
 
+    // ===== QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位，实际产水入网）=====
+    private bool _isWell;
+
     // ===== 3.5 步骤6：副产 =====
     private bool _hasByproduct;
     private ResourceType _byproductType = ResourceType.Gold;   // 有效副产类型（Crystal/FireOil）
@@ -24,8 +27,20 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     // ===== 3.5 P2：金矿直接产金入国库（§13.14 金=货币不占存储）=====
     private float _goldAccumulator;                            // 金矿产金累计（rate 为小数/秒，达 1 金才入账）
 
+    // ===== QQQ.3 B8-7 / LC-B9：主产累计器（修复低速率建筑永远不产出）=====
+    // 问题：`Mathf.RoundToInt(_rate)` 对 rate<0.5/s 恒为 0，主产无累计器 → 永远不产出。
+    // 对齐金矿 _goldAccumulator 模式：累加 rate，达 1 才产出整数并扣减。
+    private float _mainAccumulator;
+
     /// <summary>副产类型（无副产返回 Gold）。</summary>
     public ResourceType ByproductType => _byproductType;
+
+    /// <summary>当前是否有工人 Working（QQQ.2 T9/DR-4：仅 Working 算在场，DR-19）。</summary>
+    public bool HasWorkerAssigned => TaskScheduler.Instance != null && TaskScheduler.Instance.HasWorkerAssigned(_building);
+    /// <summary>是否水井（QQQ.2 T15：水井自动产水入网，不派生产任务）。</summary>
+    public bool IsWell => _isWell;
+    /// <summary>主产资源类型（QQQ.2 T15：农场 outputResource=Food 才发挑水任务）。</summary>
+    public ResourceType OutputResource => _resourceType;
     /// <summary>副产已存数量。</summary>
     public int ByproductAmount => _byproductAmount;
     /// <summary>副产容量。</summary>
@@ -42,11 +57,15 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         _storage = building.GetComponent<StorageComponent>();
         _hasByproduct = false;
         _goldAccumulator = 0f;
+        _mainAccumulator = 0f;
+
+        // QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位，实际产水入网；跳过金矿分支）
+        _isWell = building.def.id == "Well";
         UpdateByproductConfig();
 
         // 金矿：金=货币不占存储，直接产金入国库（rate 由 KingdomConfig 每日产金换算，SO 可调）
         // 3.5 P1-21：税务所（原金矿）独立产金，与 TaxSystem 并存——优先 taxOfficeGoldPerDay，否则 goldMineGoldPerDay
-        if (_resourceType == ResourceType.Gold)
+        if (!_isWell && _resourceType == ResourceType.Gold)
         {
             var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
             int perDay = 0;
@@ -94,19 +113,35 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         if (_building == null || !_building.IsActive) return;
         UpdateByproductConfig();   // 升级后按新等级刷新副产类型
 
-        // 金矿：金为货币不占存储，直接产金入国库（§13.14 金=货币无限，Override 本地存储）
+        // QQQ.2 T15：水井产水入网（DR-14：rate=4 水/秒；水为隐藏资源不占存储，UI 不显示）
+        if (_isWell)
+        {
+            TickWaterToNetwork();
+            return;
+        }
+
+        // 金矿：金为货币不占存储，直接产金入国库（3.5 P1 独立产金机制，与税收并存，不受工人约束）
         if (_resourceType == ResourceType.Gold)
         {
             TickGoldToTreasury();
             return;
         }
 
-        // 主产
+        // QQQ.2 T9 / DR-4：无工人不产——生产建筑需有工人 Working 执行生产任务才产出（DR-19 仅 Working 算在场）。
+        // 调度器在 NPC 中断/死亡/被招募走时自动清除指派（OnUnitDied/EscapeWorkers 已接），建筑不会无限判定"有人"。
+        if (!HasWorkerAssigned) return;
+
+        // QQQ.2 T15 / DR-9 + DR-18：农场产粮需耗水——1秒1次产出事件，每次产出耗 2 水（缺水停产 + 头顶冒"缺水"提示）
+        if (_resourceType == ResourceType.Food && !TryConsumeFarmWater()) return;
+
+        // 主产（QQQ.3 B8-7 / LC-B9：用累计器，低速率也产出）
         if (_storage != null && !_storage.IsFull)
         {
-            int produce = Mathf.RoundToInt(_rate);
+            _mainAccumulator += _rate;
+            int produce = Mathf.FloorToInt(_mainAccumulator);
             if (produce > 0)
             {
+                _mainAccumulator -= produce;
                 _storage.storedAmount = Mathf.Min(_storage.capacity, _storage.storedAmount + produce);
                 // 副产：按产矿数量累计
                 if (_hasByproduct && !ByproductFull)
@@ -138,6 +173,36 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
             _goldAccumulator -= gold;
             RulerController.Instance.ModifyResource(ResourceType.Gold, true, gold);
         }
+    }
+
+    /// <summary>
+    /// 水井产水入网（QQQ.2 T15 / DR-14：rate=4 水/秒）。水为隐藏资源不占 Storage，
+    /// 直接充入 WaterNetwork；水网满（容量 100）时停产避免浪费（DR-8）。
+    /// </summary>
+    private void TickWaterToNetwork()
+    {
+        if (WaterNetwork.Instance == null) return;
+        if (WaterNetwork.Instance.IsFull) return;   // 水网满 → 停产
+        _mainAccumulator += _rate;
+        int water = Mathf.FloorToInt(_mainAccumulator);
+        if (water > 0)
+        {
+            _mainAccumulator -= water;
+            WaterNetwork.Instance.AddWater(water);
+        }
+    }
+
+    /// <summary>
+    /// 农场产粮耗水（QQQ.2 T15 / DR-9 + DR-18：每次产出耗 2 水）。
+    /// ConsumeWater(2) 成功才允许本秒产出；失败则停产 + 头顶冒"缺水"提示。
+    /// </summary>
+    private bool TryConsumeFarmWater()
+    {
+        if (WaterNetwork.Instance == null) return false;
+        if (WaterNetwork.Instance.ConsumeWater(2f)) return true;
+        // 缺水停产 + 头顶冒"缺水"图标提示（OverheadSpeech 复用气泡机制）
+        OverheadSpeech.Show(_building.transform, "缺水", duration: 1.2f);
+        return false;
     }
 
     /// <summary>读档恢复副产（BuildingFactory.SpawnFromSave / Building.LoadState 调）。</summary>

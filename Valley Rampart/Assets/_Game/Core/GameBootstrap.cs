@@ -45,7 +45,6 @@ public class GameBootstrap : MonoBehaviour
         _ = TradeSystem.Instance;
         _ = RanchSystem.Instance;
         _ = VagrantCampSystem.Instance;   // 3.5.1 E-S7：流浪汉营地补员/招募/抵达入册
-        _ = EquipmentSystem.Instance;
         _ = SiegeProductionSystem.Instance;
 
         // 订阅配置加载完成事件（替代已废弃的 UnitDataLoadedEvent，见引导书 3.2 节）

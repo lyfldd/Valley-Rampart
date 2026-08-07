@@ -55,5 +55,10 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
             VagrantCampSystem.Instance.OnNewDay();
 
         // P1 占位：研究 / 装备 在此追加
+
+        // 结算全部完成后发 DaySettledEvent（QQQ.3 B8-2 / LC-G5 / D10）
+        // SaveManager 自动存档改订阅本事件 ⇒ "结算先、存档后"顺序显式化，不依赖订阅先后。
+        if (TimeManager.Instance != null)
+            EventBus.Publish(new DaySettledEvent(TimeManager.Instance.CurrentDay));
     }
 }

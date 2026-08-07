@@ -100,6 +100,29 @@ public struct TuningSnapshot
     public float wanderIntensity;
     public float wanderStayTime;
 
+    // ===== 空闲分布 SafetyScore（QQQ.2 T8 / DR-21，统一安全系数）=====
+    public float baseSafety;            // 基础安全系数 0.5
+    public float wallWeight;            // 城墙内加成 0.3（无城墙=0）
+    public float armyWeight;            // 8格内友军≥3 加成 0.2
+    public float armyRadiusCells;       // 友军加成判定半径（格，8）
+    public float kingdomDistMin;        // 距锚点安全因子最低值 0.1（不归零）
+    public float kingdomDistPerCell;    // 每格衰减 0.02
+    public float threatPenaltyScale;    // 威胁惩罚 0.8（× ThreatFactor）
+    public float nightPenaltyScale;     // 夜晚惩罚 0.1（× NightFactor）
+    public float wanderThreshold;       // 可 Wander 阈值 0.4（Score<此值不 Wander+撤退）
+    public float wanderRadiusMinCells;  // Wander 半径下限（格，4）
+    public float wanderRadiusMaxCells;  // Wander 半径上限（格，8）
+    public float anchorRefreshIntervalMin; // 锚点刷新间隔下限（秒，10）
+    public float anchorRefreshIntervalMax; // 锚点刷新间隔上限（秒，20）
+    public int anchorAvoidRecentCount;  // 锚点防重抽：最近 N 个不重抽
+
+    // ===== 空闲自动说话（QQQ.2 T2 / DR-10）=====
+    public float talkSafetyThreshold;   // 自动说话安全阈值 0.6（SafetyScore > 此值）
+    public float talkIntervalMin;       // 说话间隔下限（秒，15）
+    public float talkIntervalMax;       // 说话间隔上限（秒，30）
+    public float talkCooldown;          // 同 NPC 说话冷却（秒，8）
+    public int talkMaxActive;           // 视野内同时气泡上限（6）
+
     // ===== rawFactor 权重（3.0.1_LOD §3.2 统一因子表）=====
     public float rfDistWeight;
     public float rfCountWeight;

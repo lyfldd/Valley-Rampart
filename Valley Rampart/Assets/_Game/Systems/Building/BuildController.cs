@@ -20,7 +20,19 @@ public class BuildController : Singleton<BuildController>
 
     public bool IsInBuildMode => _inBuildMode;
     public int CastleLevel => _castleLevel;        // 3.3.4 批次7
-    public bool IsBuildUnlocked => _buildUnlocked; // 3.3.4 批次7
+    /// <summary>
+    /// 建造是否解锁（QQQ.3 B8-1 / LC-B1 修复：从 KingdomManager.CastleLevel 派生，不依赖 BuildingActivatedEvent）。
+    /// 修复点：读档重建只发 BuildingPlacedEvent 不发 BuildingActivatedEvent ⇒ 主城已修复但 _buildUnlocked 仍 false ⇒ 建造菜单永久软锁。
+    /// 改为派生后，读档恢复 CastleLevel≥1 即解锁，彻底解耦。
+    /// </summary>
+    public bool IsBuildUnlocked
+    {
+        get
+        {
+            if (_buildUnlocked) return true;   // 事件已解锁（新局/即时），快速返回
+            return KingdomManager.Instance != null && KingdomManager.Instance.CastleLevel >= 1;
+        }
+    }
 
     // ===== Unity 生命周期（3.3.4 批次7）=====
 

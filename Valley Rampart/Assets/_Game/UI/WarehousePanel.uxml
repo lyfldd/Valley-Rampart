@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:Style src="project://database/Assets/_Game/UI/WarehousePanel.uss" />
+    <ui:VisualElement name="wh-root" class="wh-root">
+        <ui:VisualElement name="wh-panel" class="wh-panel">
+            <!-- 标题行（可拖动窗口把手）：仓库 + 关闭按钮 -->
+            <ui:VisualElement name="drag-handle" class="wh-header">
+                <ui:Label name="wh-title" text="仓库" class="wh-title" />
+                <ui:Button name="wh-close-button" text="×" class="wh-close" />
+            </ui:VisualElement>
+
+            <!-- 说明 -->
+            <ui:Label text="各仓库资源存储情况（与国库区分）" class="wh-hint" />
+
+            <!-- 空提示（无仓库时显示，由代码切换） -->
+            <ui:Label name="wh-empty-hint" text="暂无仓库存储" class="wh-empty-hint" />
+
+            <!-- 资源存储列表（按资源类型汇总，动态构建） -->
+            <ui:VisualElement name="wh-storage-list" class="wh-storage-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

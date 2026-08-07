@@ -336,16 +336,20 @@ public class AIDebugSpawnController : MonoBehaviour
     // ===== 王国任务（7.8 T-K/T-R）验证辅助 =====
 
     /// <summary>
-    /// 给指定工人 GameObject 领取王国任务（若未挂 WorkerTask 则自动添加）。
-    /// 供 Play 验证用：对已生成的工人 Assign(Gather/Transport/源/目标/时长)。
+    /// 给指定工人 GameObject 派发王国任务（QQQ.2 T18：WorkerTask 内化为工厂，经调度器派发）。
+    /// 供 Play 验证用：构造 KingdomTask → TaskScheduler.DispatchExternal（NPC 靠 TaskStimulus 走向任务点）。
     /// </summary>
     public void AssignKingdomTask(GameObject workerGo, WorkerTaskType type, float sourceX, float destX, float workDuration)
     {
         if (workerGo == null) return;
-        var task = workerGo.GetComponent<WorkerTask>();
-        if (task == null) task = workerGo.AddComponent<WorkerTask>();
-        task.Assign(type, sourceX, destX, workDuration);
-        Debug.Log($"[AIDebugSpawn] 任务分配: {workerGo.name} {type} source={sourceX} dest={destX} dur={workDuration}");
+        var brain = workerGo.GetComponent<NPCBrain>();
+        if (brain == null || !TaskScheduler.HasInstance) return;
+        var task = WorkerTask.CreateTask(type,
+            new Vector2(sourceX, workerGo.transform.position.y),
+            new Vector2(destX, workerGo.transform.position.y),
+            workDuration, ResourceType.Gold);
+        TaskScheduler.Instance.DispatchExternal(brain, task);
+        Debug.Log($"[AIDebugSpawn] 任务派发: {workerGo.name} {type} source={sourceX} dest={destX} dur={workDuration}");
     }
 
     /// <summary>
@@ -358,5 +362,111 @@ public class AIDebugSpawnController : MonoBehaviour
         if (result.Success)
             AssignKingdomTask(result.Spawned, type, sourceX, destX, workDuration);
         return result;
+    }
+
+    // ===== QQQ.2 T8 / DR-21 验证场景：闲逛遇敌撤退 =====
+
+    /// <summary>
+    /// 一键生成"闲逛遇敌撤退"验证场景（默认以王国锚点为中心，含城墙）。
+    /// 详见 QQQ.2_需求4.5：验证 SafetyScore 三路合并 + WanderAnchorPool + RetreatToSafeAnchor。
+    /// </summary>
+    public void SpawnWanderRetreatScenario()
+    {
+        Vector2 center = Vector2.zero;
+        if (WorldManager.Instance != null)
+            center = WorldManager.Instance.GetKingdomAnchorWorld();
+        SpawnWanderRetreatScenario(center, withWalls: true);
+    }
+
+    /// <summary>
+    /// QQQ.2 T8 / DR-21 验证场景：闲逛遇敌撤退（一键生成）。
+    /// 王国内部 6 个空闲工人（无任务，走 Wander 闲逛）+ 边界 2 个敌方士兵 + 可选城墙双段。
+    /// 验证点（需求 4.5）：
+    ///   ① 空闲 NPC 分散在锚点池各处闲逛（不聚城堡单点）
+    ///   ② 城墙内 wallFactor → 工人在城墙内 SafetyScore 高
+    ///   ③ 敌人压近 → SafetyScore 跌破阈值 → 往最近安全锚点撤退（RetreatToSafeAnchor），不卡在敌我之间
+    /// 用法：F1 调试面板或脚本调用；withWalls=false 验证无城墙场景（靠距离+友军判定安全）。
+    /// </summary>
+    public void SpawnWanderRetreatScenario(Vector2 center, bool withWalls)
+    {
+        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize : 2.26f;
+        float wallOffset = 6f * cs;       // 城墙段距中心（内层防线）
+        float borderOffset = 8.5f * cs;   // 敌兵压近距（感知半径内触发威胁）
+
+        if (withWalls)
+        {
+            Spawn(DebugSpawnType.PlayerWall, center + new Vector2(-wallOffset, 0f));
+            Spawn(DebugSpawnType.PlayerWall, center + new Vector2(wallOffset, 0f));
+        }
+        // 6 个空闲工人：城堡附近 ±2 格散布（开局即 Wander 闲逛，10-20s 后分散到各锚点）
+        for (int i = 0; i < 6; i++)
+        {
+            float dx = (i % 3 - 1) * cs * 2f + Random.Range(-cs * 0.8f, cs * 0.8f);
+            Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(dx, 0f));
+        }
+        // 边界 2 个敌方士兵（压近触发 SafetyScore 跌破阈值 → 撤退）
+        Spawn(DebugSpawnType.EnemyWarrior, center + new Vector2(borderOffset, 0f));
+        Spawn(DebugSpawnType.EnemyWarrior, center + new Vector2(borderOffset + cs, 0f));
+        Debug.Log($"[AIDebugSpawn] 闲逛遇敌撤退场景生成完成（withWalls={withWalls}）：6 工人闲逛 + 2 敌兵边界压近，观察 RetreatToSafeAnchor。");
+    }
+
+    // ===== QQQ.2 T22 验证场景：生产链路端到端 =====
+
+    /// <summary>
+    /// 一键生成"生产链路端到端"验证场景（默认以王国锚点为中心）。
+    /// 详见 QQQ.2 T22（R2 缺口）：农场有工人+水→产粮→搬运入仓。
+    /// </summary>
+    public void SpawnProductionChainScenario()
+    {
+        Vector2 center = Vector2.zero;
+        if (WorldManager.Instance != null)
+            center = WorldManager.Instance.GetKingdomAnchorWorld();
+        SpawnProductionChainScenario(center);
+    }
+
+    /// <summary>
+    /// QQQ.2 T22 验证场景：生产链路端到端联调。
+    /// 一键生成：水井（产水入网，不需工人）+ 农场（耗水产粮，需工人）+ 仓库（接收搬运）+ 2 工人。
+    /// 验证链（依赖 T9/T15/T17/T19，本会话已完成）：
+    ///   ① 水井 → WaterNetwork 产水（4 水/秒，容量 100）
+    ///   ② 农场有工人（HasWorkerAssigned）+ 水（ConsumeWater 2/次）→ 产粮
+    ///   ③ 农场存储达标 → TaskScheduler 派搬运任务 → 工人搬粮入仓（StorageComponent.HarvestCarry）
+    /// 仓库面板（T12）落地后可同步观察实时显示。
+    /// </summary>
+    public void SpawnProductionChainScenario(Vector2 center)
+    {
+        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize : 2.26f;
+        if (BuildingFactory.Instance == null) return;
+
+        // ① 水井（产水入网，不需要工人）
+        PlaceBuilding("Buildings/Well", center + new Vector2(-4f * cs, 0f));
+        // ② 农场（耗水产粮，需工人派生产任务）
+        PlaceBuilding("Buildings/farm", center + new Vector2(1f * cs, 0f));
+        // ③ 仓库（接收搬运入仓）
+        PlaceBuilding("Buildings/Warehouse", center + new Vector2(3f * cs, 0f));
+        // ④ 2 个工人（调度器派生产/搬运任务）
+        Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(-1f * cs, 0f));
+        Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(2f * cs, 0f));
+        Debug.Log("[AIDebugSpawn] 生产链路场景生成完成：水井+农场+仓库+2工人，观察产粮→搬运入仓。");
+    }
+
+    /// <summary>按资产路径放置建筑（走 BuildingFactory 完整链路：占用/注册/挂件/事件）。</summary>
+    bool PlaceBuilding(string assetPath, Vector2 worldPos)
+    {
+        if (BuildingFactory.Instance == null || GridSystem.Instance == null || GridSystem.Instance.Config == null)
+            return false;
+        var def = Resources.Load<BuildingDef>(assetPath);
+        if (def == null)
+        {
+            Debug.LogWarning($"[AIDebugSpawn] 未找到建筑资产 {assetPath}");
+            return false;
+        }
+        GridCoord coord = GridSystem.Instance.WorldToCoord(worldPos);
+        int w = def.footprint.x > 0 ? def.footprint.x : 1;
+        return BuildingFactory.Instance.CreateBuildingInstance(
+            def, BuildingType.None, coord, w, worldPos,
+            isPlayerBuilt: true, ResourceGrade.Normal, def.isConsumable, BuildingState.Active);
     }
 }

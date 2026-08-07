@@ -164,3 +164,37 @@
     background-color: var(--color-disabled);
     color: rgb(100, 100, 100);
 }
+
+/* ===== QQQ.2 三块信息概览（可训练人数 / 队列 / 正在训练） ===== */
+.training-summary {
+    margin: 4px 0 12px 0;
+    padding: 10px 12px;
+    background-color: rgb(28, 28, 40);
+    border-radius: 6px;
+}
+
+.training-summary-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+}
+
+.training-summary-label {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+}
+
+.training-summary-value {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+    text-align: right;
+}
+
+/* ===== 训练职业按钮区 ===== */
+.training-train-buttons {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: scroll;
+}

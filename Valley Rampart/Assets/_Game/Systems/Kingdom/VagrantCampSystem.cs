@@ -98,6 +98,10 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         unit.SetOccupation(Occupation.Resident);
         unit.IsVagrantRecruited = true;
 
+        // QQQ.2 T9 / DR-4：招募走 = 原任务上下文失效——清调度器指派（流浪汉若被派任务，招募后不再执行）
+        if (TaskScheduler.HasInstance && unit.npcId != 0)
+            TaskScheduler.Instance.AbandonTask(unit.npcId);
+
         // 军令级任务刺激走回王国锚点；抵达后由 Update 扫描正式入册（人口 +1）
         Vector2 anchor = WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
         var brain = unit.GetComponent<NPCBrain>();
@@ -185,6 +189,11 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         var go = UnitFactory.Instance.SpawnUnit(
             Faction.Human_Player, Occupation.Vagrant,
             new Vector2(campPos.x + offsetX, campPos.y));
-        return go != null;
+        if (go == null) return false;
+
+        // QQQ.2 T11 / DR-7：记录出生营地坐标（未招募流浪汉 HomePoint = 本值，在营地游荡不朝王国走）
+        var uc = go.GetComponent<UnitController>();
+        if (uc != null) uc.BirthCampPos = campPos;
+        return true;
     }
 }

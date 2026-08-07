@@ -146,6 +146,48 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("漫游到点停留时长（秒，走走停停节奏）")]
     public float wanderStayTime = 1.5f;
 
+    [Header("空闲分布 SafetyScore（QQQ.2 T8 / DR-21，统一安全系数）")]
+    [Tooltip("基础安全系数（DR-21：0.5）")]
+    public float baseSafety = 0.5f;
+    [Tooltip("城墙内加成权重（DR-21：0.3；无城墙=0，靠距离/友军/威胁判定）")]
+    public float wallWeight = 0.3f;
+    [Tooltip("友军加成权重（DR-21：0.2；armyRadiusCells 内友军 ≥ protectionUpThresholds[0] 触发）")]
+    public float armyWeight = 0.2f;
+    [Tooltip("友军加成判定半径（格，DR-21：8）")]
+    public float armyRadiusCells = 8f;
+    [Tooltip("距王国锚点安全因子最低值（DR-21：0.1，离家再远也不归零）")]
+    public float kingdomDistMin = 0.1f;
+    [Tooltip("距王国锚点安全因子每格衰减（DR-21：0.02/格；1 - 0.02×格数，近家=1）")]
+    public float kingdomDistPerCell = 0.02f;
+    [Tooltip("威胁惩罚系数（DR-21：0.8，× ThreatFactor 0-1；满威胁扣 0.8 → Score 必 <0.4 不 Wander）")]
+    public float threatPenaltyScale = 0.8f;
+    [Tooltip("夜晚惩罚（DR-21：0.1，× NightFactor 0-1）")]
+    public float nightPenaltyScale = 0.1f;
+    [Tooltip("可 Wander 安全阈值（DR-21：0.4；Score<此值 不 Wander + 触发 RetreatToSafeAnchor）")]
+    public float wanderThreshold = 0.4f;
+    [Tooltip("Wander 半径下限（格，DR-21：4；Score 低档）")]
+    public float wanderRadiusMinCells = 4f;
+    [Tooltip("Wander 半径上限（格，DR-21：8；Score 高档）")]
+    public float wanderRadiusMaxCells = 8f;
+    [Tooltip("锚点刷新间隔下限（秒，DR-21：10；间隔内复用当前锚点防抖动）")]
+    public float anchorRefreshIntervalMin = 10f;
+    [Tooltip("锚点刷新间隔上限（秒，DR-21：20）")]
+    public float anchorRefreshIntervalMax = 20f;
+    [Tooltip("锚点防重抽：最近 N 个锚点不重抽（分散多 NPC，避免扎堆同一锚点）")]
+    public int anchorAvoidRecentCount = 2;
+
+    [Header("空闲自动说话（QQQ.2 T2 / DR-10）")]
+    [Tooltip("自动说话安全阈值：SafetyScore > 此值才说话（DR-10：0.6，对应大半径 Wander 档）")]
+    public float talkSafetyThreshold = 0.6f;
+    [Tooltip("自动说话间隔下限（秒，DR-10：15）")]
+    public float talkIntervalMin = 15f;
+    [Tooltip("自动说话间隔上限（秒，DR-10：30）")]
+    public float talkIntervalMax = 30f;
+    [Tooltip("同 NPC 说话冷却（秒，DR-10：8 防刷屏）")]
+    public float talkCooldown = 8f;
+    [Tooltip("视野内同时气泡上限（DR-10：6，超出进轮转队列）")]
+    public int talkMaxActive = 6;
+
     [Header("rawFactor 权重（3.0.1_LOD §3.2 统一因子表，入 SO 防硬编码）")]
     [Tooltip("敌人距离因子权重")]
     public float rfDistWeight = 0.35f;
@@ -418,6 +460,25 @@ public class AttentionTuningConfig : ScriptableObject
             traceExpiry = traceExpiry,
             wanderIntensity = wanderIntensity,
             wanderStayTime = wanderStayTime,
+            baseSafety = baseSafety,
+            wallWeight = wallWeight,
+            armyWeight = armyWeight,
+            armyRadiusCells = armyRadiusCells,
+            kingdomDistMin = kingdomDistMin,
+            kingdomDistPerCell = kingdomDistPerCell,
+            threatPenaltyScale = threatPenaltyScale,
+            nightPenaltyScale = nightPenaltyScale,
+            wanderThreshold = wanderThreshold,
+            wanderRadiusMinCells = wanderRadiusMinCells,
+            wanderRadiusMaxCells = wanderRadiusMaxCells,
+            anchorRefreshIntervalMin = anchorRefreshIntervalMin,
+            anchorRefreshIntervalMax = anchorRefreshIntervalMax,
+            anchorAvoidRecentCount = anchorAvoidRecentCount,
+            talkSafetyThreshold = talkSafetyThreshold,
+            talkIntervalMin = talkIntervalMin,
+            talkIntervalMax = talkIntervalMax,
+            talkCooldown = talkCooldown,
+            talkMaxActive = talkMaxActive,
             rfDistWeight = rfDistWeight,
             rfCountWeight = rfCountWeight,
             rfHpWeight = rfHpWeight,

@@ -18,19 +18,16 @@ MonoBehaviour:
     requiredCastleLevel: 1
     upgradeBuildings:
     - TrainingCamp
-    - Armory
     unlockBuildings: []
   - tier: 2
     requiredCastleLevel: 2
     upgradeBuildings:
     - TrainingCamp
-    - Armory
     unlockBuildings:
     - SiegeWorkshop
   - tier: 3
     requiredCastleLevel: 3
     upgradeBuildings:
     - TrainingCamp
-    - Armory
     unlockBuildings:
     - Barracks

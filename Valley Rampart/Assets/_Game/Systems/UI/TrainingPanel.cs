@@ -3,15 +3,17 @@ using UnityEngine;
 using UnityEngine.UIElements;
 
 /// <summary>
-/// 训练面板（3.5 训练系统 UI）。挂在 SampleScene 的 TrainingPanel GameObject 上（UIDocument）。
+/// 训练面板（QQQ.2 §需求3 / DR-3：不列出具体 NPC）。挂在 SampleScene 的 TrainingPanel GameObject 上（UIDocument）。
 /// 实现 IUIPanel，由 BuildingPanel 的「训练」按钮 SetTarget 后 Push 入栈，关闭 Pop。
 ///
-/// 显示：训练设施名 + 等级；该设施可训练项列表（目标职业 + 消耗金/水晶 + 时长）；
-///       每项下列出当前符合条件的单位（当前职业），每个单位一个「训练」按钮。
-/// 无训练定义或无人可训时显示空提示。
+/// 显示三块信息：
+///   1. 可训练人数（王国空闲居民数，匹配该设施起始职业）
+///   2. 训练队列清单（职业名 × 数量，含排队 + 训练中）
+///   3. 正在训练人数 + 时长（若有训练时长）
+/// 点击「训练」弹出可训练职业选择，从居民池自动取一个入队（不列出具体 NPC）。
+/// 队满 / 无可训居民时按钮置灰。
 ///
 /// 刷新策略：事件驱动（UnitDiedEvent / RulerResourceChangedEvent）+ 训练成功后本地 Refresh。
-/// 所属系统：TrainingSystem（转职）/ UnitRegistry（可训单位）/ RulerController（资源）。
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class TrainingPanel : MonoBehaviour, IUIPanel
@@ -23,7 +25,10 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
     // ===== UI 元素引用 =====
     private VisualElement _root;
     private Label _titleLabel;
-    private VisualElement _trainingList;
+    private Label _trainableLabel;       // 可训练人数
+    private Label _queueLabel;           // 训练队列清单
+    private Label _activeLabel;          // 正在训练人数
+    private VisualElement _trainButtons; // 训练职业按钮区
     private Label _emptyHint;
     private Button _closeButton;
 
@@ -57,7 +62,8 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
         if (_building == null || _building.def == null) return;
         if (_titleLabel != null)
             _titleLabel.text = $"{_building.def.displayName}（Lv.{_building.level}）";
-        RebuildTrainingList();
+        RebuildSummary();
+        RebuildTrainButtons();
     }
 
     // ===== Unity 生命周期 =====
@@ -94,118 +100,116 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
         if (_visible) Refresh();
     }
 
-    // ===== 列表构建 =====
+    // ===== 三块信息构建 =====
 
-    /// <summary>重建训练项列表；无项时显示空提示。</summary>
-    private void RebuildTrainingList()
+    /// <summary>可训练人数 + 训练队列 + 正在训练。无训练定义时显示空提示。</summary>
+    private void RebuildSummary()
     {
-        if (_trainingList == null) return;
-        _trainingList.Clear();
+        var ts = TrainingSystem.Instance;
+        bool hasConfig = ts != null && ts.GetTrainings(_building.def.id) != null
+                         && ts.GetTrainings(_building.def.id).Count > 0;
+
+        if (!hasConfig)
+        {
+            SetSummaryTexts("0", "暂无训练定义", "0");
+            SetSummaryVisible(false);
+            if (_emptyHint != null) _emptyHint.style.display = DisplayStyle.Flex;
+            return;
+        }
+        if (_emptyHint != null) _emptyHint.style.display = DisplayStyle.None;
+        SetSummaryVisible(true);
+
+        // 1. 可训练人数
+        int trainable = ts.GetTrainableCount(_building);
+        if (_trainableLabel != null) _trainableLabel.text = $"{trainable}";
+
+        // 2. 训练队列（职业名 × 数量）
+        var queue = ts.GetQueueSummary(_building);
+        if (_queueLabel != null)
+        {
+            _queueLabel.text = queue.Count == 0 ? "空" : QueueText(queue);
+        }
+
+        // 3. 正在训练人数 + 时长
+        int active = ts.GetActiveCount(_building);
+        if (_activeLabel != null) _activeLabel.text = active.ToString();
+    }
+
+    /// <summary>队列文本：`工人×2 / 士兵×1` 格式。</summary>
+    private static string QueueText(List<KeyValuePair<Occupation, int>> queue)
+    {
+        var parts = new List<string>();
+        for (int i = 0; i < queue.Count; i++)
+            parts.Add($"{OccName(queue[i].Key)}×{queue[i].Value}");
+        return string.Join(" / ", parts);
+    }
+
+    private void SetSummaryVisible(bool visible)
+    {
+        var s = visible ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_trainableLabel != null) _trainableLabel.visible = visible;
+        if (_queueLabel != null) _queueLabel.visible = visible;
+        if (_activeLabel != null) _activeLabel.visible = visible;
+    }
+
+    private void SetSummaryTexts(string trainable, string queue, string active)
+    {
+        if (_trainableLabel != null) _trainableLabel.text = trainable;
+        if (_queueLabel != null) _queueLabel.text = queue;
+        if (_activeLabel != null) _activeLabel.text = active;
+    }
+
+    // ===== 训练职业按钮区 =====
+
+    /// <summary>重建「可训练职业」按钮列表；点按钮从居民池自动入队。</summary>
+    private void RebuildTrainButtons()
+    {
+        if (_trainButtons == null) return;
+        _trainButtons.Clear();
 
         var ts = TrainingSystem.Instance;
-        var trainings = ts != null ? ts.GetTrainings(_building.def.id) : null;
-        bool any = false;
+        if (ts == null) return;
 
-        if (trainings != null && trainings.Count > 0)
+        var occs = ts.GetSupportedOccupations(_building);
+        int trainable = ts.GetTrainableCount(_building);
+        bool queueFull = ts.GetQueueSummary(_building).Count >= _building.def.trainingSlots
+                         && ts.GetActiveCount(_building) >= _building.def.trainingSlots;
+
+        if (occs == null || occs.Length == 0)
         {
-            foreach (var def in trainings)
-            {
-                var card = CreateTrainingCard(def);
-                if (card != null)
-                {
-                    _trainingList.Add(card);
-                    any = true;
-                }
-            }
-        }
-
-        if (_emptyHint != null)
-            _emptyHint.style.display = any ? DisplayStyle.None : DisplayStyle.Flex;
-    }
-
-    /// <summary>创建单个训练项卡片（目标职业 + 消耗 + 可训单位行）。</summary>
-    private VisualElement CreateTrainingCard(TrainingDef def)
-    {
-        var card = new VisualElement();
-        card.AddToClassList("training-card");
-
-        // 头部：目标职业 + 时长
-        var header = new VisualElement();
-        header.AddToClassList("training-card-header");
-        var toName = new Label { text = OccName(def.toOccupation) };
-        toName.AddToClassList("training-card-title");
-        var days = new Label { text = $"{def.costDays} 天" };
-        days.AddToClassList("training-card-days");
-        header.Add(toName);
-        header.Add(days);
-        card.Add(header);
-
-        // 消耗
-        var cost = new Label { text = CostText(def) };
-        cost.AddToClassList("training-card-cost");
-        card.Add(cost);
-
-        // 可训单位（无则显示空提示）
-        var eligible = GetEligibleUnits(def);
-        if (eligible.Count == 0)
-        {
-            var none = new Label { text = "暂无符合条件的单位" };
+            var none = new Label { text = "无可训练职业" };
             none.AddToClassList("training-card-empty");
-            card.Add(none);
-            return card;
+            _trainButtons.Add(none);
+            return;
         }
 
-        var unitsHost = new VisualElement();
-        unitsHost.AddToClassList("training-card-units");
-        foreach (var unit in eligible)
-            unitsHost.Add(CreateUnitRow(unit, def));
-        card.Add(unitsHost);
-        return card;
-    }
-
-    /// <summary>收集某项训练当前符合条件的单位：我方 + 起始职业匹配 + 存活。</summary>
-    private List<UnitController> GetEligibleUnits(TrainingDef def)
-    {
-        var result = new List<UnitController>();
-        if (UnitRegistry.Instance == null) return result;
-        foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+        foreach (var occ in occs)
         {
-            if (unit == null || unit.Data == null) continue;
-            if (unit.Data.faction != Faction.Human_Player) continue;
-            if (unit.EffectiveOccupation != def.fromOccupation) continue;
-            if (!unit.IsAlive) continue;
-            result.Add(unit);
+            var row = new VisualElement();
+            row.AddToClassList("training-unit-row");
+
+            float dur = ts.GetTrainDuration(_building, occ);
+            var name = new Label { text = $"{OccName(occ)}（{dur:F0} 天）" };
+            name.AddToClassList("training-unit-name");
+            row.Add(name);
+
+            var btn = new Button(() => OnTrainOccupationClicked(occ)) { text = "训练" };
+            btn.AddToClassList("training-btn");
+            // 队满 / 无可训居民时置灰
+            btn.SetEnabled(trainable > 0 && !queueFull && CanAffordAny());
+            row.Add(btn);
+            _trainButtons.Add(row);
         }
-        return result;
     }
 
-    /// <summary>创建单个可训单位行：当前职业名 + 「训练」按钮。</summary>
-    private VisualElement CreateUnitRow(UnitController unit, TrainingDef def)
-    {
-        var row = new VisualElement();
-        row.AddToClassList("training-unit-row");
-
-        var name = new Label { text = OccName(unit.EffectiveOccupation) };
-        name.AddToClassList("training-unit-name");
-        row.Add(name);
-
-        var btn = new Button(() => OnTrainClicked(unit, def)) { text = "训练" };
-        btn.AddToClassList("training-btn");
-        btn.SetEnabled(CanAfford(def));   // 资源不足禁用
-        row.Add(btn);
-        return row;
-    }
-
-    // ===== 训练操作 =====
-
-    private void OnTrainClicked(UnitController unit, TrainingDef def)
+    /// <summary>点目标职业「训练」：从居民池自动取一个入队。</summary>
+    private void OnTrainOccupationClicked(Occupation occ)
     {
         if (TrainingSystem.Instance == null) return;
-        // P1-10：传入所属训练建筑实例，供槽位管理（排队/训练中）
-        if (TrainingSystem.Instance.TryTrain(unit, def, _building))
+        if (TrainingSystem.Instance.TryTrainFromPool(_building, occ))
             Refresh();
         else
-            Debug.Log("[TrainingPanel] 训练失败（起始职业不符 / 资源不足 / 将军已达上限）");
+            Debug.Log("[TrainingPanel] 训练失败（无可训居民 / 队满 / 资源不足）");
     }
 
     // ===== 按钮绑定 / 解绑 =====
@@ -218,7 +222,10 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
         _root = doc.rootVisualElement;
 
         _titleLabel = _root.Q<Label>("training-title");
-        _trainingList = _root.Q<VisualElement>("training-list");
+        _trainableLabel = _root.Q<Label>("training-trainable-value");
+        _queueLabel = _root.Q<Label>("training-queue-value");
+        _activeLabel = _root.Q<Label>("training-active-value");
+        _trainButtons = _root.Q<VisualElement>("training-train-buttons");
         _emptyHint = _root.Q<Label>("training-empty-hint");
         _closeButton = _root.Q<Button>("training-close-button");
 
@@ -246,22 +253,11 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
 
     // ===== 辅助 =====
 
-    /// <summary>训练消耗文本（金 + 可选水晶）。</summary>
-    private static string CostText(TrainingDef def)
-    {
-        string s = $"消耗 金 {def.costGold}";
-        if (def.costCrystal > 0) s += $"  水晶 {def.costCrystal}";
-        return s;
-    }
-
-    /// <summary>当前持有资源是否足够某项训练。</summary>
-    private static bool CanAfford(TrainingDef def)
+    /// <summary>当前持有资源是否足够任意训练（粗略：金 > 0 任一训练所需）。</summary>
+    private static bool CanAffordAny()
     {
         var ruler = RulerController.Instance;
-        if (ruler == null) return false;
-        if (ruler.Gold < def.costGold) return false;
-        if (def.costCrystal > 0 && ruler.GetResource(ResourceType.Crystal) < def.costCrystal) return false;
-        return true;
+        return ruler != null && ruler.Gold > 0;
     }
 
     /// <summary>职业中文显示名（默认回退 ToString）。</summary>

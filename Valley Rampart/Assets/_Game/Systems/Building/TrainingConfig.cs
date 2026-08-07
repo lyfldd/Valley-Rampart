@@ -11,6 +11,13 @@ public class TrainingConfig : ScriptableObject
 {
     [Tooltip("全部训练定义（训练所/练兵场等按 from/to 匹配）")]
     public TrainingDef[] trainings;
+
+    [Header("QQQ.2 §需求3 / DR-3 / DR-12：训练 UI 数据")]
+    [Tooltip("该训练建筑可训练的职业白名单（如兵营→士兵/弓箭手，学院→法师）。TrainingPanel 弹职业选择用")]
+    public Occupation[] supportedOccupations;
+
+    [Tooltip("各目标职业的训练时长（天）。缺省按 DR-12：居民→工人 1 天 / →士兵 2 天 / →高阶 3 天")]
+    public float[] trainDurationDays;   // 与 supportedOccupations 同序（按职业对齐）
 }
 
 /// <summary>单条训练定义（转职链：from → to，消耗金 + 时长）。</summary>

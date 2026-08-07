@@ -67,6 +67,8 @@ public class BuildingDef : ScriptableObject
     public BuildingType sourceType = BuildingType.None;
     [Tooltip("一次性资源（用完消失）。true=WoodPile/StonePile/OreVein；false=Tree/Mine/Farmland")]
     public bool isConsumable = false;
+    [Tooltip("一次性资源点采集耗时（秒，QQQ.2 T19 / DR-11：WoodPile 2s / StonePile 4s / OreVein 8s）")]
+    public float gatherSeconds = 2f;
     [Tooltip("ResourceGrade 缩放系数：[0]=Barren, [1]=Normal, [2]=Rich。作用于 producer.rate 和 combat.maxHp")]
     public float[] gradeScale = new float[] { 0.7f, 1.0f, 1.5f };
 

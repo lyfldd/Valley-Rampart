@@ -43,6 +43,7 @@ MonoBehaviour:
   isDestructible: 1
   sourceType: 5
   isConsumable: 1
+  gatherSeconds: 2
   gradeScale:
   - 0.7
   - 1

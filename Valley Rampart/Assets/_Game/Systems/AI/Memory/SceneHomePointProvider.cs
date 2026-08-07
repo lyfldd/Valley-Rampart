@@ -21,19 +21,27 @@ public class SceneHomePointProvider : MonoBehaviour, IHomePointProvider
     public Transform enemyHomePointAnchor;
 
     /// <summary>
-    /// 按阵营分流返回 HomePoint（3.0.1_6 §4.1 + QQQ.1 需求2+3）：
+    /// 按阵营分流返回 HomePoint（3.0.1_6 §4.1 + QQQ.1 需求2+3 + QQQ.2 T11 / DR-7）：
     /// 我方（Human_Player/None）→ 主城坐标（WorldManager.GetKingdomAnchorWorld，城堡中心）；
     /// 敌方（Undead）→ 敌方侧锚点。
-    /// 修复：不再读场景手配 homePointAnchor（与主城脱节），也杜绝往世界 (0,0) 乱走。
+    /// QQQ.2 T11 / DR-7：未招募流浪汉（IsVagrantRecruited=false）→ 出生营地坐标（营地游荡不朝王国走）；
+    /// 已招募 → 王国锚点（走回王国入册）。
     /// </summary>
     public Vector2 GetHomePoint(NPCBrain npc)
     {
         if (npc != null)
         {
             var unit = npc.GetComponent<UnitController>();
-            bool isEnemy = unit != null && unit.Data != null && unit.Data.faction == Faction.Undead;
-            if (isEnemy)
-                return enemyHomePointAnchor != null ? (Vector2)enemyHomePointAnchor.position : ResolveKingdomAnchor();
+            if (unit != null && unit.Data != null)
+            {
+                bool isEnemy = unit.Data.faction == Faction.Undead;
+                if (isEnemy)
+                    return enemyHomePointAnchor != null ? (Vector2)enemyHomePointAnchor.position : ResolveKingdomAnchor();
+                // QQQ.2 T11 / DR-7：未招募流浪汉 HomePoint = 出生营地坐标（在营地附近游荡）
+                if (!unit.IsVagrantRecruited && unit.EffectiveOccupation == Occupation.Vagrant
+                    && unit.BirthCampPos != Vector2.zero)
+                    return unit.BirthCampPos;
+            }
             return ResolveKingdomAnchor();
         }
         return ResolveKingdomAnchor();

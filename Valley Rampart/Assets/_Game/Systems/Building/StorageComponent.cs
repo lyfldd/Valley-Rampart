@@ -11,6 +11,9 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable
     public int storedAmount;
     public int capacity = 100;
 
+    /// <summary>存储变化事件（QQQ.2 §需求7 / DR-15：WarehousePanel 订阅实时刷新）。关闭退订避免泄漏。</summary>
+    public event System.Action<StorageComponent> OnStorageChanged;
+
     public void Init(Building building)
     {
         if (building == null || building.def == null) return;
@@ -28,6 +31,7 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable
         storedAmount = 0;
         if (amount > 0)
             RulerController.Instance?.ModifyResource(resourceType, true, amount);
+        OnStorageChanged?.Invoke(this);
         return amount;
     }
 
@@ -54,6 +58,7 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable
         if (amount <= 0) return 0;
         storedAmount -= amount;
         RulerController.Instance?.ModifyResource(resourceType, true, amount);
+        OnStorageChanged?.Invoke(this);
         return amount;
     }
 }

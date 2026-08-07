@@ -388,13 +388,6 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
-        // 装备厂：装备管理入口按钮（打开 EquipmentPanel）
-        if (def.id == "Armory")
-        {
-            AddFunctionButton("装备管理", OnEquipmentClicked);
-            any = true;
-        }
-
         // 训练设施：展示可训练项 + 打开训练面板入口（数据驱动：有训练配置即视为训练设施，避免硬编码 id）
         var trainings = TrainingSystem.Instance != null ? TrainingSystem.Instance.GetTrainings(def.id) : null;
         if (trainings != null && trainings.Count > 0)
@@ -420,7 +413,22 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
+        // 一次性资源点（QQQ.2 T19 / DR-11）：采集入口——显示资源类型 + 预计耗时，确认后发布 Gather 任务
+        if (def.isConsumable)
+        {
+            AddFunctionRow("资源", $"{def.outputResource} × {GatherAmount()}");
+            AddFunctionRow("预计耗时", $"{def.gatherSeconds:F0} 秒");
+            AddFunctionButton(_target.isBeingGathered ? "采集中…" : "采集", OnGatherClicked);
+            any = true;
+        }
+
         _functionArea.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    /// <summary>一次性资源点采集量（对齐调度器 gatherAmount，数据驱动）。</summary>
+    private static int GatherAmount()
+    {
+        return TaskScheduler.HasInstance ? TaskScheduler.Instance.gatherAmount : 5;
     }
 
     /// <summary>功能区加一行「标签：值」统计（复用 info-row/info-cell 样式）。</summary>
@@ -479,18 +487,12 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         UIManager.Instance?.Push(trainingPanel, _lastCtx);
     }
 
-    /// <summary>装备厂「装备管理」按钮：推送 EquipmentPanel 入栈（透传本次交互 ctx）。</summary>
-    private void OnEquipmentClicked()
+    /// <summary>采集按钮（QQQ.2 T19 / DR-11）：确认采集 → 锁定资源点 → 调度器下 tick 派发 Gather；关闭面板。</summary>
+    private void OnGatherClicked()
     {
         if (_target == null) return;
-        var equipmentPanel = FindObjectOfType<EquipmentPanel>();
-        if (equipmentPanel == null)
-        {
-            Debug.LogWarning("[BuildingPanel] 未找到 EquipmentPanel（场景缺少挂载 EquipmentPanel + UIDocument 的 GameObject）");
-            return;
-        }
-        equipmentPanel.SetTarget(_target);
-        UIManager.Instance?.Push(equipmentPanel, _lastCtx);
+        _target.StartGather();
+        UIManager.Instance?.CloseCurrent();
     }
 
     private void OnCloseClicked()

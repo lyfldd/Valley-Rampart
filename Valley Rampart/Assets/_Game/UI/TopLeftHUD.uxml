@@ -28,5 +28,7 @@
         </ui:VisualElement>
         <!-- 人口入口按钮（打开 PopulationPanel） -->
         <ui:Button name="population-button" text="人口" class="pop-button" />
+        <!-- 仓库入口按钮（打开 WarehousePanel，QQQ.2 §需求7） -->
+        <ui:Button name="warehouse-button" text="仓库" class="pop-button" />
     </ui:VisualElement>
 </ui:UXML>

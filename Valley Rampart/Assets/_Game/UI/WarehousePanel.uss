@@ -1,0 +1,103 @@
+/* ===== WarehousePanel 仓库面板 ===== */
+
+.wh-root {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.55);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.wh-panel {
+    width: 380px;
+    max-height: 82%;
+    background-color: var(--color-bg-panel);
+    border-radius: 10px;
+    padding: 20px;
+    align-items: stretch;
+    border-width: 1px;
+    border-color: rgb(60, 60, 80);
+}
+
+/* ===== 标题区（可拖动窗口把手） ===== */
+.wh-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(60, 60, 80);
+    cursor: grab;
+}
+
+.wh-header:active {
+    cursor: grabbing;
+}
+
+.wh-title {
+    font-size: 22px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+}
+
+.wh-close {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
+    color: var(--color-text-muted);
+    background-color: transparent;
+    border-radius: 4px;
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.wh-close:hover {
+    background-color: var(--color-button-hover);
+    color: var(--color-danger);
+}
+
+.wh-hint {
+    font-size: var(--font-size-small);
+    color: var(--color-text-muted);
+    margin-bottom: 8px;
+}
+
+/* ===== 空提示 ===== */
+.wh-empty-hint {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+    -unity-font-style: italic;
+    text-align: center;
+    padding: 24px 0;
+}
+
+/* ===== 资源存储列表（可滚动） ===== */
+.wh-storage-list {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: scroll;
+}
+
+.wh-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    padding: 10px 12px;
+    background-color: rgb(28, 28, 40);
+    border-radius: 6px;
+}
+
+.wh-row-name {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+}
+
+.wh-row-value {
+    font-size: var(--font-size-label);
+    color: var(--color-accent);
+}

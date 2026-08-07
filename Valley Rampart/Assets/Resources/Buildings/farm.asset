@@ -28,7 +28,7 @@ MonoBehaviour:
   isObstacle: 0
   producer:
     kind: 0
-    rate: 15
+    rate: 2
     capacity: 100
   combat:
     attack: 0

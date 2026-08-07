@@ -115,6 +115,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     // ===== B2 治疗（对齐 sim SimBrain._healTimer）=====
     private float _healTimer;
 
+    // ===== QQQ.2 T2 / DR-10 空闲自动说话计时器 =====
+    private float _talkTimer;
+    private float _nextTalkDelay = 20f;
+
     /// <summary>
     /// 是否空闲可派任务（3.3.5 资源流转调度中心用）。
     /// 焦点无效 / 焦点是 Wander（漫游）/ Follow（跟随非任务）→ 空闲可派；
@@ -189,6 +193,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// <summary>威胁因子（上一帧 rawFactor，连续 0-1，映射训练侧 ThreatFactor）。</summary>
     public float ThreatFactor => _lastRaw;
 
+    /// <summary>是否存活（QQQ.3 B8-8 / LC-N5：调度器判工人失效用，池化下死单位引用非 null，需用血量判）。</summary>
+    public bool IsAlive => _controller != null && _controller.IsAlive;
+
     /// <summary>全局调参 SO（WorkerTask 读 abandonThreshold/taskResume*/arrivalThreshold）。</summary>
     public AttentionTuningConfig Config => _config;
 
@@ -196,8 +203,26 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     public Vector2 HomePointWorld => _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
 
     // ===== 初始化 =====
+    /// <summary>
+    /// 出池洗涤（QQQ.3 B8-3 / LC-N1）：清攻击/追击目标、受击溯源、任务标记、静态目标、任务刺激。
+    /// 由 Init 首行调用（出池总是走 brain.Init，无需在池层额外 Reset）。
+    /// </summary>
+    public void ResetForReuse()
+    {
+        IsKingdomTaskWorker = false;        // 任务标记复位（防工人永久瘫痪 LC-N2 同根）
+        _currentAttackTarget = null;        // 攻击目标复位
+        _chaseTarget = null;                // 追击目标复位
+        _lastAggressor = null;              // 受击溯源复位
+        _recentHitCount = 0;
+        _lastHitTime = 0f;
+        if (_attention != null) _attention.ClearAll();   // 清空所有刺激（威胁/任务/感知/动态）+ 焦点，防上辈子刺激跨世泄漏
+    }
+
     public void Init(NpcProfessionDef profession)
     {
+        // QQQ.3 B8-3 / LC-N1：出池洗涤——清攻击/追击目标、受击溯源、任务标记、任务刺激
+        ResetForReuse();
+
         _profession = profession;
         _controller = GetComponent<UnitController>();
         _self = GetComponent<IDamageable>();
@@ -534,6 +559,33 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ⑥ 切换历史记录 + 缓存 _lastCtx（IAIDebugInfo 兼容）
         RecordSwitchHistory(currentTime);
         _lastCtx = ctx;
+
+        // QQQ.2 T2 / DR-10：闲逛自动说话（IsIdleForTask + SafetyScore>0.6 + 非 Caution）
+        TickAutoTalk(in ctx, dt);
+    }
+
+    /// <summary>
+    /// QQQ.2 T2 / DR-10：闲逛自动说话。
+    /// 触发条件：IsIdleForTask（无任务/战斗焦点）+ SafetyScore > talkSafetyThreshold(0.6) + 非 Caution。
+    /// 15-30s 随机计时器 → PickTalkLine() 冒一句；多 NPC 数量管控（视野裁剪/上限6/轮转/冷却8s）由 OverheadSpeechManager 负责。
+    /// 战斗/任务/Caution 态复位计时不冒字（不打断战斗/任务）。
+    /// </summary>
+    private void TickAutoTalk(in FactorContext ctx, float dt)
+    {
+        if (!IsIdleForTask || ctx.IsCaution || ctx.SafetyScore < ctx.Config.talkSafetyThreshold)
+        {
+            _talkTimer = 0f;
+            _nextTalkDelay = Random.Range(ctx.Config.talkIntervalMin, ctx.Config.talkIntervalMax);
+            return;
+        }
+        _talkTimer += dt;
+        if (_talkTimer < _nextTalkDelay) return;
+        _talkTimer = 0f;
+        _nextTalkDelay = Random.Range(ctx.Config.talkIntervalMin, ctx.Config.talkIntervalMax);
+
+        if (_controller == null || _controller.npcId == 0) return;
+        string line = _controller.PickTalkLine();
+        OverheadSpeechManager.Instance.TrySpeak(_controller.transform, _controller.npcId, line, _self.GetPosition());
     }
 
     /// <summary>组装基础 FactorContext（世界/自身原始状态）</summary>
@@ -542,6 +594,28 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         float hpRatio = _self.MaxHp > 0 ? (float)_self.CurrentHp / _self.MaxHp : 0f;
         bool isNight = IsNight();
         Vector2 homePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
+
+        // QQQ.2 T8 / DR-21：统一安全系数（合并 SafetyStimulus/ThreatHysteresis/Caution 的空闲分布决策）
+        // ① 城墙内判定（多段/无城墙都支持，GridSystem 双表示查询）
+        bool insideWall = GridSystem.Instance != null && GridSystem.Instance.IsInsideWall(_self.GetPosition());
+        // ② 友军加成：armyRadiusCells(8) 内友军 ≥ protectionUpThresholds[0](3)（复用保护阈值）
+        int armyGate = (_config != null && _config.protectionUpThresholds != null && _config.protectionUpThresholds.Length > 0)
+            ? _config.protectionUpThresholds[0] : 3;
+        int armyAllyCount = CountAlliesWithinRadius(_config.armyRadiusCells * GetCellSize());
+        // ③ 距王国锚点安全因子：近家=1，0.02/格衰减，最低 0.1
+        float kingdomDistFactor = SafetyScoreFormulas.KingdomDistanceFactor(
+            Mathf.Max(0f, Vector2.Distance(_self.GetPosition(), homePoint)) / Mathf.Max(0.1f, GetCellSize()),
+            _config.kingdomDistMin, _config.kingdomDistPerCell);
+        // ④ 合成（threatFactor = 上一帧 rawFactor，0-1 连续）
+        float safetyScore = SafetyScoreFormulas.ComputeSafetyScore(
+            _config.baseSafety, insideWall, _config.wallWeight,
+            armyAllyCount >= armyGate, _config.armyWeight, kingdomDistFactor,
+            _lastRaw, _config.threatPenaltyScale,
+            GetNightFactor(), _config.nightPenaltyScale);
+        // ⑤ 撤退安全锚点：低分 → 最近安全锚点（边界遇敌往内撤）；高分 → HomePoint（正常归巢）
+        Vector2 safeAnchor = RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
+            _self.GetPosition(), safetyScore, _config.wanderThreshold, homePoint);
+
         // M1 决策核提取：核内吃快照（接缝 4），壳每 tick 从 SO 快照保证滑块实时性
         return new FactorContext
         {
@@ -575,10 +649,27 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 ? Mathf.Clamp01(_followProvider.Stimulus.Intensity / _config.formationOrderIntensity)
                 : 0f,
             SafetyFactor = ComputeSafetyFactor(hpRatio, homePoint),
+            // QQQ.2 T8 / DR-21：统一安全系数 + 撤退安全锚点
+            SafetyScore = safetyScore,
+            SafeAnchorPos = Vector2XUnity.FromUnity(safeAnchor),
             // D1 修复：保护力加权和（3.7 保护矩阵，ProtectionHysteresisComponent 消费；
             // 此前不填充恒 0 → HasProtection 恒 false，保护机制是死代码）
             ProtectPowerSum = SumNearbyProtectPower(),
         };
+    }
+
+    /// <summary>QQQ.2 T8 / DR-21：armyRadiusWorld 内存活友军数（友军加成判定，复用感知列表免二次查询）。</summary>
+    private int CountAlliesWithinRadius(float radiusWorld)
+    {
+        int count = 0;
+        Vector2 myPos = _self.GetPosition();
+        for (int i = 0; i < _nearbyAllies.Count; i++)
+        {
+            var a = _nearbyAllies[i];
+            if (a == null || a.CurrentHp <= 0) continue;
+            if (Vector2.Distance(myPos, a.GetPosition()) <= radiusWorld) count++;
+        }
+        return count;
     }
 
     /// <summary>3.7 保护力加权和：身边友军 protectPower 之和（真保护判定输入，替代友军数；对齐 sim SumNearbyProtectPower）。</summary>

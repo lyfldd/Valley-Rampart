@@ -19,14 +19,14 @@ MonoBehaviour:
     upgradeBuildings:
     - Granary
     - House
-    unlockBuildings: []
+    unlockBuildings:
+    - Well
   - tier: 2
     requiredCastleLevel: 2
     upgradeBuildings:
     - Granary
     - House
-    unlockBuildings:
-    - Well
+    unlockBuildings: []
   - tier: 3
     requiredCastleLevel: 3
     upgradeBuildings:
