@@ -33,3 +33,5 @@ MonoBehaviour:
     def: {fileID: 11400000, guid: 3625478e6de9ba740b90db1bf0111f24, type: 2}
   - type: 11
     def: {fileID: 11400000, guid: b0d1ffe0afa9a6644a4c18722efc0c67, type: 2}
+  - type: 12
+    def: {fileID: 11400000, guid: 75da74d74dc4e9d4383ffdadbf81698e, type: 2}

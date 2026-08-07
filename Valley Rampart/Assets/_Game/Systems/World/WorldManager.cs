@@ -223,6 +223,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         // === Step 8.5: 废弃城堡占位（2 格，中心区块）===
         PlaceAbandonedCastle(map.regions, abandonedCastleRegionIdx, cellCount);
 
+        // === Step 8.6: 流浪汉营地占位（3.5.1 §4.1 E-S7，仅玩家主图）===
+        if (isPlayerHome) PlaceVagrantCamps(rng, map, abandonedCastleRegionIdx, cellCount);
+
         // === Step 9: 出怪口/裂隙放置 ===
         PlaceRifts(map, M, bigTerrain);
 
@@ -557,6 +560,103 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             cellWidth = 2,  // 占 2 格
             grade = ResourceGrade.Normal
         });
+    }
+
+    // ========================================================================
+    //  流浪汉营地占位（3.5.1 §4.1，E-S7）
+    // ========================================================================
+
+    private KingdomConfig _kingdomConfig; // 懒加载（营地数值 SO 化，so-data-driven）
+
+    KingdomConfig GetKingdomConfigLazy()
+    {
+        if (_kingdomConfig == null) _kingdomConfig = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        return _kingdomConfig;
+    }
+
+    /// <summary>
+    /// 放置流浪汉营地（3.5.1 §4.1 E-S7）：开局 2-3 个（KingdomConfig SO 可调）。
+    /// 3.2.1 区块规则：近王国区块必有 1 个（按距城堡排序取最近可落区块）；
+    /// 禁落核心区块（城堡区块排除）；其余营地不落与已用区块距离&lt;2 的区块。
+    /// 营地占位不与现有 placeholder 重叠，避开区块两端（战场缓冲）。
+    /// </summary>
+    void PlaceVagrantCamps(System.Random rng, MapData map, int castleIdx, int cellCount)
+    {
+        var cfg = GetKingdomConfigLazy();
+        if (cfg == null || cfg.vagrantCampMax <= 0 || map.regions.Count <= 1) return;
+
+        int want = rng.Next(cfg.vagrantCampMin, cfg.vagrantCampMax + 1);
+        want = Mathf.Clamp(want, 1, map.regions.Count - 1);
+
+        // 候选区块：排除城堡核心区块，按与城堡的距离升序（保证第一个落近王国区块）
+        var candidates = new List<int>();
+        for (int i = 0; i < map.regions.Count; i++)
+            if (i != castleIdx) candidates.Add(i);
+        candidates.Sort((a, b) => Mathf.Abs(a - castleIdx).CompareTo(Mathf.Abs(b - castleIdx)));
+
+        var usedRegions = new List<int>();
+        int placed = 0;
+
+        for (int ci = 0; ci < candidates.Count && placed < want; ci++)
+        {
+            int idx = candidates[ci];
+
+            // 已落过营地后：跳过与已用区块距离 < 2 的区块（拉开分布）
+            if (placed > 0)
+            {
+                bool tooClose = false;
+                for (int u = 0; u < usedRegions.Count; u++)
+                    if (Mathf.Abs(usedRegions[u] - idx) < 2) { tooClose = true; break; }
+                if (tooClose) continue;
+            }
+
+            int slot = FindCampSlot(map.regions[idx], cellCount, cfg.vagrantCampFootprint, rng);
+            if (slot < 0) continue;
+
+            map.regions[idx].resources.Add(new BuildingPlaceholder
+            {
+                type = BuildingType.VagrantCamp,
+                category = BuildingCategory.SpecialPoint,
+                localCellX = slot,
+                cellWidth = cfg.vagrantCampFootprint,
+                grade = ResourceGrade.Normal
+            });
+            usedRegions.Add(idx);
+            placed++;
+        }
+
+        Debug.Log($"[WorldManager] 流浪汉营地放置: {placed}/{want}（城堡区块={castleIdx}, 区块=[{string.Join(",", usedRegions)}]）");
+    }
+
+    /// <summary>在区块内找 footprint 宽的不重叠窗口（避开区块两端与现有占位/裂隙，随机起点保种子确定性）。</summary>
+    int FindCampSlot(Region region, int cellCount, int footprint, System.Random rng)
+    {
+        if (region == null || footprint < 1) return -1;
+        if (region.resources == null) region.resources = new List<BuildingPlaceholder>();
+
+        // 与 PlaceBuildings 同规则避开两端（战场缓冲）：合法起点 ∈ [1, cellCount-1-footprint]
+        int maxStart = cellCount - 1 - footprint;
+        if (maxStart < 1) return -1;
+
+        var validStarts = new List<int>();
+        for (int s = 1; s <= maxStart; s++)
+        {
+            bool ok = true;
+            for (int x = s; x < s + footprint && ok; x++)
+            {
+                if (x == region.riftCellX) { ok = false; break; }
+                for (int p = 0; p < region.resources.Count; p++)
+                {
+                    var b = region.resources[p];
+                    if (b == null) continue;
+                    int w = Mathf.Max(1, b.cellWidth);
+                    if (x >= b.localCellX && x < b.localCellX + w) { ok = false; break; }
+                }
+            }
+            if (ok) validStarts.Add(s);
+        }
+        if (validStarts.Count == 0) return -1;
+        return validStarts[rng.Next(validStarts.Count)];
     }
 
     // ========================================================================

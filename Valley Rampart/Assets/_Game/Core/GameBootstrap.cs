@@ -44,6 +44,7 @@ public class GameBootstrap : MonoBehaviour
         _ = TaxSystem.Instance;
         _ = TradeSystem.Instance;
         _ = RanchSystem.Instance;
+        _ = VagrantCampSystem.Instance;   // 3.5.1 E-S7：流浪汉营地补员/招募/抵达入册
         _ = EquipmentSystem.Instance;
         _ = SiegeProductionSystem.Instance;
 
@@ -133,6 +134,9 @@ public class GameBootstrap : MonoBehaviour
             // 3.5.1 §3.3（E-S3）：开局人口实体化——1 君主已在 InitializeNewGame 内生成于城堡旁，
             // 此处补生成 4 工人 + 5 居民（KingdomConfig），人口=实体数（注册表派生）
             PopulationSystem.Instance.SpawnInitialEntities();
+
+            // 3.5.1 §4.1（E-S7）：营地初始流浪汉生成（地图已就绪，营地由 WorldManager 占位实例化）
+            VagrantCampSystem.Instance.OnNewGameMapReady();
             Debug.Log($"[GameBootstrap] 应用新建游戏配置: "
                 + $"ruler={config.rulerName}, seed={config.mapSeed}, difficulty={config.difficulty}");
 

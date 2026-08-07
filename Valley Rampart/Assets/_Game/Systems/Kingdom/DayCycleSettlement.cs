@@ -50,6 +50,10 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         if (RanchSystem.Instance != null)
             RanchSystem.Instance.OnNewDay();
 
+        // 流浪汉营地每日补员（3.5.1 §4.1 E-S7：不满补员，刷满停）
+        if (VagrantCampSystem.Instance != null)
+            VagrantCampSystem.Instance.OnNewDay();
+
         // P1 占位：研究 / 装备 在此追加
     }
 }

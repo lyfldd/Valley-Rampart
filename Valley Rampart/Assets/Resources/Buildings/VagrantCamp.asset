@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
+  m_Name: VagrantCamp
+  m_EditorClassIdentifier: 
+  id: VagrantCamp
+  displayName: "\u6D41\u6D6A\u6C49\u8425\u5730"
+  description: "\u8352\u91CE\u6D41\u6D6A\u6C49\u805A\u5C45\u5730\u3002\u70B9\u51FB\u6D41\u6D6A\u6C49\u82B1
+    1 \u7CAE\u53EF\u62DB\u52DF\u4E3A\u5C45\u6C11\uFF083.5.1 \xA74.1 \u51B3\u7B5613\uFF09\u3002\u6BCF\u65E5\u8865\u5458\uFF0C\u5237\u6EE1\u505C\u3002"
+  faction: 0
+  role: 4
+  cost:
+    gold: 0
+    stone: 0
+    wood: 0
+    food: 0
+  footprint: {x: 4, y: 1}
+  allowedTerrain: 
+  moduleType: 2
+  isObstacle: 0
+  producer:
+    kind: 0
+    rate: 0
+    capacity: 0
+  combat:
+    attack: 0
+    defense: 0
+    maxHp: 0
+    range: 0
+    damageType: 0
+  levels: []
+  crewRequired: 0
+  crewRadiusCells: 0
+  outputResource: 0
+  isResourceNode: 0
+  concurrentWorkers: 0
+  trainingSlots: 0
+  unlockLevel: 1
+  interactableType: 0
+  isPlayerBuilt: 0
+  isDestructible: 1
+  sourceType: 12
+  isConsumable: 0
+  gradeScale:
+  - 0.7
+  - 1
+  - 1.5
+  prefab: {fileID: 0}

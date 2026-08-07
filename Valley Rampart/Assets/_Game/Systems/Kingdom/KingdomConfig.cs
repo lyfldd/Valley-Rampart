@@ -112,6 +112,26 @@ public class KingdomConfig : ScriptableObject
     [Tooltip("将军训练限量（§10 将军限量 2，可配置）")]
     public int generalLimit = 2;                  // 将军限量
 
+    [Header("流浪汉营地（3.5.1 §4.1，E-S7：前期人口来源）")]
+    [Tooltip("开局随机生成营地数下限")]
+    public int vagrantCampMin = 2;
+    [Tooltip("开局随机生成营地数上限")]
+    public int vagrantCampMax = 3;
+    [Tooltip("营地占位格数（小区块）")]
+    public int vagrantCampFootprint = 4;
+    [Tooltip("单营地流浪汉上限（刷满停补）")]
+    public int campMaxVagrants = 3;
+    [Tooltip("单营地初始流浪汉数")]
+    public int campInitialVagrants = 2;
+    [Tooltip("营地不满时每日补员数")]
+    public int campDailyRefill = 2;
+    [Tooltip("流浪汉与营地关联半径（格）：半径内计入该营地人口")]
+    public float campVagrantRadiusCells = 4f;
+    [Tooltip("招募流浪汉粮耗（决策13：花 1 粮招募即变居民）")]
+    public int recruitFoodCost = 1;
+    [Tooltip("招募走回抵达半径（格）：到王国锚点此范围内正式纳入人口")]
+    public float recruitArriveRadiusCells = 3f;
+
     [Header("医院（§13.3 受伤恢复 + 幸福）")]
     [Tooltip("医院存在时，每日饱食回血额外加成（受伤单位恢复加快）")]
     public int hospitalRecoveryBonus = 5;         // 医院每日额外回血

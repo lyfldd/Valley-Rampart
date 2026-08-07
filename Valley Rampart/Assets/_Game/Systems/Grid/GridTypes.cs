@@ -110,7 +110,9 @@ public enum BuildingType
     Interactable,// 交互建筑（未来）
     // 功能
     Rift,        // 裂隙（出怪口）
-    CastleCore   // 主城
+    CastleCore,  // 主城
+    // ===== 3.5.1 实体化（E-S7，末尾追加保持 int 稳定）=====
+    VagrantCamp  // 流浪汉营地（3.5.1 §4.1：开局 2-3 个，近王国区块必有 1 个，禁落核心区块）
 }
 
 /// <summary>资源点等级（影响产出/获得量）。</summary>
