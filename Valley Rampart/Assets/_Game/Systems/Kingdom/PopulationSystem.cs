@@ -135,13 +135,57 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         if (uc != null) UnregisterEntity(uc);
     }
 
-    // ===== 开局（E-S3 接实体生成；此处保留冷却初始化）=====
+    // ===== 开局实体生成（3.5.1 §3.3，E-S3）=====
 
-    /// <summary>初始化人口系统（新建游戏）。实体生成见 SpawnInitialEntities（E-S3）。</summary>
-    public void SetInitialPopulation(int count)
+    /// <summary>
+    /// 新建游戏生成开局人口实体（君主由 RulerController.SpawnMonarch 先行生成于城堡旁；
+    /// 此处生成 4 工人 + 5 居民于城堡两侧）。实体经 UnitSpawnedEvent 自动入册，人口=10。
+    /// </summary>
+    public void SpawnInitialEntities()
     {
-        BirthCooldownDays = LifeConfig() != null ? LifeConfig().birthCooldownDefault : 5;
-        Debug.Log($"[PopulationSystem] 开局人口系统就绪（目标实体数 {count}，实体由 SpawnInitialEntities 生成）");
+        var cfg = LifeConfig();
+        if (cfg == null || UnitFactory.Instance == null || WorldManager.Instance == null)
+        {
+            Debug.LogError("[PopulationSystem] SpawnInitialEntities 前置缺失（config/UnitFactory/WorldManager），跳过开局实体生成！");
+            return;
+        }
+
+        Vector2 anchor = WorldManager.Instance.GetKingdomAnchorWorld();
+        if (anchor == Vector2.zero)
+        {
+            Debug.LogError("[PopulationSystem] 王国锚点不可用（地图未就绪），开局实体生成跳过！");
+            return;
+        }
+
+        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize : 2.26f;
+        float gap = Mathf.Max(0.5f, cfg.initialSpawnGapCells) * cellSize;
+
+        int idx = 0;
+        int ok = 0;
+        for (int i = 0; i < cfg.initialWorkerCount; i++)
+            if (SpawnAtAnchorSide(Faction.Human_Player, Occupation.Worker, idx++, anchor, gap)) ok++;
+        for (int i = 0; i < cfg.initialResidentCount; i++)
+            if (SpawnAtAnchorSide(Faction.Human_Player, Occupation.Resident, idx++, anchor, gap)) ok++;
+
+        BirthCooldownDays = cfg.birthCooldownDefault;
+        Debug.Log($"[PopulationSystem] 开局实体生成完成：{ok}/{cfg.initialWorkerCount + cfg.initialResidentCount} " +
+                  $"（+君主=目标 {cfg.initialPopulation}；当前注册人口 {PopulationCount}）");
+    }
+
+    /// <summary>城堡两侧交替落位生成单个实体（idx 偶左奇右，逐圈外扩）。</summary>
+    private bool SpawnAtAnchorSide(Faction faction, Occupation occ, int idx, Vector2 anchor, float gap)
+    {
+        float side = (idx % 2 == 0) ? -1f : 1f;
+        int rank = idx / 2 + 1;
+        Vector2 pos = new Vector2(anchor.x + side * rank * gap, anchor.y);
+        GameObject go = UnitFactory.Instance.SpawnUnit(faction, occ, pos);
+        if (go == null)
+        {
+            Debug.LogError($"[PopulationSystem] 开局实体生成失败：{faction}_{occ}（缺资产或 Prefab）");
+            return false;
+        }
+        return true;
     }
 
     /// <summary>每日结算（DayCycleSettlement 统一入口调用）。

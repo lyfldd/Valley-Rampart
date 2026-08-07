@@ -130,10 +130,9 @@ public class GameBootstrap : MonoBehaviour
             LoadManager.Instance.InitializeNewGame(config);
             SaveManager.Instance.ResetAutoSaveCounter();
 
-            // 3.5 步骤5：新建游戏设置开局人口（KingdomConfig）
-            var kingdomConfig = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
-            if (kingdomConfig != null)
-                PopulationSystem.Instance.SetInitialPopulation(kingdomConfig.initialPopulation);
+            // 3.5.1 §3.3（E-S3）：开局人口实体化——1 君主已在 InitializeNewGame 内生成于城堡旁，
+            // 此处补生成 4 工人 + 5 居民（KingdomConfig），人口=实体数（注册表派生）
+            PopulationSystem.Instance.SpawnInitialEntities();
             Debug.Log($"[GameBootstrap] 应用新建游戏配置: "
                 + $"ruler={config.rulerName}, seed={config.mapSeed}, difficulty={config.difficulty}");
 

@@ -158,14 +158,20 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     // 在出生位置创建君主单位，场景上没有君主时代码兜底
     // 流程：验证已有引用 → 清理重复 → 确保数据 → 查找已有 → 代码创建
+    // 3.5.1 E-S3：新建游戏君主必落废弃城堡旁——历史遗留（跨局残留/场景预置君主停在旧位置）
+    // 通过绑定后统一 Teleport(spawnPos) 根治。
     public void SpawnMonarch()
     {
+        // 出生位置先算好（废弃城堡左侧 1 格；地图未就绪回退 Inspector spawnPosition）
+        Vector2 spawnPos = ResolveSpawnPosition();
+
         // Step 0: 验证已有引用是否仍然有效
         if (monarchUnit != null)
         {
             if (monarchUnit.gameObject != null)  // Unity null-check：对象未被销毁
             {
-                Debug.LogWarning("[RulerController] 君主已存在，跳过重复创建。");
+                Debug.LogWarning("[RulerController] 君主已存在，跳过重复创建（强制归位城堡旁）。");
+                monarchUnit.Teleport(spawnPos);
                 return;
             }
             else
@@ -209,13 +215,14 @@ public class RulerController : Singleton<RulerController>, ISaveable
             {
                 Debug.Log($"[RulerController] 绑定到已初始化的君主: {monarchUnit.name}");
             }
+            // E-S3：绑定后强制归位城堡旁（根治跨局残留/预置单位停在旧位置的老毛病）
+            monarchUnit.Teleport(spawnPos);
+            Debug.Log($"[RulerController] 君主已归位废弃城堡旁: {spawnPos}");
             return;
         }
 
         // Step 4: 场景中确实没有君主，代码兜底创建
         // Prefab 已由 LoadManager 阶段1 预加载，无需再 PreloadAll
-        // 君主初始位置 = 废弃城堡左侧 1 个小区块距离（固定左边），地图未就绪时回退 Inspector spawnPosition
-        Vector2 spawnPos = ResolveSpawnPosition();
         Debug.Log($"[RulerController] 场景中未找到君主，通过 UnitFactory 创建（位置={spawnPos}）...");
         GameObject rulerGo = LoadManager.Instance.SpawnUnit(rulerData, spawnPos);
         if (rulerGo != null)
@@ -233,32 +240,20 @@ public class RulerController : Singleton<RulerController>, ISaveable
     }
 
     /// <summary>
-    /// 计算君主出生位置：废弃城堡左侧 1 个小区块距离（固定左边）。
-    /// 城堡占 2 格（CastleCore 占位 localCellX 起），君主取其左侧第 1 格的世界坐标。
+    /// 计算君主出生位置：废弃城堡左侧 1 格（固定左边），走 WorldManager 王国锚点（3.5.1 E-S3 统一）。
     /// 地图未就绪或找不到城堡时，回退 Inspector 配置的 spawnPosition。
     /// </summary>
     private Vector2 ResolveSpawnPosition()
     {
         var wm = WorldManager.Instance;
         var grid = GridSystem.Instance;
-        if (wm != null && wm.ActiveMap != null && grid != null && grid.Config != null)
+        if (wm != null && grid != null && grid.Config != null)
         {
-            var map = wm.ActiveMap;
-            int castleIdx = MapGenRules.GetCastleRegionIndex(map.regions.Count);
-            if (castleIdx >= 0 && castleIdx < map.regions.Count)
+            Vector2 anchor = wm.GetKingdomAnchorWorld();
+            if (anchor != Vector2.zero)
             {
-                var region = map.regions[castleIdx];
-                if (region.resources != null)
-                {
-                    foreach (var bp in region.resources)
-                    {
-                        if (bp == null || bp.category != BuildingCategory.CastleCore) continue;
-                        int castleCellX = region.cellStartX + bp.localCellX;   // 城堡起点格
-                        int rulerCellX = castleCellX - 1;                      // 左侧 1 格
-                        float cellSize = grid.Config.cellSize;
-                        return new Vector2((rulerCellX + 0.5f) * cellSize, -3f);
-                    }
-                }
+                // 锚点=城堡中心（2 格交界）；左侧 1 格 = 锚点左移 1.5 格
+                return new Vector2(anchor.x - 1.5f * grid.Config.cellSize, anchor.y);
             }
         }
         return spawnPosition;

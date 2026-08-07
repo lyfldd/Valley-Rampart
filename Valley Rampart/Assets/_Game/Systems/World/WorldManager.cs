@@ -560,6 +560,38 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     }
 
     // ========================================================================
+    //  王国锚点（3.5.1 E-S3：君主出生/开局实体/招募走回 共用）
+    // ========================================================================
+
+    /// <summary>
+    /// 王国锚点世界坐标 = 废弃城堡中心（地面层 y）。
+    /// 地图未就绪返回 Vector2.zero（调用方自行兜底）。
+    /// </summary>
+    public Vector2 GetKingdomAnchorWorld()
+    {
+        var map = ActiveMap;
+        var grid = GridSystem.Instance;
+        if (map == null || grid == null || grid.Config == null) return Vector2.zero;
+
+        int castleIdx = MapGenRules.GetCastleRegionIndex(map.regions.Count);
+        if (castleIdx < 0 || castleIdx >= map.regions.Count) return Vector2.zero;
+
+        var region = map.regions[castleIdx];
+        if (region.resources == null) return Vector2.zero;
+
+        for (int i = 0; i < region.resources.Count; i++)
+        {
+            var bp = region.resources[i];
+            if (bp == null || bp.category != BuildingCategory.CastleCore) continue;
+            float cs = grid.Config.cellSize;
+            // 城堡占 2 格（localCellX 起）：中心 x = 两格交界处
+            float centerX = (region.cellStartX + bp.localCellX + 1f) * cs;
+            return new Vector2(centerX, grid.CoordToWorld(new GridCoord(0, 0)).y);
+        }
+        return Vector2.zero;
+    }
+
+    // ========================================================================
     //  裂隙放置（3.2.1 第 6.10 节）
     // ========================================================================
 

@@ -16,7 +16,14 @@ public class KingdomConfig : ScriptableObject
     public TradeQuotaDef[] merchantQuotas;
 
     [Header("人口系统（数据层先行，§13.5）")]
-    public int initialPopulation = 10;       // 开局人口（1 君主 + 4 工人 + 5 废人）
+    public int initialPopulation = 10;       // 开局人口（1 君主 + 4 工人 + 5 居民，§3.3）
+    [Header("3.5.1 §3.3 开局人口分布（实体化 E-S3：1 君主由 SpawnMonarch 生成，此处为其余实体）")]
+    [Tooltip("开局工人数（基础生产各 1）")]
+    public int initialWorkerCount = 4;
+    [Tooltip("开局居民数（原废人改名）")]
+    public int initialResidentCount = 5;
+    [Tooltip("开局实体出生间距（小区块数，城堡两侧交替散布）")]
+    public float initialSpawnGapCells = 1f;
     public int birthHappinessThreshold = 60;   // 整体幸福 > 此值才生育
     public int birthSatietyThreshold = 50;     // 平均饱食 > 此值才生育
     public int birthCouplesDivisor = 2;        // 人口/2 = 对数
