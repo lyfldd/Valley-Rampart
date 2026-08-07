@@ -29,8 +29,10 @@ public class KingdomConfig : ScriptableObject
     public int birthCouplesDivisor = 2;        // 人口/2 = 对数
     public int birthIntervalDays = 5;          // 每对每 5 天 +1 人（旧档占位，已被 birthPairCooldownDays 对齐取代）
     public int birthCooldownDefault = 5;       // 初始冷却天数（占位）
-    [Tooltip("3.5 P0-1：单对生育冷却天数（文档 10 天单对冷却）。计数制下作为全局生育冷却倒计时对齐")]
+    [Tooltip("3.5 P0-1：单对生育冷却天数（文档 10 天单对冷却）。实体制下为个体配对冷却（lastBirthDay + N <= 当前天 才可再配对）")]
     public int birthPairCooldownDays = 10;     // 3.5 P0-1：单对 10 天冷却
+    [Tooltip("3.5.1 §4.2（E-S6）：小孩成长所需天数事件次数（累积 N 次长成居民）")]
+    public int childGrowthDayEvents = 2;       // 小孩长大：天数事件 2 次
     [Tooltip("3.5 P0-1：NPC 死亡整体幸福跌幅系数 K（avgHappiness ×= (1 - K/当前人口)），防雪崩")]
     public float deathHappinessK = 0.5f;       // 3.5 P0-1：死亡扣幸福 K=0.5
 

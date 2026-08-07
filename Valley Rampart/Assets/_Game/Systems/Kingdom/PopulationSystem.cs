@@ -207,6 +207,9 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         if (SatietySystem.Instance != null)
             AvgSatiety = SatietySystem.Instance.GetAverageSatiety();
 
+        // E-S6：小孩成长天数事件（先于生育结算，当日新生小孩不计当日）
+        TickChildGrowth(cfg);
+
         int pairCooldown = cfg.birthPairCooldownDays > 0 ? cfg.birthPairCooldownDays : cfg.birthIntervalDays;
 
         BirthCooldownDays--;
@@ -288,6 +291,28 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             }
         }
         return WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
+    }
+
+    /// <summary>
+    /// 小孩长大（3.5.1 §4.2/决策16，E-S6）：天数事件（每日结算）累积 childGrowthDayEvents 次（SO，默认 2）
+    /// → SetOccupation(Resident) 长成居民（占位可调，非精确时刻）。
+    /// </summary>
+    private void TickChildGrowth(KingdomConfig cfg)
+    {
+        int need = Mathf.Max(1, cfg.childGrowthDayEvents);
+        for (int i = 0; i < _entities.Count; i++)
+        {
+            var u = _entities[i];
+            if (u == null || !u.IsAlive) continue;
+            if (u.EffectiveOccupation != Occupation.Child) continue;
+            u.ChildGrowthDays++;
+            if (u.ChildGrowthDays >= need)
+            {
+                u.SetOccupation(Occupation.Resident);
+                u.ChildGrowthDays = 0;
+                Debug.Log($"[PopulationSystem] 小孩长大：天数事件累积 {need} 次 → 居民（{u.name}）");
+            }
+        }
     }
 
     // ===== ISaveable, Global =====
