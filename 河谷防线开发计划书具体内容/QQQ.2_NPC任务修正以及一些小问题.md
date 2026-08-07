@@ -522,3 +522,27 @@ enum KingdomDestType { None, Treasury, NearestWarehouse, WaterNetwork, SpecificB
 ### 笔误修正
 
 - §10.1 `enum KingDoDestType` → `enum KingdomDestType`（漏 m）
+
+---
+
+## 实施记录
+
+> 2026-08-07（提交 998a0b3）：T1-T22 全部落地，编译 0 error 0 warning。
+
+| 任务 | 实现摘要 | 关键文件 |
+|------|---------|---------|
+| T1 气泡复用（DR-6） | 每单位 1 气泡，新说话销毁旧气泡 | IClickInteractable.cs（OverheadSpeech.Show） |
+| T2 自动说话（DR-10） | SafetyScore>0.6+IsIdleForTask+非Caution，15-30s 随机；视野裁剪/上限6/轮转/冷却8s | 新 OverheadSpeechManager.cs、NPCBrain.TickAutoTalk、AttentionTuningConfig talk* 字段 |
+| T3-T5 装备厂移除 | Armory/Equipment* 代码+资产全删，无 equipId 残留 | Armory.asset、EquipmentDef/System/Panel 删除、BuildingPanel 去装备入口 |
+| T6/T7 训练 UI | 可训练人数+队列（职业×数量）+正在训练；TrainingSystem 暴露 + TrainingConfig 字段（T21） | TrainingPanel、TrainingSystem.cs、TrainingConfig.cs |
+| T8 空闲分布（DR-5/DR-21） | SafetyScore 三路合并（公式见 §需求4）；WanderAnchorPool 动态锚点池（城堡+预设+建筑5s重建+采集空地）；RetreatToSafeAnchor 撤退谱系；GridSystem.IsInsideWall 双表示；Wander 半径按 Score 档位 4-8 格；Caution 低分不驻留 | 新 SafetyScoreFormulas.cs / WanderAnchorPool.cs / RetreatToSafeAnchorBehavior.cs；Wander/SafetyStimulusProvider、L3CommandComputer、HitCooldownStateMachine、NPCBrain、GridSystem |
+| T9 工人在场（DR-4/DR-19） | ProducerComponent.HasWorkerAssigned 基于调度器派发记录；异常退出清指派（死亡/招募走/中断） | ProducerComponent.cs、TaskScheduler.cs、Building.cs、VagrantCampSystem.cs |
+| T10 速率校准（DR-13） | farm.rate 15→2 粮/秒 | farm.asset |
+| T11 流浪汉（DR-7） | BirthCampPos 字段+存档 v4；SceneHomePointProvider 未招募→营地/已招募→王国 | UnitController.cs（存档 v4）、SceneHomePointProvider.cs、VagrantCampSystem.cs |
+| T12 仓库面板（DR-15） | 顶部入口+订阅刷新，汇总 StorageComponent 按资源类型 | 新 WarehousePanel（cs/uxml/uss） |
+| T13 Well 降 tier1 | Module_Livelihood tier1 unlockBuildings 加 Well | Module_Livelihood.asset |
+| T14 水网（DR-8/DR-14） | WaterNetwork 单例容量100；well.rate=4；UI 隐藏 | 新 WaterNetwork.cs、well.asset |
+| T15 农场水条件（DR-9/DR-18） | ConsumeWater(2)+HasWorkerAssigned 才产；缺水停产+头顶"缺水" | ProducerComponent.cs、farm.asset |
+| T16-T20 任务系统 | KingdomTask/ITaskSource（OnRegister/OnUnregister）/ITaskScheduler/TaskScheduler（1s/tick+距离升序+引用占用）/TaskState；WorkerTask 内化工厂（T18）；资源点采集生命周期（T19 gatherSeconds 2/4/8s+对象池+锁定复位） | 新 Tasks/、TaskScheduling/、WorkerTask.cs、Building.cs、BuildingFactory.cs、BuildingDef.cs、BuildingPanel.cs |
+| T21 训练配置字段 | supportedOccupations + trainDuration | TrainingConfig.cs |
+| T22 验证场景 | 生产链路端到端 + 闲逛遇敌撤退 一键生成 | AIDebugSpawnController.SpawnProductionChainScenario / SpawnWanderRetreatScenario |

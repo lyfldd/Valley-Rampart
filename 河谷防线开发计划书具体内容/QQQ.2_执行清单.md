@@ -7,28 +7,28 @@
 
 | 编号 | 任务 | 需求# | 类型 | 涉及文件 | 验收标准 | 状态 |
 |------|------|-------|------|---------|---------|------|
-| T1 | OverheadSpeech 改为每单位复用气泡（DR-6：新说话先销毁旧气泡再显示新的，不叠加） | 需求1 | 架构 | IClickInteractable.cs（OverheadSpeech L85-111） | 快速连点 NPC 只显示一条气泡，不叠加 | ⬜ |
-| T2 | NPC 空闲自动说话（DR-10）：IsIdleForTask+SafetyScore>0.6 时 15-30s 随机计时器；视野裁剪+同时气泡≤6 轮转队列+冷却 8s；新 OverheadSpeechManager 管控 | 需求1 | 架构 | UnitController.cs, NPCBrain.cs, 新 OverheadSpeechManager | 闲逛每隔 15-30s 冒一句；100-200 人场景视野内同时气泡≤6；战斗/任务/Caution 态不说 | ⬜ |
-| T3 | 从建造菜单/BuildingMappingTable 移除 Armory 建筑 | 需求2 | 清理 | BuildingMappingTable.asset | 建造菜单不再出现装备厂 | ⬜ |
-| T4 | 删除 EquipmentPanel 及 BuildingPanel 中的 Armory 装备入口 | 需求2 | 清理 | BuildingPanel.cs:391-392,482, EquipmentPanel.cs | 点建筑无装备面板，编译 0 error | ⬜ |
-| T5 | 彻底移除 EquipmentDef/EquipmentSystem/EquipmentPanel 代码+资产（grep 确认 UnitController/BuildingFactory/SaveSystem/UnitData 无 equipId 残留；存档兼容性兜底） | 需求2 | 清理 | EquipmentDef.cs, EquipmentSystem.cs, EquipmentPanel.cs, *.asset | 编译 0 error，旧存档加载不崩，无残留引用 | ⬜ |
-| T6 | TrainingPanel 改为显示「可训练人数 + 训练队列（职业名×数量）+ 正在训练人数」 | 需求3 | 架构 | TrainingPanel.cs | 面板三块信息，队列显示「工人×2/士兵×1」格式，不列具体 NPC | ⬜ |
-| T7 | TrainingSystem 暴露可训练居民数/队列清单/进行中数量；TrainingConfig 暴露 supportedOccupations + trainDuration（DR-12：按职业分级 居民→工人 1天/→士兵 2天/→高阶 3天）；点击训练弹职业选择后从居民池自动入队 | 需求3 | 架构 | TrainingSystem.cs, TrainingConfig.cs | 点训练弹职业选择→自动取居民入队（带职业+对应时长），队满置灰 | ⬜ |
-| T8 | 完整重构 NPC 空闲分布：合并 SafetyStimulus/ThreatHysteresis/Caution 为统一 SafetyScore；新增动态 WanderAnchorPool；新增 RetreatToSafeAnchor 撤退行为谱系；SafetyScore 决定 Wander 阈值/半径/回城拉力；城墙内 wallFactor +X；加模拟器验证场景 | 需求4 | 架构 | WanderStimulusProvider.cs, SafetyStimulusProvider.cs, ThreatHysteresisComponent.cs, HitCooldownStateMachine.cs, BehaviorExecutor.cs, NPCBrain.cs, GridSystem.cs, 新 WanderAnchorPool, 新 RetreatToSafeAnchorBehavior | 空闲 NPC 从动态锚点池按 SafetyScore 抽取闲逛点；边界遇敌往最近安全锚点撤退；城墙内/无城墙场景均正常 | ⬜ |
-| T9 | ProducerComponent 暴露 HasWorkerAssigned，基于 TaskScheduler 派发记录判定（不写空间查询）；调度器在 NPC 中断/死亡/被招募走时清除指派（兜底见 QQQ.3） | 需求5/10 | 架构 | ProducerComponent.cs, TaskScheduler.cs | 无工人不产粮；NPC 异常退出时建筑状态正确 | ⬜ |
-| T10 | farm.asset producer.rate 从 15 校准到 2 粮/秒（DR-13） | 需求5 | 参数 | farm.asset | 产出速率=2 粮/秒 | ⬜ |
-| T11 | 流浪汉 HomePoint 按 IsVagrantRecruited 判定（DR-7）：未招募→营地坐标，已招募→王国锚点；VagrantCampSystem 记录 BirthCampPos 字段并持久化 | 需求6 | 架构 | SceneHomePointProvider.cs, VagrantCampSystem.cs, UnitController.cs, UnitData.cs | 未招募流浪汉在营地游荡；招募后走回王国；BirthCampPos 持久化 | ⬜ |
-| T12 | 新增 WarehousePanel：顶部按钮入口+订阅刷新（DR-15）；汇总各 StorageComponent 按资源类型显示 | 需求7 | 架构 | 新 WarehousePanel, 新 WarehousePanelButton, StorageComponent.cs | 顶部"仓库"按钮打开；实时显示各资源仓库量；面板关闭退订 | ⬜ |
-| T13 | Well 从民生模块 tier2 移到 tier1（一级主城可建水井） | 需求8 | 参数 | Module_Livelihood.asset, CastleUnlockTable | 一级主城可建水井 | ⬜ |
-| T14 | 新增 WaterNetwork（DR-8：单例 MonoBehaviour + ISaveable，容量 100）；well.asset rate=4 水/秒（DR-14）；UI 隐藏 | 需求9/10 | 架构 | 新 WaterNetwork, well.asset | 水井 4 水/秒入网；容量上限 100 超出停产；UI 不显示水 | ⬜ |
-| T15 | 农场生产条件（DR-9+DR-18）：WaterNetwork.ConsumeWater(2) 返回 true + HasWorkerAssigned=true（仅 Working 算在场 DR-19）才产；1s/tick 离散产出事件；缺水停产+头顶冒"缺水"图标 | 需求9 | 架构 | ProducerComponent.cs, farm.asset, WaterNetwork | 有水网+工人产粮（2粮/秒耗2水）；缺水停产+提示；无工人不产 | ⬜ |
-| T16 | 新增 KingdomTask/ITaskSource 抽象（type/source/destType/destPos 动态解析）；ITaskSource 扩展 OnRegister/OnUnregister（DR-16） | 需求10 | 架构 | 新 KingdomTask, ITaskSource | 任务带 destType 不硬编码终点；建筑生命周期挂钩注册 | ⬜ |
-| T17 | 扩展调度器（DR-17：1s/tick+引用占用+距离升序）：收集 ITaskSource 任务、按优先级+距离分派 idle NPC、动态解析终点、任务幂等靠 NPC.currentTask 引用占用 | 需求10 | 架构 | ScheduleCenterStub.cs 或新 TaskScheduler | 生产/搬运/搬水/采集任务被正确分派；同优先级按距离升序 | ⬜ |
-| T18 | WorkerTask 内化为 TaskStimulus 工厂（不做独立状态机），调度器构造 TaskStimulus 扔给 NPCBrain+BehaviorExecutor 消费；ThreatStimulus 抢占沿用现有挂起/恢复；Working 占位动作态 | 需求10 | 架构 | WorkerTask.cs, TaskScheduler.cs, BehaviorExecutor.cs | NPC 走到任务点停留执行占位动作；遇敌时任务挂起、威胁解除恢复 | ⬜ |
-| T19 | 一次性资源点采集生命周期（DR-11）：确认 UI→发布 Gather 任务→按资源量耗时（WoodPile 2s/StonePile 4s/OreVein 8s）→入国库→释放网格+BuildingFactory 对象池 Despawn；支持多资源点并行采集 | 需求10 | 架构 | Building.cs, BuildingFactory.cs, GridSystem.cs | 采集后资源点消失不留贴图；多资源点并行；走对象池不直接 Destroy | ⬜ |
-| T20 | 定义 `enum TaskState { Assigned, MovingToSource, Working, MovingToDest, Completed, Abandoned }`（A5 缺口，§10.4 提及） | 需求10 | 枚举 | 新 TaskState.cs 或并入 KingdomTask.cs | 枚举定义编译通过；任务态字段统一引用此枚举 | ⬜ |
-| T21 | TrainingConfig 字段结构定义：`supportedOccupations: List<Occupation>` + `trainDuration: Dictionary<Occupation,float>`（A4 缺口，DR-3/DR-12 落地） | 需求3 | 架构 | TrainingConfig.cs | 字段定义编译通过；TrainingPanel 可读 supportedOccupations 和 trainDuration | ⬜ |
-| T22 | 生产链路端到端联调验证场景（R2 缺口）：农场有工人+水→产粮→搬运入仓→仓库面板显示 | 需求5/9/10 | 验证 | 新验证场景/CombatTestSpawner 扩展 | 农场有工人+水时产粮；产出经搬运入仓；WarehousePanel 实时显示 | ⬜ |
+| T1 | OverheadSpeech 改为每单位复用气泡（DR-6：新说话先销毁旧气泡再显示新的，不叠加） | 需求1 | 架构 | IClickInteractable.cs（OverheadSpeech L85-111） | 快速连点 NPC 只显示一条气泡，不叠加 | ✅ |
+| T2 | NPC 空闲自动说话（DR-10）：IsIdleForTask+SafetyScore>0.6 时 15-30s 随机计时器；视野裁剪+同时气泡≤6 轮转队列+冷却 8s；新 OverheadSpeechManager 管控 | 需求1 | 架构 | UnitController.cs, NPCBrain.cs, 新 OverheadSpeechManager | 闲逛每隔 15-30s 冒一句；100-200 人场景视野内同时气泡≤6；战斗/任务/Caution 态不说 | ✅ |
+| T3 | 从建造菜单/BuildingMappingTable 移除 Armory 建筑 | 需求2 | 清理 | BuildingMappingTable.asset | 建造菜单不再出现装备厂 | ✅ |
+| T4 | 删除 EquipmentPanel 及 BuildingPanel 中的 Armory 装备入口 | 需求2 | 清理 | BuildingPanel.cs:391-392,482, EquipmentPanel.cs | 点建筑无装备面板，编译 0 error | ✅ |
+| T5 | 彻底移除 EquipmentDef/EquipmentSystem/EquipmentPanel 代码+资产（grep 确认 UnitController/BuildingFactory/SaveSystem/UnitData 无 equipId 残留；存档兼容性兜底） | 需求2 | 清理 | EquipmentDef.cs, EquipmentSystem.cs, EquipmentPanel.cs, *.asset | 编译 0 error，旧存档加载不崩，无残留引用 | ✅ |
+| T6 | TrainingPanel 改为显示「可训练人数 + 训练队列（职业名×数量）+ 正在训练人数」 | 需求3 | 架构 | TrainingPanel.cs | 面板三块信息，队列显示「工人×2/士兵×1」格式，不列具体 NPC | ✅ |
+| T7 | TrainingSystem 暴露可训练居民数/队列清单/进行中数量；TrainingConfig 暴露 supportedOccupations + trainDuration（DR-12：按职业分级 居民→工人 1天/→士兵 2天/→高阶 3天）；点击训练弹职业选择后从居民池自动入队 | 需求3 | 架构 | TrainingSystem.cs, TrainingConfig.cs | 点训练弹职业选择→自动取居民入队（带职业+对应时长），队满置灰 | ✅ |
+| T8 | 完整重构 NPC 空闲分布：合并 SafetyStimulus/ThreatHysteresis/Caution 为统一 SafetyScore；新增动态 WanderAnchorPool；新增 RetreatToSafeAnchor 撤退行为谱系；SafetyScore 决定 Wander 阈值/半径/回城拉力；城墙内 wallFactor +X；加模拟器验证场景 | 需求4 | 架构 | WanderStimulusProvider.cs, SafetyStimulusProvider.cs, ThreatHysteresisComponent.cs, HitCooldownStateMachine.cs, BehaviorExecutor.cs, NPCBrain.cs, GridSystem.cs, 新 WanderAnchorPool, 新 RetreatToSafeAnchorBehavior | 空闲 NPC 从动态锚点池按 SafetyScore 抽取闲逛点；边界遇敌往最近安全锚点撤退；城墙内/无城墙场景均正常 | ✅ |
+| T9 | ProducerComponent 暴露 HasWorkerAssigned，基于 TaskScheduler 派发记录判定（不写空间查询）；调度器在 NPC 中断/死亡/被招募走时清除指派（兜底见 QQQ.3） | 需求5/10 | 架构 | ProducerComponent.cs, TaskScheduler.cs | 无工人不产粮；NPC 异常退出时建筑状态正确 | ✅ |
+| T10 | farm.asset producer.rate 从 15 校准到 2 粮/秒（DR-13） | 需求5 | 参数 | farm.asset | 产出速率=2 粮/秒 | ✅ |
+| T11 | 流浪汉 HomePoint 按 IsVagrantRecruited 判定（DR-7）：未招募→营地坐标，已招募→王国锚点；VagrantCampSystem 记录 BirthCampPos 字段并持久化 | 需求6 | 架构 | SceneHomePointProvider.cs, VagrantCampSystem.cs, UnitController.cs, UnitData.cs | 未招募流浪汉在营地游荡；招募后走回王国；BirthCampPos 持久化 | ✅ |
+| T12 | 新增 WarehousePanel：顶部按钮入口+订阅刷新（DR-15）；汇总各 StorageComponent 按资源类型显示 | 需求7 | 架构 | 新 WarehousePanel, 新 WarehousePanelButton, StorageComponent.cs | 顶部"仓库"按钮打开；实时显示各资源仓库量；面板关闭退订 | ✅ |
+| T13 | Well 从民生模块 tier2 移到 tier1（一级主城可建水井） | 需求8 | 参数 | Module_Livelihood.asset, CastleUnlockTable | 一级主城可建水井 | ✅ |
+| T14 | 新增 WaterNetwork（DR-8：单例 MonoBehaviour + ISaveable，容量 100）；well.asset rate=4 水/秒（DR-14）；UI 隐藏 | 需求9/10 | 架构 | 新 WaterNetwork, well.asset | 水井 4 水/秒入网；容量上限 100 超出停产；UI 不显示水 | ✅ |
+| T15 | 农场生产条件（DR-9+DR-18）：WaterNetwork.ConsumeWater(2) 返回 true + HasWorkerAssigned=true（仅 Working 算在场 DR-19）才产；1s/tick 离散产出事件；缺水停产+头顶冒"缺水"图标 | 需求9 | 架构 | ProducerComponent.cs, farm.asset, WaterNetwork | 有水网+工人产粮（2粮/秒耗2水）；缺水停产+提示；无工人不产 | ✅ |
+| T16 | 新增 KingdomTask/ITaskSource 抽象（type/source/destType/destPos 动态解析）；ITaskSource 扩展 OnRegister/OnUnregister（DR-16） | 需求10 | 架构 | 新 KingdomTask, ITaskSource | 任务带 destType 不硬编码终点；建筑生命周期挂钩注册 | ✅ |
+| T17 | 扩展调度器（DR-17：1s/tick+引用占用+距离升序）：收集 ITaskSource 任务、按优先级+距离分派 idle NPC、动态解析终点、任务幂等靠 NPC.currentTask 引用占用 | 需求10 | 架构 | ScheduleCenterStub.cs 或新 TaskScheduler | 生产/搬运/搬水/采集任务被正确分派；同优先级按距离升序 | ✅ |
+| T18 | WorkerTask 内化为 TaskStimulus 工厂（不做独立状态机），调度器构造 TaskStimulus 扔给 NPCBrain+BehaviorExecutor 消费；ThreatStimulus 抢占沿用现有挂起/恢复；Working 占位动作态 | 需求10 | 架构 | WorkerTask.cs, TaskScheduler.cs, BehaviorExecutor.cs | NPC 走到任务点停留执行占位动作；遇敌时任务挂起、威胁解除恢复 | ✅ |
+| T19 | 一次性资源点采集生命周期（DR-11）：确认 UI→发布 Gather 任务→按资源量耗时（WoodPile 2s/StonePile 4s/OreVein 8s）→入国库→释放网格+BuildingFactory 对象池 Despawn；支持多资源点并行采集 | 需求10 | 架构 | Building.cs, BuildingFactory.cs, GridSystem.cs | 采集后资源点消失不留贴图；多资源点并行；走对象池不直接 Destroy | ✅ |
+| T20 | 定义 `enum TaskState { Assigned, MovingToSource, Working, MovingToDest, Completed, Abandoned }`（A5 缺口，§10.4 提及） | 需求10 | 枚举 | 新 TaskState.cs 或并入 KingdomTask.cs | 枚举定义编译通过；任务态字段统一引用此枚举 | ✅ |
+| T21 | TrainingConfig 字段结构定义：`supportedOccupations: List<Occupation>` + `trainDuration: Dictionary<Occupation,float>`（A4 缺口，DR-3/DR-12 落地） | 需求3 | 架构 | TrainingConfig.cs | 字段定义编译通过；TrainingPanel 可读 supportedOccupations 和 trainDuration | ✅ |
+| T22 | 生产链路端到端联调验证场景（R2 缺口）：农场有工人+水→产粮→搬运入仓→仓库面板显示 | 需求5/9/10 | 验证 | 新验证场景/CombatTestSpawner 扩展 | 农场有工人+水时产粮；产出经搬运入仓；WarehousePanel 实时显示 | ✅ |
 
 ## 跨需求依赖
 
