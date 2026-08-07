@@ -69,6 +69,14 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
             Debug.Log($"[VagrantCampSystem] 每日补员: +{spawned} 流浪汉");
     }
 
+    /// <summary>当前是否招募得起（粮 ≥ recruitFoodCost）。点击交互 CanTrigger 用（3.5.1 §6.3：无粮回落对话）。</summary>
+    public bool CanRecruit()
+    {
+        var cfg = GetCfg();
+        return cfg != null && RulerController.Instance != null
+               && RulerController.Instance.Food >= cfg.recruitFoodCost;
+    }
+
     /// <summary>
     /// 招募流浪汉（统一点击交互 E-S8 入口）：花 recruitFoodCost 粮 → 转居民 → TaskStimulus 走回王国锚点。
     /// 粮不足/目标非法返回 false。

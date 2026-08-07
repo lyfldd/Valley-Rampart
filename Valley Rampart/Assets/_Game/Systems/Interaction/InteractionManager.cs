@@ -111,6 +111,11 @@ public class InteractionManager : Singleton<InteractionManager>
                 }
                 return;
             }
+
+            // 3.5.1 §六（E-S8）：NPC 统一点击交互回落（招募/训练/对话，优先级子系统裁决）
+            var clickTarget = hit.GetComponentInParent<IClickInteractable>();
+            if (clickTarget != null && ClickInteractDispatcher.TryDispatch(clickTarget))
+                return;
         }
 
         // 点空白 → 关闭当前面板

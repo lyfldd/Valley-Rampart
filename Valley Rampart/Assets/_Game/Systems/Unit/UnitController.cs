@@ -17,7 +17,7 @@ using UnityEngine;
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(Rigidbody2D))]
-public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
+public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle, IClickInteractable
 {
     // ===== ISaveable =====
 
@@ -1020,6 +1020,138 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             _renderer.flipX = true;
         else if (direction.x > 0.01f)
             _renderer.flipX = false;
+    }
+
+    // ========================================================================
+    //  统一点击交互（3.5.1 §六，E-S8：IClickInteractable + 优先级子系统）
+    // ========================================================================
+
+    private InteractAction[] _interactActions;
+    private int _interactActionsOcc = int.MinValue;
+
+    /// <summary>
+    /// 注册的交互行为列表（按职业缓存，保证 oneShot 状态跨点击有效）。
+    /// §6.4 默认清单：流浪汉=招募100+对话10；居民=训练50+对话10；其余=对话。
+    /// </summary>
+    public InteractAction[] GetInteractActions()
+    {
+        int occ = (int)EffectiveOccupation;
+        if (_interactActions == null || _interactActionsOcc != occ)
+        {
+            _interactActionsOcc = occ;
+            _interactActions = BuildInteractActions();
+        }
+        return _interactActions;
+    }
+
+    InteractAction[] BuildInteractActions()
+    {
+        switch (EffectiveOccupation)
+        {
+            case Occupation.Vagrant:
+                return new[]
+                {
+                    new InteractAction("recruit", InteractPriority.RecruitVagrant, oneShot: true,
+                        canTrigger: () => IsAlive && EffectiveOccupation == Occupation.Vagrant
+                                          && VagrantCampSystem.Instance != null && VagrantCampSystem.Instance.CanRecruit(),
+                        execute: () =>
+                        {
+                            bool ok = VagrantCampSystem.Instance != null && VagrantCampSystem.Instance.RecruitVagrant(this);
+                            OverheadSpeech.Show(transform, ok ? "谢谢您的食物！我这就去王国！" : "……");
+                        }),
+                    new InteractAction("talk", InteractPriority.Talk, oneShot: false,
+                        canTrigger: () => IsAlive,
+                        execute: () => OverheadSpeech.Show(transform, "……又冷又饿……"))
+                };
+
+            case Occupation.Resident:
+                return new[]
+                {
+                    new InteractAction("train", InteractPriority.TrainResident, oneShot: false,
+                        canTrigger: () => IsAlive && FindNearestTrainingBuilding() != null,
+                        execute: () => OpenTrainingPanel()),
+                    new InteractAction("talk", InteractPriority.Talk, oneShot: false,
+                        canTrigger: () => IsAlive,
+                        execute: () => OverheadSpeech.Show(transform, "还没活干……想学门手艺。"))
+                };
+
+            case Occupation.Child:
+                return new[]
+                {
+                    new InteractAction("talk", InteractPriority.Talk, oneShot: false,
+                        canTrigger: () => IsAlive,
+                        execute: () => OverheadSpeech.Show(transform, "我很快就会长大啦！"))
+                };
+
+            case Occupation.Worker:
+            case Occupation.Porter:
+                return new[]
+                {
+                    new InteractAction("talk", InteractPriority.Talk, oneShot: false,
+                        canTrigger: () => IsAlive,
+                        execute: () => OverheadSpeech.Show(transform, "正在干活呢。"))
+                };
+
+            default:
+                // 士兵/将军/君主等：点击只出轻量对话（编队指挥走 E 键军令面板，§6.4 原则）
+                return new[]
+                {
+                    new InteractAction("talk", InteractPriority.Talk, oneShot: false,
+                        canTrigger: () => IsAlive,
+                        execute: () => OverheadSpeech.Show(transform, GetTalkLineByOccupation()))
+                };
+        }
+    }
+
+    /// <summary>按职业取对话文案（轻量表现）。</summary>
+    string GetTalkLineByOccupation()
+    {
+        switch (EffectiveOccupation)
+        {
+            case Occupation.Ruler: return "王国就托付给我吧。";
+            case Occupation.General: return "军令请走 E 键面板。";
+            case Occupation.Warrior:
+            case Occupation.Archer:
+            case Occupation.Crossbowman:
+            case Occupation.HeavyWarrior:
+            case Occupation.Cavalry:
+            case Occupation.ShieldGuard: return "随时准备战斗！";
+            default: return "……";
+        }
+    }
+
+    /// <summary>找最近的激活训练建筑（def.trainingSlots > 0）。无则 null。</summary>
+    Building FindNearestTrainingBuilding()
+    {
+        if (BuildingRegistry.Instance == null) return null;
+        Building best = null;
+        float bestDist = float.MaxValue;
+        foreach (var b in BuildingRegistry.Instance.All)
+        {
+            if (b == null || b.def == null || b.def.trainingSlots <= 0 || !b.IsActive) continue;
+            float d = Mathf.Abs(b.transform.position.x - transform.position.x);
+            if (d < bestDist) { bestDist = d; best = b; }
+        }
+        return best;
+    }
+
+    /// <summary>居民训练：找最近训练建筑 → SetTarget → TrainingPanel 入栈（复用 BuildingPanel 打开方式）。</summary>
+    void OpenTrainingPanel()
+    {
+        var building = FindNearestTrainingBuilding();
+        if (building == null)
+        {
+            OverheadSpeech.Show(transform, "还没有能训练的地方……");
+            return;
+        }
+        var panel = FindObjectOfType<TrainingPanel>();
+        if (panel == null)
+        {
+            Debug.LogWarning("[UnitController] 未找到 TrainingPanel（场景缺少挂载 TrainingPanel + UIDocument 的 GameObject）");
+            return;
+        }
+        panel.SetTarget(building);
+        UIManager.Instance?.Push(panel, new Interactor(Faction.Human_Player, transform.position));
     }
 }
 
