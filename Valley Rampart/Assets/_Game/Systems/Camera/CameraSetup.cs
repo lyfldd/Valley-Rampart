@@ -25,6 +25,11 @@ public class CameraSetup : MonoBehaviour
     private Camera _camera;
     private Transform _target;
 
+    /// <summary>QQQ.1 需求6（方案2）：背景是否已按 originX 一次性对齐到城堡 x=0。</summary>
+    private bool _bgAligned;
+    /// <summary>已应用的 originX（用于跨地图重生成时增量对齐背景）。</summary>
+    private float _bgOriginX;
+
     private void Awake()
     {
         _camera = GetComponent<Camera>();
@@ -84,8 +89,28 @@ public class CameraSetup : MonoBehaviour
         return GetBackgroundSize().y;
     }
 
+    /// <summary>
+    /// QQQ.1 需求6（方案2）：把背景 Sprite 左移 originX 与偏移后的世界对齐。
+    /// 背景初始位置匹配旧坐标系（城堡在旧 x≈originX），整体左移 originX 后城堡中心落 x=0。
+    /// 跨地图重生成（originX 变化）时增量对齐。
+    /// </summary>
+    void AlignBackgroundToMap()
+    {
+        if (backgroundSprite == null) return;
+        var grid = GridSystem.Instance;
+        if (grid == null || grid.Config == null) return;
+        float originX = grid.Config.originX;
+        if (_bgAligned && Mathf.Approximately(_bgOriginX, originX)) return;
+        backgroundSprite.transform.position += new Vector3(_bgOriginX - originX, 0f, 0f);
+        _bgOriginX = originX;
+        _bgAligned = true;
+    }
+
     private void LateUpdate()
     {
+        // QQQ.1 需求6（方案2）：地图生成后把背景一次性左移 originX，使城堡中心落 x=0（与建筑/出生点一致）
+        AlignBackgroundToMap();
+
         // 每帧检查目标是否有效（君主可能刚创建或已死亡）
         if (RulerController.Instance == null) return;
 

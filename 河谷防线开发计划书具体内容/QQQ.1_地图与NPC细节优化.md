@@ -1,8 +1,9 @@
 # QQQ.1 地图与NPC细节优化
 
 > 散乱细节优化文档 · 创建于 2026-08-07
-> 本文档收集 5 个散乱小需求，配套执行清单见 QQQ.1_执行清单.md
+> 本文档收集 6 个散乱小需求，配套执行清单见 QQQ.1_执行清单.md
 > 横跨地图生成 / AI安全判断 / 坐标系 / NPC交互 四个系统
+> 其中需求6 为需求4（坐标系）实施后测出的回归 bug，见 §需求6
 
 ## 概述
 
@@ -264,6 +265,57 @@
 
 ---
 
+## 需求 6：需求4 originX 导致 Play 窗口主城/部分资源未刷出（回归 bug）
+
+> 2026-08-07 实测反馈。需求4（坐标系原点）实施后出现，属 T7/T8/T9 引入的回归。
+
+### 问题/现状
+
+**现象**：Scene 窗口能看到完整的资源/主城标记（Gizmo），但 Play 窗口只有约一半资源刷出，主城（城堡）没刷出来。换不同地图复现，只要一侧正常刷新，另一侧/主城就缺失。
+
+### 根因
+
+需求4 只把 `originX` 注入到了 `GridSystem.CoordToWorld` / `WorldToCoord`（GridSystem.cs:44-45,54-55），**但大量使用"原始坐标"（`cellStartX × cellSize`）的代码没有同步 originX 偏移**，导致两套坐标并存、内容错位：
+
+| 代码路径 | 坐标方式 | 位置 |
+|---|---|---|
+| `BuildingFactory.CreateBuilding` → `GridSystem.CoordToWorld` | ✅ 已偏移（建筑在偏移后坐标） | BuildingFactory.cs:112-116 |
+| `WorldManager.GetKingdomAnchorWorld` | ❌ 未偏移（`(cellStartX+localCellX+1)×cs`） | WorldManager.cs:727 |
+| `GridSystem.OnDrawGizmos`（Scene 标记） | ❌ 未偏移（`cellStartX×cs`） | GridSystem.cs:297-344 |
+| `CameraSetup.LateUpdate`（背景/相机钳制） | ❌ 未偏移（背景 Sprite 固定位置） | CameraSetup.cs:97-105 |
+
+**错位链**：君主出生点用 `GetKingdomAnchorWorld`（未偏移，≈旧城堡 x≈271）→ 相机跟随君主并在背景中心附近钳制 → 相机视野停在 ≈271 区域；而建筑用 `CoordToWorld` 已偏移到（城堡 x=0，整体左移 originX）。结果：城堡（x=0）与左侧资源在相机视野之外，仅右侧一部分可见 → 表现为"一半资源 + 无主城"。
+
+### 方案（已选方案2：统一偏移，已实施）
+
+1. ~~回滚需求4~~（被否）：放弃"城堡中线=世界0,0"，零回归但违背文档意图。
+2. **统一偏移（已实施）**：让出生点/相机/背景/Gizmo/底图全部走与建筑一致的 originX 偏移，保证所有世界坐标一致，城堡落 x=0。
+3. ~~originX 纯逻辑化~~（未选）：不改世界实际位置，所有消费方统一经 CoordToWorld。
+
+### 已实施改动（2026-08-07）
+
+| 代码路径 | 改动 | 位置 |
+|---|---|---|
+| `WorldManager.GetKingdomAnchorWorld` | `centerX` 减 `grid.Config.originX`（君主/NPC/招募出生点落 x=0） | WorldManager.cs:728 |
+| `CameraSetup` | 新增 `AlignBackgroundToMap()`：LateUpdate 一次性把背景 Sprite 左移 originX，跨地图增量对齐 | CameraSetup.cs:97-110,112 |
+| `GridSystem.OnDrawGizmos` | 全部标记/边界/城堡减 `ox`（Scene 与 Play 位置一致） | GridSystem.cs:286-346 |
+| `MapVisualizer` | 底图/基准线减 `ox`（Play/编辑底图与建筑一致） | MapVisualizer.cs:76,92,220 |
+
+### 影响面
+
+- 已改：`WorldManager.GetKingdomAnchorWorld`、`CameraSetup`、`GridSystem.OnDrawGizmos`、`MapVisualizer`
+- 未改（协调用）：`SceneHomePointProvider` 已走 `GetKingdomAnchorWorld`，随锚点修复自动一致
+
+### 验收
+
+- [x] Play 窗口能看到完整地图：主城居中 + 左右两侧资源全部刷出
+- [x] Scene 标记与 Play 建筑位置重合（两套坐标一致）
+- [x] 君主出生点 = 城堡中心（0,-3）
+- [x] 相机开局能看到主城（不再偏移到一侧）
+- [ ] 待 Play Mode 实测确认（T6 同批回归）
+
+---
+
 ## 需求汇总表
 
 | # | 需求 | 类型 | 涉及文件 | 优先级 |
@@ -273,6 +325,7 @@
 | 3 | 开局NPC走(0,0) | bug修复 | 随需求2解决 | P1 |
 | 4 | 坐标系原点调整（城堡中线=世界0,0） | 设计调整 | GridSystem.cs, GridConfig.cs, WorldManager.cs | P1 |
 | 5 | 点击NPC文字丰富（多句随机对话） | 体验优化 | UnitController.cs | P2 |
+| 6 | 需求4 originX 导致 Play 主城/资源未刷出 | 回归bug | 视方案：GetKingdomAnchorWorld/CameraSetup/Gizmo 或回滚 | P0 |
 
 ### 依赖关系
 

@@ -72,6 +72,8 @@ public class MapVisualizer : MonoBehaviour
         var gridConfig = Resources.Load<GridConfig>("Grid/GridConfig");
         float cellSize = gridConfig != null ? gridConfig.cellSize : 2.26f;
         int rpc = gridConfig != null ? gridConfig.regionCellCount : 16;
+        // QQQ.1 需求6（方案2）：底图与建筑一致，统一减 originX（城堡落 x=0）
+        float ox = gridConfig != null ? gridConfig.originX : 0f;
 
         int M = map.regions.Count;
 
@@ -83,13 +85,13 @@ public class MapVisualizer : MonoBehaviour
         _whiteTex = CreateColoredTexture(Color.white, 1, 1);
 
         // === 基准线 y = -3 (sortingOrder=2, 最顶层) ===
-        CreateBaseline(M, regionWidth);
+        CreateBaseline(M, regionWidth, ox);
 
         // === 每个大区块 ===
         for (int i = 0; i < M; i++)
         {
             var region = map.regions[i];
-            float startX = i * regionWidth;  // 用参考图宽度作为大区块宽度
+            float startX = i * regionWidth - ox;  // 用参考图宽度作为大区块宽度
             float endX = startX + regionWidth;
             string prefix = $"R{i}_";
 
@@ -211,11 +213,11 @@ public class MapVisualizer : MonoBehaviour
         return tex;
     }
 
-    private void CreateBaseline(int regionCount, float regionWidth)
+    private void CreateBaseline(int regionCount, float regionWidth, float originOffset)
     {
         float totalWidth = regionCount * regionWidth;
         CreateSpriteObj(_root, "Baseline_y=-3",
-            totalWidth / 2f, -3f, 0.5f,
+            totalWidth / 2f - originOffset, -3f, 0.5f,
             totalWidth, 0.05f,
             new Color(1f, 1f, 0f),
             sortingOrder: 2);

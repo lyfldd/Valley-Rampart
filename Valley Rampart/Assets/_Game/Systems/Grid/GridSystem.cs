@@ -282,13 +282,15 @@ public class GridSystem : Singleton<GridSystem>
 
         float cs = config.cellSize;
         int rpc = config.regionCellCount;
+        // QQQ.1 需求6（方案2）：Scene 标记与 Play 建筑一致，统一减 originX（城堡落 x=0）
+        float ox = config.originX;
 
         // 画小区块边界（黄色细线）
         Gizmos.color = new Color(1, 1, 0, 0.15f);
         int totalCells = M * rpc;
         for (int x = 0; x <= totalCells; x++)
         {
-            float wx = x * cs;
+            float wx = x * cs - ox;
             Gizmos.DrawLine(new Vector3(wx, -2, 0), new Vector3(wx, 2, 0));
         }
 
@@ -296,7 +298,7 @@ public class GridSystem : Singleton<GridSystem>
         for (int i = 0; i < M; i++)
         {
             var region = _activeMap.regions[i];
-            float startX = region.cellStartX * cs;
+            float startX = region.cellStartX * cs - ox;
             float endX = startX + region.cellCount * cs;
 
             // 区颜色
@@ -318,7 +320,7 @@ public class GridSystem : Singleton<GridSystem>
             {
                 foreach (var b in region.resources)
                 {
-                    float wx = (region.cellStartX + b.localCellX + 0.5f) * cs;
+                    float wx = (region.cellStartX + b.localCellX + 0.5f) * cs - ox;
                     Color bc = GetBuildingColor(b.type);
                     Gizmos.color = bc;
                     Gizmos.DrawSphere(new Vector3(wx, 0.5f, 0), 0.3f);
@@ -328,7 +330,7 @@ public class GridSystem : Singleton<GridSystem>
             // 裂隙标记（红色 X）
             if (region.riftCellX >= 0)
             {
-                float wx = (region.cellStartX + region.riftCellX + 0.5f) * cs;
+                float wx = (region.cellStartX + region.riftCellX + 0.5f) * cs - ox;
                 Gizmos.color = Color.red;
                 float s = 0.5f;
                 Gizmos.DrawLine(new Vector3(wx - s, 0.5f - s, 0), new Vector3(wx + s, 0.5f + s, 0));
@@ -341,7 +343,7 @@ public class GridSystem : Singleton<GridSystem>
         if (castleIdx >= 0 && castleIdx < M)
         {
             var cr = _activeMap.regions[castleIdx];
-            float cwx = (cr.cellStartX + cr.cellCount / 2f) * cs;
+            float cwx = (cr.cellStartX + cr.cellCount / 2f) * cs - ox;
             Gizmos.color = new Color(0.8f, 0.7f, 0.2f);
             Gizmos.DrawCube(new Vector3(cwx, 0.5f, 0), new Vector3(cs * 2, 0.8f, 0.8f));
         }

@@ -723,8 +723,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             var bp = region.resources[i];
             if (bp == null || bp.category != BuildingCategory.CastleCore) continue;
             float cs = grid.Config.cellSize;
-            // 城堡占 2 格（localCellX 起）：中心 x = 两格交界处
-            float centerX = (region.cellStartX + bp.localCellX + 1f) * cs;
+            // 城堡占 2 格（localCellX 起）：中心 x = 两格交界处。
+            // QQQ.1 需求6（方案2）：与建筑一致，减 originX 使城堡中心落 x=0（而非原始坐标）。
+            float centerX = (region.cellStartX + bp.localCellX + 1f) * cs - grid.Config.originX;
             return new Vector2(centerX, grid.CoordToWorld(new GridCoord(0, 0)).y);
         }
         return Vector2.zero;
