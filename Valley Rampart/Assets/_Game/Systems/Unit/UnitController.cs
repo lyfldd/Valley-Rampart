@@ -47,9 +47,20 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     /// <summary>
     /// 上次生育天数（3.5 P0-1：个体生育冷却记录，-999=可生育）。
-    /// 计数制人口系统当前用全局 BirthCooldownDays 对齐，本字段为实体制预留并随 UnitSaveData 持久化。
+    /// 实体制下为随机配对个体冷却（lastBirthDay + birthPairCooldownDays <= 当前天 才可再配对，3.5.1 §4.2）。
     /// </summary>
     public int LastBirthDay = -999;
+
+    /// <summary>
+    /// 小孩成长天数事件计数（3.5.1 §4.2 E-S4：每日 +1，累积 childGrowthDayEvents 次自动长成居民）。
+    /// </summary>
+    public int ChildGrowthDays;
+
+    /// <summary>
+    /// 流浪汉招募标记（3.5.1 §4.1 E-S4：招募后职业已翻转为居民，正在走回王国途中，
+    /// 抵达王国锚点附近才正式纳入人口注册表；途中遇敌有风险）。
+    /// </summary>
+    public bool IsVagrantRecruited;
 
     /// <summary>初始化生活状态（新建单位调用；SatietySystem/HappinessSystem/存档读档共用）。</summary>
     public void InitLifeState(int satiety, int happiness, string equipId)
@@ -299,8 +310,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             satiety = Satiety,
             happiness = IndividualHappiness,
             equipId = EquipId,
-            // v3：个体上次生育天数（3.5 P0-1）
-            lastBirthDay = LastBirthDay
+            // v3：个体上次生育天数（3.5 P0-1）+ 成长计数/招募标记（3.5.1 E-S4）
+            lastBirthDay = LastBirthDay,
+            childGrowthDays = ChildGrowthDays,
+            isVagrantRecruit = IsVagrantRecruited
         };
         return new SavePayload
         {
@@ -336,8 +349,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             InitLifeState(startSatiety, 50, null);
         }
 
-        // v3 兼容：v3+ 存档恢复个体生育天数；旧档缺字段 → 默认 -999（可生育，JsonUtility 兜底）
+        // v3 兼容：v3+ 存档恢复个体生育天数/成长计数/招募标记；旧档缺字段 → 默认值（JsonUtility 兜底）
         LastBirthDay = data.saveDataVersion >= 3 ? data.lastBirthDay : -999;
+        ChildGrowthDays = data.saveDataVersion >= 3 ? data.childGrowthDays : 0;
+        IsVagrantRecruited = data.saveDataVersion >= 3 && data.isVagrantRecruit;
     }
 
     // ===== 战斗系统（3.4 重构）=====
@@ -1026,6 +1041,8 @@ public class UnitSaveData
     public int satiety = 80;
     public int happiness = 50;
     public string equipId;
-    // ===== v3（3.5 P0-1）：个体上次生育天数（-999=可生育；旧档缺字段 JsonUtility 给默认 -999）=====
+    // ===== v3（3.5 P0-1 + 3.5.1 E-S4）：个体生育/成长/招募标记（旧档缺字段 JsonUtility 给默认值）=====
     public int lastBirthDay = -999;
+    public int childGrowthDays;      // 小孩成长天数事件计数（E-S4）
+    public bool isVagrantRecruit;    // 流浪汉招募走回标记（E-S4）
 }
