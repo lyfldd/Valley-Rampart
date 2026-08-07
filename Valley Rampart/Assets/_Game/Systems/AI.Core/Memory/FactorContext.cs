@@ -69,6 +69,16 @@ public struct FactorContext
     /// 高分时 = HomePoint（正常归巢/漫游语义）。L3 战略撤退与 SafetyStimulus 低分拉力共用。
     /// </summary>
     public Vector2X SafeAnchorPos;
+    /// <summary>
+    /// 是否未招募流浪汉（QQQ.2 T11 语义）：HomePoint = 出生营地。WanderStimulusProvider 特判：
+    /// 以营地为中心小半径徘徊，不抽全局锚点池（否则流浪汉漫游目标被拉到城堡/建筑附近 → 朝主城走）。
+    /// </summary>
+    public bool IsUnrecruitedVagrant;
+    /// <summary>
+    /// 是否工人（QQQ.4 T7）：工人闲逛不抽城堡锚点（防扎堆主城），居民可抽城堡。
+    /// 职业枚举（壳类型）不入 ProfessionSnapshot，故由 NPCBrain 组装。
+    /// </summary>
+    public bool IsWorker;
 
     // ===== ② 记忆组件 FillContext 写入 =====
     public HitCooldownState CurrentState;

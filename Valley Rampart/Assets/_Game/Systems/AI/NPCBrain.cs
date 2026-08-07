@@ -259,11 +259,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         _lodSystem = LODSystem.Instance;
         _currentPerceptionInterval = _config != null ? _config.perceptionUpdateInterval : 0.2f;
 
-        // HomePointProvider 查找（场景内挂 SceneHomePointProvider）
+        // HomePointProvider：Singleton 自动创建（2026-08-07 修复：场景未挂 SceneHomePointProvider
+        // 时 _homePointProvider=null → HomePoint 恒 (0,0) → NPC 全往原点/主城聚集）
         if (_homePointProvider == null)
         {
-            var provider = FindObjectOfType<SceneHomePointProvider>();
-            if (provider != null) _homePointProvider = provider;
+            _homePointProvider = SceneHomePointProvider.Instance;
         }
     }
 
@@ -595,6 +595,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         bool isNight = IsNight();
         Vector2 homePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
 
+        // QQQ.2 T11：未招募流浪汉标记（HomePoint=出生营地，WanderStimulusProvider 特判营地徘徊，
+        // 不抽全局锚点池——否则漫游目标被拉到城堡/建筑附近，表现为"不停往主城走"）
+        bool unrecruitedVagrant = _controller != null
+            && !_controller.IsVagrantRecruited
+            && _controller.EffectiveOccupation == Occupation.Vagrant
+            && _controller.BirthCampPos != Vector2.zero;
+
         // QQQ.2 T8 / DR-21：统一安全系数（合并 SafetyStimulus/ThreatHysteresis/Caution 的空闲分布决策）
         // ① 城墙内判定（多段/无城墙都支持，GridSystem 双表示查询）
         bool insideWall = GridSystem.Instance != null && GridSystem.Instance.IsInsideWall(_self.GetPosition());
@@ -613,8 +620,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             _lastRaw, _config.threatPenaltyScale,
             GetNightFactor(), _config.nightPenaltyScale);
         // ⑤ 撤退安全锚点：低分 → 最近安全锚点（边界遇敌往内撤）；高分 → HomePoint（正常归巢）
-        Vector2 safeAnchor = RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
-            _self.GetPosition(), safetyScore, _config.wanderThreshold, homePoint);
+        // QQQ.4 T5：流浪汉低分撤退目标固定为营地（homePoint）——营地偏远 SafetyScore 低，
+        // 若走 ResolveRetreatTarget 会抽到城堡锚点 → 流浪汉被拉向主城
+        Vector2 safeAnchor = unrecruitedVagrant
+            ? homePoint
+            : RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
+                _self.GetPosition(), safetyScore, _config.wanderThreshold, homePoint);
 
         // M1 决策核提取：核内吃快照（接缝 4），壳每 tick 从 SO 快照保证滑块实时性
         return new FactorContext
@@ -652,6 +663,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             // QQQ.2 T8 / DR-21：统一安全系数 + 撤退安全锚点
             SafetyScore = safetyScore,
             SafeAnchorPos = Vector2XUnity.FromUnity(safeAnchor),
+            // QQQ.2 T11：未招募流浪汉标记（Wander 特判营地徘徊）
+            IsUnrecruitedVagrant = unrecruitedVagrant,
+            // QQQ.4 T7：工人标记（闲逛不抽城堡锚点，防扎堆主城）
+            IsWorker = _controller != null && _controller.EffectiveOccupation == Occupation.Worker,
             // D1 修复：保护力加权和（3.7 保护矩阵，ProtectionHysteresisComponent 消费；
             // 此前不填充恒 0 → HasProtection 恒 false，保护机制是死代码）
             ProtectPowerSum = SumNearbyProtectPower(),

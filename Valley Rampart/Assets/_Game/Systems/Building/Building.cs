@@ -280,6 +280,21 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         hp = maxHp;
     }
 
+    /// <summary>
+    /// 累计等级缩放系数（3.5.4 数据卡）：各已解锁 levels 档位 statScale 的连乘。
+    /// Lv1=1；升到 Lv2 乘 levels[0].statScale；升到 Lv3 再乘 levels[1].statScale。
+    /// 供 ProducerComponent.RefreshRate / StorageComponent.RefreshCapacity / HP 升级共用。
+    /// </summary>
+    public float LevelScale()
+    {
+        if (def == null || def.levels == null || def.levels.Length == 0) return 1f;
+        float s = 1f;
+        int n = Mathf.Min(level - 1, def.levels.Length);
+        for (int i = 0; i < n; i++)
+            s *= def.levels[i].statScale;
+        return s;
+    }
+
     // ===== 状态机 + 进度系统（3.3.4 批次3）=====
 
     /// <summary>开始建造/修复（进入 Constructing 态，显示脚手架）。</summary>
@@ -319,6 +334,15 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             maxHp = Mathf.RoundToInt(maxHp * lv.statScale);
             hp = maxHp;
             _pendingUpgrade = false;
+            // 3.5.4：升级后刷新产能/容量（LevelScale 按新等级重算，升级效果真实生效）
+            var prod = GetComponent<ProducerComponent>();
+            if (prod != null) prod.RefreshRate();
+            var storage = GetComponent<StorageComponent>();
+            if (storage != null)
+            {
+                storage.RefreshCapacity();
+                storage.storedAmount = Mathf.Min(storage.storedAmount, storage.capacity);
+            }
             EventBus.Publish(new BuildingUpgradedEvent(this, level - 1, level));
         }
         state = BuildingState.Active;

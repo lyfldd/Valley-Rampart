@@ -35,6 +35,12 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>贸易额度刷新倒计时（天，索引=资源等级-1，9 档）。</summary>
     public int[] TradeCooldownDays { get; private set; } = new int[9];
 
+    /// <summary>
+    /// 各模块研究等级（索引=模块，与 ModuleLevels 同构；研究完成提升，独立于主城解锁）。
+    /// QQQ.2 Q4：学院/工坊研究系统落地——研究项目完成后提升 Science 模块研究等级。
+    /// </summary>
+    public int[] ResearchLevels { get; private set; } = new int[6];
+
     /// <summary>主城 Building 引用（修复/升级时同步 level）。</summary>
     private Building _castleBuilding;
 
@@ -210,6 +216,22 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         return nextLevel <= GetModuleLevel(ResolveModule(b.def));
     }
 
+    /// <summary>某模块研究等级（研究系统：研究完成提升，独立于主城模块等级）。</summary>
+    public int GetResearchLevel(ModuleType module)
+    {
+        int idx = (int)module;
+        return idx >= 0 && idx < ResearchLevels.Length ? ResearchLevels[idx] : 0;
+    }
+
+    /// <summary>研究完成：提升对应模块研究等级（学院/工坊均属 Science 模块，QQQ.2 Q4）。</summary>
+    public void ApplyResearch(ResearchProject project)
+    {
+        int idx = (int)ModuleType.Science;
+        if (idx < 0 || idx >= ResearchLevels.Length) return;
+        ResearchLevels[idx] = Mathf.Max(ResearchLevels[idx], project.researchLevel);
+        Debug.Log($"[KingdomManager] 研究完成：{project.displayName} → 科技研究等级 {ResearchLevels[idx]}");
+    }
+
     /// <summary>解析建筑归属模块（优先 BuildingDef.moduleType，回退 ModuleDef 查表）。</summary>
     public ModuleType ResolveModule(BuildingDef def)
     {
@@ -301,7 +323,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
             currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1,
             tradeQuotaRemaining = (int[])TradeQuotaRemaining.Clone(),
             tradeCooldownDays = (int[])TradeCooldownDays.Clone(),
-            researchLevels = new int[6],
+            researchLevels = (int[])ResearchLevels.Clone(),
             waveProgress = 0
         };
         return new SavePayload
@@ -331,7 +353,11 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         if (data.tradeCooldownDays != null && data.tradeCooldownDays.Length >= 7)
             TradeCooldownDays = ResizeQuotaArray(data.tradeCooldownDays);
 
-        Debug.Log($"[KingdomManager] 读档恢复：主城 Lv.{CastleLevel}，模块=[{string.Join(",", ModuleLevels)}]");
+        // 研究等级（旧档缺失=0 保留）
+        if (data.researchLevels != null && data.researchLevels.Length == 6)
+            ResearchLevels = (int[])data.researchLevels.Clone();
+
+        Debug.Log($"[KingdomManager] 读档恢复：主城 Lv.{CastleLevel}，模块=[{string.Join(",", ModuleLevels)}]，研究=[{string.Join(",", ResearchLevels)}]");
     }
 
     /// <summary>把旧存档（7 档）额度数组扩展到当前 9 档（v1 兼容：缺档补初始额度）。</summary>
@@ -353,6 +379,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     {
         CastleLevel = 0;
         ModuleLevels = new int[6];
+        ResearchLevels = new int[6];
         TradeQuotaRemaining = new int[9];
         TradeCooldownDays = new int[9];
         _castleBuilding = null;

@@ -11,8 +11,13 @@ using UnityEngine;
 /// HomePoint 依赖倒置 P0 占位实现（§9，决策11）。
 /// 场景空 Transform 标记城墙内驻留点，Inspector 拖引用。
 /// P1 替换为城墙内驻留点计算器（接建造系统数据，自动算最近驻留点）。
+///
+/// 2026-08-07 修复（用户报告"NPC 全往主城/原点聚集"）：原为普通 MonoBehaviour 需场景手动挂载，
+/// GameScene 未挂 → NPCBrain._homePointProvider=null → HomePoint 恒 Vector2.zero。
+/// 改为 Singleton&lt;SceneHomePointProvider&gt; 自动创建；anchor 未拖时回退 ResolveKingdomAnchor()
+/// （主城坐标），不再退化为 (0,0) 把 NPC 全部拉向原点。
 /// </summary>
-public class SceneHomePointProvider : MonoBehaviour, IHomePointProvider
+public class SceneHomePointProvider : Singleton<SceneHomePointProvider>, IHomePointProvider
 {
     [Tooltip("P0 占位：我方（Human_Player）城墙内驻留点空 Transform。P1 替换为城墙计算器")]
     public Transform homePointAnchor;

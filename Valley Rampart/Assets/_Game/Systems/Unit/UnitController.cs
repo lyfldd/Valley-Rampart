@@ -338,11 +338,20 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     // ===== ISaveable 实现 =====
 
+    /// <summary>获取工人背包（缺失则补挂，QQQ.4 T8 兜底：Worker prefab 未挂 WorkerInventory 组件）。</summary>
+    public WorkerInventory GetOrAddInventory()
+    {
+        var inv = GetComponent<WorkerInventory>();
+        if (inv == null) inv = gameObject.AddComponent<WorkerInventory>();
+        return inv;
+    }
+
     public SavePayload SaveState()
     {
+        var inv = GetOrAddInventory();   // QQQ.4 T8 兜底：Worker prefab 未挂组件则补挂
         var data = new UnitSaveData
         {
-            saveDataVersion = 4,
+            saveDataVersion = 5,
             faction = (int)Data.faction,
             occupation = (int)EffectiveOccupation,
             currentHp = CurrentHp,
@@ -362,13 +371,16 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             isVagrantRecruit = IsVagrantRecruited,
             // v4：出生营地坐标（QQQ.2 T11 / DR-7：未招募流浪汉 HomePoint=营地）
             birthCampX = BirthCampPos.x,
-            birthCampY = BirthCampPos.y
+            birthCampY = BirthCampPos.y,
+            // v5：工人背包（QQQ.4 T9 / 需求5 资源生命周期）
+            carriedType = (int)inv.carriedType,
+            carriedAmount = inv.carriedAmount
         };
         return new SavePayload
         {
             typeName = typeof(UnitSaveData).AssemblyQualifiedName,
             json = JsonUtility.ToJson(data),
-            version = 4
+            version = 5
         };
     }
 
@@ -406,6 +418,13 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         BirthCampPos = data.saveDataVersion >= 4
             ? new Vector2(data.birthCampX, data.birthCampY)
             : Vector2.zero;
+        // v5 兼容：工人背包（QQQ.4 T9 / 需求5 资源生命周期）；旧档无 → 空背包
+        if (data.saveDataVersion >= 5)
+        {
+            var inv = GetOrAddInventory();
+            inv.carriedType = (ResourceType)data.carriedType;
+            inv.carriedAmount = Mathf.Max(0, data.carriedAmount);
+        }
     }
 
     // ===== 战斗系统（3.4 重构）=====
@@ -1375,4 +1394,7 @@ public class UnitSaveData
     // ===== v4（QQQ.2 T11 / DR-7）：出生营地坐标（未招募流浪汉 HomePoint=营地）=====
     public float birthCampX;
     public float birthCampY;
+    // ===== v5（QQQ.4 T9 / 需求5 资源生命周期）：工人背包 =====
+    public int carriedType;
+    public int carriedAmount;
 }

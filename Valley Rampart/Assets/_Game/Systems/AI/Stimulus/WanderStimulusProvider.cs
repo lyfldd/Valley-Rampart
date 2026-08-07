@@ -34,10 +34,31 @@ public class WanderStimulusProvider
         _stimulus.Position = ctx.HomePoint;
         _stimulus.Intensity = 0f;
 
-        // ① DR-21 门控：Score < wanderThreshold → 不 Wander（低分态交撤退/回城拉力）
+        // ① QQQ.4 T4：未招募流浪汉豁免 SafetyScore 门控——无论分数高低都在出生营地
+        // （HomePoint）为中心小半径徘徊，不抽全局锚点池。全局池含城堡中心+预设点+建筑锚点，
+        // 流浪汉抽到会被拉到城堡附近 → 表现为"不停往主城走"；营地偏远分低被门控拦截更是如此。
+        if (ctx.IsUnrecruitedVagrant)
+        {
+            float nowVagrant = ctx.CurrentTime;
+            if (nowVagrant - _lastRefreshTime >= _nextInterval)
+            {
+                _lastRefreshTime = nowVagrant;
+                _nextInterval = Random.Range(
+                    ctx.Config.anchorRefreshIntervalMin, ctx.Config.anchorRefreshIntervalMax);
+                float radius = Mathf.Max(1f, ctx.CellSize) * Random.Range(1f, 3f);
+                _currentAnchor = new Vector2(ctx.HomePoint.x, ctx.HomePoint.y)
+                    + new Vector2(Random.Range(-radius, radius), Random.Range(-0.5f, 0.5f));
+                _hasAnchor = true;
+            }
+            _stimulus.Position = _hasAnchor ? Vector2XUnity.FromUnity(_currentAnchor) : ctx.HomePoint;
+            _stimulus.Intensity = ctx.Config.wanderIntensity;
+            return _stimulus;
+        }
+
+        // ② DR-21 门控：Score < wanderThreshold → 不 Wander（低分态交撤退/回城拉力）
         if (ctx.SafetyScore < ctx.Config.wanderThreshold) return _stimulus;
 
-        // ② 锚点刷新（10-20s 随机间隔，间隔内复用当前锚点防抖动）
+        // ③ 锚点刷新（10-20s 随机间隔，间隔内复用当前锚点防抖动）
         float now = ctx.CurrentTime;
         if (now - _lastRefreshTime >= _nextInterval)
         {
@@ -47,7 +68,9 @@ public class WanderStimulusProvider
 
             var selfPos = new Vector2(ctx.SelfPos.x, ctx.SelfPos.y);
             var pool = WanderAnchorPool.Instance;
-            if (pool.TryPickAnchor(selfPos, _recent, ctx.Config.anchorAvoidRecentCount, out var anchor))
+            // QQQ.4 T7：工人闲逛不抽城堡锚点（防扎堆主城，散布在建筑/空地锚点）；居民可抽城堡
+            if (pool.TryPickAnchor(selfPos, _recent, ctx.Config.anchorAvoidRecentCount,
+                allowCastle: !ctx.IsWorker, out var anchor))
             {
                 _currentAnchor = anchor;
                 _hasAnchor = true;

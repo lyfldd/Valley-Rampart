@@ -17,9 +17,11 @@ using UnityEngine;
 /// <summary>王国动态闲逛锚点池（单例，NPCBrain/WanderStimulusProvider 查询）。</summary>
 public class WanderAnchorPool : Singleton<WanderAnchorPool>
 {
-    private readonly List<Vector2> _extras = new List<Vector2>();      // 城堡+预设+采集空地（持久）
+    private readonly List<Vector2> _castleAnchors = new List<Vector2>();  // 城堡中心+预设点（15s 刷新）
     private readonly List<Vector2> _buildingAnchors = new List<Vector2>(); // 活跃建筑（5s 重建）
-    private readonly List<Vector2> _anchors = new List<Vector2>();     // 合并缓存（查询用）
+    private readonly List<Vector2> _freeSpots = new List<Vector2>();       // 采集空地（持久）
+    private readonly List<Vector2> _anchors = new List<Vector2>();         // 合并缓存（查询用）
+    private readonly List<byte> _anchorTypes = new List<byte>();           // 与 _anchors 并行：0=城堡 1=建筑 2=空地
     private readonly HashSet<int> _coordKeys = new HashSet<int>();     // 去重（按 x 格）
     private readonly List<int> _scratch = new List<int>();             // 复用缓冲（零 GC）
     private readonly List<int> _result = new List<int>();
@@ -29,7 +31,7 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     private float _extrasRefreshTimer;
     private const float BuildingRebuildInterval = 5f;
     private const float ExtrasRefreshInterval = 15f;
-    private const int MaxExtras = 48;      // 采集空地锚点上限（防无限增长）
+    private const int MaxFreeSpots = 48;    // 采集空地锚点上限（防无限增长）
 
     private Vector2 _castleAnchor = Vector2.zero;
 
@@ -69,16 +71,16 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     /// <summary>城堡中心 + 周边预设点（±2/4/6 格），随当前城堡位置刷新（跨岛/新局自愈）。</summary>
     void RefreshCastleExtras()
     {
-        _extras.Clear();
+        _castleAnchors.Clear();
         _castleAnchor = ResolveCastleAnchor();
         if (_castleAnchor == Vector2.zero) return;  // WorldManager 未就绪：仅保留后续注册的空地锚点，下轮重试
-        _extras.Add(_castleAnchor);
+        _castleAnchors.Add(_castleAnchor);
         float cs = GetCellSize();
         float[] offsets = { 2f, 4f, 6f };
         for (int i = 0; i < offsets.Length; i++)
         {
-            _extras.Add(_castleAnchor + new Vector2(offsets[i] * cs, 0f));
-            _extras.Add(_castleAnchor - new Vector2(offsets[i] * cs, 0f));
+            _castleAnchors.Add(_castleAnchor + new Vector2(offsets[i] * cs, 0f));
+            _castleAnchors.Add(_castleAnchor - new Vector2(offsets[i] * cs, 0f));
         }
     }
 
@@ -96,15 +98,21 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     {
         _anchors.Clear();
         _coordKeys.Clear();
-        AddUnique(_extras);
-        AddUnique(_buildingAnchors);
+        _anchorTypes.Clear();
+        AddUnique(_castleAnchors, 0);
+        AddUnique(_buildingAnchors, 1);
+        AddUnique(_freeSpots, 2);
     }
 
-    void AddUnique(List<Vector2> list)
+    void AddUnique(List<Vector2> list, byte type)
     {
         for (int i = 0; i < list.Count; i++)
         {
-            if (_coordKeys.Add(RoundedKey(list[i]))) _anchors.Add(list[i]);
+            if (_coordKeys.Add(RoundedKey(list[i])))
+            {
+                _anchors.Add(list[i]);
+                _anchorTypes.Add(type);
+            }
         }
     }
 
@@ -124,8 +132,8 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     /// <summary>资源点采集后空地锚点（持久；Building.OnGatherCompleted 调）。</summary>
     public void RegisterFreeSpot(Vector2 worldPos)
     {
-        if (_extras.Count >= MaxExtras) return;
-        _extras.Add(worldPos);
+        if (_freeSpots.Count >= MaxFreeSpots) return;
+        _freeSpots.Add(worldPos);
         Compile();
     }
 
@@ -146,18 +154,20 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     /// <summary>
     /// 抽闲逛锚点（WanderStimulusProvider 用，DR-21 流程）：
     /// 近邻优先 + 随机抖动（安全系数+距离权重）→ 候选取最近 K 个 → 排除最近 avoidCount 个已用锚点 → 随机抽 1。
+    /// QQQ.4 T6/T7：allowCastle=false 时排除城堡中心+预设点（工人闲逛不扎堆主城，居民可抽城堡）。
     /// 返回 false 时调用方回退 HomePoint（无锚点/未初始化）。
     /// </summary>
-    public bool TryPickAnchor(Vector2 selfPos, List<Vector2> recent, int avoidCount, out Vector2 anchor)
+    public bool TryPickAnchor(Vector2 selfPos, List<Vector2> recent, int avoidCount, bool allowCastle, out Vector2 anchor)
     {
         anchor = Vector2.zero;
         EnsureInitialized();
         if (_anchors.Count == 0) return false;
 
-        // 排除最近 avoidCount 个已用锚点（位置 1 世界单位内视为同一锚点）
+        // 排除最近 avoidCount 个已用锚点（位置 1 世界单位内视为同一锚点）+ 职业不允的城堡锚点
         _scratch.Clear();
         for (int i = 0; i < _anchors.Count; i++)
         {
+            if (!allowCastle && _anchorTypes[i] == 0) continue;   // QQQ.4：工人不抽城堡锚点
             bool used = false;
             for (int r = 0; r < recent.Count && r < avoidCount; r++)
             {

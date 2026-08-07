@@ -112,13 +112,14 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
 
         // 升级按钮（3.5：主城升级走 KingdomManager；普通建筑升级受模块级门控）
         bool isCastle = _target.sourceType == BuildingType.CastleCore;
+        bool hasUpgradeSlot = _target.isPlayerBuilt
+            && def.levels != null
+            && def.levels.Length > 0
+            && _target.level - 1 < def.levels.Length;
+        bool moduleOk = KingdomManager.Instance == null || KingdomManager.Instance.CanUpgradeBuilding(_target);
         bool canUpgrade = isCastle
             ? (KingdomManager.Instance != null && KingdomManager.Instance.CastleLevel >= 1 && KingdomManager.Instance.CastleLevel < 6)
-            : (_target.isPlayerBuilt
-               && def.levels != null
-               && def.levels.Length > 0
-               && _target.level - 1 < def.levels.Length
-               && (KingdomManager.Instance == null || KingdomManager.Instance.CanUpgradeBuilding(_target)));
+            : hasUpgradeSlot;
         if (_upgradeButton != null)
         {
             _upgradeButton.style.display = canUpgrade ? DisplayStyle.Flex : DisplayStyle.None;
@@ -133,8 +134,17 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                 else
                 {
                     var lvCost = def.levels[_target.level - 1].upgradeCost;
-                    _upgradeButton.text = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food})";
-                    _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(lvCost));
+                    if (!moduleOk)
+                    {
+                        // 模块等级不足（3.5 §2.1：建筑等级 ≤ 模块等级）：置灰并提示，避免"为什么没有升级按钮"
+                        _upgradeButton.text = "升级 (需先升级主城)";
+                        _upgradeButton.SetEnabled(false);
+                    }
+                    else
+                    {
+                        _upgradeButton.text = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food})";
+                        _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(lvCost));
+                    }
                 }
             }
         }
@@ -373,11 +383,12 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
-        // 仓库/粮仓/高级仓储等有 StorageComponent 的：当前存储 / 容量
+        // 仓库/粮仓/高级仓储等有 StorageComponent 的：资源种类 + 当前存储 / 容量
+        // （用户反馈：点击具体仓库建筑要能看到"存的是什么资源"，而非只有数字）
         var storage = _target.GetComponent<StorageComponent>();
         if (storage != null)
         {
-            AddFunctionRow("存储", $"{storage.storedAmount}/{storage.capacity}");
+            AddFunctionRow("存储", $"{ResName(storage.resourceType)} {storage.storedAmount}/{storage.capacity}");
             any = true;
         }
 
@@ -406,11 +417,31 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
-        // 学院/工坊：研究入口占位
+        // 学院/工坊：研究（QQQ.2 Q4 完整版：单项目队列 + 天数推进 + 完成提升科技研究等级）
         if (def.id == "Academy" || def.id == "Workshop")
         {
-            AddFunctionRow("研究", "待开放");
-            any = true;
+            var academy = _target.GetComponent<AcademyBuilding>();
+            if (academy != null)
+            {
+                if (academy.currentResearch != null)
+                    AddFunctionRow("研究中", $"{academy.currentResearch.Value.displayName}（剩 {academy.RemainingDays} 天）");
+                else
+                    AddFunctionRow("研究中", "空闲");
+
+                var available = academy.GetAvailableProjects();
+                foreach (var p in available)
+                {
+                    AddFunctionRow("项目", $"{p.displayName}（{p.durationDays} 天 / 金{p.cost.gold}）");
+                    var prj = p;   // 闭包捕获副本
+                    AddFunctionButton($"研究 {p.displayName}", () => OnResearchProjectClicked(academy, prj));
+                }
+                if (available.Count == 0)
+                    AddFunctionRow("项目", "暂无（需升级主城解锁科技模块 / 已全研究）");
+
+                if (academy.Queue.Count > 0)
+                    AddFunctionRow("队列", $"{academy.Queue.Count} 项");
+                any = true;
+            }
         }
 
         // 一次性资源点（QQQ.2 T19 / DR-11）：采集入口——显示资源类型 + 预计耗时，确认后发布 Gather 任务
@@ -429,6 +460,24 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private static int GatherAmount()
     {
         return TaskScheduler.HasInstance ? TaskScheduler.Instance.gatherAmount : 5;
+    }
+
+    /// <summary>资源类型中文名（仓库存储行显示用，与 WarehousePanel 保持一致）。</summary>
+    private static string ResName(ResourceType t)
+    {
+        switch (t)
+        {
+            case ResourceType.Gold: return "金币";
+            case ResourceType.Stone: return "石材";
+            case ResourceType.Wood: return "木材";
+            case ResourceType.Food: return "食物";
+            case ResourceType.Ore: return "矿石";
+            case ResourceType.Crystal: return "水晶";
+            case ResourceType.FireOil: return "火油";
+            case ResourceType.SpecialFood: return "特殊食物";
+            case ResourceType.Meat: return "肉";
+            default: return t.ToString();
+        }
     }
 
     /// <summary>功能区加一行「标签：值」统计（复用 info-row/info-cell 样式）。</summary>
@@ -493,6 +542,13 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_target == null) return;
         _target.StartGather();
         UIManager.Instance?.CloseCurrent();
+    }
+
+    /// <summary>研究按钮（QQQ.2 Q4）：扣金入队/开始研究（资源不足/模块未解锁时 AcademyBuilding 内部拒绝）。</summary>
+    private void OnResearchProjectClicked(AcademyBuilding academy, ResearchProject project)
+    {
+        if (academy == null) return;
+        if (academy.TryEnqueueResearch(project)) Refresh();
     }
 
     private void OnCloseClicked()

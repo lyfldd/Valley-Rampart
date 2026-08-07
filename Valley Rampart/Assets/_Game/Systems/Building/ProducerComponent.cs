@@ -52,7 +52,6 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     {
         _building = building;
         if (building == null || building.def == null) return;
-        _rate = building.def.producer.rate * building.def.GetGradeScale(building.grade);
         _resourceType = building.def.outputResource;
         _storage = building.GetComponent<StorageComponent>();
         _hasByproduct = false;
@@ -61,6 +60,7 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
 
         // QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位，实际产水入网；跳过金矿分支）
         _isWell = building.def.id == "Well";
+        RefreshRate();
         UpdateByproductConfig();
 
         // 金矿：金=货币不占存储，直接产金入国库（rate 由 KingdomConfig 每日产金换算，SO 可调）
@@ -78,6 +78,18 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
             int secondsPerDay = cfg != null && cfg.kingdomSecondsPerDay > 0 ? cfg.kingdomSecondsPerDay : 180;
             _rate = perDay / (float)secondsPerDay;
         }
+    }
+
+    /// <summary>
+    /// 刷新产能：rate × gradeScale × 等级缩放（3.5.4 数据卡：Lv2/Lv3 效率↑）。
+    /// 建造/读档/升级后调用（QQQ.3 修复：升级后产能不再恒为 Lv1 值）。
+    /// </summary>
+    public void RefreshRate()
+    {
+        if (_building == null || _building.def == null) return;
+        _rate = _building.def.producer.rate
+                * _building.def.GetGradeScale(_building.grade)
+                * _building.LevelScale();
     }
 
     /// <summary>按当前建筑等级刷新副产配置（升级后自动切换水晶→火油）。</summary>

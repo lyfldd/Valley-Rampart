@@ -15,11 +15,17 @@ using UnityEngine;
 /// 注意：WorkerTask 已内化为 KingdomTask 工厂（QQQ.2 T18），本类统一驱动任务推进。
 /// 本类不设置 brain.IsKingdomTaskWorker=true（靠 TaskStimulus 让 NPC 移动，Executor 消费，
 /// 移动独占不再需要——任务态由本类 _npcStateMap 维护），完成/放弃时复位（修复 LC-N2）。
+///
+/// 2026-08-07 修复（用户报告"工人不工作/采集永远采集中"）：TaskScheduler 原为普通
+/// MonoBehaviour 单例，必须场景手动挂载；GameScene 未挂 → HasInstance 恒 false →
+/// 建筑不注册、任务永不派发、ProducerComponent.HasWorkerAssigned 恒 false 停产。
+/// 改为继承 Singleton&lt;TaskScheduler&gt;（首次访问 Instance 自动创建，DontDestroyOnLoad），
+/// 无需场景挂载，任务调度立即可用。
 /// </summary>
 // QQQ.2 T17 / QQQ.3 B1-7
-public class TaskScheduler : MonoBehaviour, ITaskScheduler
+public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 {
-    public static TaskScheduler Instance { get; private set; }
+    /// <summary>是否已有实例（访问 Instance 时若未创建会自动创建并返回，调度器始终可用）。</summary>
     public static bool HasInstance => Instance != null;
 
     [Header("任务调度配置（QQQ.2 §10.3）")]
@@ -50,26 +56,33 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
 
     // ===== 单例 =====
 
-    private void Awake()
+    protected override void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Debug.LogWarning("[TaskScheduler] 已存在实例，销毁重复对象。");
-            Destroy(gameObject);
-            return;
-        }
-        Instance = this;
+        base.Awake();   // Singleton：自动创建实例 + DontDestroyOnLoad
         _priorityConfig = Resources.Load<TaskPriorityConfig>("Config/TaskPriorityConfig");
         if (_priorityConfig == null)
             Debug.LogWarning("[TaskScheduler] 未找到 TaskPriorityConfig（Resources/Config/TaskPriorityConfig），优先级回退 B。");
 
         // QQQ.3 B1-1：订阅 NPC 死亡事件清指派
         UnitController.OnUnitDied += OnNpcDied;
+
+        // 2026-08-07 修复：自动创建时补注册——若建筑 OnConstructionComplete 发生在本单例创建前
+        // （HasInstance 当时为 false 被跳过），把已 Active 的建筑补纳入任务源，避免"任务永不派发"。
+        if (BuildingRegistry.Instance != null && BuildingRegistry.Instance.Count > 0)
+        {
+            var all = BuildingRegistry.Instance.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var b = all[i];
+                if (b != null && b.state == BuildingState.Active && !_sources.Contains(b))
+                    Register(b);
+            }
+        }
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
-        if (Instance == this) Instance = null;
+        base.OnDestroy();
         UnitController.OnUnitDied -= OnNpcDied;
     }
 
@@ -177,17 +190,23 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
             if (n == null || !n.IsAlive || !n.IsIdleForTask) continue;
             var uc = n.GetComponent<UnitController>();
             if (uc == null || uc.npcId == 0) continue;
+            // QQQ.4 T3：任务仅派给工人（Worker / Civilian——Civilian 为旧"平民"职业，注释即"从事资源采集/建造"，
+            // 可视为工人）——流浪汉/居民/君主/士兵不派任务，修复"流浪汉路过 2 秒抢走玩家采集任务"；
+            // Porter 搬运工职业启用时在此追加放行
+            var occ = uc.EffectiveOccupation;
+            if (occ != Occupation.Worker && occ != Occupation.Civilian) continue;
             if (_npcTaskMap.ContainsKey(uc.npcId)) continue;   // 幂等：已占用不重派
             idle.Add(n);
         }
 
-        // ③ 收集可派任务（跳过已在册源，任务幂等靠 _npcTaskMap 判占用）
+        // ③ 收集可派任务（QQQ.4 T1：按"源+任务类型"去重，允许同一源并发不同类型任务——
+        //    农场可同时派 Production（耕作）+ WaterHaul（挑水），修复"取水+耕作无法同时执行"）
         var jobs = new List<KingdomTask>();
         foreach (var s in _sources)
         {
             if (s == null || !s.IsValid) continue;
-            if (HasAssignedTaskForSource(s)) continue;
             if (!s.TryAdvertiseTask(out var task)) continue;
+            if (HasAssignedTaskForSourceType(s, task.type)) continue;
             ResolveDest(task);
             jobs.Add(task);
         }
@@ -335,8 +354,46 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
                     // QQQ.2 T19：Gather 按资源点类型耗时（def.gatherSeconds，DR-11），其余任务用统一 workDuration
                     if (Time.time - _workStartTime[id] >= GetTaskDuration(task))
                     {
-                        Complete(id, task, brain);
-                        stale.Add(id);
+                        if (task.type == KingdomTaskType.Transport)
+                        {
+                            // QQQ.4 T11：搬运段——建筑存量入工人背包 → 转 MovingToDest（去仓库/国库卸货）
+                            if (LoadInventoryFromSource(brain, task))
+                            {
+                                _npcStateMap[id] = TaskState.MovingToDest;
+                                InjectCarryStimulus(brain, task);
+                            }
+                            else
+                            {
+                                Complete(id, task, brain);   // 无货可搬 → 直接完成（ExecuteCompletion 兜底入国库）
+                                stale.Add(id);
+                            }
+                        }
+                        else
+                        {
+                            Complete(id, task, brain);
+                            stale.Add(id);
+                        }
+                    }
+                    break;
+
+                case TaskState.MovingToDest:
+                    // QQQ.4 T11：搬运段——背包资源送往 dest（仓库/国库），到达卸货后完成
+                    {
+                        float arrive = ArrivalThreshold(brain, cellSize);
+                        if (Vector2.Distance(brain.transform.position, task.destPos) <= arrive)
+                        {
+                            UnloadInventory(brain, task);
+                            Complete(id, task, brain);
+                            stale.Add(id);
+                        }
+                        else if (Time.time - _taskStartTime[id] > taskTimeout)
+                        {
+                            stale.Add(id);   // 超时未到达卸货点，放弃（背包资源保留，不丢）
+                        }
+                        else
+                        {
+                            InjectCarryStimulus(brain, task);   // 未到达续命（目标=destPos）
+                        }
                     }
                     break;
 
@@ -359,7 +416,7 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
     /// <summary>完成任务：执行完成动作 + 复位工人 + 移除记录。</summary>
     private void Complete(int npcId, KingdomTask task, NPCBrain brain)
     {
-        ExecuteCompletion(task);
+        ExecuteCompletion(task, brain);
         if (brain != null)
         {
             brain.IsKingdomTaskWorker = false;   // 复位（修复 LC-N2）
@@ -411,8 +468,8 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
         _suspendStartTime.Remove(npcId);
     }
 
-    /// <summary>按任务类型执行完成动作（QQQ.2 §10.3）。</summary>
-    private void ExecuteCompletion(KingdomTask task)
+    /// <summary>按任务类型执行完成动作（QQQ.2 §10.3；QQQ.4 需求5：Gather/Transport 入工人背包）。</summary>
+    private void ExecuteCompletion(KingdomTask task, NPCBrain brain)
     {
         if (task == null || task.source == null) return;
         var comp = task.source as Component;
@@ -424,8 +481,11 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
                 break;
 
             case KingdomTaskType.Transport:
+                // QQQ.4 T11：正常路径已完成（Working→LoadInventoryFromSource→MovingToDest→UnloadInventory）。
+                // 此处兜底：无背包组件（非工人）→ 保持旧行为直接入国库，资源不丢。
                 var st = comp != null ? comp.GetComponent<StorageComponent>() : null;
-                if (st != null) st.HarvestCarry();   // 一次携带量入国库（分批搬运）
+                if (st != null && GetInventory(brain) == null)
+                    st.HarvestCarry();
                 break;
 
             case KingdomTaskType.WaterHaul:
@@ -435,12 +495,100 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
 
             case KingdomTaskType.Gather:
                 var ga = task.args as GatherTaskArgs;
-                if (ga != null && RulerController.Instance != null)
-                    RulerController.Instance.ModifyResource(ga.resourceType, true, ga.amount);
+                if (ga != null)
+                {
+                    // QQQ.4 T10：采集入工人背包（资源生命周期：采集→背包→搬运→仓库）；背包满余量直接入国库兜底
+                    var inv = GetInventory(brain);
+                    if (inv != null)
+                    {
+                        int stored = inv.TryStore(ga.resourceType, ga.amount);
+                        int overflow = ga.amount - stored;
+                        if (overflow > 0 && RulerController.Instance != null)
+                            RulerController.Instance.ModifyResource(ga.resourceType, true, overflow);
+                    }
+                    else if (RulerController.Instance != null)
+                    {
+                        RulerController.Instance.ModifyResource(ga.resourceType, true, ga.amount);
+                    }
+                }
                 // QQQ.2 T19：采集完成 → 资源点销毁三步（①GridSystem.Free ②BuildingRegistry移除 ③对象池Despawn）
                 if (comp is Building b) b.OnGatherCompleted();
                 break;
         }
+    }
+
+    // ===== QQQ.4 T11：搬运两段式辅助（建筑存量→工人背包→仓库/国库）=====
+
+    /// <summary>获取工人背包（prefab 未挂组件则经 UnitController.GetOrAddInventory 补挂，QQQ.4 T8）。</summary>
+    private WorkerInventory GetInventory(NPCBrain brain)
+    {
+        if (brain == null) return null;
+        var inv = brain.GetComponent<WorkerInventory>();
+        if (inv != null) return inv;
+        var uc = brain.GetComponent<UnitController>();
+        return uc != null ? uc.GetOrAddInventory() : null;
+    }
+
+    /// <summary>搬运第一段：建筑 StorageComponent 存量 → 工人背包（一次携带量）。返回是否搬入成功。</summary>
+    private bool LoadInventoryFromSource(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null) return false;
+        var inv = GetInventory(brain);
+        if (inv == null) return false;
+        var comp = task.source as Component;
+        if (comp == null) return false;
+        var st = comp.GetComponent<StorageComponent>();
+        if (st == null || st.storedAmount <= 0) return false;
+        int max = Mathf.Max(1, st.GetCarryAmount());
+        int amount = Mathf.Min(st.storedAmount, max);
+        int stored = inv.TryStore(st.resourceType, amount);
+        if (stored <= 0) return false;
+        st.TakeOut(stored);   // 扣减存量 + 触发 OnStorageChanged（QQQ.4 T11）
+        return true;
+    }
+
+    /// <summary>搬运第二段：背包 → 最近同类型仓库（StorageComponent.Add；满则入国库兜底），资源不丢。</summary>
+    private void UnloadInventory(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null) return;
+        var inv = GetInventory(brain);
+        if (inv == null || inv.IsEmpty) return;
+        int amount = inv.UnloadAll();
+
+        StorageComponent best = null;
+        float bestDist = float.MaxValue;
+        var storages = FindObjectsOfType<StorageComponent>();
+        for (int i = 0; i < storages.Length; i++)
+        {
+            var s = storages[i];
+            if (s == null || s.resourceType != inv.carriedType || s.capacity <= s.storedAmount) continue;
+            float d = Vector2.Distance(s.transform.position, brain.transform.position);
+            if (d < bestDist) { bestDist = d; best = s; }
+        }
+        if (best != null)
+        {
+            int added = best.Add(amount);
+            int overflow = amount - added;
+            if (overflow > 0 && RulerController.Instance != null)
+                RulerController.Instance.ModifyResource(inv.carriedType, true, overflow);
+        }
+        else if (RulerController.Instance != null)
+        {
+            RulerController.Instance.ModifyResource(inv.carriedType, true, amount);
+        }
+    }
+
+    /// <summary>搬运段刺激注入：目标 = destPos（仓库/国库），区别于 Working 段的 SourcePos 刺激。</summary>
+    private void InjectCarryStimulus(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null) return;
+        brain.RemoveTaskStimulus(task.source);
+        brain.AddTaskStimulus(new TaskStimulus(
+            GetPriority(task.type),
+            Vector2XUnity.FromUnity(task.destPos),
+            task.intensity,
+            expiry: Time.time + taskExpiry,
+            issuer: task.source));
     }
 
     // ===== 终点解析（QQQ.2 §10.3：派发时动态解析 destPos，不硬编码）=====
@@ -459,9 +607,7 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
                 task.destPos = ResolveWarehouse(task);
                 break;
             case KingdomDestType.WaterNetwork:
-                task.destPos = WaterNetwork.Instance != null
-                    ? (Vector2)WaterNetwork.Instance.transform.position
-                    : task.SourcePos;
+                task.destPos = ResolveWaterSource(task);
                 break;
             case KingdomDestType.SpecificBuilding:
             default:
@@ -497,13 +643,30 @@ public class TaskScheduler : MonoBehaviour, ITaskScheduler
         return ResolveTreasury(task);
     }
 
+    /// <summary>挑水水源位置 = 最近 Active 水井（QQQ.4 T2：修复挑水目标指向 WaterNetwork.transform 恒 (0,0) 的 bug），无则回退任务源。</summary>
+    private Vector2 ResolveWaterSource(KingdomTask task)
+    {
+        var wells = FindObjectsOfType<Building>();
+        Building best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < wells.Length; i++)
+        {
+            var w = wells[i];
+            if (w == null || w.def == null || w.def.id != "Well" || w.state != BuildingState.Active) continue;
+            float d = Vector2.Distance(w.transform.position, task.SourcePos);
+            if (d < bestDist) { bestDist = d; best = w; }
+        }
+        if (best != null) return best.transform.position;
+        return task != null ? task.SourcePos : Vector2.zero;
+    }
+
     // ===== 辅助 =====
 
-    /// <summary>该源当前是否已有在派任务（幂等去重）。</summary>
-    private bool HasAssignedTaskForSource(ITaskSource source)
+    /// <summary>该源当前是否已有同类型任务在派（QQQ.4 T1：按源+任务类型去重，允许同一源并发不同类型任务）。</summary>
+    private bool HasAssignedTaskForSourceType(ITaskSource source, KingdomTaskType type)
     {
         foreach (var kv in _npcTaskMap)
-            if (ReferenceEquals(kv.Value.source, source)) return true;
+            if (ReferenceEquals(kv.Value.source, source) && kv.Value.type == type) return true;
         return false;
     }
 

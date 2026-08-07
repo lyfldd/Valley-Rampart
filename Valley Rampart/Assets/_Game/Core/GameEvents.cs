@@ -401,6 +401,19 @@ public readonly struct BuildingUpgradedEvent
     }
 }
 
+// 研究完成事件（QQQ.2 Q4）。由 AcademyBuilding 天数推进完成时发布。研究面板/增益表现订阅。
+public readonly struct ResearchCompletedEvent
+{
+    public readonly ResearchProject Project;
+    public readonly Building Academy;
+
+    public ResearchCompletedEvent(ResearchProject project, Building academy)
+    {
+        Project = project;
+        Academy = academy;
+    }
+}
+
 // 建筑产能 tick 事件。由产能系统每秒发布（3.3.2 第四节后置工作）。
 // RulerController 订阅此事件结算资源产出。
 public readonly struct BuildingProductionTickEvent

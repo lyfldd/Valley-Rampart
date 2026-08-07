@@ -18,10 +18,52 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable
     {
         if (building == null || building.def == null) return;
         resourceType = building.def.outputResource;
-        capacity = building.def.producer.capacity > 0 ? building.def.producer.capacity : 100;
+        RefreshCapacity();
+    }
+
+    /// <summary>
+    /// 刷新存储容量：def.producer.capacity × 等级缩放（3.5.4 数据卡：仓库/粮仓 Lv2/Lv3 容量↑）。
+    /// 建造/读档/升级后调用。
+    /// </summary>
+    public void RefreshCapacity()
+    {
+        var def = GetComponent<Building>() != null ? GetComponent<Building>().def : null;
+        if (def == null) return;
+        var b = GetComponent<Building>();
+        capacity = def.producer.capacity > 0
+            ? Mathf.Max(1, Mathf.RoundToInt(def.producer.capacity * b.LevelScale()))
+            : 100;
     }
 
     public bool IsFull => storedAmount >= capacity;
+
+    /// <summary>
+    /// 仓库入货（QQQ.4 T12：工人背包卸货入口）。返回实际入货量；容量满拒绝（返回 0），调用方兜底入国库。
+    /// </summary>
+    public int Add(int amount)
+    {
+        if (amount <= 0) return 0;
+        int room = capacity - storedAmount;
+        if (room <= 0) return 0;
+        int added = Mathf.Min(amount, room);
+        storedAmount += added;
+        OnStorageChanged?.Invoke(this);
+        return added;
+    }
+
+    /// <summary>
+    /// 从存储取走（≤ amount），返回实际取走量。工人搬运第一段入口（QQQ.4 T11：
+    /// 背包已入货后从建筑扣减，保证资源不丢）。内部触发 OnStorageChanged 通知 UI 刷新。
+    /// </summary>
+    public int TakeOut(int amount)
+    {
+        if (amount <= 0) return 0;
+        int taken = Mathf.Min(amount, storedAmount);
+        if (taken <= 0) return 0;
+        storedAmount -= taken;
+        OnStorageChanged?.Invoke(this);
+        return taken;
+    }
 
     public bool IsReadyToHarvest() => storedAmount > 0;
 

@@ -20,7 +20,6 @@ public class TopLeftHUD : MonoBehaviour
     private Label _dayLabel;
     private Label _seasonLabel;
     private Button _populationButton;
-    private Button _warehouseButton;
     private bool _labelsBound;
 
     private UnitController _monarch;
@@ -87,8 +86,6 @@ public class TopLeftHUD : MonoBehaviour
         _seasonLabel = root.Q<Label>("season-text");
         _populationButton = root.Q<Button>("population-button");
         if (_populationButton != null) _populationButton.clicked += OnPopulationClicked;
-        _warehouseButton = root.Q<Button>("warehouse-button");
-        if (_warehouseButton != null) _warehouseButton.clicked += OnWarehouseClicked;
 
         _labelsBound = true;
     }
@@ -183,18 +180,6 @@ public class TopLeftHUD : MonoBehaviour
             return;
         }
         UIManager.Instance?.Push(popPanel, new Interactor(Faction.Human_Player, Vector3.zero));
-    }
-
-    /// <summary>「仓库」按钮：推送 WarehousePanel 入栈（QQQ.2 §需求7 / DR-15）。</summary>
-    private void OnWarehouseClicked()
-    {
-        var whPanel = FindObjectOfType<WarehousePanel>();
-        if (whPanel == null)
-        {
-            Debug.LogWarning("[TopLeftHUD] 未找到 WarehousePanel（场景缺少挂载 WarehousePanel + UIDocument 的 GameObject）");
-            return;
-        }
-        UIManager.Instance?.Push(whPanel, new Interactor(Faction.Human_Player, Vector3.zero));
     }
 
     private void OnDayChanged(TimeDayChangedEvent evt)

@@ -36,7 +36,14 @@ MonoBehaviour:
     maxHp: 300
     range: 0
     damageType: 0
-  levels: []
+  levels:
+  - upgradeCost:
+      gold: 0
+      stone: 12
+      wood: 16
+      food: 0
+    statScale: 1.5
+    prerequisites: []
   crewRequired: 0
   crewRadiusCells: 0
   outputResource: 0

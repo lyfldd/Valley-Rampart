@@ -452,6 +452,36 @@ public class AIDebugSpawnController : MonoBehaviour
         Debug.Log("[AIDebugSpawn] 生产链路场景生成完成：水井+农场+仓库+2工人，观察产粮→搬运入仓。");
     }
 
+    /// <summary>
+    /// QQQ.4 T13 验证场景：资源生命周期端到端（双任务并行 + 工人背包 + 搬运入仓）。
+    /// 一键生成：水井（产水入网）+ 农场（耗水产粮）+ 仓库（卸货目标）+ 木头堆（采集点）+ 3 工人。
+    /// 验证链（依赖 QQQ.4 T1-T12）：
+    ///   ① 农场双任务（T1/T2）：初始水网缺水(&lt;20) → 农场同时派 Production（耕作）+ WaterHaul（挑水）→ 2 工人分工
+    ///   ② 采集入背包（T8/T10/T12）：点击木头堆采集 → 工人采集入背包 → 搬运到仓库 → 左上角资源增加
+    ///   ③ 流浪汉营地徘徊（T4/T5）：流浪汉仅在营地 ±3 格活动，不朝主城
+    /// </summary>
+    public void SpawnLifecycleScenario()
+    {
+        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize : 2.26f;
+        if (BuildingFactory.Instance == null) return;
+        Vector2 center = WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
+
+        // ① 水井（产水入网，不需要工人）
+        PlaceBuilding("Buildings/Well", center + new Vector2(-4f * cs, 0f));
+        // ② 农场（耗水产粮，需工人派生产任务）
+        PlaceBuilding("Buildings/farm", center + new Vector2(1f * cs, 0f));
+        // ③ 仓库（接收背包卸货入仓）
+        PlaceBuilding("Buildings/Warehouse", center + new Vector2(3f * cs, 0f));
+        // ④ 木头堆（采集点，玩家点击 StartGather 触发采集入背包链路）
+        PlaceBuilding("Buildings/wood_pile", center + new Vector2(6f * cs, 0f));
+        // ⑤ 3 个工人（1 耕作 + 1 挑水 + 1 采集搬运）
+        Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(-1f * cs, 0f));
+        Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(2f * cs, 0f));
+        Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(5f * cs, 0f));
+        Debug.Log("[AIDebugSpawn] QQQ.4 生命周期场景生成：水井+农场+仓库+木头堆+3工人，观察双任务/采集入背包→搬运入仓。");
+    }
+
     /// <summary>按资产路径放置建筑（走 BuildingFactory 完整链路：占用/注册/挂件/事件）。</summary>
     bool PlaceBuilding(string assetPath, Vector2 worldPos)
     {

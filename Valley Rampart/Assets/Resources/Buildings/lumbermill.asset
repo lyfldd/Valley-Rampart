@@ -36,7 +36,21 @@ MonoBehaviour:
     maxHp: 0
     range: 0
     damageType: 0
-  levels: []
+  levels:
+  - upgradeCost:
+      gold: 0
+      stone: 8
+      wood: 12
+      food: 0
+    statScale: 1.5
+    prerequisites: []
+  - upgradeCost:
+      gold: 0
+      stone: 20
+      wood: 30
+      food: 0
+    statScale: 1.33
+    prerequisites: []
   outputResource: 2
   isResourceNode: 0
   unlockLevel: 1
