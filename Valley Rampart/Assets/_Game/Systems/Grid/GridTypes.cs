@@ -183,4 +183,10 @@ public class Region
     public bool isEnemyTerritory;        // 是否敌方领土（敌方王国地图标记）
     public MapZone zone;                 // 所属 5 区分区
     public bool isInner;                 // 资源区是否内侧（靠中心区=true，靠极端区=false）
+
+    // ===== QQQ.1 需求1：资源保障占位标记（3.2.1 第四节，事前占位替代事后补丁）=====
+    /// <summary>是否为资源保障占位区块（true 时 terrain 固定为 protectedTerrain，不被权重随机/邻接修正覆盖）。</summary>
+    public bool isProtectedResource;
+    /// <summary>保障区块固定地形（Forest=保障林地 / Quarry=保障矿山）。</summary>
+    public TerrainType protectedTerrain = TerrainType.Plain;
 }

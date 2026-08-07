@@ -171,18 +171,14 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         int abandonedCastleRegionIdx = MapGenRules.GetCastleRegionIndex(M, center, extreme, resource);
 
         // === Step 3-5: 按区分配地形 ===
+        // 先创建全部 Region 骨架（多区结构），再资源保障预占位，最后按区分地形
         for (int i = 0; i < M; i++)
         {
             MapZone zone = MapGenRules.GetZone(i, M, center, extreme, resource);
-            TerrainType terrain = PickTerrainByZone(rng, zone, i, M, bigTerrain);
-
-            // 废弃城堡所在区块强制平原
-            if (i == abandonedCastleRegionIdx) terrain = TerrainType.Plain;
-
             var region = new Region
             {
                 regionIndex = i,
-                terrain = terrain,
+                terrain = TerrainType.Plain,  // 暂定，后续按区分地形覆盖
                 cellStartX = i * cellCount,
                 cellCount = cellCount,
                 resources = new List<BuildingPlaceholder>(),
@@ -192,6 +188,21 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
                 isInner = (zone == MapZone.LeftResource || zone == MapZone.RightResource)
                           ? MapGenRules.IsResourceInner(i, M, zone) : false
             };
+            map.regions.Add(region);
+        }
+
+        // 资源保障预占位（QQQ.1 需求1：事前占位替代事后补丁，左右资源区各保障 1 林 + 1 矿）
+        if (isPlayerHome) PreReserveResources(rng, map.regions, M, center, extreme, resource);
+
+        // 按区分地形（保障区块直接落 protectedTerrain，不走权重随机）
+        for (int i = 0; i < M; i++)
+        {
+            var region = map.regions[i];
+            TerrainType terrain = PickTerrainByZone(rng, region, i, M, bigTerrain);
+
+            // 废弃城堡所在区块强制平原
+            if (i == abandonedCastleRegionIdx) terrain = TerrainType.Plain;
+            region.terrain = terrain;
 
             // 平原子状态判定
             if (terrain == TerrainType.Plain)
@@ -203,8 +214,6 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
                 // 废弃城堡区块强制普通平原
                 if (i == abandonedCastleRegionIdx) region.plainSubState = PlainSubState.Normal;
             }
-
-            map.regions.Add(region);
         }
 
         // === Step 6-7: 资源保障 + 邻接校验（循环 2 轮）===
@@ -222,6 +231,14 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
 
         // === Step 8.5: 废弃城堡占位（2 格，中心区块）===
         PlaceAbandonedCastle(map.regions, abandonedCastleRegionIdx, cellCount);
+
+        // === Step 8.55: 坐标原点对齐（QQQ.1 需求4：城堡中线 = 世界 x=0）===
+        // castleCenterCellGlobal 为城堡中心所在 cell 全局 x（= 城堡两格交界处）
+        int castleCenterCellGlobal = abandonedCastleRegionIdx * cellCount + cellCount / 2;
+        float originX = castleCenterCellGlobal * (_gridConfig != null ? _gridConfig.cellSize : 1f);
+        if (_gridConfig != null) _gridConfig.originX = originX;
+        if (GridSystem.Instance != null && GridSystem.Instance.Config != null)
+            GridSystem.Instance.Config.originX = originX;
 
         // === Step 8.6: 流浪汉营地占位（3.5.1 §4.1 E-S7，仅玩家主图）===
         if (isPlayerHome) PlaceVagrantCamps(rng, map, abandonedCastleRegionIdx, cellCount);
@@ -253,9 +270,13 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     //  地形选择（3.2.1 第三 + 7.2 节）
     // ========================================================================
 
-    /// <summary>按区分地形。极端区按大地形固定，资源区分内/外侧风险分层。</summary>
-    TerrainType PickTerrainByZone(System.Random rng, MapZone zone, int idx, int M, BigTerrain bigTerrain)
+    /// <summary>按区分地形。资源保障占位区块直接返回保障地形；极端区按大地形固定，资源区分内/外侧风险分层。</summary>
+    TerrainType PickTerrainByZone(System.Random rng, Region region, int idx, int M, BigTerrain bigTerrain)
     {
+        // QQQ.1 需求1：资源保障占位区块直接返回保障地形，不走权重随机（不被覆盖）
+        if (region != null && region.isProtectedResource) return region.protectedTerrain;
+
+        MapZone zone = region != null ? region.zone : MapZone.Center;
         switch (zone)
         {
             case MapZone.Center:
@@ -304,59 +325,63 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     //  四资源保障（3.2.1 第四节）
     // ========================================================================
 
-    /// <summary>校验 + 修复四资源完整性。缺什么补什么（不动主城）。</summary>
-    /// <remarks>
-    /// 粮 auto-satisfied：中心区 always 平原，平原 always 有农田。
-    /// 石来源仅靠矿山（丘陵不再提供持续性矿洞）。
-    /// 肥沃 = 高级产出 buff，尽量保障但不强制。
-    /// </remarks>
+    /// <summary>
+    /// 四资源保障（3.2.1 第四节）。
+    /// QQQ.1 需求1重构：保障已前置到分配阶段的 PreReserveResources 事前占位，
+    /// 此处不再 ForceReplace 事后补丁（避免与 EnforceAdjacency 打架），只做统计日志兜底观察。
+    /// </summary>
     void EnsureResourceCoverage(System.Random rng, List<Region> regions, int M, int castleA, int castleB)
     {
-        int minForest = _rulesConfig != null ? _rulesConfig.minForest : 1;
-        int minStone = _rulesConfig != null ? _rulesConfig.minStone : 1;
-        int minFertile = _rulesConfig != null ? _rulesConfig.minFertile : 1;
-
         int forestCount = regions.Count(r => r.terrain == TerrainType.Forest);
         int quarryCount = regions.Count(r => r.terrain == TerrainType.Quarry);
         int fertileCount = regions.Count(r => r.terrain == TerrainType.Plain && r.plainSubState == PlainSubState.Fertile);
 
-        // 缺木 → 资源区替换为林地
-        for (; forestCount < minForest; forestCount++)
-            ForceReplace(rng, regions, M, castleA, castleB,
-                new[] { MapZone.LeftResource, MapZone.RightResource }, TerrainType.Forest);
-        // 缺石 → 资源区替换为矿山（丘陵不再提供持续性石来源）
-        for (; quarryCount < minStone; quarryCount++)
-            ForceReplace(rng, regions, M, castleA, castleB,
-                new[] { MapZone.LeftResource, MapZone.RightResource }, TerrainType.Quarry);
-        // 缺肥沃 buff → 中心区替换一个平原为肥沃（非强制，仅优化）
-        for (; fertileCount < minFertile; fertileCount++)
-            ForceReplace(rng, regions, M, castleA, castleB,
-                new[] { MapZone.Center }, TerrainType.Plain,
-                forceSubState: PlainSubState.Fertile);
+        Debug.Log($"[WorldManager] 资源数量: forest={forestCount} quarry={quarryCount} fertile={fertileCount}");
     }
 
-    /// <summary>在指定区内随机选一个大区块替换地形（不破坏主城）。</summary>
-    void ForceReplace(System.Random rng, List<Region> regions, int M,
-                     int castleA, int castleB, MapZone[] zoneMask, TerrainType target,
-                     PlainSubState forceSubState = PlainSubState.Normal)
+    /// <summary>
+    /// 资源保障预占位（QQQ.1 需求1）：左右资源区各预选 1 个区块作保障林地、1 个作保障矿山。
+    /// 共 4 个保障区块（左林/左矿/右林/右矿），标记 isProtectedResource + protectedTerrain，
+    /// 后续 PickTerrainByZone 直接落保障地形、EnforceAdjacency 不改保障区块。
+    /// </summary>
+    void PreReserveResources(System.Random rng, List<Region> regions, int M, int center, int extreme, int resource)
     {
-        var candidates = regions.Where(r =>
-            zoneMask.Contains(r.zone) &&
-            r.regionIndex != castleA && r.regionIndex != castleB
-        ).ToList();
+        int leftStart = extreme;
+        int leftEnd = extreme + resource;
+        int rightStart = extreme + resource + center;
+        int rightEnd = Mathf.Min(M, rightStart + resource);
 
+        ReserveProtectedInRange(rng, regions, leftStart, leftEnd, TerrainType.Forest);
+        ReserveProtectedInRange(rng, regions, leftStart, leftEnd, TerrainType.Quarry);
+        ReserveProtectedInRange(rng, regions, rightStart, rightEnd, TerrainType.Forest);
+        ReserveProtectedInRange(rng, regions, rightStart, rightEnd, TerrainType.Quarry);
+    }
+
+    /// <summary>在 [start, end) 大区块范围内随机选一个未占用的区块设为指定保障地形。</summary>
+    void ReserveProtectedInRange(System.Random rng, List<Region> regions, int start, int end, TerrainType type)
+    {
+        if (end <= start) return;
+        var candidates = new List<int>();
+        for (int i = start; i < end; i++)
+        {
+            var r = regions[i];
+            if (r == null || r.isProtectedResource) continue;
+            candidates.Add(i);
+        }
         if (candidates.Count == 0) return;
-        int pick = rng.Next(candidates.Count);
-        candidates[pick].terrain = target;
-        if (target == TerrainType.Plain)
-            candidates[pick].plainSubState = forceSubState;
+
+        int pick = candidates[rng.Next(candidates.Count)];
+        var region = regions[pick];
+        region.isProtectedResource = true;
+        region.protectedTerrain = type;
+        Debug.Log($"[WorldManager] 资源保障占位: 区块 {pick}（zone={region.zone}）→ {type}");
     }
 
     // ========================================================================
     //  邻接校验 + 缓冲插入（3.2.1 第五节）
     // ========================================================================
 
-    /// <summary>扫描相邻大区块对，违规则插入丘陵做缓冲。</summary>
+    /// <summary>扫描相邻大区块对，违规则插入丘陵做缓冲（QQQ.1 需求1：不改资源保障区块）。</summary>
     void EnforceAdjacency(List<Region> regions, int M, int castleA, int castleB)
     {
         for (int i = 0; i < regions.Count - 1; i++)
@@ -366,11 +391,25 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
 
             if (!_rulesConfig.CanAdjacency(a, b))
             {
+                // QQQ.1 需求1：两个相邻区块都是资源保障区块 → 跳过不处理（保障优先于邻接）
+                if (regions[i].isProtectedResource && regions[i + 1].isProtectedResource)
+                    continue;
+
                 // 违规：优先改 i+1（靠中心侧），除非 i+1 是主城
                 int fixIdx = (i + 1 == castleA || i + 1 == castleB) ? i : i + 1;
                 // 出怪口端(0 或 M-1)不改
                 if (fixIdx == 0 || fixIdx == M - 1)
                     fixIdx = (fixIdx == i) ? i + 1 : i;
+
+                // QQQ.1 需求1：fixIdx 不能是资源保障区块（改邻居不改保障）
+                if (regions[fixIdx].isProtectedResource)
+                {
+                    int alt = (fixIdx == i) ? i + 1 : i;
+                    if (alt < 0 || alt >= regions.Count) continue;
+                    if (regions[alt].isProtectedResource) continue;   // 两个都保障 → 跳过
+                    if (alt == 0 || alt == M - 1) continue;           // 出怪口不改
+                    fixIdx = alt;
+                }
 
                 regions[fixIdx].terrain = TerrainType.Hills;
                 regions[fixIdx].plainSubState = PlainSubState.Normal;  // 非平原重置子状态

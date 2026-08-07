@@ -21,9 +21,10 @@ public class SceneHomePointProvider : MonoBehaviour, IHomePointProvider
     public Transform enemyHomePointAnchor;
 
     /// <summary>
-    /// 按阵营分流返回 HomePoint（3.0.1_6 §4.1）：
-    /// 我方（Human_Player/None）→ 城墙内驻留点；敌方（Undead）→ 敌方侧锚点。
-    /// 敌方锚点未配置时回退到 homePointAnchor（行为退化到现状，不 NRE）。
+    /// 按阵营分流返回 HomePoint（3.0.1_6 §4.1 + QQQ.1 需求2+3）：
+    /// 我方（Human_Player/None）→ 主城坐标（WorldManager.GetKingdomAnchorWorld，城堡中心）；
+    /// 敌方（Undead）→ 敌方侧锚点。
+    /// 修复：不再读场景手配 homePointAnchor（与主城脱节），也杜绝往世界 (0,0) 乱走。
     /// </summary>
     public Vector2 GetHomePoint(NPCBrain npc)
     {
@@ -31,9 +32,27 @@ public class SceneHomePointProvider : MonoBehaviour, IHomePointProvider
         {
             var unit = npc.GetComponent<UnitController>();
             bool isEnemy = unit != null && unit.Data != null && unit.Data.faction == Faction.Undead;
-            var anchor = isEnemy ? enemyHomePointAnchor : homePointAnchor;
-            return anchor != null ? (Vector2)anchor.position : Vector2.zero;
+            if (isEnemy)
+                return enemyHomePointAnchor != null ? (Vector2)enemyHomePointAnchor.position : ResolveKingdomAnchor();
+            return ResolveKingdomAnchor();
         }
-        return homePointAnchor != null ? (Vector2)homePointAnchor.position : Vector2.zero;
+        return ResolveKingdomAnchor();
+    }
+
+    /// <summary>
+    /// 人类阵营 HomePoint = 主城（废弃城堡中心）。QQQ.1 需求3：避免 Vector2.zero 哨兵被当真坐标。
+    /// WorldManager 未就绪时 Debug.LogError 暴露初始化时序问题（而非静默退化为 0,0）。
+    /// </summary>
+    Vector2 ResolveKingdomAnchor()
+    {
+        if (WorldManager.Instance != null)
+        {
+            var p = WorldManager.Instance.GetKingdomAnchorWorld();
+            if (p != Vector2.zero) return p;
+            Debug.LogError("[SceneHomePointProvider] WorldManager 未初始化，GetKingdomAnchorWorld 返回 (0,0)，HomePoint 将为 0,0（时序问题需排查）");
+            return p;
+        }
+        Debug.LogError("[SceneHomePointProvider] WorldManager 未初始化，无法解析 HomePoint");
+        return Vector2.zero;
     }
 }

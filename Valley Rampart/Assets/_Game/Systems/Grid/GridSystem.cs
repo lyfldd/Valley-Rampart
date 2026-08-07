@@ -41,7 +41,8 @@ public class GridSystem : Singleton<GridSystem>
     public GridCoord WorldToCoord(Vector2 pos)
     {
         if (config == null) return new GridCoord(0, 0);
-        int x = Mathf.FloorToInt(pos.x / config.cellSize);
+        // QQQ.1 需求4：originX 偏移后，城堡中线 = 世界 x=0
+        int x = Mathf.FloorToInt((pos.x + config.originX) / config.cellSize);
         int y = pos.y > config.flyHeightThreshold ? 1 : 0;
         return new GridCoord(x, y);
     }
@@ -50,7 +51,8 @@ public class GridSystem : Singleton<GridSystem>
     public Vector2 CoordToWorld(GridCoord coord)
     {
         if (config == null) return Vector2.zero;
-        float x = (coord.x + 0.5f) * config.cellSize;
+        // QQQ.1 需求4：originX 偏移后，城堡中线 = 世界 x=0
+        float x = (coord.x + 0.5f) * config.cellSize - config.originX;
         float y = coord.y == 1 ? config.flyHeight : -3f;  // 地面层贴合 Baseline_y=-3
         return new Vector2(x, y);
     }

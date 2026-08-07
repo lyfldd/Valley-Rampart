@@ -1061,7 +1061,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                         }),
                     new InteractAction("talk", InteractPriority.Talk, oneShot: false,
                         canTrigger: () => IsAlive,
-                        execute: () => OverheadSpeech.Show(transform, "……又冷又饿……"))
+                        execute: () => OverheadSpeech.Show(transform, PickTalkLine()))
                 };
 
             case Occupation.Resident:
@@ -1072,7 +1072,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                         execute: () => OpenTrainingPanel()),
                     new InteractAction("talk", InteractPriority.Talk, oneShot: false,
                         canTrigger: () => IsAlive,
-                        execute: () => OverheadSpeech.Show(transform, "还没活干……想学门手艺。"))
+                        execute: () => OverheadSpeech.Show(transform, PickTalkLine()))
                 };
 
             case Occupation.Child:
@@ -1080,7 +1080,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                 {
                     new InteractAction("talk", InteractPriority.Talk, oneShot: false,
                         canTrigger: () => IsAlive,
-                        execute: () => OverheadSpeech.Show(transform, "我很快就会长大啦！"))
+                        execute: () => OverheadSpeech.Show(transform, PickTalkLine()))
                 };
 
             case Occupation.Worker:
@@ -1089,7 +1089,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                 {
                     new InteractAction("talk", InteractPriority.Talk, oneShot: false,
                         canTrigger: () => IsAlive,
-                        execute: () => OverheadSpeech.Show(transform, "正在干活呢。"))
+                        execute: () => OverheadSpeech.Show(transform, PickTalkLine()))
                 };
 
             default:
@@ -1098,25 +1098,164 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                 {
                     new InteractAction("talk", InteractPriority.Talk, oneShot: false,
                         canTrigger: () => IsAlive,
-                        execute: () => OverheadSpeech.Show(transform, GetTalkLineByOccupation()))
+                        execute: () => OverheadSpeech.Show(transform, PickTalkLine()))
                 };
         }
     }
 
-    /// <summary>按职业取对话文案（轻量表现）。</summary>
-    string GetTalkLineByOccupation()
+    /// <summary>
+    /// 按当前状态从对话池随机抽取一句（QQQ.1 需求5）。
+    /// 状态优先级：受伤(hp&lt;40%) &gt; 饥饿(satiety&lt;30) &gt; 正常。对应状态池为空时回退到正常池。
+    /// </summary>
+    string PickTalkLine()
     {
-        switch (EffectiveOccupation)
+        bool hungry = Satiety < 30;
+        bool injured = MaxHp > 0 && (float)CurrentHp / MaxHp < 0.4f;
+        var lines = GetTalkLinesByOccupation(EffectiveOccupation, hungry, injured);
+        return lines != null && lines.Length > 0 ? lines[Random.Range(0, lines.Length)] : "……";
+    }
+
+    /// <summary>返回某职业的对话池（按状态：正常/饥饿/受伤，池空回退正常）。</summary>
+    string[] GetTalkLinesByOccupation(Occupation occ, bool hungry, bool injured)
+    {
+        string[] pool = null;
+        if (injured) pool = GetTalkPool(occ, TalkState.Injured);
+        if (pool == null || pool.Length == 0)
         {
-            case Occupation.Ruler: return "王国就托付给我吧。";
-            case Occupation.General: return "军令请走 E 键面板。";
+            if (hungry) pool = GetTalkPool(occ, TalkState.Hungry);
+        }
+        if (pool == null || pool.Length == 0) pool = GetTalkPool(occ, TalkState.Normal);
+        return pool;
+    }
+
+    enum TalkState { Normal, Hungry, Injured }
+
+    /// <summary>按职业+状态返回对话文案池（QQQ.1 需求5 设计文案，17 职业）。</summary>
+    string[] GetTalkPool(Occupation occ, TalkState state)
+    {
+        switch (occ)
+        {
+            case Occupation.Worker:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "肚子好饿……什么时候开饭。", "干不动了，想吃东西。", "粮仓是不是空了？" };
+                    case TalkState.Injured: return new[] { "嘶……疼……还能撑住。", "轻伤不下火线。" };
+                    default: return new[] { "正在干活呢。", "木头、石头、粮食，都得有人搬。", "今天也要努力工作。", "嘿咻……这活儿不轻。", "手艺不能丢，天天练。", "仓库快满了，加把劲。" };
+                }
+            case Occupation.Porter:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "扛不动了……没吃饭。", "饿得手抖。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "搬运中，请让让。", "这批货挺沉的。", "往仓库送呢。", "别挡道，赶时间。", "一趟又一趟。", "运完了能歇会儿吗。" };
+                }
+            case Occupation.Resident:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "好饿啊……粮仓还有粮吗。", "肚子咕咕叫。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "还没活干……想学门手艺。", "今天天气不错。", "什么时候能有活干呢。", "闲着也是闲着。", "希望能派上用场。", "你看起来很忙。" };
+                }
+            case Occupation.Child:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "饿饿……想吃东西。", "妈妈什么时候回来。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "我很快就会长大啦！", "长大了我也要干活！", "嘿嘿，好好玩。", "大人都在忙呢。", "我以后要当英雄！", "你看我跑得快不快。" };
+                }
+            case Occupation.Vagrant:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "三天没吃东西了……", "饿得走不动了。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "……又冷又饿……", "能给口吃的吗。", "我已经流浪好久了。", "求求你，收留我吧。", "外面的世界好危险。", "只要一口粮食就好。", "我也能干活的。" };
+                }
+            case Occupation.Ruler:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return new[] { "我没事……还能指挥。", "保护王国要紧。" };
+                    default: return new[] { "王国就托付给我吧。", "子民们需要我。", "建设王国，任重道远。", "今天的决策，明天的未来。", "王国的繁荣是我的责任。", "有什么事尽管说。", "吾乃一国之主。" };
+                }
+            case Occupation.General:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return new[] { "将不退，兵不散。", "轻伤而已。" };
+                    default: return new[] { "军令请走 E 键面板。", "士兵们随时待命。", "兵者，国之大事。", "布阵迎敌！", "令行禁止。", "战况如何？", "稳住阵脚。" };
+                }
             case Occupation.Warrior:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "饿得挥不动剑……", "军粮还没到吗。" };
+                    case TalkState.Injured: return new[] { "小伤，不碍事。", "还能战。" };
+                    default: return new[] { "随时准备战斗！", "剑在手，不退缩。", "为了王国！", "训练不能停。", "敌人来了尽管上。", "保家卫国是本分。", "嘿嘿，手痒了。" };
+                }
             case Occupation.Archer:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "拉弓没力气……", "饿了手会抖。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "随时准备战斗！", "弓弦已上，随时放箭。", "百步穿杨。", "风向……差不多。", "箭囊还满着呢。", "远程压制交给我。" };
+                }
             case Occupation.Crossbowman:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return new[] { "还能再射几发。", "不退。" };
+                    default: return new[] { "随时准备战斗！", "弩已上弦。", "穿透盔甲没问题。", "装填……好了。", "射程之内，皆是猎物。", "机械的力量。" };
+                }
             case Occupation.HeavyWarrior:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return new[] { "甲还没破，人还在。", "重装不退。" };
+                    default: return new[] { "随时准备战斗！", "重甲在手，万夫莫开。", "我是铜墙铁壁。", "冲我来的都后悔。", "盾墙不可破。", "挡在前面是我的职责。" };
+                }
             case Occupation.Cavalry:
-            case Occupation.ShieldGuard: return "随时准备战斗！";
-            default: return "……";
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "马也得吃东西啊……", "饿得跑不动。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "随时准备战斗！", "冲锋号角何时响？", "马蹄之下，寸草不生。", "速度就是优势。", "绕后突袭，我的强项。", "马儿今天状态不错。" };
+                }
+            case Occupation.ShieldGuard:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return null;
+                    default: return new[] { "随时准备战斗！", "盾在人在。", "我守这里，谁都过不来。", "盾墙坚不可摧。", "后面的人放心输出。", "我的盾就是城墙。" };
+                }
+            case Occupation.Mage:
+                switch (state)
+                {
+                    case TalkState.Hungry: return new[] { "魔力需要饱食支撑……", "饿得念不动咒。" };
+                    case TalkState.Injured: return null;
+                    default: return new[] { "随时准备战斗！", "魔力充盈。", "一个火球，一片敌军。", "元素听我号令。", "别打断我施法。", "魔法不是戏法。" };
+                }
+            case Occupation.Healer:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return new[] { "我自己也得小心。", "还能撑住。" };
+                    default: return new[] { "随时准备战斗！", "谁受伤了？我来。", "圣光护佑。", "别担心，有我在。", "治疗优先给前线。", "愿光明庇佑你们。" };
+                }
+            case Occupation.Bishop:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return null;
+                    default: return new[] { "随时准备战斗！", "信仰即是力量。", "圣言指引方向。", "黑暗退散。", "我为主传道。", "神眷不灭。" };
+                }
+            case Occupation.Archmage:
+                switch (state)
+                {
+                    case TalkState.Hungry: return null;
+                    case TalkState.Injured: return null;
+                    default: return new[] { "随时准备战斗！", "奥术洪流蓄势待发。", "我已洞悉元素本质。", "别浪费我的法力。", "一念之间，天地变色。", "魔法之巅，不过如此。" };
+                }
+            default:
+                return new[] { "……" };
         }
     }
 

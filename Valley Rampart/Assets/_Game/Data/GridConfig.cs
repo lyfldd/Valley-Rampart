@@ -20,6 +20,10 @@ public class GridConfig : ScriptableObject
     [Tooltip("一个中区块含多少个小区块（4 个小区块编组，中区块最多承载 4 编队。热度以中区块为粒度聚合，热点跨编队可见）")]
     public int midRegionCellCount = 4;
 
+    [Header("坐标原点（QQQ.1 需求4：城堡中线 = 世界 x=0）")]
+    [Tooltip("世界坐标 x 偏移量（世界单位）。使城堡中线对齐世界 x=0（城堡中心在原点）。运行时由 WorldManager.GenerateMap 生成地图后覆盖为城堡中心 cell 偏移")]
+    public float originX = 0f;
+
     [Header("飞行层")]
     [Tooltip("y 值超过此阈值视为空中层")]
     public float flyHeightThreshold = 5f;
