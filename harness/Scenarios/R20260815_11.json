@@ -1,0 +1,40 @@
+{
+  "name": "R20260815_11",
+  "seed": 20260815,
+  "maxDuration": 60.0,
+  "cellSize": 2.26,
+  "winCondition": "annihilation",
+  "units": [
+    { "id": 1, "x": -9.00, "formationGid": 0, "profession": "Human_Player_HeavyWarrior", "faction": "Human_Player", "isGeneral": true },
+    { "id": 2, "x": -6.74, "formationGid": 0, "profession": "Human_Player_Archer", "faction": "Human_Player" },
+    { "id": 3, "x": 6.04, "formationGid": 1, "profession": "Human_Player_Healer", "faction": "Human_Player", "isGeneral": true },
+    { "id": 4, "x": 16.56, "formationGid": -1, "profession": "Human_Player_Archer", "faction": "Human_Player", "isGeneral": true },
+    { "id": 5, "x": 18.82, "formationGid": -1, "profession": "Human_Player_ShieldGuard", "faction": "Human_Player" },
+    { "id": 6, "x": 21.08, "formationGid": -1, "profession": "Human_Player_HeavyWarrior", "faction": "Human_Player" },
+    { "id": 7, "x": 23.34, "formationGid": -1, "profession": "Human_Player_Archer", "faction": "Human_Player" },
+    { "id": 8, "x": 25.60, "formationGid": -1, "profession": "Human_Player_ShieldGuard", "faction": "Human_Player" },
+    { "id": 9, "x": 20.08, "formationGid": -1, "profession": "Wall", "faction": "Human_Player" },
+    { "id": 10, "x": 17.82, "formationGid": -1, "profession": "Wall", "faction": "Human_Player" },
+    { "id": 11, "x": 24.08, "formationGid": -1, "profession": "ArrowTower", "faction": "Human_Player" },
+    { "id": 12, "x": 26.08, "formationGid": -1, "profession": "CrossbowTower", "faction": "Human_Player" },
+    { "id": 13, "x": 28.08, "formationGid": -1, "profession": "MagicTower", "faction": "Human_Player" },
+    { "id": 14, "x": 9.00, "formationGid": 2, "profession": "Undead_Healer", "faction": "Undead", "isGeneral": true },
+    { "id": 15, "x": 6.74, "formationGid": 2, "profession": "Undead_Healer", "faction": "Undead" },
+    { "id": 16, "x": -6.04, "formationGid": -1, "profession": "Undead_HeavyWarrior", "faction": "Undead", "isGeneral": true },
+    { "id": 17, "x": -8.30, "formationGid": -1, "profession": "Undead_Crossbowman", "faction": "Undead" },
+    { "id": 18, "x": -10.56, "formationGid": -1, "profession": "Undead_Healer", "faction": "Undead" },
+    { "id": 19, "x": -12.82, "formationGid": -1, "profession": "Undead_Cavalry", "faction": "Undead" },
+    { "id": 20, "x": -15.08, "formationGid": -1, "profession": "Undead_Cavalry", "faction": "Undead" },
+    { "id": 21, "x": -17.34, "formationGid": -1, "profession": "Undead_Healer", "faction": "Undead" },
+    { "id": 22, "x": -19.60, "formationGid": -1, "profession": "Undead_Warrior", "faction": "Undead" },
+    { "id": 23, "x": -21.86, "formationGid": -1, "profession": "Undead_HeavyWarrior", "faction": "Undead" },
+    { "id": 24, "x": -24.12, "formationGid": -1, "profession": "Undead_Crossbowman", "faction": "Undead" },
+    { "id": 25, "x": -26.38, "formationGid": -1, "profession": "Undead_HeavyWarrior", "faction": "Undead" },
+    { "id": 26, "x": -28.64, "formationGid": -1, "profession": "Undead_Archer", "faction": "Undead" }
+  ],
+  "formations": [
+    { "gid": 0, "faction": "Human_Player", "generalUnitId": 1, "direction": 1, "defaultIntent": "Defense", "autoIntent": true, "slots": [{ "x": 1, "y": 0, "role": "GeneralOnly" }, { "x": 2, "y": 0, "role": "RangedOnly" }], "intentScript": [] },
+    { "gid": 1, "faction": "Human_Player", "generalUnitId": 3, "direction": 1, "defaultIntent": "Defense", "autoIntent": true, "slots": [{ "x": 1, "y": 0, "role": "GeneralOnly" }], "intentScript": [] },
+    { "gid": 2, "faction": "Undead", "generalUnitId": 14, "direction": -1, "defaultIntent": "Charge", "slots": [{ "x": -1, "y": 0, "role": "GeneralOnly" }, { "x": -2, "y": 0, "role": "RangedOnly" }], "intentScript": [] }
+  ]
+}

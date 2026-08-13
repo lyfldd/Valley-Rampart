@@ -1,0 +1,31 @@
+{
+  "name": "R20260822_18",
+  "seed": 20260822,
+  "maxDuration": 60.0,
+  "cellSize": 2.26,
+  "winCondition": "annihilation",
+  "units": [
+    { "id": 1, "x": -9.00, "formationGid": 0, "profession": "Human_Player_Warrior", "faction": "Human_Player", "isGeneral": true },
+    { "id": 2, "x": -6.74, "formationGid": 0, "profession": "Human_Player_Warrior", "faction": "Human_Player" },
+    { "id": 3, "x": -4.48, "formationGid": 0, "profession": "Human_Player_ShieldGuard", "faction": "Human_Player" },
+    { "id": 4, "x": -2.22, "formationGid": 0, "profession": "Human_Player_ShieldGuard", "faction": "Human_Player" },
+    { "id": 5, "x": 0.04, "formationGid": 0, "profession": "Human_Player_Archer", "faction": "Human_Player" },
+    { "id": 6, "x": 2.30, "formationGid": 0, "profession": "Human_Player_Healer", "faction": "Human_Player" },
+    { "id": 7, "x": 22.86, "formationGid": -1, "profession": "Ballista", "faction": "Human_Player" },
+    { "id": 8, "x": 9.00, "formationGid": -1, "profession": "Undead_HeavyWarrior", "faction": "Undead", "isGeneral": true },
+    { "id": 9, "x": 6.74, "formationGid": -1, "profession": "Undead_Mage", "faction": "Undead" },
+    { "id": 10, "x": 4.48, "formationGid": -1, "profession": "Undead_Archer", "faction": "Undead" },
+    { "id": 11, "x": 2.22, "formationGid": -1, "profession": "Undead_Warrior", "faction": "Undead" },
+    { "id": 12, "x": -0.04, "formationGid": -1, "profession": "Undead_Cavalry", "faction": "Undead" },
+    { "id": 13, "x": -2.30, "formationGid": -1, "profession": "Undead_Crossbowman", "faction": "Undead" },
+    { "id": 14, "x": -4.56, "formationGid": -1, "profession": "Undead_Archer", "faction": "Undead" },
+    { "id": 15, "x": -6.82, "formationGid": -1, "profession": "Undead_Warrior", "faction": "Undead" },
+    { "id": 16, "x": -9.08, "formationGid": -1, "profession": "Undead_ShieldGuard", "faction": "Undead" },
+    { "id": 17, "x": -11.34, "formationGid": -1, "profession": "Undead_Mage", "faction": "Undead" },
+    { "id": 18, "x": -14.60, "formationGid": -1, "profession": "SiegeMachine", "faction": "Undead" },
+    { "id": 19, "x": -10.08, "formationGid": -1, "profession": "Ballista", "faction": "Undead" }
+  ],
+  "formations": [
+    { "gid": 0, "faction": "Human_Player", "generalUnitId": 1, "direction": 1, "defaultIntent": "Defense", "autoIntent": true, "slots": [{ "x": 1, "y": 0, "role": "GeneralOnly" }, { "x": 2, "y": 0, "role": "MeleeOnly" }, { "x": 3, "y": 0, "role": "MeleeOnly" }, { "x": 4, "y": 0, "role": "MeleeOnly" }, { "x": 5, "y": 0, "role": "RangedOnly" }, { "x": 6, "y": 0, "role": "RangedOnly" }], "intentScript": [] }
+  ]
+}

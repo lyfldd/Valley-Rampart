@@ -19,6 +19,9 @@ Valley Rampart/[Mm]emoryCaptures/
 # AI 训练师独立仓库（2026-08-02 起从本仓库拆分，git 由 ai决策大脑强化训练/ 自管）
 ai决策大脑强化训练/
 
+# 训练/模拟运行输出（临时产物，不入库）
+out/
+
 # OS
 .DS_Store
 Thumbs.db
