@@ -11,14 +11,10 @@
             "id": "ae150ef5d7ab8e7a",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "修复记录/启动流程开发手册.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "启动流程开发手册"
+              "title": "新标签页"
             }
           }
         ]
@@ -185,6 +181,10 @@
   },
   "active": "ae150ef5d7ab8e7a",
   "lastOpenFiles": [
+    "Valley Rampart/Library/Artifacts/b7/b7f6f18e4c8a313780252a3ad4873d43",
+    "Valley Rampart/Library/Artifacts/8e/8e19b591efc5bdfcf19ee5ae2fb58927",
+    "Valley Rampart/Library/Artifacts/8b/8bb98f6cb28b8a162cdf270cc9b59b7f",
+    "Valley Rampart/Temp/ADB-Refresh95d8f8dc090513249b4bf369b572acc5",
     "Valley Rampart/Temp/TuanjieTempFile-1d0e26834ccffd44c8f49d3884f0e2f8",
     "Valley Rampart/Temp/TuanjieTempFile-c876153b9c39f514fb611eea30831485",
     "Valley Rampart/Temp/ADB-Refresh1233ff023ced31042a523096f4e14775",
@@ -192,10 +192,6 @@
     "Valley Rampart/Temp/Burst/burst-aotl9nsvlpb.gmy",
     "Valley Rampart/Temp/Burst/burst-aotfxcf14uu.mhb",
     "Valley Rampart/Temp/Burst/burst-aot9q2okwqj.kv0",
-    "Valley Rampart/Temp/Burst/burst-aotagot0ieh.0xb",
-    "Valley Rampart/Temp/Burst/burst-aotw9fufsqz.bbe",
-    "Valley Rampart/Temp/Burst/burst-aoti88y66z6.3uw",
-    "Valley Rampart/Temp/Burst/burst-aoth4x3ba01.q88",
     "修复记录/审查_加载与数据传递链.md",
     "开发引导书/主菜单初始化引导.md",
     "修复记录/启动流程开发手册.md",

@@ -45,3 +45,7 @@ Assets/AssetStoreTools*
 
 # Crashlytics
 crashlytics-build.properties
+
+# 拷贝/传输临时产物与杂物
+U盘拷贝日志.log
+垃圾文件夹/
