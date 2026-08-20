@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 // ============================================================================
@@ -35,6 +36,24 @@ public static class PathfindingService
         if (grid == null) return null;
         int maxExp = GridSystemHasConfig() ? GridSystemMaxExpansions() : DEFAULT_MAX_EXPANSIONS;
         return AStarSolver.Solve(grid, fromSub, toSub, maxExp);
+    }
+
+    /// <summary>
+    /// 2_6 P0b：异步分帧寻路入口（排队 + 每帧预算限流 + 票据回调）。
+    /// PathFollower 主链仍用同步 FindPathImmediate（稳定）；此入口供编辑器/超大规模接入。
+    /// 返回票据；未入队（越界/未就绪/无调度器）时 HasResult=false 且不回调。
+    /// </summary>
+    public static PathTicket RequestPath(Vector2 fromWorld, Vector2 toWorld, byte priority = 0,
+        Action<PathResult> onComplete = null)
+    {
+        var scheduler = PathfindingScheduler.Instance;
+        bool enqueued = false;
+        var ticket = (scheduler != null)
+            ? scheduler.RequestPath(fromWorld, toWorld, out enqueued, priority,
+                t => onComplete?.Invoke(t.HasResult ? t.Result : null))
+            : new PathTicket();
+        if (!enqueued && onComplete != null) onComplete(null);   // 未入队 → 立即失败回调
+        return ticket;
     }
 
     private static bool GridSystemHasConfig()

@@ -402,6 +402,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         Vector2 myPos = _self.GetPosition();
         Faction myFaction = _self.GetFaction();
 
+        // 2_7 步骤8 迷雾：上报自我视野（各单位并集），视野只约束"看见什么"（D170 不阻塞寻路、不设障碍）
+        VisionSystem.MarkExplored(myPos, perceptionWorld);
+
         PerceptionSystem.QueryNearby(myPos, perceptionWorld, myFaction, true, _nearbyEnemies);
         PerceptionSystem.QueryNearby(myPos, perceptionWorld, myFaction, false, _nearbyAllies);
 
@@ -413,6 +416,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             var enemy = _nearbyEnemies[i];
             if (enemy == null || IsDestroyed(enemy) || enemy.CurrentHp <= 0) continue;
+            // 2_7 步骤8 迷雾（D169）：视野外目标不进入威胁感知（决策核只读视野内）
+            if (!VisionSystem.IsExplored(enemy.GetPosition())) continue;
             // M1 决策核提取：ThreatStimulus.Enemy 改 IUnitHandle（接缝 1），单位双接口转换
             var enemyHandle = enemy as IUnitHandle;
             if (enemyHandle == null) continue;  // 非单位 IDamageable（感知查询仅返回单位，防御性跳过）
@@ -553,6 +558,15 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ④c B4 角色族因子（对齐 sim ApplyProfessionFactors）：死拼/保命/顶住/压上
         ApplyProfessionFactors(ref cmd, in ctx);
 
+        // 2_7 步骤7：成本偏好输出 + 目标微格 goal（成本场 2_6 P1 消费；未就绪退化为纯寻路 R6，只输出不消费）
+        FillCostBias(ref cmd);
+        var gSystem = GridSystem.Instance;
+        if (gSystem != null)
+        {
+            var subOpt = gSystem.WorldToSubCoord(cmd.TargetPos);
+            if (subOpt != null) cmd.GoalSub = new Vector2X(subOpt.Value.x, subOpt.Value.y);
+        }
+
         // ⑤ 缓存 cmd（Execute 在 Update 里每帧调用，持续移动）
         _lastCmd = cmd;
 
@@ -562,6 +576,20 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
         // QQQ.2 T2 / DR-10：闲逛自动说话（IsIdleForTask + SafetyScore>0.6 + 非 Caution）
         TickAutoTalk(in ctx, dt);
+    }
+
+    /// <summary>
+    /// 2_7 步骤7：把 CostBiasConfig 占位权重填进 L3 命令（威胁/安全/编队/方向扇区）。
+    /// 成本场（2_6 P1）未就绪时只输出不消费（R6 不阻塞，退化为纯寻路）。
+    /// </summary>
+    private void FillCostBias(ref BehaviorCommand cmd)
+    {
+        var cb = CostBiasConfig.Instance;
+        if (cb == null) return;
+        cmd.Bias.threatWeight = cb.threatWeight;
+        cmd.Bias.safetyWeight = cb.safetyWeight;
+        cmd.Bias.formationWeight = cb.formationWeight;
+        cmd.Bias.directionSectorWeight = cb.directionSectorWeight;
     }
 
     /// <summary>
