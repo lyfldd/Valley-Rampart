@@ -41,4 +41,17 @@ public class WaveConfig : ScriptableObject
 
     [Tooltip("连续 N 天未触发强制（防长草）")]
     public int disasterGuaranteeNDays = 3;
+
+    [Header("灾害二/非线性加压（D266 策划 2026-08-20）")]
+    [Tooltip("每晚触发概率的基础概率（Easy=100% 固定 3 天；Normal/Hard 从该值起步）")]
+    public float disasterDifficultyBaseProb = 0.2f;
+
+    [Tooltip("难度档每日概率递增（Normal +0.05/天，Hard +0.10/天）")]
+    public float disasterProbGrowPerDay = 0.05f;
+
+    [Tooltip("是否启用非线性概率递增（false 走旧的固定 disasterProbPerNight=0.3）")]
+    public bool enableNonLinearDifficulty = false;
+
+    [Tooltip("难度档强度系数（Easy=1.0；Normal=1.0+天数×0.05；Hard=1.0+天数×0.1）")]
+    public float disasterStrengthGrowPerDay = 0.05f;
 }

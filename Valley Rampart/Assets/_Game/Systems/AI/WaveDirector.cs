@@ -27,6 +27,7 @@ public class WaveDirector : Singleton<WaveDirector>
     /// <summary>
     /// 判断今晚是否触发灾害（概率 + 天数保底 + 连续未触发强制），并推进夜晚计数。
     /// 由 DayCycleSettlement 入夜时调用；返回 true 表示应触发，随后调 <see cref="SpawnDisaster"/>。
+    /// 非线性加压（D266）：启用时每晚概率随天数递增，不再是固定 0.3。
     /// </summary>
     public bool ShouldTriggerDisasterThisNight()
     {
@@ -34,11 +35,27 @@ public class WaveDirector : Singleton<WaveDirector>
         _nightsSinceLastDisaster++;
         bool cadence = _nightsSinceLastDisaster >= _config.disasterEveryNDays;          // 天数保底触发
         bool hardCap = _nightsSinceLastDisaster >= _config.disasterGuaranteeNDays;      // 连续未触发强制（防长草）
-        bool prob = Random.value < _config.disasterProbPerNight;                        // 每晚概率
-        if (cadence || hardCap || prob)
-            Debug.Log($"[WaveDirector] 灾害判定: 夜#{_nightsSinceLastDisaster} "
+        float prob = ComputeNightProbability();
+        bool rolled = Random.value < prob;                                              // 每晚概率（含非线性递增）
+        if (cadence || hardCap || rolled)
+            Debug.Log($"[WaveDirector] 灾害判定: 夜#{_nightsSinceLastDisaster} 概率={prob:0.##} "
                 + (cadence ? "[天数保底]" : hardCap ? "[防长草强制]" : "[概率触发]"));
-        return cadence || hardCap || prob;
+        return cadence || hardCap || rolled;
+    }
+
+    /// <summary>
+    /// 每晚灾害概率：非线性加压启用时 = clamp(base + 天数×递增 + 难度档系数)；
+    /// 未启用回退旧固定 <see cref="WaveConfig.disasterProbPerNight"/>。
+    /// </summary>
+    private float ComputeNightProbability()
+    {
+        if (!_config.enableNonLinearDifficulty)
+            return _config.disasterProbPerNight;
+        int day = TimeManager.Instance != null ? Mathf.Max(1, TimeManager.Instance.CurrentDay) : 1;
+        float difficulty = DifficultyManager.Instance != null
+            ? Mathf.Max(1, DifficultyManager.Instance.CurrentDifficulty) : 1;
+        float grow = difficulty > 1 ? _config.disasterProbGrowPerDay * (difficulty - 1) : 0f;
+        return Mathf.Clamp01(_config.disasterDifficultyBaseProb + day * grow);
     }
 
     /// <summary>
@@ -92,12 +109,15 @@ public class WaveDirector : Singleton<WaveDirector>
         }
     }
 
-    /// <summary>单波规模 = strengthBase + 天数增长，封顶 strengthCap，冬季按 TimeConfig 放大。</summary>
+    /// <summary>单波规模 = strengthBase + 天数增长，封顶 strengthCap，冬季 + 非线性强度系数放大。</summary>
     private int ComputeWaveStrength(float winterMult)
     {
         int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
         float raw = _config.strengthBase + _config.strengthGrowthPerDay * day;
         raw *= winterMult;
+        // 非线性加压强度系数（D266）：预=1 + 天数×强度递增，随天数非线性放大
+        if (_config.enableNonLinearDifficulty)
+            raw *= 1f + day * _config.disasterStrengthGrowPerDay;
         return Mathf.Min(Mathf.Max(1, Mathf.RoundToInt(raw)), _config.strengthCap);
     }
 
