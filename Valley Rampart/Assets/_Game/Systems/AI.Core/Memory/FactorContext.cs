@@ -35,6 +35,12 @@ public struct FactorContext
     /// <summary>2_7 步骤2 方向因子输入：自我→最近敌的归一化方向，由壳层 NPCBrain 填。
     /// 供 Unity 侧逃逸点/撤退采样（sim 侧没有此新输入，见 sim 差距文档）。默认朝向忽略。</summary>
     public Vector2X NearestEnemyDir;
+    /// <summary>2_9 决策输入占位：自我是否处于守卫/驻守区域（2_8 真源落地；当前默认不消费）。sim 侧同源占位。</summary>
+    public bool IsGuarded;
+    /// <summary>2_9 决策输入占位：编队槽位朝向（默认朝敌=NearestEnemyDir；2_8 2D 阵型朝向真源落地）。sim 侧同源占位。</summary>
+    public Vector2X FormationSlotFacing;
+    /// <summary>2_9 决策输入占位：最近传送门距离（2_14 真源落地；无传送门=MaxValue=无影响）。sim 侧同源占位。</summary>
+    public float NearestPortalDist;
     public float CurrentTime;
     public Vector2X HomePoint;
     /// <summary>brain 上一帧 rawFactor 缓存（量化器消费，0.1s 滞后被确认吸收）</summary>
