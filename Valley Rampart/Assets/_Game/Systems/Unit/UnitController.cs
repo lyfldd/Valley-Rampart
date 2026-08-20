@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>8 向朝向（2_3 步骤5，D74）。与 doc 1 邻居顺序一致（E/NE/N/NW/W/SW/S/SE）。供 2_10 动画消费。</summary>
+public enum Facing8 { E, NE, N, NW, W, SW, S, SE }
+
 /// <summary>
 /// 单位运行时控制器。挂在所有单位 Prefab 上（君主、NPC、敌人通用）。
 /// 持有运行时状态，提供战斗（攻击/受击/死亡）和移动能力。
@@ -186,9 +189,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     bool IUnitHandle.IsAlive => this != null;  // 伪 null 检测（Unity 销毁对象）
     ProfessionSnapshot IUnitHandle.Profession => _professionSnapshot;
 
-    // ===== 空间分区追踪（3.0.1 感知广播用）=====
-    private GridCoord _lastGridCoord;
+    // ===== 空间分区追踪（3.0.1 感知广播用；2_3 步骤2 改微格粒度 D70/D71）=====
+    private GridCoord _lastGridSub;
     private bool _gridRegistered;
+
+    /// <summary>8 向朝向（2_3 步骤5，D74；2_10 动画消费）。</summary>
+    public Facing8 Facing { get; private set; } = Facing8.E;
 
     // ===== IDamageable 实现 =====
 
@@ -566,7 +572,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         GridSystem.Instance?.RemoveUnit(this);
         // 重置网格注册标志（回池后位置移动缓存失效，防出池跳过首格登记）
         _gridRegistered = false;
-        _lastGridCoord = default;
+        _lastGridSub = default;
 
         // 3.0.1 §7.4 对象池回收（无工厂兜底销毁——如场景未挂 UnitFactory）
         if (UnitFactory.Instance != null)
@@ -958,42 +964,36 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public bool HasNearbyEnemy() => HasNearbyEnemy(_professionSnapshot.perceptionRadius * GetCellSize());
 
     /// <summary>
-    /// 按方向移动。run=true 使用 runSpeed，否则使用 walkSpeed。
+    /// 按方向移动（2_3 步骤1：2D 平面 8 向）。run=true 使用 runSpeed，否则 walkSpeed。
     /// 击飞中屏蔽移动；冲锋流程中（ChargeState!=0）普通移动让位（穿透冲锋为瞬间位移）。
+    /// 普通移动不再撞墙停（D68）——规则性障碍规避走 2_6 寻路/PathFollower。
     /// </summary>
     public virtual void Move(Vector2 direction, bool run = false)
     {
         if (Data == null || !IsAlive || _knockbackActive) return;
-        if (ChargeState != 0) return;   // 3.6 §5.3：冲锋流程中普通移动让位
+        if (ChargeState != 0) return;   // 冲锋流程中普通移动让位（D69）
 
         UpdateFacing(direction);
 
         float speed = EffectiveSpeed(run ? RunSpeed : WalkSpeed);
-        Vector2 movement = direction.normalized * speed * Time.deltaTime;
-        Vector2 newPos = _rb.position + movement;
-        newPos.y = _rb.position.y;  // 固定 Y 轴，1D 横版不上下移动
-        // 3.7 P1.4 近战挡墙：方向移动同样受工事阻挡（撞墙即停，与 MoveTowards 语义一致）
-        if (IsBlockedByFortification(newPos)) return;
-        _rb.MovePosition(newPos);
+        Vector2 movement = GridDistClampDir(direction) * speed * Time.deltaTime; // 格空间归一化 §1.6
+        _rb.MovePosition(_rb.position + movement);   // 2D 平面：删 y 固定 / 删撞墙停（D68）
         UpdateGridPosition();
-        // 3.7 P1.4 拒马减速：经过敌方拒马格减速（友方拒马不减速）
+        // 拒马减速：经过敌方拒马格减速（友方拒马不减速）
         ApplyBarricadeSlowIfNeeded();
     }
 
     /// <summary>
-    /// 向指定目标位置移动一步。返回是否已到达。
-    /// 击飞中视为已到达（不移动）。工事挡移动（3.6 §2.3）：终点有 blocksMovement 工事 → 停下。
-    /// speedOverride（B3，3.6 §六）：>0 时用该速度（NPCBrain 追击提速 speedChaseBoost 经此生效），
+    /// 向指定目标位置移动一步（2_3：2D 平面走向路径点，PathFollower 调用）。返回是否已到达。
+    /// 击飞中视为已到达（不移动）。普通移动不再撞墙停（D68）——障碍规避由 2_6 寻路层负责。
+    /// speedOverride（B3）：>0 时用该速度（NPCBrain 追击提速 speedChaseBoost 经此生效），
     /// 否则按 run 选 runSpeed/walkSpeed；速度仍过 EffectiveSpeed（拒马/Slow 场减速）。
     /// </summary>
     public virtual bool MoveTowards(Vector2 destination, bool run = false, float speedOverride = 0f)
     {
         if (Data == null || !IsAlive) return true;
         if (_knockbackActive) return true;
-        if (ChargeState != 0) return true;   // 3.6 §5.3：冲锋流程中普通移动让位（瞬间位移已处理）
-
-        // 工事挡移动（3.6 §2.3：墙/拒马挡，城门 passable 不挡）
-        if (IsBlockedByFortification(destination)) return true;
+        if (ChargeState != 0) return true;   // 冲锋流程中普通移动让位（瞬间位移已处理）
 
         float speed = speedOverride > 0f
             ? EffectiveSpeed(speedOverride)
@@ -1001,28 +1001,70 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         float step = speed * Time.deltaTime;
 
         Vector2 current = _rb.position;
-        Vector2 newPos = Vector2.MoveTowards(current, destination, step);
-        newPos.y = current.y;  // 固定 Y 轴，1D 横版不上下移动
+        Vector2 newPos = Vector2.MoveTowards(current, destination, step); // 2D 平面（删 y 固定）
 
         UpdateFacing(newPos - current);
 
         _rb.MovePosition(newPos);
         UpdateGridPosition();
-        // 3.7 P1.4 拒马减速：经过敌方拒马格减速（友方拒马不减速）
+        // 拒马减速：经过敌方拒马格减速（友方拒马不减速）
         ApplyBarricadeSlowIfNeeded();
 
-        return Vector2.Distance(current, destination) < 0.01f;
+        return IsArrived(destination);   // 2_3 到达判定：格单位分量归一化距离（§1.6）
     }
 
     /// <summary>
-    /// 瞬间位移（3.6 §5.3 穿透冲锋用）：瞬移到 worldPos（Y 锁定当前 y），并同步网格注册。
+    /// 瞬间位移（3.6 §5.3 穿透冲锋用）：瞬移到 worldPos（2D，删 y 锁定），并同步网格注册。
     /// 冲锋位移与普通移动共用网格维护路径。
     /// </summary>
     public void Teleport(Vector2 worldPos)
     {
         if (Data == null || !IsAlive) return;
-        _rb.MovePosition(new Vector2(worldPos.x, _rb.position.y));
+        _rb.MovePosition(worldPos);   // 2D 瞬移（删 y 锁定）
         UpdateGridPosition();
+    }
+
+    // ===== 2_3 到达判定 + 格空间距离（steps 1/2，doc 1 §1.6）=====
+
+    /// <summary>
+    /// 是否已到达目标（2_3 步骤2，D3/D73）：格单位分量归一化距离 ≤ arriveRadiusCells。
+    /// 落点吸附微格只在 SetDestination/到达时算（D73），此处仅判定。
+    /// </summary>
+    public bool IsArrived(Vector2 dest)
+    {
+        var cfg = GridSystem.Instance != null ? GridSystem.Instance.Config : null;
+        if (cfg == null) return Vector2.Distance(_rb.position, dest) < 0.01f;
+        return GridDist(_rb.position, dest) <= ArriveRadiusCells;
+    }
+
+    /// <summary>到达半径（格单位，§1.6）。来自 MovementConfig（2_3 步骤6 SO），缺配置兜底 0.3。</summary>
+    float ArriveRadiusCells
+    {
+        get
+        {
+            var mc = MovementConfig.Instance;
+            return mc != null && mc.arriveRadiusCells > 0f ? mc.arriveRadiusCells : 0.3f;
+        }
+    }
+
+    /// <summary>格单位分量归一化欧氏距离（doc 1 §1.6）：√((Δx/cellW)² + (Δy/cellH)²)。</summary>
+    float GridDist(Vector2 a, Vector2 b)
+    {
+        var cfg = GridSystem.Instance != null ? GridSystem.Instance.Config : null;
+        float cw = cfg != null ? cfg.cellSize.x : 1.28f;
+        float ch = cfg != null ? cfg.cellSize.y : 0.64f;
+        float dx = (a.x - b.x) / cw, dy = (a.y - b.y) / ch;
+        return Mathf.Sqrt(dx * dx + dy * dy);
+    }
+
+    /// <summary>格空间方向归一化（doc 1 §1.6）：先除 cellSize 分量再归一化，使斜向与轴向速度一致。</summary>
+    Vector2 GridDistClampDir(Vector2 dir)
+    {
+        var cfg = GridSystem.Instance != null ? GridSystem.Instance.Config : null;
+        float cw = cfg != null ? cfg.cellSize.x : 1.28f;
+        float ch = cfg != null ? cfg.cellSize.y : 0.64f;
+        Vector2 scaled = new Vector2(dir.x / cw, dir.y / ch);
+        return scaled.sqrMagnitude < 0.0001f ? Vector2.zero : scaled.normalized;
     }
 
     /// <summary>
@@ -1078,35 +1120,43 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
 
     /// <summary>
-    /// 更新空间分区格子位置。仅在跨格时调 GridSystem.TryEnter，同格内零开销。
+    /// 更新空间分区格子位置（2_3 步骤2：改微格粒度，D70/D71）。仅在跨微格时调 GridSystem.TryEnter，同微格内零开销。
     /// 3.0.1 感知广播系统依赖此方法维护 GridCell 实体列表。
     /// </summary>
     private void UpdateGridPosition()
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
 
-        var currentCoordOpt = GridSystem.Instance.WorldToCoord(transform.position);
-        if (!currentCoordOpt.HasValue) return;
-        GridCoord currentCoord = currentCoordOpt.Value;
-        if (_gridRegistered && currentCoord == _lastGridCoord) return;
+        GridCoord? subOpt = GridSystem.Instance.WorldToSubCoord(_rb.position);
+        if (!subOpt.HasValue) return;   // 越界（doc 1 D2 nullable）
+        GridCoord sub = subOpt.Value;
+        if (_gridRegistered && sub == _lastGridSub) return;   // 同微格零开销
 
-        GridSystem.Instance.TryEnter(this, currentCoord);
-        _lastGridCoord = currentCoord;
+        GridSystem.Instance.TryEnter(this, sub);
+        _lastGridSub = sub;
         _gridRegistered = true;
     }
 
     /// <summary>
-    /// 根据移动方向翻转精灵。默认精灵朝右。
-    /// 向左移动时 flipX=true，向右移动时 flipX=false。
+    /// 根据移动方向更新朝向（2_3 步骤5，D74）：速度方向量化 8 向供 2_10 动画；
+    /// 渲染 flipX 暂保留（2_10 前过渡，按水平分量翻转）。
     /// </summary>
     private void UpdateFacing(Vector2 direction)
     {
-        if (_renderer == null) return;
+        if (direction.sqrMagnitude < 0.0001f) return;   // 静止保持当前朝向
 
-        if (direction.x < -0.01f)
-            _renderer.flipX = true;
-        else if (direction.x > 0.01f)
-            _renderer.flipX = false;
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        int octant = Mathf.RoundToInt(angle / 45f) & 7;   // 0=E 1=NE 2=N 3=NW 4=W 5=SW 6=S 7=SE
+        Facing = (Facing8)octant;
+
+        // 渲染 flipX 过渡（2_10 接管动画切换）：按水平分量翻转
+        if (_renderer != null)
+        {
+            if (direction.x < -0.01f)
+                _renderer.flipX = true;
+            else if (direction.x > 0.01f)
+                _renderer.flipX = false;
+        }
     }
 
     // ========================================================================

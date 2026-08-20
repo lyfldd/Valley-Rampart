@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Human_Player_Archmage
   m_EditorClassIdentifier: 
+  prefab: {fileID: 1849501128444403622, guid: 86a7bb44b8fd1e74394f5f8570f8d7d2, type: 3}
   faction: 1
   occupation: 11
   walkSpeed: 2.8
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 3

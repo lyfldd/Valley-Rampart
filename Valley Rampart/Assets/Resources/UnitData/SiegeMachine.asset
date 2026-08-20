@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: SiegeMachine
   m_EditorClassIdentifier: 
+  prefab: {fileID: 1258079886505062902, guid: deb590c3ad8e7404ea0fb8de2a0f6ba9, type: 3}
   faction: 1
   occupation: 13
   walkSpeed: 1.2

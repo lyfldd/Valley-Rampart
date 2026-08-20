@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Ballista
   m_EditorClassIdentifier: 
+  prefab: {fileID: 3788786577628235014, guid: 1b00f98dc8c131a4f891505068972edc, type: 3}
   faction: 1
   occupation: 14
   walkSpeed: 0.6

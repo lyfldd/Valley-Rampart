@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Gate
   m_EditorClassIdentifier: 
+  prefab: {fileID: 7003669483700825628, guid: c41d97ba139a46c4f971954f54c15223, type: 3}
   faction: 1
   occupation: 18
   walkSpeed: 0
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 0

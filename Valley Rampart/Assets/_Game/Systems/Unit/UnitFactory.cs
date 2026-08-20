@@ -2,25 +2,22 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 单位工厂。预加载 Prefab 并按需实例化。
-/// Prefab 存放在 Resources/UnitPrefabs/ 下，按 "{faction}_{occupation}" 命名。
+/// 单位工厂。按 UnitData（SO 直接引用）实例化，不依赖 Resources/UnitPrefabs 命名匹配（2_3 步骤0）。
+/// Prefab 由 UnitData.prefab 提供；实例对象池按 UnitData 分桶。
 /// </summary>
 public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
 {
     public string SaveIdPrefix => "Unit_";
 
-    private readonly Dictionary<string, GameObject> _prefabCache = new Dictionary<string, GameObject>();
-    private bool _isPreloaded = false;
-
-    // 3.0.1 §7.4 对象池：实例层（按 prefab 分桶），门面挂在 UnitFactory 现有生成路径
+    // 3.0.1 §7.4 对象池：实例层（按 UnitData 分桶），门面挂在 UnitFactory 现有生成路径
     private readonly UnitInstancePool _instancePool = new UnitInstancePool();
 
     /// <summary>实例池（供外部统计/调试）。</summary>
     public UnitInstancePool InstancePool => _instancePool;
 
     /// <summary>
-    /// 同步预加载所有单位 Prefab。幂等：重复调用只加载一次。
-    /// 由 LoadManager 阶段1 显式调用。
+    /// 预加载（2_3 步骤0：不再扫描 Resources/UnitPrefabs，prefab 引用随 UnitData SO 自带）。
+    /// 幂等：由 LoadManager 阶段1 显式调用。
     /// </summary>
     public void PreloadAll()
     {
@@ -30,40 +27,14 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
             return;
         }
 
-        Debug.Log("[UnitFactory] 预加载单位 Prefab...");
-
-        GameObject[] prefabs = Resources.LoadAll<GameObject>("UnitPrefabs");
-
-        foreach (var prefab in prefabs)
-        {
-            if (prefab == null) continue;
-
-            string key = prefab.name;
-
-            if (!_prefabCache.ContainsKey(key))
-            {
-                _prefabCache.Add(key, prefab);
-                Debug.Log($"[UnitFactory] 已缓存: {key}");
-            }
-        }
-
+        Debug.Log("[UnitFactory] 预加载单位数据（prefab 引用随 UnitData SO 自带）...");
         _isPreloaded = true;
-        Debug.Log($"[UnitFactory] 预加载完成，共 {_prefabCache.Count} 个 Prefab。");
     }
 
-    /// <summary>获取缓存的 Prefab（供 LoadManager 门面转发）。</summary>
-    public GameObject GetPrefab(string key)
-    {
-        if (_prefabCache.TryGetValue(key, out var prefab))
-        {
-            return prefab;
-        }
-        Debug.LogError($"[UnitFactory] 找不到 Prefab: {key}。可用: {string.Join(", ", _prefabCache.Keys)}");
-        return null;
-    }
+    private bool _isPreloaded = false;
 
     /// <summary>
-    /// 根据 UnitData 创建单位实例。
+    /// 根据 UnitData 创建单位实例（2_3 步骤0：用 data.prefab，无命名回退）。
     /// </summary>
     public GameObject SpawnUnit(UnitData data, Vector2 position)
     {
@@ -73,20 +44,18 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
             return null;
         }
 
-        string key = $"{data.faction}_{data.occupation}";
-
-        if (!_prefabCache.TryGetValue(key, out var prefab))
+        if (data.prefab == null)
         {
-            Debug.LogError($"[UnitFactory] 找不到 Prefab: {key}。请确保 Resources/UnitPrefabs/{key}.prefab 存在。");
-            return null;
+            Debug.LogError($"[UnitFactory] UnitData '{data.name}' 未挂 prefab 引用，无法生成。");
+            return null;   // 彻底解耦：无命名回退
         }
 
         // 3.0.1 §7.4 对象池：优先取桶（池空才 Instantiate——战斗尖峰零分配）
-        GameObject instance = _instancePool.Get(key);
+        GameObject instance = _instancePool.Get(data);
         if (instance == null)
         {
-            instance = Instantiate(prefab, position, Quaternion.identity);
-            instance.name = key;
+            instance = Instantiate(data.prefab, position, Quaternion.identity);
+            instance.name = data.name;
         }
         else
         {
@@ -120,21 +89,18 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
     public void ReturnUnitToPool(UnitController unit)
     {
         if (unit == null) return;
-        string key = unit.name;
-        if (unit.Data != null)
-            key = $"{unit.Data.faction}_{unit.Data.occupation}";
-        _instancePool.Return(key, unit.gameObject);
+        if (unit.Data == null) return;
+        _instancePool.Return(unit.Data, unit.gameObject);
     }
 
     /// <summary>
-    /// 3.0.1 §7.4 预热（战斗尖峰零 Instantiate）。按 prefab key × 数量预实例化入桶。
-    /// 数量为 0/缺 prefab 自动跳过。幂等可重复调（重复预热同 key 会继续叠加）。
+    /// 3.0.1 §7.4 预热（战斗尖峰零 Instantiate）。按 UnitData × 数量预实例化入桶。
+    /// 数量为 0/缺 prefab 自动跳过。幂等可重复调（重复预热同 data 会继续叠加）。
     /// </summary>
-    public void Prewarm(string prefabKey, int count)
+    public void Prewarm(UnitData data, int count)
     {
-        if (count <= 0) return;
-        if (!_prefabCache.TryGetValue(prefabKey, out var prefab)) return;
-        _instancePool.Prewarm(prefabKey, prefab, count, transform);
+        if (data == null || count <= 0) return;
+        _instancePool.Prewarm(data, count, transform);
     }
 
     /// <summary>

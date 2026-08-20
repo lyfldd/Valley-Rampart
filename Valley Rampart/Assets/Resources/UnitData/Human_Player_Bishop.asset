@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Human_Player_Bishop
   m_EditorClassIdentifier: 
+  prefab: {fileID: 9062783814890230166, guid: 2262fd03c688220438e4c6b5de3d6c02, type: 3}
   faction: 1
   occupation: 9
   walkSpeed: 3
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 4

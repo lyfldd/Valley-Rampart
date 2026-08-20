@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Human_Player_HeavyWarrior
   m_EditorClassIdentifier: 
+  prefab: {fileID: 6331482191197100495, guid: fd6a08ecf28a61f4a898bdae7aa20825, type: 3}
   faction: 1
   occupation: 8
   walkSpeed: 2.6
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 1

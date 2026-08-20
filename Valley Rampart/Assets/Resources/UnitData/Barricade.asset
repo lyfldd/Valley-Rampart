@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Barricade
   m_EditorClassIdentifier: 
+  prefab: {fileID: 7806215806833823897, guid: e85470460d909bd4986c6610e2a68f83, type: 3}
   faction: 1
   occupation: 16
   walkSpeed: 0
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 0

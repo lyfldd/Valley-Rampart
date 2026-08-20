@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Undead_Cavalry
   m_EditorClassIdentifier: 
+  prefab: {fileID: 1116375398508508132, guid: be9a99df82daf024baab3af41b804f74, type: 3}
   faction: 2
   occupation: 12
   walkSpeed: 3
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 5

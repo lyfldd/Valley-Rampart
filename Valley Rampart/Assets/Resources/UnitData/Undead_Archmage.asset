@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Undead_Archmage
   m_EditorClassIdentifier: 
+  prefab: {fileID: 8562051345770389195, guid: a94d40d108e56174582d043face4fa37, type: 3}
   faction: 2
   occupation: 11
   walkSpeed: 2.8
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 3

@@ -409,6 +409,15 @@ public readonly struct GateStateChangedEvent
     public GateStateChangedEvent(Building gate, bool open) { Gate = gate; Open = open; }
 }
 
+// 寻路失败事件（2_3 步骤4，D 五态 Failed）。由 PathFollower 连续失败达上限时发布。
+// 消费方：2_7/2_8 AI 决策核据此换目标（不反复请求）。
+public readonly struct PathFailedEvent
+{
+    public readonly UnitController Unit;
+    public readonly Vector2 Destination;
+    public PathFailedEvent(UnitController unit, Vector2 destination) { Unit = unit; Destination = destination; }
+}
+
 // 研究完成事件（QQQ.2 Q4）。由 AcademyBuilding 天数推进完成时发布。研究面板/增益表现订阅。
 public readonly struct ResearchCompletedEvent
 {

@@ -49,6 +49,10 @@ public enum Occupation
 [CreateAssetMenu(menuName = "ValleyRampart/UnitData")]
 public class UnitData : ScriptableObject
 {
+    // 美术挂接（2_3 步骤0）：单位 prefab 直接引用，替代 Resources/UnitPrefabs 命名匹配（总计划 §五 原则 6）。
+    [Header("美术")]
+    public GameObject prefab;
+
     // 身份设定：单位所属阵营，决定敌我关系
     [Header("身份设定")]
     public Faction faction;

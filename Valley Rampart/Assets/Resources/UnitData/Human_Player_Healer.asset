@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Human_Player_Healer
   m_EditorClassIdentifier: 
+  prefab: {fileID: 3868299251888690969, guid: 8772ad1f22e55ac46ba2af2952e1cde4, type: 3}
   faction: 1
   occupation: 6
   walkSpeed: 3
@@ -53,4 +54,6 @@ MonoBehaviour:
   ammoCostMagic: 5
   ammoResupplyDelay: 0
   ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
   roleFamily: 4

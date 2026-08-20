@@ -153,12 +153,6 @@ public class LoadManager : Singleton<LoadManager>
         return _configLoader != null ? _configLoader.GetAllData() : null;
     }
 
-    /// <summary>获取单位 Prefab（委托 UnitFactory）。</summary>
-    public GameObject GetPrefab(string key)
-    {
-        return _prefabLoader != null ? _prefabLoader.GetPrefab(key) : null;
-    }
-
     /// <summary>创建单位实例（委托 UnitFactory）。</summary>
     public GameObject SpawnUnit(UnitData data, Vector2 position)
     {

@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Human_Player_Porter
   m_EditorClassIdentifier: 
+  prefab: {fileID: 3745447595558409866, guid: fca08223ee70eed4ab84702e6b1921d1, type: 3}
   faction: 1
   occupation: 24
   walkSpeed: 3
