@@ -374,19 +374,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private void RefreshLodIntervals()
     {
         if (_lodSystem == null) return;
-        float thinkInterval;
-        switch (_lodSystem.GetLevelAt(_self.GetPosition()))
-        {
-            case LodLevel.SemiActive:
-                thinkInterval = 1f / Mathf.Max(0.1f, _config.lodSemiThinkHz);
-                break;
-            case LodLevel.Sleeping:
-                thinkInterval = 1f / Mathf.Max(0.1f, _config.lodSleepThinkHz);
-                break;
-            default:
-                thinkInterval = ThinkInterval;
-                break;
-        }
+        // 2_4 中区块化：从所在中区块 LOD 档读 Think 频率（LodConfig 真源）
+        float thinkHz = _lodSystem.GetThinkHz(_self.GetPosition());
+        float thinkInterval = 1f / Mathf.Max(0.1f, thinkHz);
         _currentThinkInterval = thinkInterval;
         // 感知保底 0.5s（不超过思考间隔，但休眠区不至于 2s 才发现敌人）
         _currentPerceptionInterval = Mathf.Max(_config.perceptionUpdateInterval,
