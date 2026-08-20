@@ -401,6 +401,14 @@ public readonly struct BuildingUpgradedEvent
     }
 }
 
+// 城门开关变化事件（2_2 §3.4）。开门=可走，关门=阻挡；2_6 寻路订阅此事件做失效重寻（repath）。
+public readonly struct GateStateChangedEvent
+{
+    public readonly Building Gate;
+    public readonly bool Open;
+    public GateStateChangedEvent(Building gate, bool open) { Gate = gate; Open = open; }
+}
+
 // 研究完成事件（QQQ.2 Q4）。由 AcademyBuilding 天数推进完成时发布。研究面板/增益表现订阅。
 public readonly struct ResearchCompletedEvent
 {

@@ -1,13 +1,14 @@
+using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>城门朝向（2_2 §3.4）：横墙→横向 2 格；竖墙→纵向 2 格。</summary>
+/// <summary>城门朝向（2_2 §3.4）：横墙->横向 2 格；竖墙->纵向 2 格。</summary>
 public enum GateOrientation { Horizontal, Vertical }
 
 /// <summary>放置失败原因（2_2 §5.1）。</summary>
 public enum PlacementFailReason
 {
     None,
-    Blocked,        // 占用/阻挡冲突
+    Blocked,        // 占用/阻挡冲突/断头桥/桥超长
     Terrain,        // 地形不合法
     Resource,       // 资源不足
     Bounds,         // 越界
@@ -24,12 +25,25 @@ public struct PlacementResult
 }
 
 /// <summary>
-/// 放置校验器（2_2 建筑与占格，微格吸附 + footprint 全覆盖 + 桥水域特例）。
+/// 放置校验器（2_2 建筑与占格，微格吸附 + footprint 全覆盖 + 桥水域特例 + 城门拐角）。
 /// 静态工具类。旧 1D 的 <see cref="Validate(BuildingDef, GridCoord)"/> 保留为兼容包装。
 /// </summary>
 public static class PlacementValidator
 {
-    /// <summary>微格吸附后校验（含桥的水域特例）。subOrigin 为吸附后的微格坐标。</summary>
+    private static BuildConfig _buildConfig;
+
+    /// <summary>建造全局配置（懒加载；缺资产用类默认值兜底）。</summary>
+    public static BuildConfig BuildConfig
+    {
+        get
+        {
+            if (_buildConfig == null)
+                _buildConfig = Resources.Load<BuildConfig>("Config/BuildConfig");
+            return _buildConfig;
+        }
+    }
+
+    /// <summary>微格吸附后校验（含桥的水域特例/接岸校验 + 城门拐角）。subOrigin 为吸附后的微格坐标。</summary>
     public static PlacementResult ValidatePlacement(BuildingDef def, GridCoord subOrigin, GateOrientation orient)
     {
         var result = new PlacementResult { ok = false, reason = PlacementFailReason.Blocked };
@@ -97,6 +111,20 @@ public static class PlacementValidator
             }
         }
 
+        // 城门拐角（2_2 §3.4）：横竖两侧都有墙 -> 禁放
+        if (def.isGate)
+        {
+            var inferred = InferGateOrientation(origin);
+            if (inferred.HasValue == false) { result.reason = PlacementFailReason.GateCorner; return result; }
+        }
+
+        // 桥接岸校验（2_2 §3.5）：至少一个邻格可走（陆地或既有桥面）；断头桥拒绝
+        if (def.isBridge)
+        {
+            if (!BridgeTouchesWalkable(grid, origin, w, h)) { result.reason = PlacementFailReason.Blocked; return result; }
+            if (BridgeChainLength(origin, w, h) + 1 > MaxBridgeSegments) { result.reason = PlacementFailReason.Blocked; return result; }
+        }
+
         // 资源足够
         if (RulerController.Instance != null && !RulerController.Instance.CanAfford(def.cost))
         { result.reason = PlacementFailReason.Resource; return result; }
@@ -121,4 +149,99 @@ public static class PlacementValidator
         var sub = grid.CellToSub(origin, 0, 0);
         return ValidatePlacement(def, sub, GateOrientation.Horizontal).ok;
     }
+
+    // ===== 城门朝向推断（2_2 §3.4）=====
+
+    /// <summary>
+    /// 自动推断城门朝向：检测落点两侧相邻格的墙走向。
+    /// 返回 null = 拐角（横竖都有墙，禁放）；无墙自由段返回给定 fallback（玩家可 R 旋转）。
+    /// </summary>
+    public static GateOrientation? InferGateOrientation(GridCoord cellOrigin, GateOrientation fallback = GateOrientation.Horizontal)
+    {
+        bool horizontalWall = IsWallAt(new GridCoord(cellOrigin.x - 1, cellOrigin.y))
+                            || IsWallAt(new GridCoord(cellOrigin.x + 1, cellOrigin.y));
+        bool verticalWall = IsWallAt(new GridCoord(cellOrigin.x, cellOrigin.y - 1))
+                         || IsWallAt(new GridCoord(cellOrigin.x, cellOrigin.y + 1));
+        if (horizontalWall && verticalWall) return null;   // 拐角
+        if (horizontalWall) return GateOrientation.Horizontal;
+        if (verticalWall) return GateOrientation.Vertical;
+        return fallback;
+    }
+
+    /// <summary>该格是否有城墙类建筑（role==Wall：墙/门均算，走向判定用）。</summary>
+    static bool IsWallAt(GridCoord coord)
+    {
+        var b = BuildingRegistry.Instance != null ? BuildingRegistry.Instance.GetAt(coord) : null;
+        return b != null && b.def != null && b.def.role == BuildingRole.Wall;
+    }
+
+    // ===== 桥接岸/桥链（2_2 §3.5）=====
+
+    /// <summary>桥 footprint 是否至少接触一个可走邻格（陆地或既有桥面；桥面 Bridge 位使 IsWalkable 为 true）。</summary>
+    static bool BridgeTouchesWalkable(GridSystem grid, GridCoord origin, int w, int h)
+    {
+        // 沿 footprint 外圈扫描四邻
+        for (int dx = -1; dx <= w; dx++)
+        {
+            var top = new GridCoord(origin.x + dx, origin.y - 1);
+            var bottom = new GridCoord(origin.x + dx, origin.y + h);
+            if (grid.IsInBounds(top) && grid.IsWalkable(top)) return true;
+            if (grid.IsInBounds(bottom) && grid.IsWalkable(bottom)) return true;
+        }
+        for (int dy = -1; dy <= h; dy++)
+        {
+            var left = new GridCoord(origin.x - 1, origin.y + dy);
+            var right = new GridCoord(origin.x + w, origin.y + dy);
+            if (grid.IsInBounds(left) && grid.IsWalkable(left)) return true;
+            if (grid.IsInBounds(right) && grid.IsWalkable(right)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>从落点邻接桥段出发 BFS 数既有桥链段数（新段不计，调用方 +1）。</summary>
+    static int BridgeChainLength(GridCoord origin, int w, int h)
+    {
+        var registry = BuildingRegistry.Instance;
+        if (registry == null) return 0;
+
+        var visited = new HashSet<Building>();
+        var queue = new Queue<GridCoord>();
+
+        // 种子：落点外圈的既有桥段
+        for (int dx = -1; dx <= w; dx++)
+        {
+            queue.Enqueue(new GridCoord(origin.x + dx, origin.y - 1));
+            queue.Enqueue(new GridCoord(origin.x + dx, origin.y + h));
+        }
+        for (int dy = -1; dy <= h; dy++)
+        {
+            queue.Enqueue(new GridCoord(origin.x - 1, origin.y + dy));
+            queue.Enqueue(new GridCoord(origin.x + w, origin.y + dy));
+        }
+
+        while (queue.Count > 0)
+        {
+            var c = queue.Dequeue();
+            var b = registry.GetAt(c);
+            if (b == null || b.def == null || !b.def.isBridge || visited.Contains(b)) continue;
+            visited.Add(b);
+            // 沿该桥段四邻继续扩散
+            int bw = Mathf.Max(1, b.footprint.x), bh = Mathf.Max(1, b.footprint.y);
+            for (int dx = -1; dx <= bw; dx++)
+            {
+                queue.Enqueue(new GridCoord(b.coord.x + dx, b.coord.y - 1));
+                queue.Enqueue(new GridCoord(b.coord.x + dx, b.coord.y + bh));
+            }
+            for (int dy = -1; dy <= bh; dy++)
+            {
+                queue.Enqueue(new GridCoord(b.coord.x - 1, b.coord.y + dy));
+                queue.Enqueue(new GridCoord(b.coord.x + bw, b.coord.y + dy));
+            }
+        }
+        return visited.Count;
+    }
+
+    /// <summary>桥链段数上限（BuildConfig.bridgeMaxSegments，缺配置 8）。</summary>
+    static int MaxBridgeSegments
+        => BuildConfig != null && BuildConfig.bridgeMaxSegments > 0 ? BuildConfig.bridgeMaxSegments : 8;
 }

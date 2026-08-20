@@ -277,6 +277,20 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
                 Free(new GridCoord(origin.x + dx, origin.y + dy, origin.layer));
     }
 
+    /// <summary>置/清桥面位（2_2 桥放置/拆除）。Bridge 置位后 IsWalkable 豁免 Water 阻挡（doc 1 §5.1）。</summary>
+    public void SetBridge(GridCoord origin, int w, int h, bool on)
+    {
+        for (int dy = 0; dy < h; dy++)
+            for (int dx = 0; dx < w; dx++)
+            {
+                var c = new GridCoord(origin.x + dx, origin.y + dy, origin.layer);
+                if (!InBounds(c.x, c.y) || _walkFlags == null) continue;
+                int i = ToIndex(c.x, c.y);
+                if (on) _walkFlags[i] |= WalkFlags.Bridge;
+                else _walkFlags[i] &= ~WalkFlags.Bridge;
+            }
+    }
+
     public bool IsFootprintClear(GridCoord origin, int w, int h)
     {
         for (int dy = 0; dy < h; dy++)

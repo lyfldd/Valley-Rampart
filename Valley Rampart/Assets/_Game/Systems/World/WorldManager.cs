@@ -5,8 +5,8 @@ using UnityEngine;
 /// <summary>
 /// 世界管理器（改造计划 doc 1：地图生成归 2_1，本片只保留单图 2D 空间契约骨架）。
 /// 作用：
-///   - 按 worldSize → width/height 装配空 MapData（terrain 全 Plain），供空场景初始化 2D 网格验收；
-///   - 不再调用 BuildingFactory.InstantiateFromMap（2_2 接管建筑实例化）；
+///   - 2_1 生成管线装配 MapData（features 唯一功能源）；
+///   - 填充网格后调 BuildingFactory.InstantiateFromMap 实例化自然建筑 + 主城（2_2）；
 ///   - 不再生成 5 区/Region/资源占位（2_1 重写）。
 /// 存档策略：seed 复现（WorldSaveData 存 seed+meta，读档用同 seed 重生成）。
 /// </summary>
@@ -114,9 +114,11 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         var playerMap = GenerateMap(worldSeed, mapId: 0, size, difficulty);
         _world.maps.Add(playerMap);
 
-        // 填充网格 + 发布事件（单图初始化）
+        // 填充网格 + 实例化自然建筑/主城（2_2）+ 发布事件（单图初始化）
         if (GridSystem.Instance != null)
             GridSystem.Instance.PopulateFromMap(playerMap);
+        if (BuildingFactory.Instance != null)
+            BuildingFactory.Instance.InstantiateFromMap(playerMap);
         EventBus.Publish(new MapGeneratedEvent(0, true));
 
         Debug.Log($"[WorldManager] 世界已装配（2D 骨架）: seed={worldSeed}, size={size}, " +

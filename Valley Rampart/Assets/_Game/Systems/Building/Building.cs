@@ -51,9 +51,28 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     // ===== 占位 =====
     [Header("占位")]
-    public GridCoord coord;
-    public int cellWidth = 1;
+    public GridCoord coord;                    // footprint 左上格（2D）
+    public Vector2Int footprint = Vector2Int.one; // 占地 w×h（小区块，2_2）
     public bool isObstacle = false;
+
+    /// <summary>桥链 id（2_2 §3.5：1×N 桥段共享同一 bridgeId；运行时派生，不入档）。</summary>
+    [HideInInspector] public string bridgeId;
+
+    /// <summary>城门朝向（2_2 §3.4）：w>=h 为横门，反之为竖门。</summary>
+    public GateOrientation GateOrientation
+        => footprint.x >= footprint.y ? GateOrientation.Horizontal : GateOrientation.Vertical;
+
+    /// <summary>
+    /// 城门开关切换占用阻挡（2_2 §3.4，GateController 调）：
+    /// 开门=不阻挡（isObstacle=false + 重标 footprint 清 BuildingBlocked），关门=阻挡。
+    /// occupant 注册保持不变，只切 BuildingBlocked 位。
+    /// </summary>
+    public void SetGateBlocking(bool blocked)
+    {
+        isObstacle = blocked;
+        if (GridSystem.Instance != null)
+            GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), this);
+    }
 
     // ===== 来源 =====
     [Header("来源")]
@@ -136,11 +155,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
         int count = 0;
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int dy = -cellRange; dy <= cellRange; dy++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int dx = -cellRange; dx <= cellRange; dx++)
             {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, center.y + dy));
                 foreach (var unit in units)
                 {
                     var uc = unit as UnitController;
@@ -168,11 +187,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
         int count = 0;
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int dy = -cellRange; dy <= cellRange; dy++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int dx = -cellRange; dx <= cellRange; dx++)
             {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, center.y + dy));
                 foreach (var unit in units)
                 {
                     var uc = unit as UnitController;
@@ -200,11 +219,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var centerOpt = GridSystem.Instance.WorldToCoord(transform.position);
         if (!centerOpt.HasValue) return false; // doc1 改造：越界返回 null，视为无敌
         GridCoord center = centerOpt.Value;
-        for (int dx = -range; dx <= range; dx++)
+        for (int dy = -range; dy <= range; dy++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int dx = -range; dx <= range; dx++)
             {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, center.y + dy));
                 foreach (var unit in units)
                 {
                     var uc = unit as UnitController;
@@ -228,13 +247,20 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// <summary>玩家建造初始化（由 BuildController.Place 调）。默认 state=Active，调用方按需 StartConstructing。</summary>
     public void Init(BuildingDef def, GridCoord coord, bool isPlayerBuilt = true)
     {
+        Init(def, coord, isPlayerBuilt,
+             def != null ? new Vector2Int(Mathf.Max(1, def.footprint.x), Mathf.Max(1, def.footprint.y)) : Vector2Int.one);
+    }
+
+    /// <summary>2D 初始化（2_2）：footprintOverride 供城门旋转等运行时变体。</summary>
+    public void Init(BuildingDef def, GridCoord coord, bool isPlayerBuilt, Vector2Int footprintOverride)
+    {
         this.def = def;
         this.coord = coord;
         this.isPlayerBuilt = isPlayerBuilt;
         this.sourceType = BuildingType.None;
         this.grade = ResourceGrade.Normal;
         this.level = 1;
-        this.cellWidth = def != null ? def.footprint.x : 1;
+        this.footprint = footprintOverride.x > 0 && footprintOverride.y > 0 ? footprintOverride : Vector2Int.one;
 
         ApplyDef();
         state = BuildingState.Active;
@@ -331,13 +357,15 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         RegisterWithTaskScheduler();   // QQQ.2 T17：转 Active 注册任务源
     }
 
-    /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 cellWidth 缩放。</summary>
+    /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 footprint w×h 缩放（2_2）。</summary>
     void UpdateVisual()
     {
         if (_renderer == null) _renderer = GetComponent<SpriteRenderer>();
-        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
-        // 占位 sprite 是 1x1 世界单位，按 cellWidth × cellSize 缩放到实际占地尺寸
-        transform.localScale = new Vector3(Mathf.Max(1, cellWidth) * cellSize, cellSize, 1);
+        float cellW = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
+        float cellH = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.y : 2.26f;
+        // 占位 sprite 是 1x1 世界单位，按 footprint w×h × cellSize 缩放到实际占地尺寸
+        int w = Mathf.Max(1, footprint.x), h = Mathf.Max(1, footprint.y);
+        transform.localScale = new Vector3(w * cellW, h * cellH, 1);
 
         if (state == BuildingState.Constructing)
         {
@@ -415,12 +443,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         {
             defId = def != null ? def.id : "",
             coordX = coord.x,
+            coordY = coord.y,
+            footprintW = Mathf.Max(1, footprint.x),
+            footprintH = Mathf.Max(1, footprint.y),
             level = level,
             hp = hp,
             maxHp = maxHp,
             faction = (int)faction,
             state = (int)state,
-            cellWidth = cellWidth,
             sourceType = (int)sourceType,
             storedAmount = storage != null ? storage.storedAmount : 0,
             byproductType = producer != null ? (int)producer.ByproductType : 0,
@@ -442,6 +472,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
         level = Mathf.Max(1, data.level);
 
+        // 2D 占地恢复（2_2）：旧档缺字段 -> 兜底 def.footprint
+        int fw = data.footprintW > 0 ? data.footprintW : (def != null && def.footprint.x > 0 ? def.footprint.x : 1);
+        int fh = data.footprintH > 0 ? data.footprintH : (def != null && def.footprint.y > 0 ? def.footprint.y : 1);
+        footprint = new Vector2Int(Mathf.Max(1, fw), Mathf.Max(1, fh));
+        coord = new GridCoord(data.coordX, data.coordY);
+
         // QQQ.3 B8-5 / LC-B2：grade 恢复 + 重算属性（修复读档后产能永久降贫瘠档 rate×0.7）。
         // 先设 grade 再 ApplyDef ⇒ maxHp 按新等级重算；随后恢复保存的 hp（clamp 到新 maxHp，不因 ApplyDef 重置满血）。
         grade = (ResourceGrade)data.grade;
@@ -455,9 +491,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var producer = GetComponent<ProducerComponent>();
         if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
 
-        // 网格占用恢复（Spawning 已占用，此处兜底幂等）；doc1 改造：新签名补 h=1
+        // 网格占用恢复（Spawning 已占用，此处兜底幂等；2_2：footprint w×h）
         if (GridSystem.Instance != null)
-            GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), 1, this);
+        {
+            GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), this);
+            // 桥面位恢复（2_2 §3.5：桥段占用水格，Bridge 位豁免 Water 阻挡）
+            if (def != null && def.isBridge)
+                GridSystem.Instance.SetBridge(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), true);
+        }
     }
 
     // ===== 战斗（3.4 实现 IDamageable）=====
@@ -490,7 +531,13 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TrainingSystem.Instance != null)
             TrainingSystem.Instance.OnBuildingDestroyed(this);
 
-        GridSystem.Instance?.FreeFootprint(coord, cellWidth, 1); // doc1 改造：新签名补 h=1
+        // 2_2：footprint w×h 全释放；桥清 Bridge 位（水面恢复阻挡）
+        if (GridSystem.Instance != null)
+        {
+            GridSystem.Instance.FreeFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y));
+            if (def != null && def.isBridge)
+                GridSystem.Instance.SetBridge(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), false);
+        }
         BuildingRegistry.Instance?.Unregister(this);
         // QQQ.2 T17：从任务调度器注销（清指向本建筑的在派任务）
         if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
@@ -519,8 +566,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (def == null || !def.isConsumable) return;
         isBeingGathered = false;
 
-        // ① 释放网格占用（doc1 改造：新签名补 h=1）
-        GridSystem.Instance?.FreeFootprint(coord, cellWidth, 1);
+        // ① 释放网格占用（2_2：footprint w×h）
+        if (GridSystem.Instance != null)
+            GridSystem.Instance.FreeFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y));
         // ①b QQQ.2 T8 / DR-21：采集后空地加入闲逛锚点池（王国多锚点之一，持久）
         WanderAnchorPool.Instance.RegisterFreeSpot(transform.position);
         // ② 从注册表移除
@@ -551,14 +599,15 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 3.5 P1-15 工人逃出（3.5.3 §7.4 / 3.5.4 §8.5）：建筑被摧毁时当前在册工人存活。
-    /// 每个工人：① 清除任务状态（变 Idle）② 位置 +1 格偏移逃离（避免卡在废墟格）③ 不死亡。
+    /// 每个工人：① 清除任务状态（变 Idle）② 位置环形偏移逃离（避免卡在废墟格）③ 不死亡。
     /// 逃出后可被 ScheduleCenter 重新派发任务。
     /// </summary>
     private void EscapeWorkers()
     {
         if (currentWorkers == null || currentWorkers.Count == 0) return;
-        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
+        var cfg = GridSystem.Instance != null ? GridSystem.Instance.Config : null;
+        float cellW = cfg != null ? cfg.cellSize.x : 2.26f;
+        float cellH = cfg != null ? cfg.cellSize.y : 2.26f;
         int idx = 0;
         for (int i = currentWorkers.Count - 1; i >= 0; i--)
         {
@@ -578,10 +627,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
                 brain.RemoveTaskStimulus(this);
             }
 
-            // ② 位置 +1 格偏移逃离（逐工人递增偏移，避免重叠）
-            int dir = (idx % 2 == 0) ? 1 : -1;   // 交替左右偏移
-            int cells = (idx / 2) + 1;
-            Vector2 escape = (Vector2)transform.position + new Vector2(dir * cells * cellSize, 0f);
+            // ② 位置逃离偏移（2_2：2D 环形分布，避免卡废墟格/重叠）
+            int ring = (idx / 8) + 1;                 // 第 1 圈 8 向，逐圈外扩
+            int dirIdx = idx % 8;
+            int ex = ring * (new int[] { 1, 1, 0, -1, -1, -1, 0, 1 }[dirIdx]);
+            int ey = ring * (new int[] { 0, 1, 1, 1, 0, -1, -1, -1 }[dirIdx]);
+            Vector2 escape = (Vector2)transform.position + new Vector2(ex * cellW, ey * cellH);
             w.Teleport(escape);
             currentWorkers.RemoveAt(i);
             idx++;

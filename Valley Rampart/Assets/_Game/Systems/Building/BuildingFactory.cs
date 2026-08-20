@@ -44,26 +44,100 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         return null;
     }
 
-    // ===== 地图预置建筑实例化 =====
+    // ===== 地图预置建筑实例化（2_2 步骤5：naturalBuildings 双来源之一）=====
+
+    /// <summary>FeatureType -> BuildingType（naturalBuildings 实例化映射；SnowMountain 无建筑实体，地形已阻挡）。</summary>
+    static BuildingType? FeatureToBuildingType(FeatureType f)
+    {
+        switch (f)
+        {
+            case FeatureType.Tree: return BuildingType.Tree;
+            case FeatureType.Mine: return BuildingType.Mine;
+            case FeatureType.OreVein: return BuildingType.OreVein;
+            default: return null;   // SnowMountain 等纯视觉/地形阻挡特征物跳过
+        }
+    }
 
     /// <summary>
-    /// 把 MapData 的地图预置占位转为 Building 实例。
-    /// 改造计划 doc 1：1D BuildingPlaceholder/Region 已删除；2D 占位（NaturalBuilding）
-    /// 与实例化逻辑由 2_2 接管，本片返回 0 保持编译与调用链完整。
+    /// 把 MapData 的自然建筑占位（2_1 naturalBuildings）转为 Building 实例（2_2 接管）。
+    /// 树/矿洞/矿脉按 BuildingMappingTable 查 BuildingDef 实例化；
+    /// 另在玩家出生点放主城（CastleCore）保建造解锁链路（正式主城锚点归 2_12）。
     /// </summary>
     public int InstantiateFromMap(MapData map)
     {
         if (map == null) return 0;
-        Debug.Log("[BuildingFactory] 2D 地图预置建筑实例化归 2_2，当前跳过");
-        return 0;
+        var table = GetMappingTable();
+        if (table == null)
+        {
+            Debug.LogWarning("[BuildingFactory] BuildingMappingTable 未加载，跳过自然建筑实例化");
+            return 0;
+        }
+
+        int count = 0;
+        if (map.naturalBuildings != null)
+        {
+            foreach (var nb in map.naturalBuildings)
+            {
+                if (nb == null) continue;
+                var type = FeatureToBuildingType(nb.feature);
+                if (!type.HasValue) continue;   // SnowMountain：地形阻挡已就位，无建筑实体
+                var def = table.Get(type.Value);
+                if (def == null)
+                {
+                    Debug.LogWarning($"[BuildingFactory] naturalBuildings 类型 {type.Value} 未配置 BuildingDef，跳过");
+                    continue;
+                }
+
+                var coord = new GridCoord(nb.cellX, nb.cellY);
+                var fp = new Vector2Int(nb.w > 0 ? nb.w : 1, nb.h > 0 ? nb.h : 1);
+                var worldPos = FootprintCenterWorld(coord, fp);
+                if (CreateBuildingInstance(def, type.Value, coord, fp, worldPos,
+                        isPlayerBuilt: false, grade: ResourceGrade.Normal,
+                        isConsumable: def.isConsumable, initialState: BuildingState.Active))
+                    count++;
+            }
+        }
+
+        // 玩家出生点放主城（2_2 过渡桥：保建造解锁链路；主城=王座/旗帜锚点归 2_12 重做）
+        // 沿用 1D 流程：Abandoned 废墟态放置，玩家经 BuildingPanel 修复 -> CastleLevel=1 解锁建造
+        var castleDef = table.Get(BuildingType.CastleCore);
+        if (castleDef != null && map.kingdomSpawns != null && map.kingdomSpawns.Count > 0)
+        {
+            var spawn = map.kingdomSpawns[0];
+            var coord = new GridCoord(spawn.x, spawn.y);
+            var fp = new Vector2Int(
+                castleDef.footprint.x > 0 ? castleDef.footprint.x : 1,
+                castleDef.footprint.y > 0 ? castleDef.footprint.y : 1);
+            if (CreateBuildingInstance(castleDef, BuildingType.CastleCore, coord, fp,
+                    FootprintCenterWorld(coord, fp),
+                    isPlayerBuilt: false, grade: ResourceGrade.Normal,
+                    isConsumable: false, initialState: BuildingState.Abandoned))
+                count++;
+        }
+
+        Debug.Log($"[BuildingFactory] 2D 地图预置建筑实例化完成：{count} 个（自然建筑 + 主城）");
+        return count;
+    }
+
+    /// <summary>footprint 中心世界坐标（origin 左上格 + w/h 中心偏移）。</summary>
+    static Vector3 FootprintCenterWorld(GridCoord coord, Vector2Int fp)
+    {
+        var grid = GridSystem.Instance;
+        if (grid == null || grid.Config == null) return Vector3.zero;
+        Vector2 origin = grid.CoordToWorld(coord);
+        return origin + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
+                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y);
     }
 
     /// <summary>按占用/注册/挂件/发事件创建 Building 实例。供地图与玩家放置共用逻辑（BuildController 保留自身放置路径）。</summary>
-    public bool CreateBuildingInstance(BuildingDef def, BuildingType sourceType, GridCoord coord, int cellWidth,
+    public bool CreateBuildingInstance(BuildingDef def, BuildingType sourceType, GridCoord coord, Vector2Int footprint,
                                        Vector3 worldPos, bool isPlayerBuilt, ResourceGrade grade, bool isConsumable,
                                        BuildingState initialState)
     {
         if (def == null) return false;
+        var fp = new Vector2Int(
+            footprint.x > 0 ? footprint.x : 1,
+            footprint.y > 0 ? footprint.y : 1);
 
         GameObject go;
         if (def.prefab != null)
@@ -72,7 +146,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         }
         else
         {
-            go = new GameObject($"Building_{def.id}_{coord.x}");
+            go = new GameObject($"Building_{def.id}_{coord.x}_{coord.y}");
             go.transform.position = worldPos;
             BuildingVisual.ApplyPlaceholder(go, sourceType, def.role);
         }
@@ -97,7 +171,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             b.isPlayerBuilt = isPlayerBuilt;
             b.sourceType = sourceType;
             b.grade = grade;
-            b.cellWidth = cellWidth;
+            b.footprint = fp;
             b.level = 1;
             b.faction = def.faction;
             b.isObstacle = def.isObstacle;
@@ -130,14 +204,25 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             col.size = Vector2.one;
         }
 
-        try { if (GridSystem.Instance != null) GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), 1, b); } // doc1 改造：新签名补 h=1
+        try { if (GridSystem.Instance != null) GridSystem.Instance.MarkOccupiedFootprint(coord, fp.x, fp.y, b); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] MarkOccupiedFootprint 失败: " + ex.Message); }
+
+        // 桥：置 Bridge 位（2_2 §3.5）
+        if (def.isBridge && GridSystem.Instance != null)
+        {
+            try { GridSystem.Instance.SetBridge(coord, fp.x, fp.y, true); }
+            catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] SetBridge 失败: " + ex.Message); }
+        }
 
         try { if (BuildingRegistry.Instance != null) BuildingRegistry.Instance.Register(b); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Registry.Register 失败: " + ex.Message); }
 
         try { AttachComponents(b, def); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] AttachComponents 失败: " + ex.Message); }
+
+        // 城门：挂 GateController（2_2 §3.4）
+        if (def.isGate && go.GetComponent<GateController>() == null)
+            go.AddComponent<GateController>();
 
         // QQQ.2 T17：直接以 Active 态创建的建筑（地图预置/读档）注册到任务调度器
         if (initialState == BuildingState.Active && TaskScheduler.HasInstance)
@@ -191,27 +276,34 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             return;
         }
 
-        var coord = new GridCoord(data.coordX, 0);
-        int cellWidth = data.cellWidth > 0 ? data.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
-        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
+        // 2D 坐标/占地恢复（2_2）：旧档缺字段 -> 兜底 def.footprint
+        var coord = new GridCoord(data.coordX, data.coordY);
+        int fw = data.footprintW > 0 ? data.footprintW : (def.footprint.x > 0 ? def.footprint.x : 1);
+        int fh = data.footprintH > 0 ? data.footprintH : (def.footprint.y > 0 ? def.footprint.y : 1);
+        var fp = new Vector2Int(Mathf.Max(1, fw), Mathf.Max(1, fh));
         Vector3 worldPos = GridSystem.Instance != null
             ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
-            : new Vector3(coord.x * cs, -3f, 0);
-        if (cellWidth > 1)
-            worldPos.x += (cellWidth - 1) / 2f * cs;
+            : new Vector3(coord.x * 2.26f, coord.y * 1.13f, 0);
+        if (fp.x > 1 || fp.y > 1)
+        {
+            float csX = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
+            float csY = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.y : 1.13f;
+            worldPos.x += (fp.x - 1) * 0.5f * csX;
+            worldPos.y += (fp.y - 1) * 0.5f * csY;
+        }
 
         BuildingState state = (BuildingState)data.state;
         if (def.sourceType == BuildingType.CastleCore && state == BuildingState.Abandoned)
             state = BuildingState.Active;   // 主城修复后读档不应回到废墟（castoeLevel≥1）
 
-        bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, cellWidth, worldPos,
+        bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, fp, worldPos,
                                          isPlayerBuilt: true, (ResourceGrade)data.grade, false, state);
         if (!ok) return;
 
         var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) : null;
         if (b == null)
         {
-            Debug.LogWarning($"[BuildingFactory] 读档重建后未取到 Building（coord={coord.x}），跳过状态恢复。");
+            Debug.LogWarning($"[BuildingFactory] 读档重建后未取到 Building（coord=({coord.x},{coord.y})），跳过状态恢复。");
             return;
         }
 

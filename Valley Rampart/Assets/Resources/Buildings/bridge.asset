@@ -10,56 +10,49 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
-  m_Name: gate
+  m_Name: bridge
   m_EditorClassIdentifier: 
-  id: gate
-  displayName: "\u57CE\u95E8"
-  description: "\u57CE\u5899\u7F3A\u53E3"
+  id: bridge
+  displayName: "\u6865"
+  description: "\u8DE8\u6CB3\u901A\u884C\uFF081x1 \u6865\u6BB5\uFF0C\u53EF\u62FC\u63A5\uFF0C\u53EA\u80FD\u5EFA\u5728\u6C34\u4E0A\uFF0C\u4E24\u7AEF\u987B\u63A5\u5CB8\uFF09"
   faction: 1
   role: 3
   cost:
-    gold: 80
+    gold: 0
     stone: 0
-    wood: 50
+    wood: 10
     food: 0
-  footprint: {x: 2, y: 1}
+  footprint: {x: 1, y: 1}
   allowedTerrain: 
-  heightLayer: 1
-  canPlaceOnWater: 0
-  isBridge: 0
-  isGate: 1
-  rotatable: 1
+  heightLayer: 0
+  canPlaceOnWater: 1
+  isBridge: 1
+  isGate: 0
+  rotatable: 0
   moduleType: 0
-  isObstacle: 1
+  isObstacle: 0
   producer:
     kind: 0
     rate: 0
     capacity: 0
   combat:
     attack: 0
-    defense: 10
-    maxHp: 300
+    defense: 0
+    maxHp: 0
     range: 0
     damageType: 0
-  levels:
-  - upgradeCost:
-      gold: 0
-      stone: 12
-      wood: 16
-      food: 0
-    statScale: 1.5
-    prerequisites: []
+  levels: []
   crewRequired: 0
   crewRadiusCells: 0
   outputResource: 0
   isResourceNode: 0
   concurrentWorkers: 0
   trainingSlots: 0
-  unlockLevel: 3
+  unlockLevel: 1
   interactableType: 0
   isPlayerBuilt: 1
   isDestructible: 1
-  maxHp: 300
+  maxHp: 150
   sourceType: 0
   isConsumable: 0
   gatherSeconds: 2

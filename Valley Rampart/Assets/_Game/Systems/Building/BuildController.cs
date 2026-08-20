@@ -1,7 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 建造控制器（3.3 第四节）。管理建造模式、ghost 预览、放置校验、放置执行。
+/// 建造控制器（3.3 第四节 + 2_2 步骤3：2D 微格吸附 + 朝向旋转 + 绿/红预览）。
+/// 管理建造模式、ghost 预览、放置校验、放置执行。
 /// Singleton，由 UI 建造按钮调 EnterBuildMode(def) 进入，ESC 或放置后退出。
 /// </summary>
 public class BuildController : Singleton<BuildController>
@@ -14,9 +15,9 @@ public class BuildController : Singleton<BuildController>
     // 主城解锁/等级（3.3.4 批次7）
     private bool _buildUnlocked = false;
     private int _castleLevel = 0;
-    // 多格占地 + R 键旋转（3.3.4 批次8）
+    // 多格占地 + 旋转（3.3.4 批次8 + 2_2：rotatable 才可转，城门/桥）
     private Vector2Int _footprint = Vector2Int.one;
-    private bool _rotated = false;
+    private GateOrientation _playerOrientation = GateOrientation.Horizontal; // 玩家 R 键选择（仅自由段生效）
 
     public bool IsInBuildMode => _inBuildMode;
     public int CastleLevel => _castleLevel;        // 3.3.4 批次7
@@ -62,14 +63,16 @@ public class BuildController : Singleton<BuildController>
         if (def == null) return;
 
         // 建造解锁校验（3.3.4 批次7）
-        if (!_buildUnlocked) { Debug.Log("[BuildController] 建造未解锁（需先修复主城）"); return; }
+        if (!IsBuildUnlocked) { Debug.Log("[BuildController] 建造未解锁（需先修复主城）"); return; }
 
         // 已在建造模式则先退出
         if (_inBuildMode) ExitBuildMode();
 
         _selectedDef = def;
-        _footprint = def.footprint;  // 多格占地（3.3.4 批次8）
-        _rotated = false;            // 旋转重置（3.3.4 批次8）
+        _footprint = new Vector2Int(
+            def.footprint.x > 0 ? def.footprint.x : 1,
+            def.footprint.y > 0 ? def.footprint.y : 1);
+        _playerOrientation = GateOrientation.Horizontal;   // 旋转重置
         _inBuildMode = true;
         InputManager.Instance?.SetMode(InputMode.Build);
 
@@ -95,34 +98,34 @@ public class BuildController : Singleton<BuildController>
     {
         if (!_inBuildMode || _selectedDef == null) return;
 
-        // R 键旋转 ghost（3.3.4 批次8）
-        if (Input.GetKeyDown(KeyCode.R))
+        // R 键旋转 ghost（2_2：仅 rotatable 可转，城门/桥）
+        if (Input.GetKeyDown(KeyCode.R) && _selectedDef.rotatable)
         {
-            _rotated = !_rotated;
-            // 旋转：w/h 互换
-            int w = _footprint.y > 0 ? _footprint.y : 1;
-            int h = _footprint.x > 0 ? _footprint.x : 1;
-            _footprint = new Vector2Int(w, h);
-            // 重建 ghost
+            _playerOrientation = _playerOrientation == GateOrientation.Horizontal
+                ? GateOrientation.Vertical : GateOrientation.Horizontal;
+            // 重建 ghost（footprint w/h 互换）
             if (_ghost != null) { Destroy(_ghost); _ghost = null; }
             CreateGhost(_selectedDef);
         }
 
-        // ghost 跟随鼠标 + 吸附区块中心 + 绿/红反馈
+        // ghost 跟随鼠标 + 微格吸附 + 绿/红反馈（2_2 步骤3/9）
         if (_ghost != null && Camera.main != null && GridSystem.Instance != null)
         {
             Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            var coordOpt = GridSystem.Instance.WorldToCoord(mouseWorld);
-            if (coordOpt.HasValue) // doc1 改造：null=越界，跳过 ghost 吸附与反馈
+            var subOpt = GridSystem.Instance.WorldToSubCoord(mouseWorld);
+            if (subOpt.HasValue) // doc1 改造：null=越界，跳过 ghost 吸附与反馈
             {
-                GridCoord coord = coordOpt.Value;
-                Vector3 snapPos = GridSystem.Instance.CoordToWorld(coord);
-                _ghost.transform.position = snapPos;
+                GridCoord sub = subOpt.Value;
+                var orient = EffectiveOrientation(sub);
+                _ghost.transform.position = GhostWorldPos(sub, orient);
 
-                // 绿/红反馈
-                bool valid = PlacementValidator.Validate(_selectedDef, coord);
+                // 绿/红反馈（预览色走 BuildConfig SO，缺配置用默认）
+                var check = PlacementValidator.ValidatePlacement(_selectedDef, sub, orient);
+                var cfg = PlacementValidator.BuildConfig;
+                Color okColor = cfg != null ? cfg.previewColorOk : new Color(0, 1, 0, 0.5f);
+                Color badColor = cfg != null ? cfg.previewColorBad : new Color(1, 0, 0, 0.5f);
                 if (_ghostRenderer != null)
-                    _ghostRenderer.color = valid ? new Color(0, 1, 0, 0.5f) : new Color(1, 0, 0, 0.5f);
+                    _ghostRenderer.color = check.ok ? okColor : badColor;
             }
         }
 
@@ -139,21 +142,63 @@ public class BuildController : Singleton<BuildController>
         }
     }
 
+    /// <summary>
+    /// 有效朝向（2_2 §3.4）：城门自动推断墙走向（墙优先于玩家 R 键，仅自由段玩家可转）；
+    /// 其余 rotatable 建筑用玩家选择，非 rotatable 恒 Horizontal。
+    /// </summary>
+    GateOrientation EffectiveOrientation(GridCoord sub)
+    {
+        if (_selectedDef == null) return GateOrientation.Horizontal;
+        if (!_selectedDef.rotatable) return GateOrientation.Horizontal;
+        if (_selectedDef.isGate)
+        {
+            var origin = GridSystem.Instance.SubToCell(sub);
+            var inferred = PlacementValidator.InferGateOrientation(origin, _playerOrientation);
+            return inferred ?? _playerOrientation;   // 拐角（null）时按玩家朝向走，校验会拒
+        }
+        return _playerOrientation;
+    }
+
+    /// <summary>当前朝向下的占地 w×h。</summary>
+    Vector2Int OrientedFootprint(GateOrientation orient)
+    {
+        int w = _footprint.x > 0 ? _footprint.x : 1;
+        int h = _footprint.y > 0 ? _footprint.y : 1;
+        if (_selectedDef != null && _selectedDef.rotatable && orient == GateOrientation.Vertical)
+            return new Vector2Int(h, w);
+        return new Vector2Int(w, h);
+    }
+
+    /// <summary>ghost 世界坐标：origin 格 + footprint 中心偏移（多格建筑视觉居中）。</summary>
+    Vector3 GhostWorldPos(GridCoord sub, GateOrientation orient)
+    {
+        var grid = GridSystem.Instance;
+        var origin = grid.SubToCell(sub);
+        var fp = OrientedFootprint(orient);
+        Vector2 originWorld = grid.CoordToWorld(origin);
+        float cellW = grid.Config != null ? grid.Config.cellSize.x : 1.28f;
+        float cellH = grid.Config != null ? grid.Config.cellSize.y : 0.64f;
+        return originWorld + new Vector2((fp.x - 1) * 0.5f * cellW, (fp.y - 1) * 0.5f * cellH);
+    }
+
     void TryPlace()
     {
         if (_selectedDef == null || Camera.main == null || GridSystem.Instance == null) return;
 
         Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        var coordOpt = GridSystem.Instance.WorldToCoord(mouseWorld);
-        if (!coordOpt.HasValue) return; // doc1 改造：越界返回 null，不可放置
-        GridCoord coord = coordOpt.Value;
+        var subOpt = GridSystem.Instance.WorldToSubCoord(mouseWorld);
+        if (!subOpt.HasValue) return; // doc1 改造：越界返回 null，不可放置
+        GridCoord sub = subOpt.Value;
 
-        // 校验用 def.footprint（非旋转后的 _footprint）；多格旋转校验留待 footprint 不可变改造（3.3.4 批次8）
-        if (!PlacementValidator.Validate(_selectedDef, coord))
+        GateOrientation orient = EffectiveOrientation(sub);
+        var check = PlacementValidator.ValidatePlacement(_selectedDef, sub, orient);
+        if (!check.ok)
         {
-            Debug.Log("[BuildController] 放置校验失败");
+            Debug.Log($"[BuildController] 放置校验失败: {check.reason}");
             return;
         }
+        GridCoord coord = check.snappedOrigin;
+        var fp = OrientedFootprint(orient);
 
         // 扣资源
         if (RulerController.Instance != null)
@@ -172,8 +217,8 @@ public class BuildController : Singleton<BuildController>
             }
         }
 
-        // 实例化 Building
-        Vector3 worldPos = GridSystem.Instance.CoordToWorld(coord);
+        // 实例化 Building（世界坐标 = footprint 中心）
+        Vector3 worldPos = GhostWorldPos(sub, orient);
         GameObject go;
         if (_selectedDef.prefab != null)
         {
@@ -182,14 +227,14 @@ public class BuildController : Singleton<BuildController>
         else
         {
             // 无 prefab 时创建空壳 + 占位视觉（3.3.4 问题12）
-            go = new GameObject($"Building_{_selectedDef.id}_{coord.x}");
+            go = new GameObject($"Building_{_selectedDef.id}_{coord.x}_{coord.y}");
             go.transform.position = worldPos;
             BuildingVisual.ApplyPlaceholder(go, BuildingType.None, _selectedDef.role);
         }
 
         var b = go.GetComponent<Building>();
         if (b == null) b = go.AddComponent<Building>();
-        b.Init(_selectedDef, coord, true);
+        b.Init(_selectedDef, coord, true, fp);
         b.StartConstructing();  // 玩家建造走 Constructing 进度（3.3.4 批次3）
 
         // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）
@@ -199,12 +244,25 @@ public class BuildController : Singleton<BuildController>
             col.size = Vector2.one;
         }
 
-        GridSystem.Instance.MarkOccupiedFootprint(coord, b.cellWidth, 1, b); // doc1 改造：新签名补 h=1
+        GridSystem.Instance.MarkOccupiedFootprint(coord, fp.x, fp.y, b);
+
+        // 桥：置 Bridge 位（水面可走）+ 接链 bridgeId（2_2 §3.5）
+        if (_selectedDef.isBridge)
+        {
+            GridSystem.Instance.SetBridge(coord, fp.x, fp.y, true);
+            b.bridgeId = FindAdjacentBridgeId(coord, fp) ?? System.Guid.NewGuid().ToString("N");
+        }
+
         BuildingRegistry.Instance?.Register(b);
         BuildingFactory.Instance.AttachComponents(b, _selectedDef);  // 玩家建造也挂组件（3.3.4 批次5）
+
+        // 城门：挂 GateController（开关切换 footprint 阻挡，2_2 §3.4）
+        if (_selectedDef.isGate && go.GetComponent<GateController>() == null)
+            go.AddComponent<GateController>();
+
         EventBus.Publish(new BuildingPlacedEvent(b));
 
-        Debug.Log($"[BuildController] 放置 {_selectedDef.id} at cell {coord.x}");
+        Debug.Log($"[BuildController] 放置 {_selectedDef.id} at cell ({coord.x},{coord.y}) fp {fp.x}x{fp.y}");
 
         // Shift 连放，否则退出（走栈 Pop，触发 BuildModeEntry.Close -> ExitBuildMode + 回菜单）
         if (!Input.GetKey(KeyCode.LeftShift))
@@ -212,6 +270,26 @@ public class BuildController : Singleton<BuildController>
             if (UIManager.Instance != null) UIManager.Instance.Pop();
             else ExitBuildMode(); // 兜底
         }
+    }
+
+    /// <summary>找邻接桥段的 bridgeId（无邻接桥返回 null，开新链）。</summary>
+    static string FindAdjacentBridgeId(GridCoord origin, Vector2Int fp)
+    {
+        var registry = BuildingRegistry.Instance;
+        if (registry == null) return null;
+        for (int dx = -1; dx <= fp.x; dx++)
+        {
+            var nb = registry.GetAt(new GridCoord(origin.x + dx, origin.y - 1))
+                  ?? registry.GetAt(new GridCoord(origin.x + dx, origin.y + fp.y));
+            if (nb != null && nb.def != null && nb.def.isBridge && !string.IsNullOrEmpty(nb.bridgeId)) return nb.bridgeId;
+        }
+        for (int dy = -1; dy <= fp.y; dy++)
+        {
+            var nb = registry.GetAt(new GridCoord(origin.x - 1, origin.y + dy))
+                  ?? registry.GetAt(new GridCoord(origin.x + fp.x, origin.y + dy));
+            if (nb != null && nb.def != null && nb.def.isBridge && !string.IsNullOrEmpty(nb.bridgeId)) return nb.bridgeId;
+        }
+        return null;
     }
 
     void CreateGhost(BuildingDef def)
@@ -226,13 +304,17 @@ public class BuildController : Singleton<BuildController>
             // 无 prefab 时用占位视觉（3.3.4 问题12）
             _ghost = new GameObject("BuildGhost");
             _ghostRenderer = BuildingVisual.ApplyPlaceholder(_ghost, BuildingType.None, def.role);
-            // 多格占地视觉（3.3.4 批次8，用 _footprint 支持旋转）
-            int w = _footprint.x > 0 ? _footprint.x : 1;
-            int h = _footprint.y > 0 ? _footprint.y : 1;
-            _ghost.transform.localScale = new Vector3(w, h, 1);
+            // 多格占地视觉（3.3.4 批次8 + 2_2：按当前朝向 footprint 缩放）
+            var fp = OrientedFootprint(_playerOrientation);
+            float cellW = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 1.28f;
+            float cellH = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.y : 0.64f;
+            _ghost.transform.localScale = new Vector3(fp.x * cellW, fp.y * cellH, 1);
         }
 
         if (_ghostRenderer != null)
-            _ghostRenderer.color = new Color(0, 1, 0, 0.5f);
+        {
+            var cfg = PlacementValidator.BuildConfig;
+            _ghostRenderer.color = cfg != null ? cfg.previewColorOk : new Color(0, 1, 0, 0.5f);
+        }
     }
 }

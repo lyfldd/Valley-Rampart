@@ -15,13 +15,15 @@ using UnityEngine;
 public struct BuildingSaveData
 {
     public string defId;        // BuildingDef.id（重建时查映射表）
-    public int coordX;          // GridCoord.x
+    public int coordX;          // GridCoord.x（footprint 左上格）
+    public int coordY;          // GridCoord.y（2_2：1D -> 2D 纵轴；旧档缺字段 -> 0）
+    public int footprintW;      // 占地宽（2_2；旧档缺字段 -> 0 由 SpawnFromSave 兜底 def.footprint.x）
+    public int footprintH;      // 占地高（2_2；旧档缺字段 -> 0 由 SpawnFromSave 兜底 def.footprint.y）
     public int level;
     public int hp;
     public int maxHp;
     public int faction;         // (int)Faction
     public int state;           // (int)BuildingState
-    public int cellWidth;
     public int sourceType;      // (int)BuildingType
     public int storedAmount;    // StorageComponent.storedAmount（无则 0）
     // 3.5 步骤6：矿洞副产（水晶/火油）本地存储（无则 0）。旧档缺字段 → 默认 0，向前兼容。

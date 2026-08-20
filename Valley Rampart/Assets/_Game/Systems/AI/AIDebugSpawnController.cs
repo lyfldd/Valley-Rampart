@@ -498,9 +498,11 @@ public class AIDebugSpawnController : MonoBehaviour
         var coordOpt = GridSystem.Instance.WorldToCoord(worldPos);
         if (!coordOpt.HasValue) return false; // doc1 改造：越界返回 null，不可放置
         GridCoord coord = coordOpt.Value;
-        int w = def.footprint.x > 0 ? def.footprint.x : 1;
+        var fp = new Vector2Int(
+            def.footprint.x > 0 ? def.footprint.x : 1,
+            def.footprint.y > 0 ? def.footprint.y : 1);
         return BuildingFactory.Instance.CreateBuildingInstance(
-            def, BuildingType.None, coord, w, worldPos,
+            def, BuildingType.None, coord, fp, worldPos,
             isPlayerBuilt: true, ResourceGrade.Normal, def.isConsumable, BuildingState.Active);
     }
 }

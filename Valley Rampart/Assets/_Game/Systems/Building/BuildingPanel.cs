@@ -105,8 +105,9 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_producerRate != null) _producerRate.text = def.producer.rate > 0f ? $"{def.producer.rate:F1}/s" : "-";
         if (_producerCap != null) _producerCap.text = def.producer.capacity > 0 ? def.producer.capacity.ToString() : "-";
 
-        // 基础信息
-        if (_footprintValue != null) _footprintValue.text = $"{_target.cellWidth}格";
+        // 基础信息（2_2：footprint w×h）
+        if (_footprintValue != null)
+            _footprintValue.text = $"{Mathf.Max(1, _target.footprint.x)}×{Mathf.Max(1, _target.footprint.y)}格";
         if (_factionValue != null) _factionValue.text = FactionDisplayName(def.faction);
         if (_obstacleValue != null) _obstacleValue.text = _target.isObstacle ? "是" : "否";
 
