@@ -49,6 +49,10 @@ public class FormationController : MonoBehaviour
     [Tooltip("减员重排防抖时间（秒，§15.3）")]
     public float casualtyDebounce = 1f;
 
+    [Header("2_8 步骤4：编队 2D 槽位形状（§5.2；缺省 Resources/Config/FormationShapes）")]
+    [Tooltip("槽位形状形参 SO（线/圆/楔形参数）。未配置回退 Resources.Load('Config/FormationShapes')，仍缺失用内置默认（线1/圆1/楔0.7）")]
+    public FormationShapes formationShapes;
+
     [Header("守城锚点（无将军编队用，§14.7）")]
     [Tooltip("是否无将军守城编队（true=城墙锚点模式，false=将军 NPC 模式）")]
     public bool isGarrison = false;
@@ -72,6 +76,8 @@ public class FormationController : MonoBehaviour
     private int _formationDirection = 1;
     /// <summary>自主补员上次扫描时间戳（3.7 §4.2：周期扫描 + 防抖）</summary>
     private float _lastAutoRecruitTime;
+    /// <summary>编队 2D 槽位形状形参（2_8 步骤4：Inspector 优先，缺省 Resources.Load 兜底）</summary>
+    private FormationShapes _shapes;
 
     /// <summary>当前意图</summary>
     public TacticIntent CurrentIntent => _currentIntent;
@@ -95,6 +101,9 @@ public class FormationController : MonoBehaviour
     private void Awake()
     {
         _config = Resources.Load<AttentionTuningConfig>("Config/AttentionTuningConfig");
+        // 2_8 步骤4：槽位形状形参 SO（Inspector 优先，Resources 兜底）
+        _shapes = formationShapes != null ? formationShapes
+            : Resources.Load<FormationShapes>("Config/FormationShapes");
         if (isGarrison)
         {
             _anchor = transform;  // 守城编队锚点 = 挂载 GameObject 自身
@@ -339,12 +348,11 @@ public class FormationController : MonoBehaviour
     }
 
     /// <summary>
-    /// 槽位分配（§3.2 R2 残编紧凑：空槽压队尾，按兵种填槽）。
-    /// 两轮填充：
-    ///   第一轮：近战填 MeleeOnly/GeneralOnly/Any 槽，**按 |x| 外侧优先**（防残编时弓手顶前排：
-    ///     近战先占两端防线，弓手居中安全位——修 3.0.1_LOD 场景验证暴露的"弓手占第一位"）
-    ///   第二轮：弓手填剩余 RangedOnly/Any 槽，按距锚点 |x| 从近到远排序（残编时弓优先填靠后安全位）
-    /// 方向翻转：offset.x *= _formationDirection（1=右/-1=左）
+    /// 槽位分配 2D 化（2_8 步骤4，§5.2）。
+    /// 形状生成（格单位浮点，FormationShapes 形参）→ 角色族填充（近战外沿/前，弓手内/后）→
+    /// 可走校验回缩（IsSubWalkable 微格）→ round 到整数 cell 存 SlotOffset（与 FollowStimulus 既有换算一致）。
+    /// 朝向（D2）：敌人方向 = Anchor→AdvanceTarget；无目标 = 前进方向（_formationDirection）。
+    /// 减员防抖重排由 Update 沿用 casualtyDebounce 触发。
     /// </summary>
     private void AssignSlots(FormationDef def)
     {
@@ -357,51 +365,168 @@ public class FormationController : MonoBehaviour
             else melee.Add(m);   // 近战族 + 未分类兜底算近战
         }
 
-        bool[] occupied = new bool[def.slots.Length];
-        int dir = _formationDirection;
+        // 2D 形状生成槽位（格单位，顺序=近战外沿/前，弓手内/后），已做可走校验回缩
+        var slots = BuildSlots2D(def, melee.Count, archer.Count);
 
-        // 第一轮：近战按 |x| 外侧优先填 MeleeOnly/GeneralOnly/Any 槽
-        var meleeSlots = new List<int>();
-        for (int i = 0; i < def.slots.Length; i++)
+        int idx = 0;
+        for (int k = 0; k < melee.Count && idx < slots.Count; k++)
         {
-            SlotRole role = def.slots[i].role;
-            if (role == SlotRole.MeleeOnly || role == SlotRole.GeneralOnly || role == SlotRole.Any)
-                meleeSlots.Add(i);
+            var mem = melee[k];
+            mem.SlotOffset = slots[idx++];
+            melee[k] = mem;          // 结构体经列表索引器整体回写（CS1612）
+            ReplaceMember(mem);
         }
-        meleeSlots.Sort((a, b) =>
-            Mathf.Abs(def.slots[b].cellOffset.x).CompareTo(Mathf.Abs(def.slots[a].cellOffset.x)));
+        for (int k = 0; k < archer.Count && idx < slots.Count; k++)
+        {
+            var mem = archer[k];
+            mem.SlotOffset = slots[idx++];
+            archer[k] = mem;         // 结构体经列表索引器整体回写（CS1612）
+            ReplaceMember(mem);
+        }
+        Debug.Log($"[FormationController] 槽位 2D 生成完成：shape={def.shape}（槽位 {slots.Count} 个，赋 {idx} 个）");
+    }
 
-        int meleeIdx = 0;
-        foreach (int i in meleeSlots)
+    /// <summary>
+    /// 按形状生成编队槽位（2_8 步骤4）。
+    /// 返回整数 cell 偏移列表，顺序保证近战槽在前（外沿/前排），弓手槽在后（内/后撤排），
+    /// 供 AssignSlots 按 近战→弓手 依次赋成员（天然保护弓手）。
+    /// </summary>
+    private List<Vector2Int> BuildSlots2D(FormationDef def, int meleeCount, int archerCount)
+    {
+        int n = meleeCount + archerCount;
+        var raw = GenerateShapeOffsets(def.shape, n, meleeCount, archerCount);
+
+        Vector2 anchorWorld = AnchorWorldPos;
+        Vector2 cell = CellSize2();
+        var result = new List<Vector2Int>(raw.Count);
+        foreach (var off in raw)
         {
-            if (meleeIdx >= melee.Count) break;
-            var m = melee[meleeIdx++];
-            m.SlotOffset = new Vector2Int(def.slots[i].cellOffset.x * dir, def.slots[i].cellOffset.y);
-            ReplaceMember(m);
-            occupied[i] = true;
+            // 可走校验 + 回缩（不可走向锚点回缩），再 round 到整数 cell
+            Vector2 resolved = ResolveWalkable(anchorWorld, off, cell);
+            result.Add(new Vector2Int(Mathf.RoundToInt(resolved.x), Mathf.RoundToInt(resolved.y)));
+        }
+        return result;
+    }
+
+    /// <summary>当前格尺寸（cellSize）</summary>
+    private Vector2 CellSize2()
+    {
+        if (GridSystem.Instance != null && GridSystem.Instance.Config != null)
+            return GridSystem.Instance.Config.cellSize;
+        return new Vector2(1.28f, 0.64f);
+    }
+
+    /// <summary>
+    /// 编队朝向（D2）：敌人方向 = Anchor→AdvanceTarget；无目标（AdvanceTarget≈zero）回退前进方向（_formationDirection）。
+    /// SetAdvanceTarget 已按推进目标相对锚点维护 AdvanceTarget 与 _formationDirection。
+    /// </summary>
+    private Vector2 GetFormationForward()
+    {
+        Vector2 dir = Vector2.zero;
+        if (AdvanceTarget != Vector2.zero && _anchor != null)
+        {
+            Vector2 d = AdvanceTarget - (Vector2)_anchor.position;
+            if (d.sqrMagnitude > 0.0001f) dir = d.normalized;
+        }
+        // 无目标 = 前进方向（默认向右，1=右 / -1=左）
+        if (dir == Vector2.zero)
+            dir = _formationDirection >= 0 ? Vector2.right : Vector2.left;
+        return dir;
+    }
+
+    /// <summary>垂直朝向的单位向量（阵线横向展开方向）</summary>
+    private static Vector2 Perp(Vector2 forward) => new Vector2(-forward.y, forward.x);
+
+    /// <summary>
+    /// 按形状生成槽位格坐标（相对锚点，格单位浮点；含楔形 0.7 后撤）。
+    /// 返回顺序：近战位在前（外沿/前排/外环），弓手位在后（内/后撤/内环）。
+    /// 形参读 FormationShapes SO，缺失用内置默认（线 1 / 圆 1 / 楔 0.7）。
+    /// </summary>
+    private List<Vector2> GenerateShapeOffsets(FormationShape shape, int n, int meleeCount, int archerCount)
+    {
+        float spacing = _shapes != null ? _shapes.lineSpacingCells : 1f;
+        float minR = _shapes != null ? _shapes.circleMinRadiusCells : 1f;
+        float wedgeBack = _shapes != null ? _shapes.wedgeStepBackCells : 0.7f;
+        Vector2 fwd = GetFormationForward();
+        Vector2 perp = Perp(fwd);
+        var list = new List<Vector2>(n);
+
+        switch (shape)
+        {
+            case FormationShape.Circle:
+            {
+                // 将军居中（锚点），r=ceil(n/2π)，弓手内环/近战外环
+                int r = Mathf.Max(1, Mathf.CeilToInt(n / (2f * Mathf.PI)));
+                float outerR = Mathf.Max(minR, r);
+                float innerR = Mathf.Max(minR * 0.5f, r - 1);
+                float baseAng = Mathf.Atan2(fwd.y, fwd.x);
+                for (int i = 0; i < meleeCount; i++)   // 近战外环
+                {
+                    float a = baseAng + i / (float)Mathf.Max(1, meleeCount) * Mathf.PI * 2f;
+                    list.Add(new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * outerR);
+                }
+                for (int i = 0; i < archerCount; i++)  // 弓手内环（错开半步防重叠）
+                {
+                    float a = baseAng + (i + 0.5f) / (float)Mathf.Max(1, archerCount) * Mathf.PI * 2f;
+                    list.Add(new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * innerR);
+                }
+                break;
+            }
+            case FormationShape.Wedge:
+            {
+                // 朝向为轴，两翼逐排后撤：近战前排（后撤少），弓手后排（后撤多）
+                for (int i = 0; i < n; i++)
+                {
+                    int row = i / 2;
+                    int side = (i & 1) == 0 ? -1 : 1;
+                    float h = (row + 1) * spacing;                 // 横向展开（两侧）
+                    float back = (row + 1) * wedgeBack;            // 逐排后撤（沿朝向负向）
+                    list.Add(fwd * (-back) + perp * (side * h));
+                }
+                break;
+            }
+            case FormationShape.Line:
+            default:
+            {
+                // 线阵：垂直朝向直线展开，间距 spacing；先按 |along| 降序（近战外沿两端），弓手居中
+                for (int i = 0; i < n; i++)
+                {
+                    float along = (i - (n - 1) * 0.5f) * spacing;
+                    list.Add(perp * along);
+                }
+                break;
+            }
         }
 
-        // 第二轮：收集剩余 RangedOnly/Any 弓手槽，按距锚点 |x| 从近到远排序后填
-        var archerSlots = new List<int>();
-        for (int i = 0; i < def.slots.Length; i++)
+        // Line 需要按外沿优先排（近战两端）。Circle/Wedge 生成顺序已天然外→内 / 前→后。
+        if (shape == FormationShape.Line)
         {
-            if (occupied[i]) continue;
-            SlotRole role = def.slots[i].role;
-            if (role == SlotRole.RangedOnly || role == SlotRole.Any)
-                archerSlots.Add(i);
+            // 距锚点越远越"外沿"，降序（近战先占两端，弓手居中）
+            list.Sort((a, b) =>
+                (b.x * b.x + b.y * b.y).CompareTo(a.x * a.x + a.y * a.y));
         }
-        archerSlots.Sort((a, b) =>
-            Mathf.Abs(def.slots[a].cellOffset.x).CompareTo(Mathf.Abs(def.slots[b].cellOffset.x)));
 
-        int archerIdx = 0;
-        foreach (int i in archerSlots)
+        return list;
+    }
+
+    /// <summary>
+    /// 槽位可走校验 + 回缩（2_7 §5.4 R2）。
+    /// 目标世界位 = anchor + offset(格)×cellSize，经 WorldToSubCoord → IsSubWalkable；
+    /// 不可走向锚点逐步回缩（t: 1→0.75→0.5→0.25→0），回缩到可走位返回（格单位近似）。
+    /// </summary>
+    private Vector2 ResolveWalkable(Vector2 anchorWorld, Vector2 offsetCells, Vector2 cell)
+    {
+        var grid = GridSystem.Instance;
+        if (grid == null || grid.Config == null) return offsetCells;   // 无网格：直接给原偏移（不破坏旧行为）
+        const float step = 0.25f;
+        for (float t = 1f; t >= 0f - 0.001f; t -= step)
         {
-            if (archerIdx >= archer.Count) break;
-            var m = archer[archerIdx++];
-            m.SlotOffset = new Vector2Int(def.slots[i].cellOffset.x * dir, def.slots[i].cellOffset.y);
-            ReplaceMember(m);
-            occupied[i] = true;
+            Vector2 off = offsetCells * t;
+            Vector2 target = anchorWorld + new Vector2(off.x * cell.x, off.y * cell.y);
+            var sub = grid.WorldToSubCoord(target);
+            if (sub.HasValue && grid.IsSubWalkable(sub.Value)) return off;
         }
+        return Vector2.zero;   // 全部不可走：回缩到锚点（将军位）
     }
 
     /// <summary>替换成员记录（更新 SlotOffset）</summary>

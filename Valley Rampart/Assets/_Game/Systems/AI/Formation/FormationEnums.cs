@@ -20,14 +20,28 @@ public enum SlotRole
 /// <summary>
 /// 槽位定义（§八 SlotDef）。
 /// 一字横队 6 槽，每槽相对锚点的 cell 偏移 + 角色约束。
+/// 2_8 步骤4 复核（SlotDef 2D y 语义）：y=0 平面层扩散/上墙位仅守城编队用；
+/// 2D 化后 x 为沿阵线横向展开方向，y 为沿朝向纵深（前/后），由 FormationShapes
+/// 形参 + FormationController.AssignSlots 生成，SlotDef.cellOffset 保留为兼容旧资产。
 /// </summary>
 [System.Serializable]
 public struct SlotDef
 {
-    [Tooltip("相对锚点的 cell 偏移（x=横向，y=0 地面层 / 1 上墙位）")]
+    [Tooltip("相对锚点的 cell 偏移（x=沿阵线横向，y=沿朝向纵深 0 地面层 / 1 上墙位）")]
     public Vector2Int cellOffset;
     [Tooltip("槽位角色约束")]
     public SlotRole role;
+}
+
+/// <summary>
+/// 编队 2D 槽位形状（2_8 步骤4，§5.2）。FormationDef.shape 声明用哪种形状，
+/// FormShapes SO 提供对应形参。默认 Line 兼容旧资产（未配置字段时自动取枚举首值）。
+/// </summary>
+public enum FormationShape
+{
+    Line,    // 线阵：槽位沿垂直于朝向量直线展开，间距 lineSpacingCells（近战外沿）
+    Circle,  // 圆阵：将军居中，半径 r=ceil(n/2π) 环布，弓手内环/近战外环
+    Wedge,   // 楔形：朝向为轴，两翼逐排后撤 wedgeStepBackCells
 }
 
 // NOTE: FormationDef（ScriptableObject）已拆分到独立文件 FormationDef.cs。

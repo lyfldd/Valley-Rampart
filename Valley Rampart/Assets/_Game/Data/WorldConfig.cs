@@ -10,7 +10,7 @@ using UnityEngine;
 public class WorldConfig : ScriptableObject
 {
     [Header("时间规则")]
-    public TimeConfig time;
+    public TimeConfigData time;
 
     [Header("难度规则")]
     public DifficultyConfig difficulty;
@@ -26,7 +26,7 @@ public class WorldConfig : ScriptableObject
 
 /// <summary>时间规则配置。</summary>
 [Serializable]
-public struct TimeConfig
+public struct TimeConfigData
 {
     [Tooltip("现实多少秒 = 游戏内一天")]
     public float secondsPerDay;       // 默认 480（8分钟/天）

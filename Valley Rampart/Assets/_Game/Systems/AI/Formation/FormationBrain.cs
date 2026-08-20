@@ -35,6 +35,10 @@ public class FormationBrain : MonoBehaviour
     [Tooltip("热点有效期（秒）：超过则不再朝旧热点移动")]
     public float hotspotMaxAge = 5f;
 
+    [Header("2_8 步骤5：推进目标流场化（D89/D96）")]
+    [Tooltip("是否已接流场（2_6 RegisterFlowGoal）。当前未接线=false：fallback 用 LODSystem 高价值热点/推进目标作战略目标，将军走 PathFollower、个体保持槽位相对位置；2_6 流场落地后可切 true")]
+    public bool useFlowField = false;
+
     [Header("意图阈值")]
     [Tooltip("本地威胁热度 ≥ 此值视为敌压近（防守/撤退判定线）")]
     public float heatEngage = 0.3f;
@@ -114,14 +118,52 @@ public class FormationBrain : MonoBehaviour
         // 壳执行控制器副作用（推进方向 + 切意图）
         if (decision.ShouldAdvance)
         {
-            // Sally：朝最近敌人推进（出城压上）；支援：朝远程战斗热点推进
+            // 2_8 步骤5：战略目标流场化 fallback（无流场系统 → LODSystem 高价值热点/推进目标）
+            // 流场负责"大方向"，阵型槽位负责"小排列"（D89/D96）
+            Vector2 strategic = ResolveStrategicGoal(anchorPos, maxAge, searchRadius, hotspot, hasRemoteHotspot);
+            // Sally：朝最近敌人推进（出城压上）；支援：朝远程战斗热点推进；否则战略目标
             Vector2 target = decision.Intent == TacticIntent.Sally && enemyDist < float.MaxValue
                 ? enemyPos
-                : hotspot;
+                : strategic;
             _controller.SetAdvanceTarget(target);
+            // 编队整体向战略目标移动（将军 PathFollower 喂点；个体经 SetFormationSlot 锚点跟随保持槽位）
+            AdvanceFormationToStrategic(strategic);
         }
         if (decision.Valid)
             _controller.SetIntent(decision.Intent);
+    }
+
+    /// <summary>
+    /// 2_8 步骤5：战略目标解析（无流场系统 fallback）。
+    /// 优先级：远程高价值战斗热点（支援/高价值 D85）→ 已有推进目标（战斗中朝敌）→ 锚点（无战略=不推进）。
+    /// 保留意图自决（攻/守/撤/支援/Sally）由 FormationDecisionCore 判定，本方法只给推进"大方向"。
+    /// </summary>
+    private Vector2 ResolveStrategicGoal(Vector2 anchorPos, float maxAge, float searchRadius, Vector2 hotspot, bool hasRemoteHotspot)
+    {
+        if (hasRemoteHotspot && hotspot != Vector2.zero) return hotspot;                    // 支援：朝战斗热点
+        if (_controller.AdvanceTarget != Vector2.zero) return _controller.AdvanceTarget;    // 攻守：朝既有推进目标
+        return anchorPos;   // 无高价值目标：视为已就位（不推进，避免原地空转）
+    }
+
+    /// <summary>
+    /// 2_8 步骤5：编队整体推进（流场分层 fallback）。
+    /// 无流场系统时，将军（锚点单位）走 PathFollower 至战略目标；个体经 SetFormationSlot
+    /// 锚点跟随 + 槽位相对位置（流场=大方向，槽位=小排列）。守城编队无将军不在此驱动。
+    /// PathFollower 已内置同目标缓存，秒级决策重复 SetDestination 零开销。
+    /// </summary>
+    private void AdvanceFormationToStrategic(Vector2 target)
+    {
+        // fallback（当前无流场系统）：将军 PathFollower 走战略目标。useFlowField=true（2_6 流场落地）
+        // 时可在此改走 RegisterFlowGoal 流场；真流场未实装前统一走 PathFollower 兜底，不破坏行为。
+        if (_controller == null || _controller.Anchor == null) return;
+        float cellW = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize.x : 1.28f;
+        if (Vector2.Distance((Vector2)_controller.Anchor.position, target) < cellW * 0.5f) return; // 已到达
+        UnitController general = _controller.GeneralUnit;
+        if (general == null) return;   // 守城编队无将军：不驱动整体移动（依赖个体自驱动）
+        var pf = general.GetComponent<PathFollower>();
+        if (pf == null) pf = general.gameObject.AddComponent<PathFollower>();
+        pf.SetDestination(target);
     }
 
     /// <summary>

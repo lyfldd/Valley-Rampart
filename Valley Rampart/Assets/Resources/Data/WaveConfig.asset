@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7db6f69400515c446bdd241afb405e72, type: 3}
+  m_Name: WaveConfig
+  m_EditorClassIdentifier: 
+  baseWaves: 2
+  wavePerDifficulty: 1
+  strengthBase: 5
+  strengthGrowthPerDay: 1.5
+  strengthCap: 60
+  directionMergeAngle: 45
+  spawnIntervalRange: {x: 2, y: 5}
+  disasterProbPerNight: 0.3
+  disasterEveryNDays: 3
+  disasterGuaranteeNDays: 3

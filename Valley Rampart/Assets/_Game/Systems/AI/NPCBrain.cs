@@ -270,11 +270,14 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private void OnEnable()
     {
         EventBus.Subscribe<UnitDamagedEvent>(OnDamaged);
+        // 2_8 步骤12：单位级寻路失败兜底（PathFailedEvent 消费）
+        EventBus.Subscribe<PathFailedEvent>(OnPathFailed);
     }
 
     private void OnDisable()
     {
         EventBus.Unsubscribe<UnitDamagedEvent>(OnDamaged);
+        EventBus.Unsubscribe<PathFailedEvent>(OnPathFailed);
     }
 
     /// <summary>自身受击事件 -> HitCooldownStateMachine.OnDamaged（事件驱动路径b）+ 3.0.1_4 受击溯源聚合更新</summary>
@@ -293,6 +296,33 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         _lastAggressor = evt.Source;
         _recentHitCount++;
         _lastHitTime = Time.time;
+    }
+
+    /// <summary>
+    /// 2_8 步骤12：单位级寻路失败兜底（PathFailedEvent 消费）。
+    /// 与任务层换点位（步骤2）区分：任务层=换点重派；本步=无任务/编队单位卡死防护。
+    /// 仅处理自身、无任务的非职业工人（Worker/Porter 的失败由任务层换点处理）。
+    /// 处理：复位当前移动状态（Executor.Stop 停 PathFollower）+ 清刺激源 → 转 Idle 不卡死，
+    /// 并上报调试日志（供调试面板查看）。
+    /// </summary>
+    private void OnPathFailed(PathFailedEvent evt)
+    {
+        if (!ReferenceEquals(evt.Unit, _controller)) return;   // 只处理自身
+        if (_controller == null || !IsAlive) return;
+
+        // 职业工人：寻路失败由任务层换点位（步骤2）重派，本步不接管
+        var occ = _controller.EffectiveOccupation;
+        if (occ == Occupation.Worker || occ == Occupation.Porter) return;
+        // 编队单位：由编队层/军令层处理，本步不打断守阵
+        if (HasFormationSlot) return;
+
+        // 复位当前移动状态 + 清刺激源 → 转 Idle（卡死防护）
+        _executor?.Stop();
+        _attention?.ClearAll();
+        _chaseTarget = null;   // 清追击目标，防残留追击状态锁死
+
+        Debug.LogWarning($"[NPCBrain] PathFailed 兜底: 单位 npcId={_controller.npcId}({occ}) "
+            + $"寻路不可达({evt.Destination}) → 转 Idle");
     }
 
     // ===== IExecutorEventReceiver 实现（§13.4 双层分发：本地主 + EventBus 辅）=====

@@ -19,6 +19,9 @@ public interface ITaskScheduler
     /// <summary>该生产源当前是否有工人 Working（T9 用）。</summary>
     bool HasWorkerAssigned(ITaskSource producer);
 
+    /// <summary>该源当前被派工人总数（2_8 步骤3 规模派工查询口，D95）。</summary>
+    int CountAssignedWorkers(ITaskSource source);
+
     /// <summary>外部强制放弃某工人任务。</summary>
     void AbandonTask(int npcId);
 

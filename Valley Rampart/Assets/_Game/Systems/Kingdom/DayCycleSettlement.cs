@@ -15,6 +15,7 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         base.Awake();
         if (_instance != this) return;
         EventBus.Subscribe<TimeDayChangedEvent>(OnDayChanged);
+        EventBus.Subscribe<TimePhaseChangedEvent>(OnPhaseChanged);
     }
 
     protected override void OnDestroy()
@@ -22,6 +23,18 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         if (_instance != this) return;
         base.OnDestroy();
         EventBus.Unsubscribe<TimeDayChangedEvent>(OnDayChanged);
+        EventBus.Unsubscribe<TimePhaseChangedEvent>(OnPhaseChanged);
+    }
+
+    /// <summary>
+    /// 2_8 步骤7/8：入夜到点判断灾害触发（偶发传送门灾害，2_14）。
+    /// 判定（概率/天数保底/防长草）在 WaveDirector，本结算只做触发入口 + 派发。
+    /// </summary>
+    private void OnPhaseChanged(TimePhaseChangedEvent evt)
+    {
+        if (evt.NewPhase != TimePhase.Night) return;
+        if (WaveDirector.Instance != null && WaveDirector.Instance.ShouldTriggerDisasterThisNight())
+            WaveDirector.Instance.SpawnDisaster();
     }
 
     private void OnDayChanged(TimeDayChangedEvent evt)

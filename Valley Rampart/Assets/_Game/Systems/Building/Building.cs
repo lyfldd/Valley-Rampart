@@ -694,12 +694,17 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             return true;
         }
 
-        // ③ 搬运：存储达标且存量>0 → 搬运任务
+        // ③ 搬运：存储达标且存量>0 → 搬运任务（2_8 步骤3 / D95：把资源总需求附带进 task.args，调度器据此规模派工）
         if (storage != null && storage.capacity > 0 && storage.storedAmount > 0
             && storage.storedAmount >= storage.capacity * transportThreshold)
         {
             task = new KingdomTask(KingdomTaskType.Transport, this);
             task.destType = KingdomDestType.NearestWarehouse;
+            task.args = new ScaleTaskArgs
+            {
+                resourceType = storage.resourceType,
+                totalResourceDemand = storage.storedAmount
+            };
             return true;
         }
 

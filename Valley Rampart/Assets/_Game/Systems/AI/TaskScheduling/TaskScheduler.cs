@@ -41,6 +41,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     public float waterCarryAmount = 10f;
     [Tooltip("Gather 一次采集量")]
     public int gatherAmount = 5;
+    [Tooltip("规模派工单建筑任务最大同时派工上限（D95，默认不超过 8）。")]
+    public int maxWorkersPerTask = 8;
 
     // ===== 数据结构 =====
     private readonly HashSet<ITaskSource> _sources = new HashSet<ITaskSource>();
@@ -66,6 +68,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // QQQ.3 B1-1：订阅 NPC 死亡事件清指派
         UnitController.OnUnitDied += OnNpcDied;
 
+        // 2_8 步骤2：寻路失败 → 放弃当前任务（不改单位级），下 tick 换点位（R5）
+        EventBus.Subscribe<PathFailedEvent>(OnPathFailed);
+
         // 2026-08-07 修复：自动创建时补注册——若建筑 OnConstructionComplete 发生在本单例创建前
         // （HasInstance 当时为 false 被跳过），把已 Active 的建筑补纳入任务源，避免"任务永不派发"。
         if (BuildingRegistry.Instance != null && BuildingRegistry.Instance.Count > 0)
@@ -84,6 +89,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     {
         base.OnDestroy();
         UnitController.OnUnitDied -= OnNpcDied;
+        EventBus.Unsubscribe<PathFailedEvent>(OnPathFailed);
     }
 
     private void Update()
@@ -129,6 +135,16 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return false;
     }
 
+    /// <summary>2_8 步骤3（D95）：该源当前被派工人总数（规模派工查询口）。</summary>
+    public int CountAssignedWorkers(ITaskSource source)
+    {
+        if (source == null) return 0;
+        int count = 0;
+        foreach (var kv in _npcTaskMap)
+            if (ReferenceEquals(kv.Value.source, source)) count++;
+        return count;
+    }
+
     public void AbandonTask(int npcId)
     {
         if (!_npcTaskMap.TryGetValue(npcId, out var task)) return;
@@ -141,6 +157,19 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (!_npcTaskMap.TryGetValue(npcId, out var task)) return;
         _npcBrainMap.TryGetValue(npcId, out var brain);
         Abandon(npcId, task, brain);
+    }
+
+    /// <summary>
+    /// 2_8 步骤2（R5）：寻路失败事件消费——放弃该工人的当前任务（不改单位级，
+    /// 单位自身的移动态由 PathFollower 自理），使下 tick 可换点位/换任务重派，防卡死。
+    /// </summary>
+    private void OnPathFailed(PathFailedEvent evt)
+    {
+        if (evt.Unit == null) return;
+        int id = evt.Unit.npcId;
+        if (id == 0 || !_npcTaskMap.TryGetValue(id, out var task)) return;
+        _npcBrainMap.TryGetValue(id, out var brain);
+        Abandon(id, task, brain);
     }
 
     public void OnBuildingDied(ITaskSource source)
@@ -201,12 +230,17 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 
         // ③ 收集可派任务（QQQ.4 T1：按"源+任务类型"去重，允许同一源并发不同类型任务——
         //    农场可同时派 Production（耕作）+ WaterHaul（挑水），修复"取水+耕作无法同时执行"）
+        //    2_8 步骤3（D95）：Transport 去重放宽为按容量（同源可多工人搬运）；其余独占任务按源+类型去重
         var jobs = new List<KingdomTask>();
         foreach (var s in _sources)
         {
             if (s == null || !s.IsValid) continue;
             if (!s.TryAdvertiseTask(out var task)) continue;
-            if (HasAssignedTaskForSourceType(s, task.type)) continue;
+            if (task.type == KingdomTaskType.Transport)
+            {
+                if (RemainingSlots(task) <= 0) continue;   // 规模派工：容量已满不再派
+            }
+            else if (HasAssignedTaskForSourceType(s, task.type)) continue;
             ResolveDest(task);
             jobs.Add(task);
         }
@@ -219,18 +253,23 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         for (int j = 0; j < jobs.Count; j++)
         {
             var task = jobs[j];
-            // 找到距源最近的仍空闲 NPC
-            int best = -1;
-            float bestDist = float.MaxValue;
-            for (int i = 0; i < idle.Count; i++)
+            // 规模派工（D95）：运输任务按容量可多派工人；其余独占任务派 1
+            int slots = task.type == KingdomTaskType.Transport ? RemainingSlots(task) : 1;
+            for (int k = 0; k < slots; k++)
             {
-                if (used[i]) continue;
-                float d = Vector2.Distance(idle[i].transform.position, task.SourcePos);
-                if (d < bestDist) { bestDist = d; best = i; }
+                // 找到距源最近的仍空闲 NPC（2_8 步骤1：格单位排序）
+                int best = -1;
+                float bestDist = float.MaxValue;
+                for (int i = 0; i < idle.Count; i++)
+                {
+                    if (used[i]) continue;
+                    float d = GridMath.DistCells(idle[i].transform.position, task.SourcePos);
+                    if (d < bestDist) { bestDist = d; best = i; }
+                }
+                if (best < 0) break;   // 无空闲工人，剩余任务等待下 tick
+                used[best] = true;
+                Dispatch(idle[best], task);
             }
-            if (best < 0) break;   // 无空闲工人，剩余任务等待下 tick
-            used[best] = true;
-            Dispatch(idle[best], task);
         }
 
         // ⑤ 推进在册任务态
@@ -261,7 +300,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         _taskStartTime[id] = Time.time;
         _workStartTime.Remove(id);
         _suspendStartTime.Remove(id);
-        InjectStimulus(brain, task);
+        InjectStimulus(brain, task);   // TaskStimulus 保留兜底（决策核据此维持工作焦点/威胁挂起）
+        NavigateToSource(brain, task); // 2_8 步骤2：PathFollower 直接走向 SourcePos 微格落点
         Debug.Log($"[TaskScheduler] 派发 {task.type} 任务 → npcId {id} @ {task.SourcePos}（优先级 {GetPriority(task.type)}）");
     }
 
@@ -276,6 +316,23 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             task.intensity,
             expiry: Time.time + taskExpiry,
             issuer: task.source));
+    }
+
+    /// <summary>
+    /// 2_8 步骤2：派发后让工人经 PathFollower 直接寻路走向任务源的微格落点
+    /// （WorldToSubCoord 吸附 + SubCoordToWorld 中心），提升到达准确/绕障；TaskStimulus 保留兜底。
+    /// PathFollower 缺失时自动补挂（与 BehaviorExecutor.EnsurePathFollower 一致）。
+    /// </summary>
+    private void NavigateToSource(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null || task == null) return;
+        var uc = brain.GetComponent<UnitController>();
+        if (uc == null || GridSystem.Instance == null) return;
+        var pf = uc.GetComponent<PathFollower>();
+        if (pf == null) pf = uc.gameObject.AddComponent<PathFollower>();
+        var subOpt = GridSystem.Instance.WorldToSubCoord(task.SourcePos);
+        if (!subOpt.HasValue) return;
+        pf.SetDestination(GridSystem.Instance.SubCoordToWorld(subOpt.Value));
     }
 
     /// <summary>
@@ -562,7 +619,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             var s = storages[i];
             if (s == null || s.resourceType != inv.carriedType || s.capacity <= s.storedAmount) continue;
-            float d = Vector2.Distance(s.transform.position, brain.transform.position);
+            float d = GridMath.DistCells(s.transform.position, brain.transform.position);
             if (d < bestDist) { bestDist = d; best = s; }
         }
         if (best != null)
@@ -636,7 +693,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             var s = storages[i];
             if (s == null || s.capacity <= s.storedAmount) continue;   // 已满不收
-            float d = Vector2.Distance(s.transform.position, task.SourcePos);
+            float d = GridMath.DistCells(s.transform.position, task.SourcePos);
             if (d < bestDist) { bestDist = d; best = s; }
         }
         if (best != null) return best.transform.position;
@@ -653,7 +710,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             var w = wells[i];
             if (w == null || w.def == null || w.def.id != "Well" || w.state != BuildingState.Active) continue;
-            float d = Vector2.Distance(w.transform.position, task.SourcePos);
+            float d = GridMath.DistCells(w.transform.position, task.SourcePos);
             if (d < bestDist) { bestDist = d; best = w; }
         }
         if (best != null) return best.transform.position;
@@ -668,6 +725,35 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         foreach (var kv in _npcTaskMap)
             if (ReferenceEquals(kv.Value.source, source) && kv.Value.type == type) return true;
         return false;
+    }
+
+    /// <summary>该源当前已被派的同类型任务数（规模派工按容量计数）。</summary>
+    private int CountAssignedForType(ITaskSource source, KingdomTaskType type)
+    {
+        if (source == null) return 0;
+        int count = 0;
+        foreach (var kv in _npcTaskMap)
+            if (ReferenceEquals(kv.Value.source, source) && kv.Value.type == type) count++;
+        return count;
+    }
+
+    /// <summary>2_8 步骤3（D95）：理想工人数 = ceil(资源总量/单次携带量)，clamp 到 [1, maxWorkersPerTask]。</summary>
+    private int RequiredWorkers(KingdomTask task)
+    {
+        if (task == null || !(task.args is ScaleTaskArgs scale)) return 1;
+        int total = scale.totalResourceDemand;
+        if (total <= 0) return 1;
+        int carry = Mathf.Max(1, WorkerTask.GetCarryAmount(scale.resourceType));
+        int ideal = Mathf.CeilToInt((float)total / carry);
+        return Mathf.Clamp(ideal, 1, Mathf.Max(1, maxWorkersPerTask));
+    }
+
+    /// <summary>该任务还缺多少派工名额（理想人数 - 已派同类型工人数，下限 0）。</summary>
+    private int RemainingSlots(KingdomTask task)
+    {
+        int required = RequiredWorkers(task);
+        int assigned = CountAssignedForType(task.source, task.type);
+        return Mathf.Max(0, required - assigned);
     }
 
     private TaskPriority GetPriority(KingdomTaskType type)
@@ -716,4 +802,14 @@ public class GatherTaskArgs
     public int amount;
     /// <summary>采集耗时（秒，取自 BuildingDef.gatherSeconds，数据驱动）。</summary>
     public float gatherSeconds;
+}
+
+/// <summary>
+/// 规模派工参数（2_8 步骤3 / D95）：建筑发布任务时把资源总需求附带进 task.args，
+/// 调度器按"理想工人数 = ceil(资源总量/单次携带量)"上限 maxWorkersPerTask 分配多工人。
+/// </summary>
+public class ScaleTaskArgs
+{
+    public ResourceType resourceType;
+    public int totalResourceDemand;
 }

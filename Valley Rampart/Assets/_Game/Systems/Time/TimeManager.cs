@@ -9,7 +9,7 @@ using UnityEngine;
 ///   - 时段 Night→Dawn→Day→Dusk→Night 由「当天时刻 + 季节昼夜比例」动态计算。
 ///   - 季节影响日出/日落：夏白天最长(15h)，冬最短(10h)。
 ///
-/// 配置来源：WorldSystem.Config.time（TimeConfig）。所有时间规则不再硬编码。
+/// 配置来源：WorldSystem.Config.time（TimeConfigData）。所有时间规则不再硬编码。
 /// secondsPerDay 会被 DifficultyManager.Initialize 按档位覆盖（Easy 慢/Hard 快）。
 ///
 /// 发布的事件（仅这三种，小时变化不发事件）：
@@ -76,6 +76,18 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>玩家上次请求的倍速（战斗降速结束后恢复此值，默认 1x）。</summary>
     private float _pendingScale = 1f;
 
+    // ===== 2_8 步骤11：倍速 TimeScale API（D240/D241/D256）+ sim 对拍锁 =====
+
+    /// <summary>2_8 SetGameSpeed 支持的档位（0.5/1/2/3，D240/D241）。</summary>
+    private static readonly float[] kGameSpeeds = { 0.5f, 1f, 2f, 3f };
+    /// <summary>sim 对拍锁 1x（D256：倍速只作用于 Unity 表现层时钟，不进 sim 决策）。</summary>
+    private bool _simLocked1x;
+
+    // ===== 2_8 步骤8：昼夜双环 SO（TimeConfig，D232~D234）=====
+
+    /// <summary>昼夜双环配置（Resources/Data/TimeConfig.asset；未创建返回 null，各消费者走默认值兜底）。</summary>
+    public TimeConfig RuntimeTimeConfig { get; private set; }
+
     protected override void Awake()
     {
         base.Awake();
@@ -103,6 +115,14 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         }
 
         SaveManager.Instance.RegisterSaveable(this);
+
+        // 2_8 步骤8：昼夜双环 SO（Data/TimeConfig.asset；未创建返回 null，走默认兜底）
+        RuntimeTimeConfig = Resources.Load<TimeConfig>("Data/TimeConfig");
+        if (RuntimeTimeConfig != null)
+        {
+            Debug.Log($"[TimeManager] 昼夜双环配置: 白天{RuntimeTimeConfig.dayDurationSeconds}s/夜晚{RuntimeTimeConfig.nightDurationSeconds}s, "
+                + $"四季={RuntimeTimeConfig.seasonEnabled}, 冬产×{RuntimeTimeConfig.winterProductionScale}, 冬怪×{RuntimeTimeConfig.winterMonsterScale}");
+        }
     }
 
     private void Start()
@@ -180,12 +200,16 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         CurrentDay++;
 
         Season oldSeason = CurrentSeason;
-        Season newSeason = CalculateSeason(CurrentDay);
-        if (newSeason != oldSeason)
+        // 2_8 步骤8：seasonEnabled=false 时冻结季节循环（锁定不改，默认春季）
+        if (SeasonEnabled)
         {
-            CurrentSeason = newSeason;
-            EventBus.Publish(new SeasonChangedEvent(oldSeason, newSeason));
-            Debug.Log($"[TimeManager] 季节切换: {oldSeason} → {newSeason}");
+            Season newSeason = CalculateSeason(CurrentDay);
+            if (newSeason != oldSeason)
+            {
+                CurrentSeason = newSeason;
+                EventBus.Publish(new SeasonChangedEvent(oldSeason, newSeason));
+                Debug.Log($"[TimeManager] 季节切换: {oldSeason} → {newSeason}");
+            }
         }
 
         EventBus.Publish(new TimeDayChangedEvent(oldDay, CurrentDay, CurrentSeason));
@@ -257,6 +281,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         CurrentTimeScale = 1f;
         _pendingScale = 1f;
         IsCombatSlowed = false;
+        _simLocked1x = false;
         Time.timeScale = 1f;
 
         Debug.Log($"[TimeManager] ResetState: 第{CurrentDay}天 {CurrentTimeOfDay:0.0}点 "
@@ -349,6 +374,82 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         }
         return best;
     }
+
+    // ===== 2_8 步骤11：倍速 TimeScale API（D240/D241）+ sim 对拍锁（D256）=====
+
+    /// <summary>
+    /// 设置游戏倍速（0.5/1/2/3 四档，吸附到最近档位），供 2_13 UI 按钮调用。
+    /// sim 对拍锁中（<see cref="LockSpeedToSim"/>）强制 1x；战斗降速中同样强制 1x。
+    /// </summary>
+    public void SetGameSpeed(float speed)
+    {
+        if (_simLocked1x || IsCombatSlowed)
+        {
+            if (!Mathf.Approximately(Time.timeScale, 0f))
+                Time.timeScale = 1f;
+            CurrentTimeScale = 1f;
+            _pendingScale = _simLocked1x ? 1f : _pendingScale;   // sim 锁时玩家请求倍速不记录
+            return;
+        }
+
+        float clamped = SnapToSpeed(speed);
+        CurrentTimeScale = clamped;
+        _pendingScale = clamped;
+
+        // 暂停态（0）不覆盖，避免解冻暂停
+        if (Mathf.Approximately(Time.timeScale, 0f)) return;
+        Time.timeScale = clamped;
+        Debug.Log($"[TimeManager] 倍速 → {clamped}x");
+    }
+
+    /// <summary>把请求倍速吸附到最近支持档位（0.5/1/2/3，允许 <1）。</summary>
+    private float SnapToSpeed(float speed)
+    {
+        float best = 1f;
+        float bestDiff = float.MaxValue;
+        for (int i = 0; i < kGameSpeeds.Length; i++)
+        {
+            float diff = Mathf.Abs(kGameSpeeds[i] - speed);
+            if (diff < bestDiff) { bestDiff = diff; best = kGameSpeeds[i]; }
+        }
+        return best;
+    }
+
+    /// <summary>锁定 1x（sim 对拍：倍速只作用于表现层时钟，不进 sim 决策，D256）。</summary>
+    public void LockSpeedToSim()
+    {
+        _simLocked1x = true;
+        CurrentTimeScale = 1f;
+        _pendingScale = 1f;
+        if (!Mathf.Approximately(Time.timeScale, 0f))
+            Time.timeScale = 1f;
+        Debug.Log("[TimeManager] sim 对拍锁定 1x");
+    }
+
+    /// <summary>解除 sim 对拍锁，恢复玩家倍速。</summary>
+    public void UnlockSpeed()
+    {
+        _simLocked1x = false;
+        Debug.Log("[TimeManager] sim 对拍解锁");
+    }
+
+    /// <summary>sim 对拍锁中（倍速强制 1x）。</summary>
+    public bool IsSimLocked => _simLocked1x;
+
+    // ===== 2_8 步骤8：昼夜双环（TimeConfig SO 消费，D232~D234）=====
+
+    /// <summary>四季开关（无 TimeConfig asset 时默认 true，维持现有季节循环）。</summary>
+    public bool SeasonEnabled => RuntimeTimeConfig != null ? RuntimeTimeConfig.seasonEnabled : true;
+
+    /// <summary>冬季怪物强度系数（无配置默认 1，供 WaveDirector 波次规模放大）。</summary>
+    public float WinterMonsterScale => RuntimeTimeConfig != null ? RuntimeTimeConfig.winterMonsterScale : 1f;
+
+    /// <summary>冬季产量系数（无配置默认 1，供生产结算消费）。</summary>
+    public float WinterProductionScale => RuntimeTimeConfig != null ? RuntimeTimeConfig.winterProductionScale : 1f;
+
+    /// <summary>当前四季生效中的怪物强度系数（冬季强化，其余 1）。</summary>
+    public float MonsterStrengthMultiplierForCurrentSeason =>
+        (SeasonEnabled && CurrentSeason == Season.Winter) ? WinterMonsterScale : 1f;
 
     // ===== ISaveable 实现 =====
 

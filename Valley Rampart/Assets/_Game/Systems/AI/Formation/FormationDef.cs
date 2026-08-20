@@ -28,7 +28,11 @@ public class FormationDef : ScriptableObject
     [Tooltip("适配的战线形态")]
     public BattleLine battleLine;
 
-    [Header("槽位布局（一字横队，索引 0=最左，5=最右）")]
+    [Header("2_8 步骤4：编队 2D 槽位形状（默认 Line 兼容旧资产；形参在 FormationShapes SO）")]
+    [Tooltip("槽位生成形状：线阵（垂直朝向直线展开）/ 圆阵（将军居中环布）/ 楔形（两翼逐排后撤）")]
+    public FormationShape shape = FormationShape.Line;
+
+    [Header("槽位布局（一字横队，索引 0=最左，5=最右；2D 化后 AssignSlots 按 shape 生成，此字段留作兼容旧资产）")]
     public SlotDef[] slots = new SlotDef[6];
 
     /// <summary>标准满编规模（1 将军 + 3 近战 + 2 弓手）</summary>
