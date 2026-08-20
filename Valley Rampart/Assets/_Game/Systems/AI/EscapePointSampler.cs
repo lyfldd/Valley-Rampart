@@ -78,7 +78,12 @@ public static class EscapePointSampler
                         threat += 1f / ed;               // 敌人惩罚
                 }
                 float distBias = Mathf.Abs(ringR - retreatRadiusWorld) * rc.distBiasWeight;
-                float score = sectorW / Mathf.Max(0.01f, threat) + distBias;
+                // 评分（越小越优）：远离威胁(threat 越大越劣) + 靠近期望扇区((1-sectorW) 越小越靠近) + 近理想距离
+                // 修复 2026-08-20（2_7 冒烟）：原 score=sectorW/threat 方向反——threat 大反而分低被选中，且空旷扇区
+                // threat≈0 被 Mathf.Max(0.01) 兜底成分暴高被排除，导致往敌堆里逃。threat 权重读 CostBiasConfig（不硬编码）。
+                float threatScale = CostBiasConfig.Instance != null
+                    ? Mathf.Max(0f, CostBiasConfig.Instance.threatWeight) : 2f;
+                float score = (1f - sectorW) + threat * threatScale + distBias;
                 if (score < bestScore)
                 {
                     bestScore = score; best = cand; found = true;
