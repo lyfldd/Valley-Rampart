@@ -27,6 +27,9 @@ public class BehaviorExecutor
     private float _durationTimer;
     private float _tacticalRetreatTraveled;  // 战术短撤已移动距离
 
+    // 2_7 §四 Executor 接入寻路：懒获取单位 PathFollower（2_3/2_6 A*）；缺失回退直线 MoveTowards。
+    private PathFollower _pathFollower;
+
     // 3.0.1_4 §6.3 漫游状态（Executor 持有随机点，不依赖每 tick L3 重算）
     private Vector2 _wanderTarget;
     private bool _wanderHasTarget;
@@ -103,13 +106,13 @@ public class BehaviorExecutor
         {
             // 到达焦点目标
             _arrivedAtFocus = true;
-            _controller.MoveTowards(myPos);  // 停在原地
+            Brake();  // 停
             _receiver?.OnArrived(myPos, BehaviorModule.MoveTowards);
         }
         else
         {
             _arrivedAtFocus = false;
-            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos), speedOverride: _currentSpeed);
+            NavigateTo(Vector2XUnity.ToUnity(cmd.TargetPos), _currentSpeed);
         }
     }
 
@@ -141,12 +144,12 @@ public class BehaviorExecutor
 
             if (dist <= arrivalDist)
             {
-                _controller.MoveTowards(myPos);
+                Brake();
                 _receiver?.OnMoveComplete(myPos);
             }
             else
             {
-                _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos), speedOverride: _currentSpeed);
+                NavigateTo(Vector2XUnity.ToUnity(cmd.TargetPos), _currentSpeed);
             }
         }
     }
@@ -163,6 +166,7 @@ public class BehaviorExecutor
             if (!_arrivedAtFocus)
             {
                 _arrivedAtFocus = true;
+                Brake();  // 已到 → 停车（停 PathFollower）
                 // 3.3.5 资源流转：搬运任务到达 → Harvest 入国库（原占位"原地待机"扩展）
                 // 3.5 P1-8 搬运携带量：源建筑产出 > 携带量时分批多次搬运（每次 HarvestCarry ≤ 携带量，剩余留待下轮）。
                 if (cmd.HarvestTarget != null)
@@ -177,7 +181,7 @@ public class BehaviorExecutor
         else
         {
             _arrivedAtFocus = false;
-            _controller.MoveTowards(Vector2XUnity.ToUnity(cmd.TargetPos), speedOverride: _currentSpeed);
+            NavigateTo(Vector2XUnity.ToUnity(cmd.TargetPos), _currentSpeed);
         }
     }
 
@@ -203,13 +207,13 @@ public class BehaviorExecutor
 
             if (dist > arrivalDist)
             {
-                // 未到槽位 -> 向槽位移动（cell 吸附，1D 横版 y 由 MoveTowards 夹取）
-                _controller.MoveTowards(slotWorld, speedOverride: _currentSpeed);
+                // 未到槽位 -> 向槽位移动（cell 吸附；寻路走 PathFollower）
+                NavigateTo(slotWorld, _currentSpeed);
             }
             else
             {
                 // 到槽位 -> 停
-                _controller.MoveTowards(myPos);
+                Brake();
             }
         }
         else
@@ -222,12 +226,12 @@ public class BehaviorExecutor
             if (dist > cmd.KeepDistance + _config.arrivalThreshold * cellSize)
             {
                 // 超出保持距离 -> 靠近
-                _controller.MoveTowards(anchorPos, speedOverride: _currentSpeed);
+                NavigateTo(anchorPos, _currentSpeed);
             }
             else
             {
                 // 在保持距离内 -> 停
-                _controller.MoveTowards(myPos);
+                Brake();
             }
         }
     }
@@ -235,7 +239,7 @@ public class BehaviorExecutor
     private void ExecuteIdle(in BehaviorCommand cmd, float dt)
     {
         _arrivedAtFocus = true;  // Idle = 已在目标点
-        _controller.MoveTowards(_self.GetPosition());  // 停
+        Brake();  // 停
 
         if (cmd.Duration > 0f)
         {
@@ -268,7 +272,7 @@ public class BehaviorExecutor
         if (_wanderStaying)
         {
             // 到点停留（走走停停），停满后取新点
-            _controller.MoveTowards(_self.GetPosition());
+            Brake();
             _wanderStayTimer += dt;
             if (_wanderStayTimer >= cmd.Duration)
             {
@@ -288,20 +292,21 @@ public class BehaviorExecutor
                 // 到达 -> 开始停留
                 _wanderStaying = true;
                 _wanderStayTimer = 0f;
-                _controller.MoveTowards(myPos);
+                Brake();
             }
             else
             {
-                _controller.MoveTowards(_wanderTarget, speedOverride: _currentSpeed);
+                NavigateTo(_wanderTarget, _currentSpeed);
             }
         }
     }
 
-    /// <summary>1D 横版随机取点：x 轴 ±radius 随机，y 固定漫游中心（地面基线由 MoveTowards 夹取）。</summary>
+    /// <summary>2D 随机取点（2_7 §四修 1D：x ±radius + y ±radius，去 y 固定）。</summary>
     private Vector2 PickWanderPoint(Vector2 center, float radius)
     {
         float rx = UnityEngine.Random.Range(-radius, radius);
-        return new Vector2(center.x + rx, center.y);
+        float ry = UnityEngine.Random.Range(-radius, radius);
+        return new Vector2(center.x + rx, center.y + ry);
     }
 
     private void ResetWanderState()
@@ -319,6 +324,40 @@ public class BehaviorExecutor
         _durationTimer = 0f;
         _tacticalRetreatTraveled = 0f;
         ResetWanderState();
+        _pathFollower?.Stop();
+    }
+
+    // ===== 2_7 §四 寻路移动接入（PathFollower / 2_6 A*）=====
+
+    /// <summary>向目标寻路移动（优先 PathFollower；缺失回退直线 MoveTowards）。目标未变由 PathFollower 缓存跳过重寻。</summary>
+    private void NavigateTo(Vector2 target, float speed)
+    {
+        EnsurePathFollower();
+        if (_pathFollower != null)
+        {
+            _pathFollower.SetSpeed(speed);
+            _pathFollower.SetDestination(target);
+            return;
+        }
+        _controller.MoveTowards(target, speedOverride: speed);
+    }
+
+    /// <summary>停车（原 MoveTowards(self) 语义，同时停 PathFollower）。</summary>
+    private void Brake()
+    {
+        EnsurePathFollower();
+        if (_self != null) _controller.MoveTowards(_self.GetPosition());
+        _pathFollower?.Stop();
+    }
+
+    private void EnsurePathFollower()
+    {
+        if (_pathFollower == null)
+        {
+            _pathFollower = _controller.GetComponent<PathFollower>();
+            if (_pathFollower == null)
+                _pathFollower = _controller.gameObject.AddComponent<PathFollower>();  // 自动挂，保证寻路生效
+        }
     }
 
     public void Reset()

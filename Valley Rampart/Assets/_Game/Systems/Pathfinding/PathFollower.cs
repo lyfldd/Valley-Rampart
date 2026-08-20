@@ -23,6 +23,10 @@ public class PathFollower : MonoBehaviour
     private int _consecutiveFails;
     private float _stateStartTime;   // Pending 超时 / Repathing 冷却
 
+    // 2_7 §四 Executor 接入：速度透传（BehaviorExecutor 的 _currentSpeed）+ 同目标缓存（防每帧重寻）
+    private float _speedOverride;
+    private const float DestEpsilonWorld = 0.1f;
+
     public PathFollowerState State => _state;
 
     private void Awake()
@@ -30,14 +34,24 @@ public class PathFollower : MonoBehaviour
         _unit = GetComponent<UnitController>();
     }
 
-    /// <summary>设置目标（世界坐标）。落点吸附微格 + 发同步寻路请求（D73：仅在设置/到达时算）。</summary>
+    /// <summary>设置目标（世界坐标）。落点吸附微格 + 发同步寻路请求（D73：仅在设置/到达时算）。
+    /// 2_7 缓存：已正跟随且目标未变（<0.1 世界单位）→ 不重寻，供 Executor 每帧同目标调用零开销。</summary>
     public void SetDestination(Vector2 worldPos, byte priority = 0)
     {
+        bool same = _state == PathFollowerState.Following &&
+                    Vector2.Distance(_destination, worldPos) <= DestEpsilonWorld;
         _destination = worldPos;
+        if (same) return;   // 正跟随 + 目标未变：续走现有路径，不重寻
         _stateStartTime = Time.time;
         _state = PathFollowerState.Pending;
         RequestPath();
     }
+
+    /// <summary>设置移动速度透传（2_7：BehaviorExecutor 的 _currentSpeed）。≤0 走 run/walk 默认。</summary>
+    public void SetSpeed(float speed) => _speedOverride = Mathf.Max(0f, speed);
+
+    /// <summary>取消目标缓存（Stop/外部重定向后旧目标失效）。</summary>
+    private void InvalidateDest() { _destination = Vector2.zero; }
 
     /// <summary>外部直接注入路径（2_6 服务化/测试用）。成功置 Following。</summary>
     public void SetPath(PathResult path)
@@ -116,7 +130,7 @@ public class PathFollower : MonoBehaviour
         if (_wpIndex >= _path.waypoints.Length)
         {
             // 路径走完仍未达目标（通常因落点吸附离散）：尝试直接走向终点
-            if (_unit.MoveTowards(_destination)) { Complete(); }
+            if (_unit.MoveTowards(_destination, run: false, speedOverride: _speedOverride)) { Complete(); }
             else { RequestPath(); }   // 偏离路径，重寻
             return;
         }
@@ -132,7 +146,7 @@ public class PathFollower : MonoBehaviour
         }
 
         Vector2 target = grid != null ? grid.SubCoordToWorld(wp) : (Vector2)transform.position;
-        bool arrived = _unit.MoveTowards(target);
+        bool arrived = _unit.MoveTowards(target, run: false, speedOverride: _speedOverride);
         if (arrived) _wpIndex++;
     }
 

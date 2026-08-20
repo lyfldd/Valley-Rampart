@@ -113,4 +113,27 @@ public struct BehaviorCommand
     /// Executor 在 cmd.TargetPos（= HomePoint 漫游中心）周围取随机点。
     /// </summary>
     public float WanderRadius;
+
+    // ===== 2_7 §步骤6：成本场决策契约（AI.Core 用 Vector2X 存微格坐标，避免跨程序集引用默认 Assembly-CSharp 的 GridCoord）=====
+
+    /// <summary>
+    /// L3 输出的成本偏好（核心层 → 2_6 工具层契约）。供 CostFieldBuilder 合成微格成本（2_6 P1）。
+    /// 成本场未就绪（P1 前）→ 退化为纯寻路（R6），不阻塞。
+    /// </summary>
+    public CostBias Bias;
+
+    /// <summary>
+    /// 目标微格（规划 goal）。壳层 NPCBrain 用 WorldToSubCoord 填写；AI.Core 经 Vector2X 契约承载，
+    /// 不跨程序集引用默认 Assembly-CSharp 的 GridCoord。2_6 成本场/寻路消费。
+    /// </summary>
+    public Vector2X GoalSub;
+}
+
+/// <summary>成本偏好权重（2_7 §三 CostBiasConfig；占位手配，2_9 入训后由训练产出替换）。</summary>
+public struct CostBias
+{
+    public float threatWeight;
+    public float safetyWeight;
+    public float formationWeight;
+    public float directionSectorWeight;
 }
