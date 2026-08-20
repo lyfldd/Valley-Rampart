@@ -563,7 +563,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         var gSystem = GridSystem.Instance;
         if (gSystem != null)
         {
-            var subOpt = gSystem.WorldToSubCoord(cmd.TargetPos);
+            var subOpt = gSystem.WorldToSubCoord(Vector2XUnity.ToUnity(cmd.TargetPos));
             if (subOpt != null) cmd.GoalSub = new Vector2X(subOpt.Value.x, subOpt.Value.y);
         }
 

@@ -23,9 +23,11 @@ public class PathResult
     public bool reachedExactGoal;
 }
 
-/// <summary>异步票据（未来 P0b 服务化用；P0a FindPathImmediate 同步不出票）。</summary>
+/// <summary>异步票据（2_6 P0b 服务化；P0a FindPathImmediate 同步不出票）。</summary>
 public struct PathTicket
 {
     public int id;
     public byte priority;
+    public bool HasResult;      // 2_6 P0b：已完成（Result 有效；false=未入队/未就绪）
+    public PathResult Result;   // 2_6 P0b：求解结果（失败/越界=null）
 }

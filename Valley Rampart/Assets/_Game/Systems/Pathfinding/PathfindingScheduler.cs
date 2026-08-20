@@ -9,15 +9,6 @@ using UnityEngine;
 //  本 Scheduler 提供 RequestPath 异步入口供编辑器模拟/超高单位数场景接入。
 // ============================================================================
 
-/// <summary>寻路票据（P0b）：RequestPath 返回值，记录请求 id 与异步结果。失败时 Result=null。</summary>
-public struct PathTicket
-{
-    public int Id;
-    public bool HasResult;
-    public PathResult Result;
-    public bool IsRunning => !HasResult;
-}
-
 /// <summary>异步分帧寻路调度器（P0b 服务化，MonoBehaviour 单例）。</summary>
 public class PathfindingScheduler : MonoBehaviour
 {
@@ -63,7 +54,7 @@ public class PathfindingScheduler : MonoBehaviour
     public PathTicket RequestPath(Vector2 fromWorld, Vector2 toWorld, out bool enqueued,
         byte priority = 0, Action<PathTicket> callback = null)
     {
-        var ticket = new PathTicket { Id = _nextId++ };
+        var ticket = new PathTicket { id = _nextId++ };
         var grid = GridSystem.Instance;
         enqueued = false;
         if (grid == null) return ticket;   // 未就绪：空票据（不回调）
@@ -74,7 +65,7 @@ public class PathfindingScheduler : MonoBehaviour
 
         _queue.Add(new Req
         {
-            Id = ticket.Id, From = fromOpt.Value, To = toOpt.Value,
+            Id = ticket.id, From = fromOpt.Value, To = toOpt.Value,
             Priority = priority, Callback = callback
         });
         enqueued = true;
@@ -95,7 +86,7 @@ public class PathfindingScheduler : MonoBehaviour
         {
             Req req = _queue[i];
             PathResult res = AStarSolver.Solve(GridSystem.Instance, req.From, req.To, maxExpansions);
-            _done.Add(new PathTicket { Id = req.Id, HasResult = true, Result = res });
+            _done.Add(new PathTicket { id = req.Id, HasResult = true, Result = res });
             try { req.Callback?.Invoke(_done[_done.Count - 1]); }
             catch (Exception e) { Debug.LogError($"PathScheduler callback error: {e}"); }
             processed++;
