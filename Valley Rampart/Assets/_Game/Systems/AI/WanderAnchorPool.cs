@@ -81,6 +81,9 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
         {
             _castleAnchors.Add(_castleAnchor + new Vector2(offsets[i] * cs, 0f));
             _castleAnchors.Add(_castleAnchor - new Vector2(offsets[i] * cs, 0f));
+            // 2_7 步骤1：去 1D y 固定，补 y 方向点（2D 环绕城堡）
+            _castleAnchors.Add(_castleAnchor + new Vector2(0f, offsets[i] * cs));
+            _castleAnchors.Add(_castleAnchor - new Vector2(0f, offsets[i] * cs));
         }
     }
 
@@ -120,7 +123,10 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     {
         float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
             ? GridSystem.Instance.Config.cellSize.x : 2.26f;
-        return Mathf.RoundToInt(pos.x / cs);  // 1D 横版 y 固定，按 x 格去重
+        // 2_7 步骤1：去 1D 按 x 去重，改 2D 联合 key（x+y 哈希去重）
+        int hx = Mathf.RoundToInt(pos.x / cs);
+        int hy = Mathf.RoundToInt(pos.y / cs);
+        unchecked { return hx * 397 ^ hy; }
     }
 
     static float GetCellSize()

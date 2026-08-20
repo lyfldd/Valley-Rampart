@@ -29,6 +29,9 @@ public struct FactorContext
     public float PerceptionWorldRadius;
     public float AttackWorldRange;
     public float CellSize;
+    /// <summary>2_7 步骤1：距离口径开关。true=NearestEnemyDist/PerceptionWorldRadius/AttackWorldRange 为格单位；
+    /// false=旧世界距离（×cellSize）。NPCBrain 由 AIDistConfig.useGridUnits 填；AI.Core 侧据此一致换算（对拍/回滚）。</summary>
+    public bool UseGridUnits;
     public float CurrentTime;
     public Vector2X HomePoint;
     /// <summary>brain 上一帧 rawFactor 缓存（量化器消费，0.1s 滞后被确认吸收）</summary>

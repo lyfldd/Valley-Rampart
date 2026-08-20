@@ -627,6 +627,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             : RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
                 _self.GetPosition(), safetyScore, _config.wanderThreshold, homePoint);
 
+        // 2_7 步骤1 距离口径：useGridUnits=true → 距离字段全格单位（量纲迁移，数学等价重标定）；
+        // false → 回退旧世界距离（×cellSize，1D/2D 对照/回滚）。
+        float cs = GetCellSize();
+        var adc = AIDistConfig.Instance;
+        bool useGrid = adc != null && adc.useGridUnits;
+
         // M1 决策核提取：核内吃快照（接缝 4），壳每 tick 从 SO 快照保证滑块实时性
         return new FactorContext
         {
@@ -639,10 +645,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             NightFactor = GetNightFactor(),
             NearbyEnemyCount = _nearbyEnemies.Count,
             NearbyAllyCount = _nearbyAllies.Count,
-            NearestEnemyDist = _nearestDist,
-            PerceptionWorldRadius = _profession.perceptionRadius * GetCellSize(),
-            AttackWorldRange = _profession.attackRange * GetCellSize(),
-            CellSize = GetCellSize(),
+            // 2_7 步骤1 距离口径：useGridUnits=true → 距离字段全部格单位（量纲迁移，数学等价重标定）；
+             // false → 回退旧世界距离（×cellSize，1D/2D 对照/回滚）。
+             NearestEnemyDist = useGrid ? _nearestDist / cs : _nearestDist,
+             PerceptionWorldRadius = useGrid ? _profession.perceptionRadius : _profession.perceptionRadius * cs,
+             AttackWorldRange = useGrid ? _profession.attackRange : _profession.attackRange * cs,
+             CellSize = cs,
+             UseGridUnits = useGrid,
             CurrentTime = Time.time,
             HomePoint = Vector2XUnity.FromUnity(homePoint),
             // 3.0.1_3：编队槽位（守阵追击 clamp 用，§4.1）

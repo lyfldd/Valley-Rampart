@@ -42,6 +42,8 @@ public static class L3CommandComputer
                 if (prof.isRanged)
                 {
                     float distToTarget = Vector2X.Distance(ctx.SelfPos, cmd.TargetPos);
+                    // 2_7 步骤1：与 AttackWorldRange 同口径（格单位时 dist 同步 ÷cellSize，对拍无悬崖）
+                    if (ctx.UseGridUnits) distToTarget /= ctx.CellSize;
                     if (distToTarget < ctx.AttackWorldRange)
                         cmd.TargetPos = ctx.SelfPos;  // 停在原地，攻击系统自动开火
                 }
@@ -117,12 +119,12 @@ public static class L3CommandComputer
     }
 
     /// <summary>
-    /// 守阵追击 clamp（§4.1）：将目标点钳制在槽位 ± chaseRange 矩形范围内。
-    /// 1D 横版只钳 x 轴，y 保持目标原值（地面基线 -3 由 Executor MoveTowards 自行夹取）。
+    /// 守阵追击 clamp（§4.1）：将目标点钳制在槽位 ± chaseRange 方形范围内（2D，去 1D 只钳 x 假定）。
     /// </summary>
-    private static Vector2X ClampToSlotRange(Vector2X target, Vector2X slotWorld, float chaseRangeWorld)
+    private static Vector2X ClampToSlotRange(Vector2X target, Vector2X slotWorld, float chaseRange)
     {
-        float clampedX = MathfX.Clamp(target.x, slotWorld.x - chaseRangeWorld, slotWorld.x + chaseRangeWorld);
-        return new Vector2X(clampedX, target.y);
+        float clampedX = MathfX.Clamp(target.x, slotWorld.x - chaseRange, slotWorld.x + chaseRange);
+        float clampedY = MathfX.Clamp(target.y, slotWorld.y - chaseRange, slotWorld.y + chaseRange);
+        return new Vector2X(clampedX, clampedY);
     }
 }
