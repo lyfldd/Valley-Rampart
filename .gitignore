@@ -49,3 +49,13 @@ crashlytics-build.properties
 # 拷贝/传输临时产物与杂物
 U盘拷贝日志.log
 垃圾文件夹/
+
+# ===== 工具 / AI 助手配置与产物（2026-08-20 收口排除，不入库）=====
+.codely-cli/
+Tools/
+screenshots/
+CODELY.md
+.codelyignore
+.com-unity-codely.json
+valley-rampart.code-workspace
+*.code-workspace
