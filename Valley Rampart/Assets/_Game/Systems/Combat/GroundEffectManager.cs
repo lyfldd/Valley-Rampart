@@ -13,7 +13,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         public Vector2 pos;
         public IDamageable source;
         public GroundEffectType type;
-        public float radiusWorld;
+        public float radiusCells;   // 2_5 步骤7：半径改格单位（不再存 world=格×cellSize）
         public float duration;
         public float tickInterval;
         public float power;
@@ -30,15 +30,12 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     {
         if (type == GroundEffectType.None || radiusCells <= 0f || duration <= 0f) return;
 
-        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
-
         _effects.Add(new Effect
         {
             pos = pos,
             source = source,
             type = type,
-            radiusWorld = radiusCells * cellSize,
+            radiusCells = radiusCells,          // 直接存格单位（2_5 步骤7）
             duration = duration,
             tickInterval = Mathf.Max(0.1f, tickInterval),
             power = power,
@@ -90,7 +87,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     /// <summary>灼烧：区域内敌对单位每 tick 受 power 伤害（走伤害管线，触发免伤/死亡）。</summary>
     private void TickBurn(Effect e)
     {
-        var units = QueryUnitsInRadius(e.pos, e.radiusWorld);
+        var units = QueryUnitsInRadius(e.pos, e.radiusCells);
         Faction sourceFaction = e.source != null ? e.source.GetFaction() : Faction.None;
 
         foreach (var unit in units)
@@ -105,7 +102,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     /// <summary>减速：区域内敌对单位减速（取最大系数）。</summary>
     private void TickSlow(Effect e)
     {
-        var units = QueryUnitsInRadius(e.pos, e.radiusWorld);
+        var units = QueryUnitsInRadius(e.pos, e.radiusCells);
         Faction sourceFaction = e.source != null ? e.source.GetFaction() : Faction.None;
 
         foreach (var unit in units)
@@ -120,7 +117,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     /// <summary>治疗：区域内友军按低血优先，最多 maxTargets 个（3.6 Heal 场"有限个"）。</summary>
     private void TickHeal(Effect e)
     {
-        var units = QueryUnitsInRadius(e.pos, e.radiusWorld);
+        var units = QueryUnitsInRadius(e.pos, e.radiusCells);
         Faction sourceFaction = e.source != null ? e.source.GetFaction() : Faction.None;
 
         // 友军按血量升序（低血优先）
@@ -142,24 +139,29 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         }
     }
 
-    /// <summary>查 worldPos 半径内单位（空间分区，复用 GridSystem）。</summary>
-    private List<UnitController> QueryUnitsInRadius(Vector2 worldPos, float radiusWorld)
+    /// <summary>查 worldPos 半径（格单位）内单位（doc1 微格主表 D70，2_5 步骤3/7，格单位精确过滤）。</summary>
+    private List<UnitController> QueryUnitsInRadius(Vector2 worldPos, float radiusCells)
     {
         var result = new List<UnitController>();
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
 
-        float cellSize = GridSystem.Instance.Config.cellSize.x;
-        var centerOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        int subDiv = GridSystem.Instance.Config.subCellDivisor;
+        var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
         if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
         GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
+        int subRange = Mathf.Max(0, Mathf.CeilToInt(radiusCells * subDiv));
 
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int dy = -subRange; dy <= subRange; dy++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int dx = -subRange; dx <= subRange; dx++)
             {
-                var coord = new GridCoord(center.x + dx, y);
-                result.AddRange(GridSystem.Instance.GetUnitsInCell(coord));
+                var list = GridSystem.Instance.GetUnitsInSubCell(new GridCoord(center.x + dx, center.y + dy));
+                foreach (var unit in list)
+                {
+                    if (unit == null) continue;
+                    if (GridMath.DistCells(worldPos, unit.GetPosition()) > radiusCells) continue;
+                    result.Add(unit);
+                }
             }
         }
         return result;

@@ -241,10 +241,9 @@ public class DamageSystem : Singleton<DamageSystem>
             return;
         }
 
-        // 检查距离（target 是否还在范围内）
-        float distance = Vector2.Distance(attacker.GetPosition(), target.GetPosition());
-        float rangeWorld = profile.range * GetCellSize();
-        if (distance > rangeWorld)
+        // 检查距离（2_5 射程圆，格单位各向同性判定）：target 是否仍在范围内
+        // 旧：Vector2.Distance(world) > range×cellSize（标量）；新：GridMath.DistCells > range（格单位）
+        if (GridMath.DistCells(attacker.GetPosition(), target.GetPosition()) > profile.range)
         {
             // 目标超出范围，不攻击（等 NPCBrain 换目标或靠近）
             return;
@@ -319,10 +318,7 @@ public class DamageSystem : Singleton<DamageSystem>
     {
         if (aoeRadiusCells <= 0f || GridSystem.Instance == null) return;
 
-        float cellSize = GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
-        float radiusWorld = aoeRadiusCells * cellSize;
-
-        var units = QueryUnitsInRadius(worldPos, radiusWorld);
+        var units = QueryUnitsInRadius(worldPos, aoeRadiusCells);
         Faction attackerFaction = source.GetFaction();
 
         foreach (var unit in units)
@@ -330,33 +326,33 @@ public class DamageSystem : Singleton<DamageSystem>
             if (unit == null || unit.CurrentHp <= 0) continue;
             if (unit.GetFaction() == attackerFaction || unit.GetFaction() == Faction.None) continue;
 
-            float dist = Vector2.Distance(worldPos, unit.GetPosition());
-            if (dist > radiusWorld) continue;
+            float dist = GridMath.DistCells(worldPos, unit.GetPosition());
+            if (dist > aoeRadiusCells) continue;
 
-            float falloff = 1f - aoeFalloff * (dist / radiusWorld);
+            float falloff = 1f - aoeFalloff * (dist / aoeRadiusCells);
             int dmg = Mathf.Max(1, Mathf.RoundToInt(attack * falloff));
             ApplyDamage(source, unit, dmg);
         }
     }
 
-    /// <summary>查 worldPos 半径内单位（空间分区，复用 GridSystem）。</summary>
-    private List<UnitController> QueryUnitsInRadius(Vector2 worldPos, float radiusWorld)
+    /// <summary>查 worldPos 半径（格单位）内单位（doc1 微格主表 D70：登记/命中/寻路同粒度微格；2_5 步骤3）。</summary>
+    private List<UnitController> QueryUnitsInRadius(Vector2 worldPos, float radiusCells)
     {
         var result = new List<UnitController>();
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
 
-        float cellSize = GridSystem.Instance.Config.cellSize.x;
-        var centerOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        int subDiv = GridSystem.Instance.Config.subCellDivisor;
+        var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
         if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
         GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
+        int subRange = Mathf.Max(0, Mathf.CeilToInt(radiusCells * subDiv));
 
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int dy = -subRange; dy <= subRange; dy++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int dx = -subRange; dx <= subRange; dx++)
             {
-                var coord = new GridCoord(center.x + dx, y);
-                result.AddRange(GridSystem.Instance.GetUnitsInCell(coord));
+                var sub = new GridCoord(center.x + dx, center.y + dy);
+                result.AddRange(GridSystem.Instance.GetUnitsInSubCell(sub));
             }
         }
         return result;
@@ -449,11 +445,5 @@ public class DamageSystem : Singleton<DamageSystem>
             if (count <= 1) _overkillCount.Remove(target);
             else _overkillCount[target] = count - 1;
         }
-    }
-
-    private float GetCellSize()
-    {
-        return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -38,5 +39,51 @@ public static class CombatRules
         float distance = Mathf.Max(0.5f, lMax * distFactor);
         duration = 1.2f;                                             // 被撞「懵」固定 1.2s（改动③）
         distanceWorld = distance;
+    }
+
+    // ===== 2_5 目标选择 + 视线（D83/D3）=====
+
+    /// <summary>
+    /// 价值×距离目标评分（2_5 步骤4，D83）：score = valueWeight×目标价值 − distWeight×距离(格单位)，取最高。
+    /// 近战：攻击范围内候选按此评分（无视线要求）；远程：射程圆内 + HasLineOfSight。
+    /// </summary>
+    public static float TargetScore(float targetValue, float distCells,
+        float valueWeight, float distWeight)
+        => valueWeight * targetValue - distWeight * distCells;
+
+    /// <summary>
+    /// 微格视线判定（2_5 步骤5，D3）：from→to 逐微格 Bresenham，任一非起点/终点微格不可走（非桥）→ false。
+    /// 越界保守放行 true（不误拦）。
+    /// </summary>
+    public static bool HasLineOfSight(Vector2 from, Vector2 to)
+    {
+        if (GridSystem.Instance == null) return true;
+        var a = GridSystem.Instance.WorldToSubCoord(from);
+        var b = GridSystem.Instance.WorldToSubCoord(to);
+        if (a == null || b == null) return true; // 越界保守放行
+        GridCoord sa = a.Value, sb = b.Value;
+        foreach (var sub in SubBresenham(sa, sb))
+        {
+            if (sub == sa || sub == sb) continue; // 起点/终点所在微格豁免
+            if (!GridSystem.Instance.IsSubWalkable(sub)) return false; // 桥可走 → 天然放行
+        }
+        return true;
+    }
+
+    /// <summary>微格 Bresenham 直线逐点枚举（含起终点，调用方自行豁免终点语义）。</summary>
+    private static IEnumerable<GridCoord> SubBresenham(GridCoord a, GridCoord b)
+    {
+        int x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+        int dx = Mathf.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        int dy = -Mathf.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        int err = dx + dy;
+        while (true)
+        {
+            yield return new GridCoord(x0, y0);
+            if (x0 == x1 && y0 == y1) yield break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+        }
     }
 }

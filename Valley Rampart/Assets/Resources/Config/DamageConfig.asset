@@ -17,8 +17,15 @@ MonoBehaviour:
   maxAttacksPerFrame: 100
   overkillLimit: 2
   eventThrottle: 0.5
-  hitRadiusCells: 1
+  hitRadiusCells: 0.25
   maxHits: 1
   arcHeight: 2
   projectileErrorRadius: 1.5
   hitFlashDuration: 0.1
+  stickinessFactor: 1.15
+  valueWeight: 1
+  distWeight: 1
+  losEnabled: 1
+  projectilePoolSize: 128
+  KnockbackArcHeight: 6
+  KnockbackForceScale: 6

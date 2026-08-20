@@ -25,7 +25,10 @@ public class ProjectileManager : Singleton<ProjectileManager>
     private const float ProjectileScale = 0.3f;
     private const int SortingOrder = 5;
     private const int InitialPoolSize = 16;
-    private const int MaxPoolSize = 200;
+
+    // 投射物池上限（2_5 步骤6：改读 DamageConfig.projectilePoolSize，SO 可调，默认 128；溢出丢最旧）
+    private int ProjectilePoolSize =>
+        _config != null && _config.projectilePoolSize > 0 ? _config.projectilePoolSize : 128;
 
     [Tooltip("投射物 Sprite。未指定时运行时创建黄色小方块。")]
     [SerializeField] private Sprite _projectileSprite;
@@ -139,8 +142,7 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (_active.Count == 0) return;
 
         float dt = Time.deltaTime;
-        float cellSize = GetCellSize();
-        float hitRadiusWorld = HitRadiusCells * cellSize;
+        float hitRadiusCells = HitRadiusCells; // 格单位（2_5 步骤6：命中半径不再 ×cellSize）
 
         for (int i = _active.Count - 1; i >= 0; i--)
         {
@@ -151,7 +153,7 @@ public class ProjectileManager : Singleton<ProjectileManager>
             if (t >= 1f)
             {
                 // 到达时刻：位置检测（一次，决策 9+12）
-                OnProjectileArrived(p, hitRadiusWorld);
+                OnProjectileArrived(p, hitRadiusCells);
                 ReturnToPool(p.visual);
                 _active.RemoveAt(i);
             }
@@ -172,14 +174,14 @@ public class ProjectileManager : Singleton<ProjectileManager>
     /// 到达时刻位置检测：查目标位置 1 格半径内非己方单位，命中最近（MaxHits=1）。
     /// 原目标跑了 + 无其他单位 = miss；有单位 = 误伤命中（Faction 二元判定）。
     /// </summary>
-    private void OnProjectileArrived(ProjectileData p, float hitRadiusWorld)
+    private void OnProjectileArrived(ProjectileData p, float hitRadiusCells)
     {
         // 越墙判定（3.6 §5）：低抛被工事挡（弧高 ≤ 工事高度），穿透等级决定对墙伤害
         if (CheckWallBlock(p))
             return;
 
-        // 查 GridSystem 附近格子的单位
-        List<UnitController> candidates = QueryNearbyUnits(p.targetPos, hitRadiusWorld);
+        // 查 GridSystem 附近微格的单位（doc1 微格主表 D70，2_5 步骤3）
+        List<UnitController> candidates = QueryNearbyUnits(p.targetPos, hitRadiusCells);
 
         if (candidates.Count == 0) return; // miss
 
@@ -194,8 +196,8 @@ public class ProjectileManager : Singleton<ProjectileManager>
             if (unit.GetFaction() == attackerFaction) continue; // 己方跳过
             if (unit.GetFaction() == Faction.None) continue;    // 无阵营跳过
 
-            float dist = Vector2.Distance(p.targetPos, unit.GetPosition());
-            if (dist < bestDist)
+            float dist = GridMath.DistCells(p.targetPos, unit.GetPosition());
+            if (dist <= hitRadiusCells && dist < bestDist)
             {
                 bestDist = dist;
                 bestTarget = unit;
@@ -262,25 +264,23 @@ public class ProjectileManager : Singleton<ProjectileManager>
         return false;
     }
 
-    /// <summary>查目标位置附近格子内的单位（空间分区，复用 GridSystem）。</summary>
-    private List<UnitController> QueryNearbyUnits(Vector2 worldPos, float radiusWorld)
+    /// <summary>查目标位置附近微格内的单位（doc1 微格主表 D70，2_5 步骤3）。</summary>
+    private List<UnitController> QueryNearbyUnits(Vector2 worldPos, float radiusCells)
     {
         var result = new List<UnitController>();
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
 
-        float cellSize = GridSystem.Instance.Config.cellSize.x;
-        var centerOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        int subDiv = GridSystem.Instance.Config.subCellDivisor;
+        var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
         if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
         GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
+        int subRange = Mathf.Max(0, Mathf.CeilToInt(radiusCells * subDiv));
 
-        // 查附近格子（1D 横版：x 范围，y=0 地面 + y=1 飞行）
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int dy = -subRange; dy <= subRange; dy++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int dx = -subRange; dx <= subRange; dx++)
             {
-                var coord = new GridCoord(center.x + dx, y);
-                result.AddRange(GridSystem.Instance.GetUnitsInCell(coord));
+                result.AddRange(GridSystem.Instance.GetUnitsInSubCell(new GridCoord(center.x + dx, center.y + dy)));
             }
         }
         return result;
@@ -302,7 +302,7 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (go == null) return;
         go.SetActive(false);
 
-        if (_pool.Count >= MaxPoolSize)
+        if (_pool.Count >= ProjectilePoolSize)
         {
             // 超上限，直接销毁（降级处理）
             Destroy(go);
@@ -378,10 +378,4 @@ public class ProjectileManager : Singleton<ProjectileManager>
     }
 
     // ===== 辅助 =====
-
-    private float GetCellSize()
-    {
-        return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
-    }
 }
