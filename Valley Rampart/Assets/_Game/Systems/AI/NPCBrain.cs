@@ -622,10 +622,45 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ⑤ 撤退安全锚点：低分 → 最近安全锚点（边界遇敌往内撤）；高分 → HomePoint（正常归巢）
         // QQQ.4 T5：流浪汉低分撤退目标固定为营地（homePoint）——营地偏远 SafetyScore 低，
         // 若走 ResolveRetreatTarget 会抽到城堡锚点 → 流浪汉被拉向主城
-        Vector2 safeAnchor = unrecruitedVagrant
-            ? homePoint
-            : RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
-                _self.GetPosition(), safetyScore, _config.wanderThreshold, homePoint);
+        Vector2 selfPos = _self.GetPosition();
+
+        // 2_7 步骤2/4：最近敌方向（NearestEnemyDir，sim 侧无此新输入）+ 附近敌位置分布（逃逸点避让用）
+        Vector2 enemyDirUnit = Vector2.right;   // 无目标默认朝向忽略
+        List<Vector2>? enemyPositions = null;
+        {
+            Vector2 nearestEnemyPos = selfPos;
+            float nearestSq = float.MaxValue;
+            for (int i = 0; i < _nearbyEnemies.Count; i++)
+            {
+                Vector2 p = _nearbyEnemies[i].GetPosition();
+                (enemyPositions ??= new List<Vector2>()).Add(p);
+                float sq = (p - selfPos).sqrMagnitude;
+                if (sq < nearestSq) { nearestSq = sq; nearestEnemyPos = p; }
+            }
+            if (_nearbyEnemies.Count > 0)
+            {
+                Vector2 d = nearestEnemyPos - selfPos;
+                if (d.sqrMagnitude > 1e-6f) enemyDirUnit = d.normalized;
+            }
+        }
+
+        Vector2 safeAnchor;
+        if (unrecruitedVagrant)
+        {
+            safeAnchor = homePoint;   // 流浪汉固定营地，不出逃逸点
+        }
+        else
+        {
+            Vector2 fallback = RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
+                selfPos, safetyScore, _config.wanderThreshold, homePoint);
+            float cs0 = GetCellSize();
+            float retreatR = (AIDistConfig.Instance != null ? AIDistConfig.Instance.baseRetreatCells : 6f) * cs0;
+            if (enemyPositions != null && enemyPositions.Count > 0
+                && EscapePointSampler.TryPick(selfPos, enemyPositions, retreatR, out Vector2 esc))
+                safeAnchor = esc;   // 往敌稀疏/开口侧退
+            else
+                safeAnchor = fallback;
+        }
 
         // 2_7 步骤1 距离口径：useGridUnits=true → 距离字段全格单位（量纲迁移，数学等价重标定）；
         // false → 回退旧世界距离（×cellSize，1D/2D 对照/回滚）。
@@ -648,6 +683,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             // 2_7 步骤1 距离口径：useGridUnits=true → 距离字段全部格单位（量纲迁移，数学等价重标定）；
              // false → 回退旧世界距离（×cellSize，1D/2D 对照/回滚）。
              NearestEnemyDist = useGrid ? _nearestDist / cs : _nearestDist,
+             // 2_7 步骤2 方向因子输入（sim 无新输入，供 Unity 逃逸点/撤退采样；默认朝向忽略）
+             NearestEnemyDir = Vector2XUnity.FromUnity(enemyDirUnit),
              PerceptionWorldRadius = useGrid ? _profession.perceptionRadius : _profession.perceptionRadius * cs,
              AttackWorldRange = useGrid ? _profession.attackRange : _profession.attackRange * cs,
              CellSize = cs,
