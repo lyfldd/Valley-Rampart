@@ -704,7 +704,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private float GetCellSize()
     {
         return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 }
 

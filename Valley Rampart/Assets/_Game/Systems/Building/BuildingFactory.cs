@@ -46,79 +46,16 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
     // ===== 地图预置建筑实例化 =====
 
-    /// <summary>把 MapData 的所有 BuildingPlaceholder 转为 Building 实例。</summary>
+    /// <summary>
+    /// 把 MapData 的地图预置占位转为 Building 实例。
+    /// 改造计划 doc 1：1D BuildingPlaceholder/Region 已删除；2D 占位（NaturalBuilding）
+    /// 与实例化逻辑由 2_2 接管，本片返回 0 保持编译与调用链完整。
+    /// </summary>
     public int InstantiateFromMap(MapData map)
     {
-        if (map == null || map.regions == null) return 0;
-
-        var table = GetMappingTable();
-        if (table == null)
-        {
-            Debug.LogWarning("[BuildingFactory] BuildingMappingTable 未加载（Resources/Buildings/BuildingMappingTable.asset），跳过建筑实例化。地图上将无建筑。");
-            return 0;
-        }
-
-        int created = 0;
-        for (int i = 0; i < map.regions.Count; i++)
-        {
-            var region = map.regions[i];
-
-            if (region.resources != null)
-            {
-                foreach (var ph in region.resources)
-                {
-                    if (CreateBuilding(ph, region))
-                        created++;
-                }
-            }
-
-            if (region.riftCellX >= 0)
-            {
-                var riftPh = new BuildingPlaceholder
-                {
-                    type = BuildingType.Rift,
-                    category = BuildingCategory.Rift,
-                    localCellX = region.riftCellX,
-                    cellWidth = 1,
-                    grade = ResourceGrade.Normal,
-                    isConsumable = false
-                };
-                if (CreateBuilding(riftPh, region))
-                    created++;
-            }
-        }
-
-        Debug.Log($"[BuildingFactory] 地图 mapId={map.mapId} 实例化 {created} 个建筑");
-        return created;
-    }
-
-    static bool CreateBuilding(BuildingPlaceholder ph, Region region)
-    {
-        if (ph == null) return false;
-        var table = GetMappingTable();
-        if (table == null) return false;
-        var def = table.Get(ph.type);
-        if (def == null)
-        {
-            Debug.LogWarning($"[BuildingFactory] BuildingType={ph.type} 未在映射表中配置（regionIdx={region.regionIndex}, localCellX={ph.localCellX}），跳过");
-            return false;
-        }
-
-        int globalCellX = region.cellStartX + ph.localCellX;
-        var coord = new GridCoord(globalCellX, 0);
-        int phCellWidth = (ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
-
-        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
-        Vector3 worldPos = GridSystem.Instance != null
-            ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
-            : new Vector3(globalCellX * cs, -3f, 0);
-        if (phCellWidth > 1)
-            worldPos.x += (phCellWidth - 1) / 2f * cs;
-
-        // 复用通用实例化（含组件挂载/占用/注册/事件）
-        return Instance.CreateBuildingInstance(def, ph.type, coord, phCellWidth, worldPos,
-                                               isPlayerBuilt: false, ph.grade, ph.isConsumable,
-                                               initialState: ph.type == BuildingType.CastleCore ? BuildingState.Abandoned : BuildingState.Active);
+        if (map == null) return 0;
+        Debug.Log("[BuildingFactory] 2D 地图预置建筑实例化归 2_2，当前跳过");
+        return 0;
     }
 
     /// <summary>按占用/注册/挂件/发事件创建 Building 实例。供地图与玩家放置共用逻辑（BuildController 保留自身放置路径）。</summary>
@@ -193,7 +130,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             col.size = Vector2.one;
         }
 
-        try { if (GridSystem.Instance != null) GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), b); }
+        try { if (GridSystem.Instance != null) GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), 1, b); } // doc1 改造：新签名补 h=1
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] MarkOccupiedFootprint 失败: " + ex.Message); }
 
         try { if (BuildingRegistry.Instance != null) BuildingRegistry.Instance.Register(b); }
@@ -256,7 +193,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
         var coord = new GridCoord(data.coordX, 0);
         int cellWidth = data.cellWidth > 0 ? data.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
-        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
+        float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         Vector3 worldPos = GridSystem.Instance != null
             ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
             : new Vector3(coord.x * cs, -3f, 0);

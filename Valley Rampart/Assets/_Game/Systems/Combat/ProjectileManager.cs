@@ -232,8 +232,12 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (p.ballisticType == BallisticType.HighArc) return false; // 高抛越墙
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
 
-        int startCell = GridSystem.Instance.WorldToCoord(p.startPos).x;
-        int endCell = GridSystem.Instance.WorldToCoord(p.targetPos).x;
+        // doc1 改造：WorldToCoord 返回 GridCoord?（null=越界），越界视为不被墙挡
+        var startOpt = GridSystem.Instance.WorldToCoord(p.startPos);
+        var endOpt = GridSystem.Instance.WorldToCoord(p.targetPos);
+        if (!startOpt.HasValue || !endOpt.HasValue) return false;
+        int startCell = startOpt.Value.x;
+        int endCell = endOpt.Value.x;
         if (startCell == endCell) return false;
 
         int dir = startCell < endCell ? 1 : -1;
@@ -264,8 +268,10 @@ public class ProjectileManager : Singleton<ProjectileManager>
         var result = new List<UnitController>();
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
 
-        float cellSize = GridSystem.Instance.Config.cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(worldPos);
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
+        var centerOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
 
         // 查附近格子（1D 横版：x 范围，y=0 地面 + y=1 飞行）
@@ -376,6 +382,6 @@ public class ProjectileManager : Singleton<ProjectileManager>
     private float GetCellSize()
     {
         return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 }

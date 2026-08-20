@@ -476,3 +476,17 @@ public readonly struct EnemyEnteredRegionEvent
         Enemy = enemy;
     }
 }
+
+// 敌人进入 Chunk 事件（doc 1 §1.4：旧 EnemyEnteredRegionEvent 由 ChunkEvent 取代；
+// 订阅方适配归 2_7，本片先新增事件与发布点，不删旧事件以免影响现有订阅方）。
+public readonly struct EnemyEnteredChunkEvent
+{
+    public readonly UnityEngine.Vector2Int ChunkCoord;
+    public readonly UnitController Enemy;
+
+    public EnemyEnteredChunkEvent(UnityEngine.Vector2Int chunkCoord, UnitController enemy)
+    {
+        ChunkCoord = chunkCoord;
+        Enemy = enemy;
+    }
+}

@@ -14,9 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sizes:
   - size: 0
-    regionCount: 10
+    width: 128
+    height: 128
   - size: 1
-    regionCount: 15
+    width: 256
+    height: 256
   - size: 2
-    regionCount: 24
+    width: 384
+    height: 384
   enemyByDifficulty: 010000000200000003000000

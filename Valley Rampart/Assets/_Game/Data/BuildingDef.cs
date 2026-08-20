@@ -20,8 +20,20 @@ public class BuildingDef : ScriptableObject
 
     [Header("造价与占位")]
     public ResourcePack cost;          // 金/石/木/粮（走 RulerController.CanAfford/Spend）
-    public Vector2Int footprint;       // 占用小区块尺寸 (w,h)，1D 地图 h 暂不用
+    public Vector2Int footprint;       // 占用小区块尺寸 (w,h)，2D 全用
     public TerrainType[] allowedTerrain;
+
+    [Header("2D 空间（2_2 建筑与占格）")]
+    [Tooltip("纯视觉层数（美术规范 §1.2），不参与逻辑，只影响 sprite 尺寸（2_10 渲染用）")]
+    public int heightLayer = 0;
+    [Tooltip("桥专属：true 时仅校验 Water 位（只能造在水上），其余 false")]
+    public bool canPlaceOnWater = false;
+    [Tooltip("语义标记：是否桥（工事区分，D62/D64）")]
+    public bool isBridge = false;
+    [Tooltip("语义标记：是否城门（工事区分，D62/D64）")]
+    public bool isGate = false;
+    [Tooltip("可否旋转（城门/桥 true，R 键切换朝向）")]
+    public bool rotatable = false;
 
     [Header("模块归属（3.5 §2.2 归属原则）")]
     [Tooltip("所属王国模块。Civil=土木/Production=生产/Livelihood=民生/Military=军事/Commerce=商业/Science=科技。用于模块级解锁判定")]

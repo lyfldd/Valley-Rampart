@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 64974e2490e5c9a4db2ee4648463d75b, type: 3}
   m_Name: GridConfig
   m_EditorClassIdentifier: 
-  cellSize: 2.26
-  regionCellCount: 16
-  midRegionCellCount: 4
-  flyHeightThreshold: 5
-  flyHeight: 8
+  cellSize: {x: 1.28, y: 0.64}
+  subCellDivisor: 4
+  chunkSize: 16
+  midChunkSize: 4
   stackLimits:
   - category: 0
     maxStack: 12
   - category: 1
     maxStack: 0
+  drawGizmos: 1

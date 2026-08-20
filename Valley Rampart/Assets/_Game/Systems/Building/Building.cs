@@ -129,9 +129,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         if (def == null || def.crewRequired <= 0) return true;
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
-        float cellSize = GridSystem.Instance.Config.cellSize;
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
         float crewRadius = def.crewRadiusCells * cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(transform.position);
+        var centerOpt = GridSystem.Instance.WorldToCoord(transform.position);
+        if (!centerOpt.HasValue) return false; // doc1 改造：越界返回 null，无工人
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
         int count = 0;
         for (int dx = -cellRange; dx <= cellRange; dx++)
@@ -159,9 +161,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         if (def == null || def.crewRequired <= 0) return 0;
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return def.crewRequired;
-        float cellSize = GridSystem.Instance.Config.cellSize;
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
         float crewRadius = def.crewRadiusCells * cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(transform.position);
+        var centerOpt = GridSystem.Instance.WorldToCoord(transform.position);
+        if (!centerOpt.HasValue) return 0; // doc1 改造：越界返回 null，无缺口
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
         int count = 0;
         for (int dx = -cellRange; dx <= cellRange; dx++)
@@ -191,9 +195,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public bool HasNearbyEnemy(float rangeWorld)
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
-        float cellSize = GridSystem.Instance.Config.cellSize;
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
         int range = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
-        GridCoord center = GridSystem.Instance.WorldToCoord(transform.position);
+        var centerOpt = GridSystem.Instance.WorldToCoord(transform.position);
+        if (!centerOpt.HasValue) return false; // doc1 改造：越界返回 null，视为无敌
+        GridCoord center = centerOpt.Value;
         for (int dx = -range; dx <= range; dx++)
         {
             for (int y = 0; y <= 1; y++)
@@ -234,34 +240,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         state = BuildingState.Active;
     }
 
-    /// <summary>地图预置建筑初始化（由 BuildingFactory 调）。保留以兼容手动调用；CreateBuilding 当前走内联初始化，不使用此方法。</summary>
-    public void InitFromPlaceholder(BuildingDef def, BuildingPlaceholder ph, GridCoord coord)
-    {
-        if (def == null)
-        {
-            this.def = null;
-            this.coord = coord;
-            this.isPlayerBuilt = false;
-            this.sourceType = ph != null ? ph.type : BuildingType.None;
-            this.grade = ResourceGrade.Normal;
-            this.cellWidth = ph != null && ph.cellWidth > 0 ? ph.cellWidth : 1;
-            this.level = 1;
-            this.maxHp = 100;
-            this.hp = 100;
-            state = BuildingState.Active;
-            return;
-        }
-        this.def = def;
-        this.coord = coord;
-        this.isPlayerBuilt = false;
-        this.sourceType = ph != null ? ph.type : BuildingType.None;
-        this.grade = ph != null ? ph.grade : ResourceGrade.Normal;
-        this.cellWidth = (ph != null && ph.cellWidth > 0) ? ph.cellWidth : (def.footprint.x > 0 ? def.footprint.x : 1);
-        this.level = 1;
-
-        ApplyDef();
-        state = BuildingState.Active;
-    }
+    // 注：InitFromPlaceholder 已删除（改造计划 doc 1：BuildingPlaceholder 为 1D 概念，
+    // 2D 地图预置建筑实例化由 BuildingFactory 按 NaturalBuilding 重写，归 2_2）。
 
     /// <summary>按 BuildingDef 应用属性（含 gradeScale 缩放）。public 供 BuildingFactory.SpawnFromSave 读档后按 grade 重算（QQQ.3 B8-5）。</summary>
     public void ApplyDef()
@@ -355,7 +335,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     void UpdateVisual()
     {
         if (_renderer == null) _renderer = GetComponent<SpriteRenderer>();
-        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
+        float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         // 占位 sprite 是 1x1 世界单位，按 cellWidth × cellSize 缩放到实际占地尺寸
         transform.localScale = new Vector3(Mathf.Max(1, cellWidth) * cellSize, cellSize, 1);
 
@@ -475,9 +455,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var producer = GetComponent<ProducerComponent>();
         if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
 
-        // 网格占用恢复（Spawning 已占用，此处兜底幂等）
+        // 网格占用恢复（Spawning 已占用，此处兜底幂等）；doc1 改造：新签名补 h=1
         if (GridSystem.Instance != null)
-            GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), this);
+            GridSystem.Instance.MarkOccupiedFootprint(coord, Mathf.Max(1, cellWidth), 1, this);
     }
 
     // ===== 战斗（3.4 实现 IDamageable）=====
@@ -510,7 +490,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TrainingSystem.Instance != null)
             TrainingSystem.Instance.OnBuildingDestroyed(this);
 
-        GridSystem.Instance?.FreeFootprint(coord, cellWidth);
+        GridSystem.Instance?.FreeFootprint(coord, cellWidth, 1); // doc1 改造：新签名补 h=1
         BuildingRegistry.Instance?.Unregister(this);
         // QQQ.2 T17：从任务调度器注销（清指向本建筑的在派任务）
         if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
@@ -539,8 +519,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (def == null || !def.isConsumable) return;
         isBeingGathered = false;
 
-        // ① 释放网格占用
-        GridSystem.Instance?.FreeFootprint(coord, cellWidth);
+        // ① 释放网格占用（doc1 改造：新签名补 h=1）
+        GridSystem.Instance?.FreeFootprint(coord, cellWidth, 1);
         // ①b QQQ.2 T8 / DR-21：采集后空地加入闲逛锚点池（王国多锚点之一，持久）
         WanderAnchorPool.Instance.RegisterFreeSpot(transform.position);
         // ② 从注册表移除
@@ -578,7 +558,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         if (currentWorkers == null || currentWorkers.Count == 0) return;
         float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         int idx = 0;
         for (int i = currentWorkers.Count - 1; i >= 0; i--)
         {

@@ -96,14 +96,9 @@ public class CameraSetup : MonoBehaviour
     /// </summary>
     void AlignBackgroundToMap()
     {
-        if (backgroundSprite == null) return;
-        var grid = GridSystem.Instance;
-        if (grid == null || grid.Config == null) return;
-        float originX = grid.Config.originX;
-        if (_bgAligned && Mathf.Approximately(_bgOriginX, originX)) return;
-        backgroundSprite.transform.position += new Vector3(_bgOriginX - originX, 0f, 0f);
-        _bgOriginX = originX;
+        // doc 1：originX 已删除，地图中心 = 世界原点，背景无需偏移对齐（重写归 2_10）
         _bgAligned = true;
+        _bgOriginX = 0f;
     }
 
     private void LateUpdate()

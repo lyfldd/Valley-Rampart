@@ -14,7 +14,7 @@ public class UnityWorldQueryAdapter : IWorldQuery
 {
     public float CellSize =>
         GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize
+            ? GridSystem.Instance.Config.cellSize.x
             : 0f;
 
     public float GetHeatAt(Vector2X pos)

@@ -58,7 +58,7 @@ public class LODSystem : Singleton<LODSystem>
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
         int mapCellCount = GridSystem.Instance.MapCellCount;
         if (mapCellCount <= 0) return;
-        InitRegions(mapCellCount / GridSystem.Instance.Config.regionCellCount);
+        InitRegions(mapCellCount / GridSystem.Instance.Config.chunkSize);
     }
 
     // ===== 初始化 =====
@@ -87,8 +87,8 @@ public class LODSystem : Singleton<LODSystem>
     private int GetMidCellCount()
     {
         if (GridSystem.Instance != null && GridSystem.Instance.Config != null
-            && GridSystem.Instance.Config.midRegionCellCount > 0)
-            return GridSystem.Instance.Config.midRegionCellCount;
+            && GridSystem.Instance.Config.midChunkSize > 0)
+            return GridSystem.Instance.Config.midChunkSize;
         return 4;
     }
 
@@ -116,7 +116,7 @@ public class LODSystem : Singleton<LODSystem>
         {
             int mapCellCount = GridSystem.Instance.MapCellCount;
             if (mapCellCount > 0)
-                InitRegions(mapCellCount / GridSystem.Instance.Config.regionCellCount);
+                InitRegions(mapCellCount / GridSystem.Instance.Config.chunkSize);
         }
 
         if (_regions.Count == 0 || _config == null) return;
@@ -346,7 +346,8 @@ public class LODSystem : Singleton<LODSystem>
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return -1;
         var coord = GridSystem.Instance.WorldToCoord(worldPos);
-        return GridSystem.Instance.CellToRegionIndex(coord.x);
+        if (!coord.HasValue) return -1;
+        return GridSystem.Instance.CellToRegionIndex(coord.Value.x);
     }
 
     /// <summary>世界坐标 → 中区块索引（3.0.1_5 §五：midRegionCellCount 小区块编组，热度聚合粒度）。</summary>
@@ -354,6 +355,7 @@ public class LODSystem : Singleton<LODSystem>
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return -1;
         var coord = GridSystem.Instance.WorldToCoord(worldPos);
-        return GridSystem.Instance.CellToMidRegionIndex(coord.x);
+        if (!coord.HasValue) return -1;
+        return GridSystem.Instance.CellToMidRegionIndex(coord.Value.x);
     }
 }

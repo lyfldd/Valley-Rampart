@@ -119,14 +119,14 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
     static int RoundedKey(Vector2 pos)
     {
         float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         return Mathf.RoundToInt(pos.x / cs);  // 1D 横版 y 固定，按 x 格去重
     }
 
     static float GetCellSize()
     {
         return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 
     /// <summary>资源点采集后空地锚点（持久；Building.OnGatherCompleted 调）。</summary>

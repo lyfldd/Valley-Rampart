@@ -130,7 +130,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         if (cfg == null || pop == null || grid == null || grid.Config == null || UnitRegistry.Instance == null) return;
 
         Vector2 anchor = WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
-        float arriveRadiusWorld = cfg.recruitArriveRadiusCells * grid.Config.cellSize;
+        float arriveRadiusWorld = cfg.recruitArriveRadiusCells * grid.Config.cellSize.x;
 
         foreach (var uc in UnitRegistry.Instance.GetAllUnits())
         {
@@ -161,7 +161,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
     {
         var grid = GridSystem.Instance;
         if (grid == null || grid.Config == null || UnitRegistry.Instance == null) return 0;
-        float radiusWorld = radiusCells * grid.Config.cellSize;
+        float radiusWorld = radiusCells * grid.Config.cellSize.x;
 
         int count = 0;
         foreach (var uc in UnitRegistry.Instance.GetAllUnits())
@@ -183,7 +183,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
 
         Vector2 campPos = camp.GetPosition();
         var grid = GridSystem.Instance;
-        float cs = grid != null && grid.Config != null ? grid.Config.cellSize : 2.26f;
+        float cs = grid != null && grid.Config != null ? grid.Config.cellSize.x : 2.26f;
         float offsetX = Random.Range(-cfg.campVagrantRadiusCells * 0.5f, cfg.campVagrantRadiusCells * 0.5f) * cs;
 
         var go = UnitFactory.Instance.SpawnUnit(

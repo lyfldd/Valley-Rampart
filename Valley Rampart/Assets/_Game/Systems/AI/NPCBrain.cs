@@ -1348,8 +1348,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     {
         var result = new List<UnitController>();
         if (GridSystem.Instance == null) return result;
-        int c1 = GridSystem.Instance.WorldToCoord(new Vector2(x1, 0)).x;
-        int c2 = GridSystem.Instance.WorldToCoord(new Vector2(x2, 0)).x;
+        // doc1 改造：WorldToCoord 返回 GridCoord?（null=越界），越界返回空列表
+        var c1Opt = GridSystem.Instance.WorldToCoord(new Vector2(x1, 0));
+        var c2Opt = GridSystem.Instance.WorldToCoord(new Vector2(x2, 0));
+        if (!c1Opt.HasValue || !c2Opt.HasValue) return result;
+        int c1 = c1Opt.Value.x;
+        int c2 = c2Opt.Value.x;
         for (int cx = c1; cx <= c2; cx++)
         {
             for (int y = 0; y <= 1; y++)
@@ -1422,7 +1426,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private float GetCellSize()
     {
         return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 
     /// <summary>设置跟随锚点（调度中心/军令下发时调，§3.2）</summary>

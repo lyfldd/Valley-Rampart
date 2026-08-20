@@ -112,14 +112,18 @@ public class BuildController : Singleton<BuildController>
         if (_ghost != null && Camera.main != null && GridSystem.Instance != null)
         {
             Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            var coord = GridSystem.Instance.WorldToCoord(mouseWorld);
-            Vector3 snapPos = GridSystem.Instance.CoordToWorld(coord);
-            _ghost.transform.position = snapPos;
+            var coordOpt = GridSystem.Instance.WorldToCoord(mouseWorld);
+            if (coordOpt.HasValue) // doc1 改造：null=越界，跳过 ghost 吸附与反馈
+            {
+                GridCoord coord = coordOpt.Value;
+                Vector3 snapPos = GridSystem.Instance.CoordToWorld(coord);
+                _ghost.transform.position = snapPos;
 
-            // 绿/红反馈
-            bool valid = PlacementValidator.Validate(_selectedDef, coord);
-            if (_ghostRenderer != null)
-                _ghostRenderer.color = valid ? new Color(0, 1, 0, 0.5f) : new Color(1, 0, 0, 0.5f);
+                // 绿/红反馈
+                bool valid = PlacementValidator.Validate(_selectedDef, coord);
+                if (_ghostRenderer != null)
+                    _ghostRenderer.color = valid ? new Color(0, 1, 0, 0.5f) : new Color(1, 0, 0, 0.5f);
+            }
         }
 
         // 左键放置
@@ -140,7 +144,9 @@ public class BuildController : Singleton<BuildController>
         if (_selectedDef == null || Camera.main == null || GridSystem.Instance == null) return;
 
         Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        var coord = GridSystem.Instance.WorldToCoord(mouseWorld);
+        var coordOpt = GridSystem.Instance.WorldToCoord(mouseWorld);
+        if (!coordOpt.HasValue) return; // doc1 改造：越界返回 null，不可放置
+        GridCoord coord = coordOpt.Value;
 
         // 校验用 def.footprint（非旋转后的 _footprint）；多格旋转校验留待 footprint 不可变改造（3.3.4 批次8）
         if (!PlacementValidator.Validate(_selectedDef, coord))
@@ -193,7 +199,7 @@ public class BuildController : Singleton<BuildController>
             col.size = Vector2.one;
         }
 
-        GridSystem.Instance.MarkOccupiedFootprint(coord, b.cellWidth, b);
+        GridSystem.Instance.MarkOccupiedFootprint(coord, b.cellWidth, 1, b); // doc1 改造：新签名补 h=1
         BuildingRegistry.Instance?.Register(b);
         BuildingFactory.Instance.AttachComponents(b, _selectedDef);  // 玩家建造也挂组件（3.3.4 批次5）
         EventBus.Publish(new BuildingPlacedEvent(b));

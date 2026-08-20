@@ -252,8 +252,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
             Vector2 anchor = wm.GetKingdomAnchorWorld();
             if (anchor != Vector2.zero)
             {
-                // 锚点=城堡中心（2 格交界）；左侧 1 格 = 锚点左移 1.5 格
-                return new Vector2(anchor.x - 1.5f * grid.Config.cellSize, anchor.y);
+                // 锚点=城堡中心（2 格交界）；左侧 1 格 = 锚点左移 1.5 格（doc1 改造：cellSize 取 .x 分量）
+                return new Vector2(anchor.x - 1.5f * grid.Config.cellSize.x, anchor.y);
             }
         }
         return spawnPosition;

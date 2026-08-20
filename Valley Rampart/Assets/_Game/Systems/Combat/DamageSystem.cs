@@ -319,7 +319,7 @@ public class DamageSystem : Singleton<DamageSystem>
     {
         if (aoeRadiusCells <= 0f || GridSystem.Instance == null) return;
 
-        float cellSize = GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize : 2.26f;
+        float cellSize = GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         float radiusWorld = aoeRadiusCells * cellSize;
 
         var units = QueryUnitsInRadius(worldPos, radiusWorld);
@@ -345,8 +345,10 @@ public class DamageSystem : Singleton<DamageSystem>
         var result = new List<UnitController>();
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
 
-        float cellSize = GridSystem.Instance.Config.cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(worldPos);
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
+        var centerOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
 
         for (int dx = -cellRange; dx <= cellRange; dx++)
@@ -452,6 +454,6 @@ public class DamageSystem : Singleton<DamageSystem>
     private float GetCellSize()
     {
         return GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 }

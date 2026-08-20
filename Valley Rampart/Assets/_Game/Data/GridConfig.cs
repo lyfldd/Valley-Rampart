@@ -2,37 +2,33 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 区块配置（3.2 第 7.1 节）。Inspector 可调，数据驱动。
+/// 区块配置（改造计划 doc 1 §2.3 / §5.6）。Inspector 可调，数据驱动。
 /// 资产实例放在 Resources/Grid/GridConfig.asset
 /// </summary>
 [CreateAssetMenu(menuName = "ValleyRampart/GridConfig", fileName = "GridConfig")]
 public class GridConfig : ScriptableObject
 {
-    [Header("区块大小")]
-    [Tooltip("一个小区块多宽（世界单位/像素）。审计勘误：资产 GridConfig.asset 实际值 2.26，类默认值对齐防误读")]
-    public float cellSize = 2.26f;
+    [Header("区块尺寸（doc 1 §1.6：逻辑正交，等轴投影归 2_10）")]
+    [Tooltip("世界单位/格，双分量（1.28, 0.64）。禁止任何公式把 cellSize 当标量用；1 小区块 = 1 等轴 Tile = 128×64px @PPU100")]
+    public Vector2 cellSize = new Vector2(1.28f, 0.64f);
 
-    [Header("大区块")]
-    [Tooltip("一个大区块含多少个小区块（固定）")]
-    public int regionCellCount = 16;
+    [Tooltip("小区块 ÷ 此数 = 微格（寻路粒度，固定 4）。每小区块 = 4×4 = 16 微格（0.32×0.16）")]
+    public int subCellDivisor = 4;
 
-    [Header("中区块（3.0.1_5 §五：底层支撑多编队协作）")]
-    [Tooltip("一个中区块含多少个小区块（4 个小区块编组，中区块最多承载 4 编队。热度以中区块为粒度聚合，热点跨编队可见）")]
-    public int midRegionCellCount = 4;
+    [Header("区块划分")]
+    [Tooltip("大区块边长（小区块数）。Chunk 级事件 / 地图生成单位 / 温度带")]
+    public int chunkSize = 16;
 
-    [Header("坐标原点（QQQ.1 需求4：城堡中线 = 世界 x=0）")]
-    [Tooltip("世界坐标 x 偏移量（世界单位）。使城堡中线对齐世界 x=0（城堡中心在原点）。运行时由 WorldManager.GenerateMap 生成地图后覆盖为城堡中心 cell 偏移")]
-    public float originX = 0f;
-
-    [Header("飞行层")]
-    [Tooltip("y 值超过此阈值视为空中层")]
-    public float flyHeightThreshold = 5f;
-    [Tooltip("空中层固定 y 值")]
-    public float flyHeight = 8f;
+    [Tooltip("中区块边长（小区块数）。LOD / 热度聚合 / 编队槽位组")]
+    public int midChunkSize = 4;
 
     [Header("堆叠上限（按 NPC 类型）")]
     [Tooltip("只配 Enemy + Civilian 两类（不划分防御类驻军）")]
     public StackLimitConfig[] stackLimits = new StackLimitConfig[2];
+
+    [Header("调试")]
+    [Tooltip("Gizmos 调试绘制总开关")]
+    public bool drawGizmos = true;
 
     /// <summary>按类型查堆叠上限。0=无上限。</summary>
     public int GetStackLimit(UnitCategory category)

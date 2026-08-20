@@ -3,20 +3,44 @@ using System.Collections.Generic;
 // ============================================================================
 //  地块与地图生成数据结构（3.2 第 7.3 节 + 3.2.1 第 6.2 节）
 //  本文件只放数据结构，不含 ScriptableObject 配置（见 Data/ 目录）。
+//
+//  改造计划 doc 1：
+//    - GridCoord 2D 化 + layer 预留 + 强哈希（§5.1）
+//    - WalkFlags 五位位标记（§5.1）
+//    - GridCell 瘦身：occupant/isObstacle/terrain 下沉到 GridSystem 稠密数组，
+//      此处保留 Obsolete 过渡属性供兼容期读取（改造完毕删除）
+//    - 删除 BigTerrain / MapZone / Region / BuildingPlaceholder（1D 概念，生成归 2_1）
 // ============================================================================
 
-/// <summary>小区块坐标。x=横向列号，y=子层（0=地面，1=空中）。</summary>
+/// <summary>2D 平面格坐标。x=横轴，y=纵轴（语义变更：老 y=层已废，改动见改造计划 doc 1 §1.2）。</summary>
 public struct GridCoord
 {
     public int x;
-    public int y;
+    public int y;          // 纵轴格号（0..H-1）
+    public int layer;      // 预留：0=地面（空中层冻结，用户决策 2026-08-12）
 
-    public GridCoord(int x, int y) { this.x = x; this.y = y; }
+    public GridCoord(int x, int y, int layer = 0) { this.x = x; this.y = y; this.layer = layer; }
 
-    public static bool operator ==(GridCoord a, GridCoord b) => a.x == b.x && a.y == b.y;
+    public static bool operator ==(GridCoord a, GridCoord b)
+        => a.x == b.x && a.y == b.y && a.layer == b.layer;
     public static bool operator !=(GridCoord a, GridCoord b) => !(a == b);
     public override bool Equals(object obj) => obj is GridCoord c && this == c;
-    public override int GetHashCode() => x * 31 + y;
+    public override int GetHashCode() => x * 73856093 ^ y * 19349663 ^ layer * 83492791;
+    public override string ToString() => $"(x={x}, y={y}, layer={layer})";
+}
+
+/// <summary>可行走位标记（byte，每格一份）。可走判定规则：TerrainWalkable 置位
+/// 且 BuildingBlocked/Locked/Water 均未置位，或 Bridge 置位（桥面豁免水域阻挡，2_2 桥写入）。</summary>
+[System.Flags]
+public enum WalkFlags : byte
+{
+    None            = 0,
+    TerrainWalkable = 1 << 0,  // 地形基础可走（地图生成写入）
+    BuildingBlocked = 1 << 1,  // 建筑障碍（MarkOccupied 且 isObstacle 时置位）
+    Locked          = 1 << 2,  // 资源点锁格（3.5 锁格机制延续，写入方 2_2/2_7）
+    Water           = 1 << 3,  // 水域（2_1 河流/湖泊/海洋）
+    Bridge          = 1 << 4,  // 桥面（2_2 桥建筑置位：桥可跨水，优先级高于 Water）
+    // bit5~7 预留（空中层/特殊地形）
 }
 
 /// <summary>NPC 类型分类（决定堆叠上限）。不划分防御类驻军——
@@ -30,16 +54,20 @@ public enum UnitCategory
 
 // ===== 地形类型 =====
 
-/// <summary>小地形类型（对应大区块）。平原拆两态，肥沃降为子状态。</summary>
+/// <summary>小地形类型（doc 1：语义从"每 Region"变"每格"）。</summary>
 public enum TerrainType
 {
     Plain,      // 平原（子状态见 PlainSubState）
-    Wasteland,  // 荒地（内陆极端区出怪侧）
+    Wasteland,  // 荒地
     Hills,      // 丘陵（万能缓冲 + 复合资源区）
     Forest,     // 林地（木来源）
     Quarry,     // 矿山（石来源）
-    Snow,       // 雪山（仅内陆大山屏障侧）
-    Coast       // 海岸（仅岛屿两端，出海口+造船厂位）
+    Snow,       // 雪山
+    Coast,      // 海岸
+    Mountain,   // 山地（2_1 §5.1 映射：FeatureType.Mountain，阻挡）
+    River,      // 河流（2_1 §5.1 映射：FeatureType.River，水域阻挡）
+    Lake,       // 湖泊（2_1 §5.1 映射：FeatureType.Lake，水域阻挡）
+    Ocean       // 海洋（2_1 §5.1 映射：FeatureType.Ocean，边缘环绕阻挡）
 }
 
 /// <summary>平原子状态（仅 terrain==Plain 时有效）。</summary>
@@ -49,23 +77,35 @@ public enum PlainSubState
     Fertile    // 肥沃（农田位，粮来源）
 }
 
-/// <summary>大地形类型（玩家/关卡决定，决定出怪方向）。</summary>
-public enum BigTerrain
+// ===== 2_1 地图生成契约（features 唯一功能源，doc 1 §5.5 扩展）=====
+
+/// <summary>温度带（大区块 16×16 属性，散乱分布不按纬度，2_1 §3.2）。</summary>
+public enum ClimateZone { Tropical, Subtropical, Temperate, Cold }
+
+/// <summary>小区块特征物（功能层，2_1 §5.1 唯一功能源）。可走/阻挡由 GridSystem 派生 walkFlags。</summary>
+public enum FeatureType
 {
-    Island,          // 岛屿（两边出怪）
-    Inland,          // 内陆（一边出怪，另一边大山屏障）
-    EndlessIsland    // 无限关卡固定岛屿（通关后）
+    Plain,             // 可走/可建
+    Tree,              // 一次性木（可刷新，无伐木场）
+    Mountain,          // 阻挡
+    SnowMountain,      // 阻挡
+    Mine,              // 矿洞（石，需争夺；可走，Locked 由 2_2/2_7 置）
+    OreVein, StonePile, WoodPile,  // 一次性资源（可走）
+    River, Lake, Ocean             // 水（阻挡）
 }
 
-/// <summary>5 区结构分区枚举（3.2.1 第二节）。</summary>
-public enum MapZone
+/// <summary>自然建筑占位（features 派生的视觉层，供 2_2 实例化，不反向改可走，2_1 §5.1）。</summary>
+[System.Serializable]
+public class NaturalBuilding
 {
-    LeftExtreme,    // 左极端区（出怪口/大山屏障）
-    LeftResource,   // 左资源区
-    Center,          // 中心区（主城）
-    RightResource,  // 右资源区
-    RightExtreme    // 右极端区（出怪口/造船厂位）
+    public int cellX, cellY;        // 落点（2×2 建筑取左上）
+    public int w = 1, h = 1;        // 默认 1×1；仅 Mine/大型岩石等特殊特征物可升 2×2
+    public FeatureType feature;     // 对应特征物
+    public ClimateZone climate;     // 所属温度带（决定美术变体）
+    public string artId;            // 美术资源 id（占位，以美术资源规范为准 D37）
 }
+
+// 注：BigTerrain / MapZone 已删除（doc 1 §2.2：单大陆 + 5 区是 1D 概念）
 
 // ===== Building 体系（3.2.1 第 6.2 节）=====
 
@@ -123,35 +163,23 @@ public enum ResourceGrade
     Rich      // 富有（×2.0，高风险区倾向）
 }
 
-/// <summary>
-/// 地图生成产出的 Building 占位。运行时由 BuildingFactory（建造系统⬜）转为 Building 实例。
-/// 这是"生成结果"数据，不是运行时实例。
-/// </summary>
-public class BuildingPlaceholder
-{
-    public BuildingCategory category;   // 大类
-    public BuildingType type;            // 具体类型
-    public int localCellX;               // 在大区块内的小区块局部坐标
-    public int cellWidth = 1;            // 占几个小区格（默认 1，城堡=2）
-    public ResourceGrade grade;          // 等级（仅资源点有效）
-    public bool isConsumable;            // 是否一次性（true=用完消失，false=持续产出）
-}
+// 注：BuildingPlaceholder 已删除（doc 1 §2.2：2D 化归 2_1 重新定义 NaturalBuilding）
 
 // ===== 区块结构 =====
 
-/// <summary>小区块：单位堆叠 + 建筑占用最小单元。</summary>
+/// <summary>
+/// 小区块：单位堆叠 + 建筑占用最小单元。
+/// doc 1 §2.2 / §5.3：occupant/isObstacle/terrain 已下沉到 GridSystem 稠密数组
+/// （_occupants/_walkFlags/_terrain），本 class 只承载稀疏懒分配的单位列表。
+/// 旧字段保留为 Obsolete 过渡属性，从 GridSystem 数组读取；改造完毕删除。
+/// </summary>
 public class GridCell
 {
+    /// <summary>本格坐标（由 GridSystem 懒分配时写入）。</summary>
     public GridCoord Coord;
-    public readonly List<UnitController> Units = new List<UnitController>();
 
-    // ===== 建筑占用层（3.3.1 P1）=====
-    /// <summary>占据此格的建筑（null=空）。footprint 多格建筑会在每个格都存同一引用。</summary>
-    public Building occupant;
-    /// <summary>缓存 occupant.isObstacle，避免每次读 occupant 空检查。</summary>
-    public bool isObstacle;
-    /// <summary>此格地形（由 GridSystem.GetTerrainAt 懒填充）。</summary>
-    public TerrainType terrain;
+    /// <summary>本格单位列表（微格登记聚合到小区块后落在格级列表）。</summary>
+    public readonly List<UnitController> Units = new List<UnitController>();
 
     public int Count => Units.Count;
 
@@ -165,28 +193,27 @@ public class GridCell
 
     public void Add(UnitController unit) => Units.Add(unit);
     public bool Remove(UnitController unit) => Units.Remove(unit);
-}
 
-/// <summary>
-/// 大区块：地形段，程序化生成基本单位。
-/// 每个大区块对应一种小地形，内部含固定 regionCellCount 个小区块。
-/// </summary>
-public class Region
-{
-    public int regionIndex;              // 在地图内的索引（0..M-1）
-    public TerrainType terrain;          // 小地形类型
-    public PlainSubState plainSubState;  // 平原子状态（仅 terrain==Plain 时有效）
-    public int cellStartX;               // 该大区块第一个小区块的全局 x 坐标
-    public int cellCount;                // 含小区块数（= regionCellCount，固定）
-    public List<BuildingPlaceholder> resources; // Building 占位列表（二级约束生成）
-    public int riftCellX = -1;           // 裂隙所在小区块索引（-1=无裂隙）
-    public bool isEnemyTerritory;        // 是否敌方领土（敌方王国地图标记）
-    public MapZone zone;                 // 所属 5 区分区
-    public bool isInner;                 // 资源区是否内侧（靠中心区=true，靠极端区=false）
+    // ===== 过渡 Obsolete 属性（已下沉 GridSystem 数组，2_2/2_4 适配完成后删除）=====
 
-    // ===== QQQ.1 需求1：资源保障占位标记（3.2.1 第四节，事前占位替代事后补丁）=====
-    /// <summary>是否为资源保障占位区块（true 时 terrain 固定为 protectedTerrain，不被权重随机/邻接修正覆盖）。</summary>
-    public bool isProtectedResource;
-    /// <summary>保障区块固定地形（Forest=保障林地 / Quarry=保障矿山）。</summary>
-    public TerrainType protectedTerrain = TerrainType.Plain;
+    /// <summary>[过渡已废弃] 占据此格的建筑。改用 GridSystem.IsOccupied / GetOccupant。</summary>
+    [System.Obsolete("GridCell.occupant 已下沉 GridSystem._occupants，改用 GridSystem.IsOccupied/GetOccupant")]
+    public Building occupant
+    {
+        get { var g = GridSystem.Instance; return g != null ? g.GetOccupant(Coord) : null; }
+    }
+
+    /// <summary>[过渡已废弃] 是否障碍格。改用 GridSystem.IsObstacle。</summary>
+    [System.Obsolete("GridCell.isObstacle 已下沉，改用 GridSystem.IsObstacle")]
+    public bool isObstacle
+    {
+        get { var g = GridSystem.Instance; return g != null && g.IsObstacle(Coord); }
+    }
+
+    /// <summary>[过渡已废弃] 此格地形。改用 GridSystem.GetTerrainAt。</summary>
+    [System.Obsolete("GridCell.terrain 已下沉 GridSystem._terrain，改用 GridSystem.GetTerrainAt")]
+    public TerrainType terrain
+    {
+        get { var g = GridSystem.Instance; return g != null ? g.GetTerrainAt(Coord) : TerrainType.Plain; }
+    }
 }

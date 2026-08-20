@@ -32,8 +32,14 @@ public static class PerceptionSystem
             return;
         }
 
-        float cellSize = GridSystem.Instance.Config.cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(position);
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
+        var centerOpt = GridSystem.Instance.WorldToCoord(position);
+        if (!centerOpt.HasValue)
+        {
+            FallbackQuery(position, radiusWorld, myFaction, findEnemies, results);
+            return;
+        }
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
 
         for (int dx = -cellRange; dx <= cellRange; dx++)

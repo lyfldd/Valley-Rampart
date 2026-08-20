@@ -158,7 +158,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         }
 
         float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         float gap = Mathf.Max(0.5f, cfg.initialSpawnGapCells) * cellSize;
 
         int idx = 0;

@@ -12,45 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd16d70b57943b44d85aa7075f91797c, type: 3}
   m_Name: MapGenRulesConfig
   m_EditorClassIdentifier: 
-  centerRatio: 0.3
-  extremeRatio: 0.25
-  resourceInnerWeights:
-  - terrain: 3
-    weight: 0.4
-  - terrain: 0
-    weight: 0.2
-  - terrain: 2
-    weight: 0.1
-  resourceOuterWeights:
-  - terrain: 4
-    weight: 0.45
-  - terrain: 2
-    weight: 0.35
-  - terrain: 3
-    weight: 0.2
-  centerFertileChance: 0.3
-  adjacencyMatrix:
-  - terrain: 6
-    allowedNeighbors: 00000000030000000200000001000000
-    tolerableNeighbors: 04000000
-  - terrain: 0
-    allowedNeighbors: 06000000000000000300000002000000
-    tolerableNeighbors: 
-  - terrain: 3
-    allowedNeighbors: 06000000000000000300000002000000
-    tolerableNeighbors: 04000000
-  - terrain: 2
-    allowedNeighbors: 06000000000000000300000002000000040000000100000005000000
-    tolerableNeighbors: 
-  - terrain: 4
-    allowedNeighbors: 02000000040000000100000005000000
-    tolerableNeighbors: 03000000
-  - terrain: 1
-    allowedNeighbors: 0600000002000000040000000100000005000000
-    tolerableNeighbors: 
-  - terrain: 5
-    allowedNeighbors: 02000000040000000100000005000000
-    tolerableNeighbors: 
-  minForest: 1
-  minStone: 1
-  minFertile: 1
+  climateWeights:
+  - 1
+  - 1
+  - 1
+  - 1
+  spawnMinDistanceCells: 180000002000000028000000
+  resourceGuaranteeRadius: 3
+  connectivityThreshold: 0.95
+  threatsPerKingdom: 2
+  threatMinChunkDistance: 2

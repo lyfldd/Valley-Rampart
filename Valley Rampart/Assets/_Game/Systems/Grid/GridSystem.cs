@@ -2,31 +2,34 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 运行时区块管理器（3.2 第 7.5 节）。
-/// 无状态索引：不存档，单位存档后重新 TryEnter 状态自恢复。
-/// 只管理当前活跃地图的区块。
+/// 运行时 2D 网格管理器（改造计划 doc 1 §5.2/§5.3）。
+/// 稠密数组存储 + 中心原点坐标换算（WorldToCoord 返回 null=越界 D2）+ 微格 + footprint 矩形。
+/// 无状态索引：不存档。实现 IPathGrid（2_6 寻路唯一依赖口）。
 /// </summary>
-public class GridSystem : Singleton<GridSystem>
+public class GridSystem : Singleton<GridSystem>, IPathGrid
 {
     [SerializeField] private GridConfig config;
 
-    private readonly Dictionary<GridCoord, GridCell> _cells = new Dictionary<GridCoord, GridCell>();
-    private readonly Dictionary<UnitController, GridCoord> _unitCells = new Dictionary<UnitController, GridCoord>();
-
-    /// <summary>当前活跃地图（用于 Gizmos 可视化）。</summary>
-    private MapData _activeMap;
+    // ===== 分层存储布局（doc 1 §5.3）=====
+    private int _w, _h;
+    private TerrainType[]   _terrain;      // W×H
+    private PlainSubState[] _plainSub;     // W×H
+    private WalkFlags[]     _walkFlags;    // W×H
+    private Building[]      _occupants;    // W×H（footprint 每格同引用）
+    private GridCell[]      _cells;        // W×H，懒分配 null 起步
+    private readonly Dictionary<UnitController, GridCoord> _unitSubCells = new Dictionary<UnitController, GridCoord>();
 
     public GridConfig Config => config;
 
-    /// <summary>当前地图总小区块数（大区块数 × regionCellCount）。用于边界校验。</summary>
-    public int MapCellCount
-    {
-        get
-        {
-            if (_activeMap == null || config == null) return 0;
-            return _activeMap.regions.Count * config.regionCellCount;
-        }
-    }
+    public int MapWidth  => _w;
+    public int MapHeight => _h;
+
+    /// <summary>过渡：旧消费方（LOD 等）读总格数，2_4 重写后移除。</summary>
+    public int MapCellCount => _w * _h;
+
+    // ===== IPathGrid（微格坐标）=====
+    public int Width  => _w * Config.subCellDivisor;
+    public int Height => _h * Config.subCellDivisor;
 
     protected override void Awake()
     {
@@ -35,392 +38,380 @@ public class GridSystem : Singleton<GridSystem>
             config = Resources.Load<GridConfig>("Grid/GridConfig");
     }
 
-    // ===== 坐标转换 =====
+    private int ToIndex(int x, int y) => y * _w + x;
+    private bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < _w && y < _h;
+    public bool IsInBounds(GridCoord c) => InBounds(c.x, c.y);
 
-    /// <summary>世界坐标 → 小区块坐标。</summary>
-    public GridCoord WorldToCoord(Vector2 pos)
+    // ===== 生命周期 =====
+    public void Initialize(int w, int h)
     {
-        if (config == null) return new GridCoord(0, 0);
-        // QQQ.1 需求4：originX 偏移后，城堡中线 = 世界 x=0
-        int x = Mathf.FloorToInt((pos.x + config.originX) / config.cellSize);
-        int y = pos.y > config.flyHeightThreshold ? 1 : 0;
-        return new GridCoord(x, y);
+        _w = w; _h = h;
+        int n = w * h;
+        _terrain   = new TerrainType[n];
+        _plainSub  = new PlainSubState[n];
+        _walkFlags = new WalkFlags[n];
+        _occupants = new Building[n];
+        _cells     = new GridCell[n];
+        _unitSubCells.Clear();
     }
 
-    /// <summary>小区块坐标 → 世界坐标（中心点）。</summary>
+    public void PopulateFromMap(MapData map)
+    {
+        Initialize(map.width, map.height);
+        // 2_1 §1.3：features 为唯一功能源，terrain/plainSub/walkFlags 全部由此派生
+        if (map.features != null && map.features.Length == _w * _h)
+        {
+            for (int i = 0; i < _terrain.Length; i++)
+            {
+                var f = map.features[i];
+                _terrain[i] = FeatureToTerrain(f);
+                _plainSub[i] = PlainSubState.Normal;
+                _walkFlags[i] = FeatureToWalkFlags(f);
+            }
+        }
+    }
+
+    // ===== 2_1 §5.1 FeatureType→网格层派生映射（features 唯一功能源）=====
+    private static TerrainType FeatureToTerrain(FeatureType f)
+    {
+        switch (f)
+        {
+            case FeatureType.Plain: return TerrainType.Plain;
+            case FeatureType.Tree: return TerrainType.Forest;
+            case FeatureType.Mountain: return TerrainType.Mountain;
+            case FeatureType.SnowMountain: return TerrainType.Snow;
+            case FeatureType.Mine: return TerrainType.Quarry;
+            // 一次性资源坑位落在可走地皮上（对应地皮，视觉变体归 2_10）
+            case FeatureType.OreVein: case FeatureType.StonePile: case FeatureType.WoodPile: return TerrainType.Plain;
+            case FeatureType.River: return TerrainType.River;
+            case FeatureType.Lake: return TerrainType.Lake;
+            case FeatureType.Ocean: return TerrainType.Ocean;
+            default: return TerrainType.Plain;
+        }
+    }
+
+    private static WalkFlags FeatureToWalkFlags(FeatureType f)
+    {
+        switch (f)
+        {
+            // 可走：平原/树/矿洞/一次性资源（Locked 由 2_2/2_7 按需置位）
+            case FeatureType.Plain: case FeatureType.Tree: case FeatureType.Mine:
+            case FeatureType.OreVein: case FeatureType.StonePile: case FeatureType.WoodPile:
+                return WalkFlags.TerrainWalkable;
+            // 水域阻挡（桥由 2_2 置 Bridge 位覆盖）
+            case FeatureType.River: case FeatureType.Lake: case FeatureType.Ocean:
+                return WalkFlags.Water;
+            // 山地/雪山阻挡（无 TerrainWalkable 位）
+            default: return WalkFlags.None;
+        }
+    }
+
+    private static bool TerrainIsWalkable(TerrainType t)
+    {
+        switch (t)
+        {
+            case TerrainType.Plain: case TerrainType.Forest: case TerrainType.Quarry: return true;
+            default: return false;
+        }
+    }
+
+    public void ClearAll()
+    {
+        _w = _h = 0;
+        _terrain = null;
+        _plainSub = null;
+        _walkFlags = null;
+        _occupants = null;
+        _cells = null;
+        _unitSubCells.Clear();
+    }
+
+    // ===== 坐标换算（中心原点，doc 1 §5.2）=====
+    public GridCoord? WorldToCoord(Vector2 pos)
+    {
+        if (config == null || _w <= 0 || _h <= 0) return null;
+        float cellW = config.cellSize.x, cellH = config.cellSize.y;
+        int x = Mathf.FloorToInt((pos.x + _w * cellW * 0.5f) / cellW);
+        int y = Mathf.FloorToInt((pos.y + _h * cellH * 0.5f) / cellH);
+        return InBounds(x, y) ? new GridCoord(x, y) : (GridCoord?)null;
+    }
+
     public Vector2 CoordToWorld(GridCoord coord)
     {
-        if (config == null) return Vector2.zero;
-        // QQQ.1 需求4：originX 偏移后，城堡中线 = 世界 x=0
-        float x = (coord.x + 0.5f) * config.cellSize - config.originX;
-        float y = coord.y == 1 ? config.flyHeight : -3f;  // 地面层贴合 Baseline_y=-3
-        return new Vector2(x, y);
+        float cellW = config != null ? config.cellSize.x : 1f;
+        float cellH = config != null ? config.cellSize.y : 1f;
+        return new Vector2((coord.x + 0.5f) * cellW - _w * cellW * 0.5f,
+                           (coord.y + 0.5f) * cellH - _h * cellH * 0.5f);
     }
 
-    /// <summary>小区块全局 x → 大区块索引。</summary>
-    public int CellToRegionIndex(int cellX)
+    // ===== 微格 SubCell（doc 1 §5.2/§5.4）=====
+    public GridCoord? WorldToSubCoord(Vector2 pos)
     {
-        if (config == null) return 0;
-        return cellX / config.regionCellCount;
+        if (config == null || _w <= 0 || _h <= 0) return null;
+        int div = config.subCellDivisor > 0 ? config.subCellDivisor : 4;
+        float subW = config.cellSize.x / div, subH = config.cellSize.y / div;
+        int sx = Mathf.FloorToInt((pos.x + _w * config.cellSize.x * 0.5f) / subW);
+        int sy = Mathf.FloorToInt((pos.y + _h * config.cellSize.y * 0.5f) / subH);
+        int subWCount = _w * div, subHCount = _h * div;
+        return (sx >= 0 && sy >= 0 && sx < subWCount && sy < subHCount) ? new GridCoord(sx, sy) : (GridCoord?)null;
     }
 
-    /// <summary>
-    /// 小区块全局 x → 中区块索引（3.0.1_5 §五：midRegionCellCount 个小区块编组为一中区块）。
-    /// 中区块承载编队上限（最多 4 编队）与热度聚合粒度（热点跨编队可见）。
-    /// </summary>
-    public int CellToMidRegionIndex(int cellX)
+    public Vector2 SubCoordToWorld(GridCoord sub)
     {
-        if (config == null) return 0;
-        int mrc = config.midRegionCellCount > 0 ? config.midRegionCellCount : 4;
-        return cellX / mrc;
+        float cellW = config != null ? config.cellSize.x : 1f;
+        float cellH = config != null ? config.cellSize.y : 1f;
+        int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
+        float subW = cellW / div, subH = cellH / div;
+        return new Vector2((sub.x + 0.5f) * subW - _w * cellW * 0.5f,
+                           (sub.y + 0.5f) * subH - _h * cellH * 0.5f);
     }
 
-    // ===== NPC 进出（堆叠上限）=====
-
-    /// <summary>单位尝试进入区块。超过堆叠上限返回 false（排队等待）。</summary>
-    public bool TryEnter(UnitController unit, GridCoord coord)
+    public GridCoord SubToCell(GridCoord sub)
     {
-        var cell = GetOrCreateCell(coord);
-        int limit = config != null ? config.GetStackLimit(unit.GetCategory()) : 0;
-        if (limit > 0 && cell.Count >= limit)
+        int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
+        return new GridCoord(sub.x / div, sub.y / div, sub.layer);
+    }
+
+    public GridCoord CellToSub(GridCoord cell, int sx, int sy)
+    {
+        int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
+        return new GridCoord(cell.x * div + sx, cell.y * div + sy, cell.layer);
+    }
+
+    public bool IsSubWalkable(GridCoord sub)
+    {
+        var cell = SubToCell(sub);
+        if (!IsWalkable(cell)) return false;
+        // 精确 footprint 覆盖推导归 2_6；此处分块粒度近似（建筑阻挡即整格不可走）
+        return !IsObstacle(cell);
+    }
+
+    // ===== 地形 / 可行走层 =====
+    public TerrainType GetTerrainAt(GridCoord c)
+    {
+        if (!InBounds(c.x, c.y) || _terrain == null) return TerrainType.Plain;
+        return _terrain[ToIndex(c.x, c.y)];
+    }
+
+    public PlainSubState GetPlainSubStateAt(GridCoord c)
+    {
+        if (!InBounds(c.x, c.y) || _plainSub == null) return PlainSubState.Normal;
+        return _plainSub[ToIndex(c.x, c.y)];
+    }
+
+    public WalkFlags GetWalkFlags(GridCoord c)
+    {
+        if (!InBounds(c.x, c.y) || _walkFlags == null) return WalkFlags.None;
+        return _walkFlags[ToIndex(c.x, c.y)];
+    }
+
+    public void SetTerrain(GridCoord c, TerrainType t, PlainSubState sub = PlainSubState.Normal)
+    {
+        if (!InBounds(c.x, c.y) || _terrain == null) return;
+        int i = ToIndex(c.x, c.y);
+        _terrain[i] = t;
+        _plainSub[i] = sub;
+        _walkFlags[i] = TerrainIsWalkable(t) ? WalkFlags.TerrainWalkable : WalkFlags.None;
+    }
+
+    public bool IsWalkable(GridCoord c)
+    {
+        var f = GetWalkFlags(c);
+        return (f & WalkFlags.TerrainWalkable) != 0
+            && (f & (WalkFlags.BuildingBlocked | WalkFlags.Locked | WalkFlags.Water)) == 0
+            || (f & WalkFlags.Bridge) != 0;
+    }
+
+    // ===== 建筑占用层 =====
+    public bool IsOccupied(GridCoord c) => InBounds(c.x, c.y) && _occupants != null && _occupants[ToIndex(c.x, c.y)] != null;
+
+    public bool IsObstacle(GridCoord c)
+    {
+        if (!InBounds(c.x, c.y) || _occupants == null) return false;
+        var b = _occupants[ToIndex(c.x, c.y)];
+        return b != null && b.isObstacle;
+    }
+
+    public Building GetOccupant(GridCoord c)
+    {
+        if (!InBounds(c.x, c.y) || _occupants == null) return null;
+        return _occupants[ToIndex(c.x, c.y)];
+    }
+
+    public void MarkOccupied(GridCoord c, Building building)
+    {
+        if (!InBounds(c.x, c.y) || _occupants == null) return;
+        int i = ToIndex(c.x, c.y);
+        _occupants[i] = building;
+        if (building != null)
         {
-            // 检查同类型是否超限
-            if (cell.CountByCategory(unit.GetCategory()) >= limit)
-                return false;
+            if (building.isObstacle) _walkFlags[i] |= WalkFlags.BuildingBlocked;
+            else _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
+            MarkCellOccupied(c);
         }
-
-        // 3.0.1_LOD §1.3 感知广播事件源：敌人跨 region 进入 -> 发布事件（威胁类事件升整 region）
-        bool crossedRegion = false;
-        if (_unitCells.TryGetValue(unit, out var oldCoord))
-            crossedRegion = CellToRegionIndex(oldCoord.x) != CellToRegionIndex(coord.x);
         else
-            crossedRegion = true; // 首次登记（出生）也视为进入
-
-        // 退出旧区块
-        ExitCurrentCell(unit);
-
-        cell.Add(unit);
-        _unitCells[unit] = coord;
-
-        if (crossedRegion && unit.GetFaction() == Faction.Undead
-            && EventBus.HasSubscribers<EnemyEnteredRegionEvent>())
         {
-            EventBus.Publish(new EnemyEnteredRegionEvent(CellToRegionIndex(coord.x), unit));
+            _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
         }
+    }
+
+    public void Free(GridCoord c)
+    {
+        if (!InBounds(c.x, c.y) || _occupants == null) return;
+        int i = ToIndex(c.x, c.y);
+        _occupants[i] = null;
+        _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
+    }
+
+    public void MarkOccupiedFootprint(GridCoord origin, int w, int h, Building building)
+    {
+        for (int dy = 0; dy < h; dy++)
+            for (int dx = 0; dx < w; dx++)
+                MarkOccupied(new GridCoord(origin.x + dx, origin.y + dy, origin.layer), building);
+    }
+
+    public void FreeFootprint(GridCoord origin, int w, int h)
+    {
+        for (int dy = 0; dy < h; dy++)
+            for (int dx = 0; dx < w; dx++)
+                Free(new GridCoord(origin.x + dx, origin.y + dy, origin.layer));
+    }
+
+    public bool IsFootprintClear(GridCoord origin, int w, int h)
+    {
+        for (int dy = 0; dy < h; dy++)
+            for (int dx = 0; dx < w; dx++)
+            {
+                var c = new GridCoord(origin.x + dx, origin.y + dy, origin.layer);
+                // 阻挡（地形/建筑/水域）或已被占用均不可摆放（doc 1 R6）
+                if (!IsWalkable(c) || IsOccupied(c)) return false;
+            }
         return true;
     }
 
-    /// <summary>退出当前区块。</summary>
-    public void ExitCurrentCell(UnitController unit)
+    // ===== 单位层（微格登记，doc 1 §5.2 单位层）=====
+    public bool TryEnter(UnitController unit, GridCoord subCoord)
     {
-        if (_unitCells.TryGetValue(unit, out var coord))
-        {
-            if (_cells.TryGetValue(coord, out var cell))
-                cell.Remove(unit);
-            _unitCells.Remove(unit);
-        }
+        var prev = _unitSubCells.TryGetValue(unit, out var old) ? (GridCoord?)old : null;
+        _unitSubCells[unit] = subCoord;
+
+        // 跨界检测 → 发 EnemyEnteredChunkEvent（聚焦到 cell 级开始，精确微格事件归 2_7）
+        bool crossedChunk = !prev.HasValue || CellToChunk(subCoord) != CellToChunk(prev.Value);
+        if (crossedChunk && unit.GetFaction() == Faction.Undead)
+            EventBus.Publish(new EnemyEnteredChunkEvent(new Vector2Int(CellToChunk(subCoord).x, CellToChunk(subCoord).y), unit));
+        return true;
     }
 
-    // ===== 查询（攻击命中用）=====
+    public void ExitCurrentCell(UnitController unit) { _unitSubCells.Remove(unit); }
 
-    /// <summary>获取区块内所有单位。</summary>
-    public List<UnitController> GetUnitsInCell(GridCoord coord)
-    {
-        if (_cells.TryGetValue(coord, out var cell))
-            return new List<UnitController>(cell.Units);
-        return new List<UnitController>();
-    }
+    public void RemoveUnit(UnitController unit) { _unitSubCells.Remove(unit); }
 
-    /// <summary>获取单位当前所在坐标。</summary>
     public GridCoord? GetUnitCoord(UnitController unit)
-    {
-        if (_unitCells.TryGetValue(unit, out var coord))
-            return coord;
-        return null;
-    }
+        => _unitSubCells.TryGetValue(unit, out var c) ? (GridCoord?)c : null;
 
-    /// <summary>获取区块内指定类型的单位。</summary>
-    public List<UnitController> GetUnitsInCellByCategory(GridCoord coord, UnitCategory category)
+    public List<UnitController> GetUnitsInSubCell(GridCoord sub)
     {
         var result = new List<UnitController>();
-        if (_cells.TryGetValue(coord, out var cell))
+        foreach (var kv in _unitSubCells)
+            if (kv.Value == sub) result.Add(kv.Key);
+        return result;
+    }
+
+    public List<UnitController> GetUnitsInCell(GridCoord cell)
+    {
+        var result = new List<UnitController>();
+        var cellIs = cell == default;
+        foreach (var kv in _unitSubCells)
         {
-            for (int i = 0; i < cell.Units.Count; i++)
-                if (cell.Units[i].GetCategory() == category)
-                    result.Add(cell.Units[i]);
+            GridCoord s = kv.Value;
+            if (SubToCell(s) == cell) result.Add(kv.Key);
         }
         return result;
     }
 
-    // ===== 清理 =====
-
-    /// <summary>移除单位（死亡/销毁时调）。</summary>
-    public void RemoveUnit(UnitController unit)
+    public List<UnitController> GetUnitsInCellByCategory(GridCoord cell, UnitCategory category)
     {
-        ExitCurrentCell(unit);
-    }
-
-    /// <summary>清空所有区块（跨岛切换/回主菜单时调）。</summary>
-    public void ClearAll()
-    {
-        _cells.Clear();
-        _unitCells.Clear();
-    }
-
-    // ===== 建筑占用层（3.3.1 P1）=====
-
-    /// <summary>该格是否被建筑占用。</summary>
-    public bool IsOccupied(GridCoord coord)
-    {
-        return _cells.TryGetValue(coord, out var cell) && cell.occupant != null;
-    }
-
-    /// <summary>该格是否为障碍（占用且 isObstacle=true）。</summary>
-    public bool IsObstacle(GridCoord coord)
-    {
-        return _cells.TryGetValue(coord, out var cell) && cell.isObstacle;
-    }
-
-    /// <summary>获取占据该格的建筑（null=空）。</summary>
-    public Building GetOccupant(GridCoord coord)
-    {
-        return _cells.TryGetValue(coord, out var cell) ? cell.occupant : null;
-    }
-
-    /// <summary>标记单格被建筑占用。footprint 多格建筑由调用方循环或用 MarkOccupiedFootprint。</summary>
-    public void MarkOccupied(GridCoord coord, Building building)
-    {
-        var cell = GetOrCreateCell(coord);
-        cell.occupant = building;
-        cell.isObstacle = building != null && building.isObstacle;
-    }
-
-    /// <summary>便利方法：标记 cellWidth 格（从 origin 起 x 方向）被同一建筑占用。</summary>
-    public void MarkOccupiedFootprint(GridCoord origin, int cellWidth, Building building)
-    {
-        for (int i = 0; i < cellWidth; i++)
+        var result = new List<UnitController>();
+        foreach (var kv in _unitSubCells)
         {
-            MarkOccupied(new GridCoord(origin.x + i, origin.y), building);
+            if (SubToCell(kv.Value) != cell) continue;
+            if (kv.Key.GetCategory() == category) result.Add(kv.Key);
         }
+        return result;
     }
 
-    /// <summary>释放单格占用。</summary>
-    public void Free(GridCoord coord)
+    public int FillUnitsInRect(RectInt subRect, List<UnitController> buffer)
     {
-        if (_cells.TryGetValue(coord, out var cell))
-        {
-            cell.occupant = null;
-            cell.isObstacle = false;
-        }
+        int before = buffer.Count;
+        foreach (var kv in _unitSubCells)
+            if (subRect.Contains(new Vector2Int(kv.Value.x, kv.Value.y))) buffer.Add(kv.Key);
+        return buffer.Count - before;
     }
 
-    /// <summary>便利方法：释放 cellWidth 格（从 origin 起 x 方向）。</summary>
-    public void FreeFootprint(GridCoord origin, int cellWidth)
+    // ===== 分区 =====
+    public Vector2Int CellToChunk(GridCoord c)
     {
-        for (int i = 0; i < cellWidth; i++)
-        {
-            Free(new GridCoord(origin.x + i, origin.y));
-        }
+        int cs = config != null && config.chunkSize > 0 ? config.chunkSize : 16;
+        return new Vector2Int(c.x / cs, c.y / cs);
     }
 
-    // ===== 城墙内判定（QQQ.2 T8 / DR-21：多段城墙/无城墙都支持）=====
-
-    /// <summary>
-    /// 该世界点是否在城墙内（任一段城墙 footprint 覆盖，双表示兼容）。
-    /// ① 建筑层：占用该格的 Building 且 def.role == Wall（Active 未毁）；
-    /// ② 单位层：该格有 Occupation.Wall + fortification.blocksMovement 的存活单位（3.5 实体化城墙）。
-    /// 城墙被摧毁（hp≤0/非 Active）→ 对应段不再贡献 wallFactor；无城墙恒 false（靠距离/友军/威胁判定）。
-    /// </summary>
-    public bool IsInsideWall(Vector2 worldPos)
+    public Vector2Int CellToMidChunk(GridCoord c)
     {
-        if (config == null) return false;
-        var coord = WorldToCoord(worldPos);
-
-        // ① 建筑层
-        var b = GetOccupant(coord);
-        if (b != null && b.def != null && b.def.role == BuildingRole.Wall
-            && b.IsActive && b.CurrentHp > 0)
-            return true;
-
-        // ② 单位层（实体化城墙/城门——城门 passable 不贡献安全，仅硬挡的城墙算）
-        // 零 GC：直接遍历 cell.Units（GetUnitsInCell 每次 new List，NPC 每 think 查会打 GC）
-        if (_cells.TryGetValue(coord, out var wallCell))
-        {
-            var units = wallCell.Units;
-            for (int i = 0; i < units.Count; i++)
-            {
-                var uc = units[i] as UnitController;
-                if (uc == null || !uc.IsAlive || uc.fortification == null) continue;
-                if (!uc.fortification.blocksMovement) continue;  // 城门/拒马不算城墙内
-                var nd = uc.Data as NpcProfessionDef;
-                if (nd != null && nd.occupation == Occupation.Wall)
-                    return true;
-            }
-        }
-        return false;
+        int ms = config != null && config.midChunkSize > 0 ? config.midChunkSize : 4;
+        return new Vector2Int(c.x / ms, c.y / ms);
     }
 
-    // ===== 地形查询（3.3.1 P1 / C4）=====
+    /// <summary>过渡：旧 1D 消费方按 x 取 region 索引，2_4/2_8 重写后移除。</summary>
+    public int CellToRegionIndex(int cellX)
+        => config != null && config.chunkSize > 0 ? cellX / config.chunkSize : 0;
 
-    /// <summary>查询某格地形。由 coord.x → 大区块索引 → Region.terrain。</summary>
-    public TerrainType GetTerrainAt(GridCoord coord)
+    /// <summary>过渡：旧 1D 消费方按 x 取 midregion 索引。</summary>
+    public int CellToMidRegionIndex(int cellX)
+        => config != null && config.midChunkSize > 0 ? cellX / config.midChunkSize : 0;
+
+    public IEnumerable<GridCoord> GetCellsInChunk(Vector2Int chunk)
     {
-        if (_activeMap == null) return TerrainType.Plain;
-        int regionIdx = CellToRegionIndex(coord.x);
-        if (regionIdx < 0 || regionIdx >= _activeMap.regions.Count) return TerrainType.Plain;
-        var region = _activeMap.regions[regionIdx];
-
-        // 缓存到 GridCell 供后续查询
-        var cell = GetOrCreateCell(coord);
-        cell.terrain = region.terrain;
-        return region.terrain;
+        int cs = config != null && config.chunkSize > 0 ? config.chunkSize : 16;
+        for (int y = chunk.y * cs; y < (chunk.y + 1) * cs; y++)
+            for (int x = chunk.x * cs; x < (chunk.x + 1) * cs; x++)
+                if (InBounds(x, y)) yield return new GridCoord(x, y);
     }
 
-    /// <summary>查询某格平原子状态（仅 terrain==Plain 时有效）。</summary>
-    public PlainSubState GetPlainSubStateAt(GridCoord coord)
+    // ===== IPathGrid 实现 =====
+    public bool IsDiagonalMoveAllowed(GridCoord from, GridCoord to)
     {
-        if (_activeMap == null) return PlainSubState.Normal;
-        int regionIdx = CellToRegionIndex(coord.x);
-        if (regionIdx < 0 || regionIdx >= _activeMap.regions.Count) return PlainSubState.Normal;
-        return _activeMap.regions[regionIdx].plainSubState;
+        int dx = Mathf.Abs(to.x - from.x), dy = Mathf.Abs(to.y - from.y);
+        if (dx == 0 || dy == 0) return true;
+        var a = new GridCoord(from.x + System.Math.Sign(to.x - from.x), from.y, from.layer);
+        var b = new GridCoord(from.x, from.y + System.Math.Sign(to.y - from.y), from.layer);
+        return IsWalkable(a) && IsWalkable(b);
     }
 
-    // ===== 按当前活跃地图填充 =====
-
-    /// <summary>按地图数据填充区块（跨岛切换时调）。</summary>
-    public void PopulateFromMap(MapData map)
+    public float GetEnterCost(GridCoord subCoord)
     {
-        ClearAll();
-        _activeMap = map;
-        // 区块按需懒创建（GetOrCreateCell），单位 TryEnter 时自动创建
-        // 这里只记录活跃地图供 Gizmos 用
+        // 地形代价表归 2_6；此处统一 1.0
+        return 1f;
     }
 
-    // ===== 内部辅助 =====
-
-    GridCell GetOrCreateCell(GridCoord coord)
+    // ===== 内部辅助：GridCell 懒分配（承载单位列表，兼容旧消费方）=====
+    private void MarkCellOccupied(GridCoord c)
     {
-        if (!_cells.TryGetValue(coord, out var cell))
-        {
-            cell = new GridCell { Coord = coord };
-            _cells[coord] = cell;
-        }
-        return cell;
+        if (!InBounds(c.x, c.y) || _cells == null) return;
+        int i = ToIndex(c.x, c.y);
+        if (_cells[i] == null) _cells[i] = new GridCell { Coord = c };
     }
 
-    // ===== 调试 Gizmos（3.2 第十二节 + 3.2.1 第十节 5区可视化）=====
+    // ===== 过渡兼容：IsInsideWall（围合判定由 2_2 移除 / 2_7 接管；此处保留保守实现避免破坏消费方编译）=====
+    public bool IsInsideWall(Vector2 worldPos) => false;
 
+    // ===== Gizmos 2D（doc 1 §5.7，简易版）=====
     private void OnDrawGizmos()
     {
-        if (_activeMap == null || config == null) return;
+        if (config == null || !config.drawGizmos || _w <= 0 || _h <= 0) return;
+        float cellW = config.cellSize.x, cellH = config.cellSize.y;
 
-        int M = _activeMap.regions.Count;
-        if (M == 0) return;
-
-        float cs = config.cellSize;
-        int rpc = config.regionCellCount;
-        // QQQ.1 需求6（方案2）：Scene 标记与 Play 建筑一致，统一减 originX（城堡落 x=0）
-        float ox = config.originX;
-
-        // 画小区块边界（黄色细线）
-        Gizmos.color = new Color(1, 1, 0, 0.15f);
-        int totalCells = M * rpc;
-        for (int x = 0; x <= totalCells; x++)
-        {
-            float wx = x * cs - ox;
-            Gizmos.DrawLine(new Vector3(wx, -2, 0), new Vector3(wx, 2, 0));
-        }
-
-        // 画大区块边界 + 地形颜色（5区不同色）
-        for (int i = 0; i < M; i++)
-        {
-            var region = _activeMap.regions[i];
-            float startX = region.cellStartX * cs - ox;
-            float endX = startX + region.cellCount * cs;
-
-            // 区颜色
-            Color zoneColor = GetZoneColor(region.zone);
-            Gizmos.color = new Color(zoneColor.r, zoneColor.g, zoneColor.b, 0.3f);
-            // 画区底色方块
-            Vector3 center = new Vector3((startX + endX) / 2f, 0, 0);
-            Vector3 size = new Vector3(endX - startX, 1.5f, 0.01f);
-            Gizmos.DrawCube(center, size);
-
-            // 区边界（粗线）
-            Gizmos.color = new Color(zoneColor.r, zoneColor.g, zoneColor.b, 0.8f);
-            Gizmos.DrawLine(new Vector3(startX, -2, 0), new Vector3(startX, 2, 0));
-            if (i == M - 1)
-                Gizmos.DrawLine(new Vector3(endX, -2, 0), new Vector3(endX, 2, 0));
-
-            // 资源点标记
-            if (region.resources != null)
-            {
-                foreach (var b in region.resources)
-                {
-                    float wx = (region.cellStartX + b.localCellX + 0.5f) * cs - ox;
-                    Color bc = GetBuildingColor(b.type);
-                    Gizmos.color = bc;
-                    Gizmos.DrawSphere(new Vector3(wx, 0.5f, 0), 0.3f);
-                }
-            }
-
-            // 裂隙标记（红色 X）
-            if (region.riftCellX >= 0)
-            {
-                float wx = (region.cellStartX + region.riftCellX + 0.5f) * cs - ox;
-                Gizmos.color = Color.red;
-                float s = 0.5f;
-                Gizmos.DrawLine(new Vector3(wx - s, 0.5f - s, 0), new Vector3(wx + s, 0.5f + s, 0));
-                Gizmos.DrawLine(new Vector3(wx - s, 0.5f + s, 0), new Vector3(wx + s, 0.5f - s, 0));
-            }
-        }
-
-        // 主城标记（金色方块）-- 3.2.1 第 2.4 节
-        int castleIdx = MapGenRules.GetCastleRegionIndex(M);
-        if (castleIdx >= 0 && castleIdx < M)
-        {
-            var cr = _activeMap.regions[castleIdx];
-            float cwx = (cr.cellStartX + cr.cellCount / 2f) * cs - ox;
-            Gizmos.color = new Color(0.8f, 0.7f, 0.2f);
-            Gizmos.DrawCube(new Vector3(cwx, 0.5f, 0), new Vector3(cs * 2, 0.8f, 0.8f));
-        }
-    }
-
-    Color GetZoneColor(MapZone zone)
-    {
-        switch (zone)
-        {
-            case MapZone.LeftExtreme:
-            case MapZone.RightExtreme:
-                return new Color(0.6f, 0.3f, 0.3f); // 暗红（极端区）
-            case MapZone.LeftResource:
-            case MapZone.RightResource:
-                return new Color(0.3f, 0.5f, 0.3f); // 深绿（资源区）
-            case MapZone.Center:
-                return new Color(0.8f, 0.7f, 0.2f);  // 金色（中心区）
-            default:
-                return Color.gray;
-        }
-    }
-
-    Color GetBuildingColor(BuildingType type)
-    {
-        switch (type)
-        {
-            case BuildingType.Tree:
-            case BuildingType.WoodPile:
-                return Color.green;      // 木=绿
-            case BuildingType.Mine:
-            case BuildingType.StonePile:
-            case BuildingType.OreVein:
-                return Color.magenta;     // 石=紫
-            case BuildingType.Farmland:
-                return Color.yellow;      // 粮=黄
-            case BuildingType.TreasureBox:
-            case BuildingType.Ruins:
-                return Color.cyan;       // 特殊=青
-            default:
-                return Color.white;
-        }
+        // 地形色块（只画一格，避免全图开销；实际可按键决定）
+        Gizmos.color = new Color(0, 0, 0, 0.05f);
+        Gizmos.DrawCube(CoordToWorld(new GridCoord(_w / 2, _h / 2)), new Vector3(cellW, cellH, 0.01f));
     }
 }

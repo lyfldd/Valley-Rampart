@@ -142,15 +142,17 @@ public class FormationManager : Singleton<FormationManager>
     public int CountInMidRegion(Vector2 worldPos)
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return 0;
-        var coord = GridSystem.Instance.WorldToCoord(worldPos);
-        int mid = GridSystem.Instance.CellToMidRegionIndex(coord.x);
+        var coordOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        if (!coordOpt.HasValue) return 0; // doc1 改造：越界返回 null，编队数记 0
+        int mid = GridSystem.Instance.CellToMidRegionIndex(coordOpt.Value.x);
         int count = 0;
         for (int i = 0; i < _formations.Count; i++)
         {
             var fc = _formations[i];
             if (fc == null || fc.Anchor == null) continue;
-            var c2 = GridSystem.Instance.WorldToCoord(fc.Anchor.position);
-            if (GridSystem.Instance.CellToMidRegionIndex(c2.x) == mid)
+            var c2Opt = GridSystem.Instance.WorldToCoord(fc.Anchor.position);
+            if (!c2Opt.HasValue) continue; // doc1 改造：锚点越界不计入
+            if (GridSystem.Instance.CellToMidRegionIndex(c2Opt.Value.x) == mid)
                 count++;
         }
         return count;

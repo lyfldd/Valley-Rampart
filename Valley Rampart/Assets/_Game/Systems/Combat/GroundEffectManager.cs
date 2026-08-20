@@ -31,7 +31,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         if (type == GroundEffectType.None || radiusCells <= 0f || duration <= 0f) return;
 
         float cellSize = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
 
         _effects.Add(new Effect
         {
@@ -148,8 +148,10 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         var result = new List<UnitController>();
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
 
-        float cellSize = GridSystem.Instance.Config.cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(worldPos);
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
+        var centerOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(radiusWorld / cellSize));
 
         for (int dx = -cellRange; dx <= cellRange; dx++)

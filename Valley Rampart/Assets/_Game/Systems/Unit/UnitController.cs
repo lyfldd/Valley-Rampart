@@ -787,7 +787,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         float cellSize = GetCellSize();
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(aoeWorld / cellSize));
         Vector2 centerPos = center.GetPosition();
-        GridCoord centerCoord = GridSystem.Instance.WorldToCoord(centerPos);
+        var centerCoordOpt = GridSystem.Instance.WorldToCoord(centerPos);
+        if (!centerCoordOpt.HasValue) return 0;
+        GridCoord centerCoord = centerCoordOpt.Value;
         int count = 0;
         for (int dx = -cellRange; dx <= cellRange; dx++)
         {
@@ -810,7 +812,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     private float GetCellSize()
     {
         return (GridSystem.Instance != null && GridSystem.Instance.Config != null)
-            ? GridSystem.Instance.Config.cellSize : 1f;
+            ? GridSystem.Instance.Config.cellSize.x : 1f;
     }
 
     /// <summary>静态单位射程内最近敌对单位（GridSystem 邻近格扫描，y 地面+飞行两层）。</summary>
@@ -823,8 +825,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     private IDamageable FindNearestEnemy(float rangeWorld)
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return null;
-        float cellSize = GridSystem.Instance.Config.cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(_rb.position);
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
+        var centerOpt = GridSystem.Instance.WorldToCoord(_rb.position);
+        if (!centerOpt.HasValue) return null;
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
 
         IDamageable nearest = null;
@@ -904,7 +908,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return 0;
         float cellSize = GetCellSize();
         float crewRadius = _professionSnapshot.crewRadiusCells * cellSize;
-        GridCoord center = GridSystem.Instance.WorldToCoord(_rb.position);
+        var centerOpt = GridSystem.Instance.WorldToCoord(_rb.position);
+        if (!centerOpt.HasValue) return 0;
+        GridCoord center = centerOpt.Value;
         int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
         int count = 0;
         for (int dx = -cellRange; dx <= cellRange; dx++)
@@ -1028,7 +1034,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (fortification != null && fortification.blocksMovement) return true; // 自身是墙
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
 
-        GridCoord coord = GridSystem.Instance.WorldToCoord(worldPos);
+        var coordOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        if (!coordOpt.HasValue) return false;
+        GridCoord coord = coordOpt.Value;
         var units = GridSystem.Instance.GetUnitsInCell(coord);
         foreach (var unit in units)
         {
@@ -1051,7 +1059,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (Data == null || fortification != null) return;   // 自身是工事不自我减速
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
 
-        GridCoord coord = GridSystem.Instance.WorldToCoord(_rb.position);
+        var coordOpt = GridSystem.Instance.WorldToCoord(_rb.position);
+        if (!coordOpt.HasValue) return;
+        GridCoord coord = coordOpt.Value;
         var units = GridSystem.Instance.GetUnitsInCell(coord);
         foreach (var unit in units)
         {
@@ -1075,7 +1085,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
 
-        GridCoord currentCoord = GridSystem.Instance.WorldToCoord(transform.position);
+        var currentCoordOpt = GridSystem.Instance.WorldToCoord(transform.position);
+        if (!currentCoordOpt.HasValue) return;
+        GridCoord currentCoord = currentCoordOpt.Value;
         if (_gridRegistered && currentCoord == _lastGridCoord) return;
 
         GridSystem.Instance.TryEnter(this, currentCoord);

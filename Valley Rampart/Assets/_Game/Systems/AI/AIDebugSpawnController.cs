@@ -285,8 +285,10 @@ public class AIDebugSpawnController : MonoBehaviour
         var controller = go.GetComponent<UnitController>();
         if (controller != null && GridSystem.Instance != null)
         {
-            GridCoord coord = GridSystem.Instance.WorldToCoord(pos);
-            GridSystem.Instance.TryEnter(controller, coord);
+            // doc1 改造：WorldToCoord 返回 GridCoord?（null=越界），越界跳过登记
+            var coordOpt = GridSystem.Instance.WorldToCoord(pos);
+            if (coordOpt.HasValue)
+                GridSystem.Instance.TryEnter(controller, coordOpt.Value);
         }
 
         Debug.Log($"[AIDebugSpawn] 生成: {GetFactionName(type)} {GetDisplayName(type)} @ {pos}");
@@ -390,7 +392,7 @@ public class AIDebugSpawnController : MonoBehaviour
     public void SpawnWanderRetreatScenario(Vector2 center, bool withWalls)
     {
         float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         float wallOffset = 6f * cs;       // 城墙段距中心（内层防线）
         float borderOffset = 8.5f * cs;   // 敌兵压近距（感知半径内触发威胁）
 
@@ -437,7 +439,7 @@ public class AIDebugSpawnController : MonoBehaviour
     public void SpawnProductionChainScenario(Vector2 center)
     {
         float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         if (BuildingFactory.Instance == null) return;
 
         // ① 水井（产水入网，不需要工人）
@@ -463,7 +465,7 @@ public class AIDebugSpawnController : MonoBehaviour
     public void SpawnLifecycleScenario()
     {
         float cs = GridSystem.Instance != null && GridSystem.Instance.Config != null
-            ? GridSystem.Instance.Config.cellSize : 2.26f;
+            ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         if (BuildingFactory.Instance == null) return;
         Vector2 center = WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
 
@@ -493,7 +495,9 @@ public class AIDebugSpawnController : MonoBehaviour
             Debug.LogWarning($"[AIDebugSpawn] 未找到建筑资产 {assetPath}");
             return false;
         }
-        GridCoord coord = GridSystem.Instance.WorldToCoord(worldPos);
+        var coordOpt = GridSystem.Instance.WorldToCoord(worldPos);
+        if (!coordOpt.HasValue) return false; // doc1 改造：越界返回 null，不可放置
+        GridCoord coord = coordOpt.Value;
         int w = def.footprint.x > 0 ? def.footprint.x : 1;
         return BuildingFactory.Instance.CreateBuildingInstance(
             def, BuildingType.None, coord, w, worldPos,

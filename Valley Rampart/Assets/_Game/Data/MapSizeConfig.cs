@@ -2,29 +2,42 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// 地图大小配置（3.2 第 7.2 节）。决定单张地图的大区块数 M。
+/// 地图大小配置（doc 1 §2.4 / §5.6）。决定单张地图的宽高（格数）。
 /// 资产实例放在 Resources/Grid/MapSizeConfig.asset
 /// </summary>
 [CreateAssetMenu(menuName = "ValleyRampart/MapSizeConfig", fileName = "MapSizeConfig")]
 public class MapSizeConfig : ScriptableObject
 {
-    [Header("地图大小规格")]
-    [Tooltip("大/中/小三档，决定大区块数 M")]
+    [Header("地图大小规格（2D 档位：128²/256²/384²，D19）")]
     public MapSizeEntry[] sizes = new MapSizeEntry[3];
 
-    [Header("敌方王国数量（按难度决定，不按 worldSize）")]
+    [Header("同图 AI 王国数（按难度决定，不按 worldSize；数值重审归 2_1/2_8）")]
     [Tooltip("索引 0/1/2 对应 Easy/Normal/Hard 的基础数")]
     public int[] enemyByDifficulty = new int[3] { 1, 2, 3 };
 
-    /// <summary>按 WorldSize 查大区块数 M。</summary>
-    public int GetRegionCount(WorldSize size)
+    /// <summary>按 WorldSize 查单档规格。</summary>
+    public MapSizeEntry GetEntry(WorldSize size)
     {
         for (int i = 0; i < sizes.Length; i++)
-            if (sizes[i].size == size) return sizes[i].regionCount;
-        return 15;  // 默认中
+            if (sizes[i].size == size) return sizes[i];
+        return sizes.Length > 0 ? sizes[0] : default;
     }
 
-    /// <summary>按难度查敌方王国基础数。实际数 = 基础 + worldSeed 随机加 0~2。</summary>
+    /// <summary>按 WorldSize 查地图宽（格数）。默认 256。</summary>
+    public int GetWidth(WorldSize size)
+    {
+        var e = GetEntry(size);
+        return e.width > 0 ? e.width : 256;
+    }
+
+    /// <summary>按 WorldSize 查地图高（格数）。默认 256。</summary>
+    public int GetHeight(WorldSize size)
+    {
+        var e = GetEntry(size);
+        return e.height > 0 ? e.height : 256;
+    }
+
+    /// <summary>按难度查同图 AI 王国基础数。</summary>
     public int GetEnemyMapBase(int difficulty)
     {
         int idx = Mathf.Clamp(difficulty, 1, 3) - 1;
@@ -37,13 +50,14 @@ public class MapSizeConfig : ScriptableObject
 public struct MapSizeEntry
 {
     public WorldSize size;
-    public int regionCount;  // 大区块数 M
+    public int width;   // 格数（推荐 Small=128 / Medium=256 / Large=384，D19）
+    public int height;  // 格数（= width，方形）
 }
 
-/// <summary>地图大小枚举（3.2 第 2.2 节）。</summary>
+/// <summary>地图大小枚举。</summary>
 public enum WorldSize
 {
-    Small,    // 10 个大区块（节奏快，适合试玩）
-    Medium,   // 15 个大区块（标准体验）
-    Large     // 24 个大区块（长期经营 + 更多敌方王国）
+    Small,    // 128×128
+    Medium,   // 256×256（标准体验）
+    Large     // 384×384
 }
