@@ -192,3 +192,14 @@ public class LODSystem : Singleton<LODSystem>
 | 2_5 | 依赖：伤害/击杀事件（热度注入） |
 | 2_6 | 提供：活跃带范围（细成本场/远处粗切换） |
 | 2_7 | 提供：热度查询（FormationBrain 输入） |
+
+---
+
+## 版本历史
+
+> **2026-08-20（主仓库 caa8dd84）实施落地**：
+> - 新增：`LodConfig.cs`（SO 运行时真源，活跃半径/Think频率/热度扩散衰减/事件注入；注意旧 `AttentionTuningConfig` lod/heat 字段保留保 sim 同源不删）+ `Assets/Resources/Config/LodConfig.asset`
+> - 新增：`MidChunkLodState.cs`（`LodLevel` 含 `Dormant`，替代旧 `RegionLodState.cs`，已删）
+> - 重写：`LODSystem.cs`——1D region → 2D 中区块（4×4，`GridSystem.CellToMidChunk`）；状态稀疏 `Dictionary<Vector2Int,MidChunkLodState>`（D80）；2D 多中心活跃带（主城锚点+战斗热点，切比雪夫，`maxCenters` 上限 D3/D77）；热度扩散/衰减 tick 1Hz（`heatSpreadThreshold`/`spreadRatio`/`heatDecayRate` 4 邻）；升降级即时上、降档防抖（热度归零+`idleTimer≥demoteDelaySeconds`）；事件驱动升档（`UnitDamagedEvent.Position` 兼容建筑、`EnemyEnteredChunkEvent`）；Gizmos（活跃绿/半活跃黄/休眠灰+热度红+中心星标）
+> - 改动：`NPCBrain.RefreshLodIntervals` 改读 `LODSystem.GetThinkHz`（不再直接用 config 频繁字段）；`GetLevelAt/GetHeatAt/TryGetCombatHotspot/TryGetNearestCombatHotspot` 签名保持，FormationBrain 等调用点兼容
+> - 验证：编译 0 错误；`LodConfig.asset` `Resources.Load` 通过；⚠️ Play 冒烟验证待补（活跃带跟随/热点扩散/降档迟滞/稀疏性）
