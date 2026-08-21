@@ -1,10 +1,11 @@
 using UnityEngine;
 
 /// <summary>
-/// 2D 摄像机跟随。挂在 Main Camera 上。
-/// 仅跟随玩家 X 轴移动，Y 轴固定为背景图中心 Y。
-/// 视口高度 = 背景图高度；X 可视范围 = 背景图宽度 * 0.7。
+/// [已退役] 2D 1D 侧滚摄像机跟随（被 2_10 步骤3 CameraRig 替换）。
+/// 仅跟随君主 X 轴 + Y 固定背景中心。2026-08-21 起不再挂载（场景改用 CameraRig），
+/// 保留文件以防残留场景引用编译异常，勿再挂载到新场景。删除前务必确认场景无引用并清理 .meta。
 /// </summary>
+[System.Obsolete("CameraSetup 已退役，改用 Systems/Rendering/CameraRig.cs（2_10 步骤3）")]
 [RequireComponent(typeof(Camera))]
 public class CameraSetup : MonoBehaviour
 {

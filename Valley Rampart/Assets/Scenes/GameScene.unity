@@ -923,13 +923,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 519420028}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 64aef095945617540abefc5e5e88aaf1, type: 3}
+  m_Script: {fileID: 11500000, guid: e941692a8bfad3b43b33e5f629f00bb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  followSpeed: 1100
-  cameraZ: -10
-  backgroundSprite: {fileID: 0}
-  widthRatio: 0.7
+  config: {fileID: 0}
 --- !u!1 &538856829
 GameObject:
   m_ObjectHideFlags: 0
