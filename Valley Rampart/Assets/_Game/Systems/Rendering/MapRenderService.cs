@@ -39,6 +39,17 @@ public class MapRenderService : Singleton<MapRenderService>
     private readonly Dictionary<FeatureType, Tile> _groundTiles = new Dictionary<FeatureType, Tile>();
     private static readonly Color _fallback = new Color(0.6f, 0.6f, 0.6f);
 
+    // ===== 视域动态加载（chunk 化，2_10 落地附加）=====
+    [Header("视域动态加载（chunk 化）")]
+    [Tooltip("chunk 边长（格数）。地图按此切块，摄像机滑入时才铺对应 chunk，初装只铺主城锚点周边强加载+视域")]
+    [SerializeField] private int chunkSize = 24;
+    [Tooltip("视域外预加载环形边数（chunk），滑动进入更远处才铺")]
+    [SerializeField] private int lookaheadChunks = 1;
+    private readonly HashSet<long> _loadedChunks = new HashSet<long>();
+    private MapData _map;
+    private bool _chunkRendering;
+    private Vector2Int _lastCamChunk = new Vector2Int(int.MaxValue, int.MaxValue);
+
     /// <summary>取逻辑网格 cellSize；Editor 空网格（GridSystem 未激活）回退默认，保证纯投影可算。</summary>
     private static Vector2 CellSize()
     {
@@ -85,6 +96,7 @@ public class MapRenderService : Singleton<MapRenderService>
     protected override void Awake()
     {
         base.Awake();
+        _chunkRendering = true; // 默认启用 chunk 视域动态加载（chunkSize=0 时退全量）
         if (groundTilemap == null || featureTilemap == null)
         {
             var all = FindObjectsOfType<Tilemap>(true);
@@ -115,13 +127,19 @@ public class MapRenderService : Singleton<MapRenderService>
     //  铺格
     // ========================================================================
 
-    /// <summary>全图重建铺格（features 唯一功能源）。Ground 全覆盖无缝隙，Feature 只铺实体特征物。</summary>
+    /// <summary>
+    /// 全图/视域铺格。默认走 chunk 视域动态加载（chunkSize>0 时）：
+    ///   只在摄像机视域 + 主城锚点周边 chunk 铺 tile，镜头滑入新 chunk 才填。
+    /// chunkSize=0 则全图一次铺（2_10 验收/调试模式），不依赖摄像机。
+    /// </summary>
     public void RenderMap(MapData map)
     {
         if (map == null || map.features == null || map.width <= 0 || map.height <= 0)
         {
             Debug.LogWarning("[MapRenderService] RenderMap 无有效地图数据，清空渲染层");
             ClearAllTiles();
+            _map = null;
+            _loadedChunks.Clear();
             return;
         }
         if (groundTilemap == null) groundTilemap = FindTilemap("Tilemap_Ground");
@@ -132,19 +150,25 @@ public class MapRenderService : Singleton<MapRenderService>
             return;
         }
 
+        _map = map;
         ClearAllTiles();
-        for (int y = 0; y < map.height; y++)
+        _loadedChunks.Clear();
+        _lastCamChunk = new Vector2Int(int.MaxValue, int.MaxValue);
+
+        if (_chunkRendering && chunkSize > 0)
         {
-            for (int x = 0; x < map.width; x++)
-            {
-                var ft = map.features[y * map.width + x];
-                var pos = new Vector3Int(x, y, 0);
-                if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft));
-                var featTile = FeatureTileOrNull(ft);
-                if (featureTilemap != null) featureTilemap.SetTile(pos, featTile);
-            }
+            // chunk 模式：初装只强加载主城锚点周边 + 当前视域（Update 持续补）
+            EnsureStrongHomeArea();
+            UpdateViewport();
+            Debug.Log($"[MapRenderService] chunk 视域加载初始化完成 {map.width}x{map.height}, chunk={chunkSize}x{chunkSize}");
         }
-        Debug.Log($"[MapRenderService] RenderMap 铺格完成: {map.width}x{map.height}");
+        else
+        {
+            for (int y = 0; y < map.height; y++)
+                for (int x = 0; x < map.width; x++)
+                    SetCell(x, y, map.features[y * map.width + x]);
+            Debug.Log($"[MapRenderService] RenderMap 全量铺格完成: {map.width}x{map.height}");
+        }
     }
 
     /// <summary>单格增量刷新（建造/地形/树刷新/2_12 废墟态切换时调用）。只重铺该格，不重建全图。</summary>
@@ -153,11 +177,7 @@ public class MapRenderService : Singleton<MapRenderService>
         var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
         if (map == null || map.features == null) return;
         if (cell.x < 0 || cell.y < 0 || cell.x >= map.width || cell.y >= map.height) return;
-
-        var ft = map.features[cell.y * map.width + cell.x];
-        var pos = new Vector3Int(cell.x, cell.y, 0);
-        if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft));
-        if (featureTilemap != null) featureTilemap.SetTile(pos, FeatureTileOrNull(ft));
+        SetCell(cell.x, cell.y, map.features[cell.y * map.width + cell.x]);
     }
 
     /// <summary>重铺指定区域的全部格（外部批量刷新入口，如建筑 footprint 变化）。</summary>
@@ -166,6 +186,88 @@ public class MapRenderService : Singleton<MapRenderService>
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
                 UpdateCell(new GridCoord(x, y));
+    }
+
+    // ========================================================================
+    //  视域动态加载（chunk）
+    // ========================================================================
+
+    private void Update()
+    {
+        if (!_chunkRendering || chunkSize <= 0 || _map == null) return;
+        UpdateViewport();
+    }
+
+    /// <summary>单格铺格（Ground+Feature）。占位 tile 缓存复用。</summary>
+    private void SetCell(int x, int y, FeatureType ft)
+    {
+        var pos = new Vector3Int(x, y, 0);
+        if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft));
+        if (featureTilemap != null) featureTilemap.SetTile(pos, FeatureTileOrNull(ft));
+    }
+
+    /// <summary>chunk 坐标 → 索引（long 防 256² 大数）。</summary>
+    private static long ChunkKey(int cx, int cy)
+    {
+        return (long)cx * 100000 + cy;
+    }
+
+    /// <summary>把指定 chunk 范围（逻辑格矩形）全部铺格并登记 loaded。</summary>
+    private void RenderChunk(int cx, int cy)
+    {
+        long key = ChunkKey(cx, cy);
+        if (_loadedChunks.Contains(key) || _map == null) return;
+        int x0 = cx * chunkSize, y0 = cy * chunkSize;
+        int x1 = Mathf.Min(x0 + chunkSize, _map.width);
+        int y1 = Mathf.Min(y0 + chunkSize, _map.height);
+        if (x0 >= _map.width || y0 >= _map.height) return;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+                SetCell(x, y, _map.features[y * _map.width + x]);
+        _loadedChunks.Add(key);
+    }
+
+    /// <summary>当前摄像机所在 chunk 及周边 lookahead 环形 chunk。摄像机用 CameraRig 世界坐标→IsoToCell→chunk。</summary>
+    private void UpdateViewport()
+    {
+        if (_map == null) return;
+        var rig = CameraRig.Instance;
+        if (rig == null || cameraCenterOut(out var center)) return;
+        GridCoord camCell = MapRenderService.IsoToCell(center);
+        int ccx = camCell.x / chunkSize;
+        int ccy = camCell.y / chunkSize;
+        if (ccx == _lastCamChunk.x && ccy == _lastCamChunk.y) return;
+        _lastCamChunk = new Vector2Int(ccx, ccy);
+        for (int oy = -lookaheadChunks; oy <= lookaheadChunks; oy++)
+        {
+            for (int ox = -lookaheadChunks; ox <= lookaheadChunks; ox++)
+            {
+                int cx = ccx + ox, cy = ccy + oy;
+                if (cx < 0 || cy < 0) continue;
+                RenderChunk(cx, cy);
+            }
+        }
+    }
+
+    private bool cameraCenterOut(out Vector2 center)
+    {
+        center = Vector2.zero;
+        var rig = CameraRig.Instance;
+        if (rig == null || rig.transform == null) return true;
+        center = (Vector2)rig.transform.position;
+        return false;
+    }
+
+    /// <summary>初装强加载主城锚点周边 chunk（保证出生可见主城及城郊，不被视域初始位置偏移错过）。</summary>
+    private void EnsureStrongHomeArea()
+    {
+        if (_map == null) return;
+        var map = _map;
+        int hcx = (map.width / 2) / chunkSize;
+        int hcy = (map.height / 2) / chunkSize;
+        for (int oy = -1; oy <= 1; oy++)
+            for (int ox = -1; ox <= 1; ox++)
+                RenderChunk(hcx + ox, hcy + oy);
     }
 
     public void ClearAllTiles()

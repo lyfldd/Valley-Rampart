@@ -150,6 +150,13 @@ public class CameraRig : Singleton<CameraRig>
         else
             anchor = Vector2.zero;
         FocusOn(anchor);
+        // 初始主城上方（露出城郊）：等轴 isoY 向下增长，向上=减小 y。偏移半屏高，让主城略靠下、上方地形可见。
+        if (_cam != null)
+        {
+            Vector3 p = transform.position;
+            transform.position = new Vector3(p.x, p.y - _cam.orthographicSize * 0.5f, p.z);
+            ClampToBounds();
+        }
     }
 
     private void ApplyZoom()
@@ -180,18 +187,31 @@ public class CameraRig : Singleton<CameraRig>
     private void Update()
     {
         if (_cam == null || !_mapReady) return;
-        // 边缘滚屏（避开 UI 区域在输入层拦截，此处仅鼠标屏幕边缘）
-        var mouse = Input.mousePosition;
-        float w = Screen.width, h = Screen.height;
         if (config == null) return;
-        float edge = config.edgeScrollWidth;
-        float speed = config.panSpeed * config.edgeScrollScale;
-        Vector2 delta = Vector2.zero;
-        if (mouse.x < edge) delta.x -= speed;
-        else if (mouse.x > w - edge) delta.x += speed;
-        if (mouse.y < edge) delta.y -= speed;
-        else if (mouse.y > h - edge) delta.y += speed;
-        if (delta != Vector2.zero) Pan(delta * Time.deltaTime);
+
+        // WASD 键盘平移（世界轴：W/S=上下，A/D=左右；等轴俯视下指屏幕上下/左右）
+        Vector2 kbd = Vector2.zero;
+        if (Input.GetKey(KeyCode.W)) kbd.y += 1f;
+        if (Input.GetKey(KeyCode.S)) kbd.y -= 1f;
+        if (Input.GetKey(KeyCode.A)) kbd.x -= 1f;
+        if (Input.GetKey(KeyCode.D)) kbd.x += 1f;
+        if (kbd != Vector2.zero)
+            Pan(kbd.normalized * config.panSpeed * Time.deltaTime);
+
+        // 边缘滚屏（鼠标贴边；键盘平移进行时不叠加边缘，避免跳动）
+        if (kbd == Vector2.zero)
+        {
+            var mouse = Input.mousePosition;
+            float w = Screen.width, h = Screen.height;
+            float edge = config.edgeScrollWidth;
+            float speed = config.panSpeed * config.edgeScrollScale;
+            Vector2 delta = Vector2.zero;
+            if (mouse.x < edge) delta.x -= speed;
+            else if (mouse.x > w - edge) delta.x += speed;
+            if (mouse.y < edge) delta.y -= speed;
+            else if (mouse.y > h - edge) delta.y += speed;
+            if (delta != Vector2.zero) Pan(delta * Time.deltaTime);
+        }
 
         // 中键拖拽平移
         if (Input.GetMouseButton(2))
@@ -205,7 +225,7 @@ public class CameraRig : Singleton<CameraRig>
             }
         }
 
-        // 滚轮缩放
+        // 滚轮缩放（档位吸附）
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (scroll > 0.001f) Zoom(1);
         else if (scroll < -0.001f) Zoom(-1);

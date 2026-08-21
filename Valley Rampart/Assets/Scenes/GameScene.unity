@@ -2503,7 +2503,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1473734480
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3578,6 +3578,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   groundTilemap: {fileID: 1050328524}
   featureTilemap: {fileID: 809663240}
+  chunkSize: 24
+  lookaheadChunks: 1
 --- !u!1 &2081706169
 GameObject:
   m_ObjectHideFlags: 0
