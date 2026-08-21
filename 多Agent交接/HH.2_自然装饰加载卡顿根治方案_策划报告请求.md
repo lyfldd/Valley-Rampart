@@ -55,13 +55,48 @@
 
 ## 策划裁决（策划端回写，裁决前保持空白）
 
+**结论：A 成立，但升级为 A+（全量数据化 + Tilemap 渲染 + 实体仅按需）。**
+
+权衡（决策点 1 对应表）：
+
+| 维度 | A（懒创建 Building） | **A+（选定）** | 其他路 |
+|------|------|------|--------|
+| 加载 | 毫秒级 | 毫秒级 | 预烘焙场景：破每 seed 程序生成，否 |
+| 运行时 | 采集时反复建/拆实体抖动 | 采集=纯数据操作，零实体churn | 池化+激活半径：复杂度换内存，不如数据化 |
+| 采集语义 | 树砍完→懒建→拆，别扭 | 格状态机（完好/已采/刷新中），与 sim T2.4 经济抽象天然同构 | ECS 重写：1 个月规模否 |
+| 守卫锚点 | 同样要适配 | 同样适配（就近查 features 索引），矿几千个本就不该是"锚点实体" | — |
+| 实体例外 | 每次采集都建 | 仅当特性确需实体语义（可被攻击的 HP/面板交互）才建 | — |
+
+**A+ 相比 A 的两条修正：**
+1. **采集不懒建 Building**——"采集发生时才懒创建"仍是实体思维。正确形态：树/矿/矿脉/石堆**全部停留数据层**，采集 = 格状态翻转 + 库存操作。真正需要 Building 实体的是 **玩家在矿上建的采集建筑（2_12 职责）**——那才是实体层入口，天然稀少。
+2. **渲染不许"一树一 GameObject"**——哪怕去掉 Building 组件，1.6 万 transform+SpriteRenderer 仍是负担。树/矿**直接进 2_10 的 Tilemap 特征物层**（chunk 动态加载顺延覆盖），从根上杜绝这个量级的对象存在。
+
+**理由**：A+ 不是新方案，是把 A 的"懒创建"残余实体思维剪干净：数据的归数据（格+状态字典），渲染的归渲染（Tilemap 层），实体的归玩家建造（2_12）。最贴北极星——sim 侧经济从来就是数据抽象，Unity 侧对齐后采集链路可以在对拍时逐字段映射。
+
 | 决策点 | 裁决 | 理由 |
 |--------|------|------|
+| 决策点 1：自然装饰是否每个有 Building 实体 | 采纳 A+（全量数据化） | 详见上表；采集=纯数据操作；实体仅玩家建造(2_12) |
+| 决策点 2：树/矿密度 | 由策划侧按"游戏性够用 + 视觉稀疏"另行为准 | 非本次阻塞，后续数值另立 |
+| 决策点 3：雪山 | 确认不建实体，纯阻挡地形 | 执行端保持现状即可 |
+
+**验收补充（防 A+ 误伤 2_12）**：2_12 在矿上建采集建筑时实体创建必须正常。
 
 ### 分歧裁决记录（有分歧时必填）
-- 执行端意见：.. · 策划端意见：..
-- 裁决：.. · 依据：..
+无分歧（策划端将 A 升级为 A+，属方案细化而非冲突）。
 
 ### 衍生产物
-- 新建设计文档：{3.x / QQQ.x 文件名}
-- 新建清单任务：{清单名 T编号}
+- 本 HH 即裁决口径，实现按 A+（全量数据化 + Tilemap 渲染 + 实体仅按需）执行，不另开设计文档。
+- 执行端落地后需自证：① 树/矿/矿脉/石堆不进 BuildingFactory.InstantiateFromMap；② 渲染进 Tilemap 特征物层；③ 采集=格状态字典操作零实体；④ 2_12 玩家矿区采集建筑实体创建不受影响。
+
+### 执行端落地记录（2026-08-21，验收通过）
+- **②已完成**：树/矿/雪山渲染早已由 MapRenderService Feature 层承担（chunk 动态加载顺延覆盖）。
+- **①③ 落地**：
+  - `MapGenRules.DeriveNaturalBuildings`：只派生 OreVein（一次性可采），树/矿/雪山不再派生 → 消灭 1.6 万实体源头。
+  - `BuildingFactory.InstantiateFromMap`：自然只剩 OreVein + 主城，不再逐树建 Building。
+  - WorldManager 新增 `TryConsumeResourceNode`（Tree/Mine feature→Plain + GridSystem.RefreshCellFromFeature + MapRenderService.UpdateCell）；新增 `IsResourceNodeAvailable`（资源点放置由 features 数据判定）。
+  - GridSystem 新增 `RefreshCellFromFeature`（单格 terrain/plainSub/walkFlags 重派）。
+  - `BuildController` 伐木场/采石场放置：由查 BuildingRegistry node.Die() → `TryConsumeResourceNode` 数据覆盖。
+  - `PlacementValidator`：needsNode 无实体占用时改为 `IsResourceNodeAvailable` 判定。
+- **实证（Play/Stopwatch）**：ApplyConfig 总耗时 **16322ms→1103ms（15 倍）**；naturalBuildings **23013→1354（全 OreVein，Tree/Mine=0）**；registeredBuildings **16689→1355（OreVein+Castle）**。
+- **验收点全过**：伐木场 IsResourceNodeAvailable(Tree)=True、TryConsumeResourceNode True（Tree→Plain）+ 渲染刷新；OreVein 采集链路完整（isConsumable=True、StartGather 正常）。
+- **已知副作用（记录，非本次处置）**：`GuardDeploymentSystem.FindNearestResourceNode` 依赖 `def.isResourceNode` 的 Building 实体——树/矿消失后守卫锚点减少，仅剩 OreVein（isResourceNode=True 实体保留，仍可用）。守卫锚点是否改查 features 索引，待后续依 A+ 口径处理，本次未重写守卫系统。
