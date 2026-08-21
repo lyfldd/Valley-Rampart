@@ -186,6 +186,51 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     }
 
     // ========================================================================
+    //  A+（HH.2）：资源节点数据覆盖
+    //  树/矿不再创建 Building 实体（装饰持续节点，归 features 数据 + Tilemap 特征层渲染）。
+    //  玩家把工具建筑（伐木场/采石场）放在树/矿格上时，覆盖该格 feature → Plain 并刷新渲染。
+    // ========================================================================
+
+    /// <summary>
+    /// 消耗一格的资源节点（树/矿 feature → Plain），供工具建筑放置覆盖使用。
+    /// 若该格是 Tree/Mine feature 则改 Plain + 刷新 GridSystem 地形/可走 + MapRenderService 渲染。
+    /// 返回是否覆盖成功（该格本就是资源节点）。
+    /// </summary>
+    public bool TryConsumeResourceNode(GridCoord coord)
+    {
+        var map = ActiveMap;
+        if (map == null || map.features == null) return false;
+        if (coord.x < 0 || coord.y < 0 || coord.x >= map.width || coord.y >= map.height) return false;
+        int i = coord.y * map.width + coord.x;
+        var f = map.features[i];
+        if (f != FeatureType.Tree && f != FeatureType.Mine) return false;   // 非可覆盖资源节点
+
+        map.features[i] = FeatureType.Plain;
+        // 网格派生刷新（GridSystem.PopulateFromMap 同源逻辑）
+        if (GridSystem.Instance != null)
+            GridSystem.Instance.RefreshCellFromFeature(coord, FeatureType.Plain);
+        if (MapRenderService.Instance != null)
+            MapRenderService.Instance.UpdateCell(new GridCoord(coord.x, coord.y));
+        return true;
+    }
+
+    /// <summary>该格是否满足资源点放置（Tree/Mine/Farmland；A+ 下由 features 数据判定，非 Building 实体）。</summary>
+    public bool IsResourceNodeAvailable(GridCoord coord, BuildingType requiredNode)
+    {
+        var map = ActiveMap;
+        if (map == null || map.features == null) return false;
+        if (coord.x < 0 || coord.y < 0 || coord.x >= map.width || coord.y >= map.height) return false;
+        var f = map.features[coord.y * map.width + coord.x];
+        switch (requiredNode)
+        {
+            case BuildingType.Tree:      return f == FeatureType.Tree;
+            case BuildingType.Mine:      return f == FeatureType.Mine;
+            case BuildingType.Farmland:  return f == FeatureType.Plain;   // 农田建在可耕 Plain 上
+            default: return false;
+        }
+    }
+
+    // ========================================================================
     //  跨岛远征 + 王国征服（保留壳；单图征服语义归 2_8）
     // ========================================================================
 

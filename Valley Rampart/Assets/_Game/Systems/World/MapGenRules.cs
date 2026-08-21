@@ -274,7 +274,10 @@ public static class MapGenRules
         }
     }
 
-    // ===== 步骤 11：naturalBuildings 派生（视觉层，不反向改可走）=====
+    // ===== 步骤 11：naturalBuildings 派生（视觉层/一次性可采集实体，不反向改可走）=====
+    // A+（HH.2）落地：树/矿/雪山不再派生 Building 实体——它们归 2_10 Tilemap 特征层渲染 +
+    // features 数据承载（装饰持续节点），不再建 1.6 万个 GameObject（消灭加载 20s 根因）。
+    // 仅真正一次性可采集的 OreVein 保留 Building 实体（走 BuildingPanel 采集销毁链路，2_12 不受影响）。
     public static void DeriveNaturalBuildings(MapData map)
     {
         map.naturalBuildings.Clear();
@@ -282,8 +285,7 @@ public static class MapGenRules
             for (int x = 0; x < map.width; x++)
             {
                 var f = map.features[Idx(map, x, y)];
-                if (f != FeatureType.Tree && f != FeatureType.SnowMountain
-                    && f != FeatureType.OreVein && f != FeatureType.Mine) continue;
+                if (f != FeatureType.OreVein) continue;   // 仅一次性可采实体（OreVein）
                 map.naturalBuildings.Add(new NaturalBuilding
                 {
                     cellX = x, cellY = y, w = 1, h = 1,

@@ -90,6 +90,17 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         }
     }
 
+    /// <summary>A+ 资源节点数据覆盖：按 feature 重刷单格 terrain/plainSub/walkFlags（保留 occupant）。</summary>
+    public void RefreshCellFromFeature(GridCoord coord, FeatureType f)
+    {
+        if (coord.x < 0 || coord.y < 0 || coord.x >= _w || coord.y >= _h) return;
+        int i = coord.y * _w + coord.x;
+        if (i < 0 || i >= _terrain.Length) return;
+        _terrain[i] = FeatureToTerrain(f);
+        if (i < _plainSub.Length) _plainSub[i] = PlainSubState.Normal;
+        if (i < _walkFlags.Length) _walkFlags[i] = FeatureToWalkFlags(f);
+    }
+
     private static WalkFlags FeatureToWalkFlags(FeatureType f)
     {
         switch (f)

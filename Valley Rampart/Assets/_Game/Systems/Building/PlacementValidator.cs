@@ -85,6 +85,7 @@ public static class PlacementValidator
                 }
 
                 // 区块占用（工具建筑允许建在对应资源点上）
+                // A+（HH.2）：树/矿不再建 Building 实体，资源点改由 features 数据判定
                 var occupant = BuildingRegistry.Instance != null ? BuildingRegistry.Instance.GetAt(coord) : null;
                 if (occupant != null)
                 {
@@ -94,7 +95,13 @@ public static class PlacementValidator
                     }
                     else { result.reason = PlacementFailReason.Blocked; return result; }
                 }
-                else if (needsNode) { result.reason = PlacementFailReason.Blocked; return result; }
+                else if (needsNode)
+                {
+                    // 无实体占用：查 features 数据是否满足该工具建筑所需的资源节点
+                    bool nodeOk = WorldManager.Instance != null
+                                  && WorldManager.Instance.IsResourceNodeAvailable(coord, requiredNode.Value);
+                    if (!nodeOk) { result.reason = PlacementFailReason.Blocked; return result; }
+                }
 
                 // 地形合法（桥不校验地形，只校验 Water 位）
                 if (!def.canPlaceOnWater && def.allowedTerrain != null && def.allowedTerrain.Length > 0)
