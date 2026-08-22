@@ -388,8 +388,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// </summary>
     private void UpdateProgressBar()
     {
-        bool show = state == BuildingState.Constructing || state == BuildingState.Ruined;
-        float progress = state == BuildingState.Constructing ? constructProgress : 0f;
+        // Constructing/Upgrading（_pendingUpgrade 亦为 Constructing 态）显示 constructProgress；Ruined 显示空"待重建"条。
+        bool constructingOrUpgrading = state == BuildingState.Constructing;   // Upgrading 复用 Constructing 态(_pendingUpgrade=true)
+        bool show = constructingOrUpgrading || state == BuildingState.Ruined;
+        float progress = constructingOrUpgrading ? constructProgress : 0f;
 
         if (!show)
         {
