@@ -6,7 +6,7 @@ using UnityEngine;
 /// 挂 Worker prefab（UnitFactory.SpawnUnit 兜底 AddComponent）；存档由 UnitController v5 代理（carriedType/carriedAmount）。
 /// 背包规则：单资源类型不可混装（背包满/类型不符拒绝存储）。
 /// </summary>
-public class WorkerInventory : MonoBehaviour
+public class WorkerInventory : MonoBehaviour, IWarehouse
 {
     [Tooltip("当前背包资源类型（空背包=默认）")]
     public ResourceType carriedType;
@@ -50,4 +50,22 @@ public class WorkerInventory : MonoBehaviour
         carriedAmount = 0;
         return amount;
     }
+
+    // ===== IWarehouse 实现（2_12 步骤3，移动仓库，签名逐字对齐 sim harness/Core）=====
+    public ResourceAmount Query() => new ResourceAmount(carriedType, carriedAmount);
+
+    public bool CanTake(ResourceType t, int amt) => !IsEmpty && carriedType == t && carriedAmount >= amt;
+
+    public int Take(ResourceType t, int amt)
+    {
+        if (!CanTake(t, amt)) return 0;
+        int taken = Mathf.Min(amt, carriedAmount);
+        carriedAmount -= taken;
+        return taken;
+    }
+
+    public void Deposit(ResourceType t, int amt) => TryStore(t, amt);
+
+    /// <summary>背包不加工，返回 0（签名对齐用；加工只在加工建筑）。</summary>
+    public int Transform(ResourceType @in, ResourceType @out, int amt) => 0;
 }

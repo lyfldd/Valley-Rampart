@@ -5,7 +5,7 @@ using UnityEngine;
 /// 实现 IHarvestable：玩家手动收取或未来工人搬运，资源转入国库。
 /// 存档只需存 storedAmount（ProducerComponent 每秒重算无需存）。
 /// </summary>
-public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable
+public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable, IWarehouse
 {
     public ResourceType resourceType;
     public int storedAmount;
@@ -66,6 +66,26 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable
     }
 
     public bool IsReadyToHarvest() => storedAmount > 0;
+
+    // ===== IWarehouse 实现（2_12 步骤3，D43/D51，签名逐字对齐 sim harness/Core）=====
+    public ResourceAmount Query() => new ResourceAmount(resourceType, storedAmount);
+
+    public bool CanTake(ResourceType t, int amt) => t == resourceType && storedAmount >= amt;
+
+    public int Take(ResourceType t, int amt) => t == resourceType ? TakeOut(amt) : 0;
+
+    public void Deposit(ResourceType t, int amt)
+    {
+        if (t != resourceType) return;   // 仓库只存单一资源类型；异型资源拒绝（调用方兜底国库）
+        Add(amt);
+    }
+
+    /// <summary>就地加工增值。2_12 步骤3 仅立接口；Metal 加工链归步骤8 铁匠铺（D200），此分支暂空。</summary>
+    public int Transform(ResourceType @in, ResourceType @out, int amt)
+    {
+        // TODO(2_12步骤8)：铁匠铺 Metal 加工（石→Metal，D200 Transform 就地加工）。签名先立住防 sim 漂移。
+        return 0;
+    }
 
     public int Harvest()
     {

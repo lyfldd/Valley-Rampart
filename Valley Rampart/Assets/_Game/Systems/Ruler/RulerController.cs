@@ -404,6 +404,11 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // type=资源类型，isIncrease=true增加/false减少，amount=变化量。
     // 每次修改都会发布 RulerResourceChangedEvent 通知其他系统（UI 刷新、成就检测等）。
     // 防御逻辑：Mathf.Abs 防止负数反向操作，Mathf.Max(0) 防止资源变为负数。
+    //
+    // TODO(2_12步骤8)：随 Ruler 全量迁移到仓库系统(IWarehouse)退役当前真源记账。HH.8 裁决分批A。
+    //   * 金(Gold)=货币不占存储，本方法保留直通；
+    //   * 非金资源在步骤3~7 阶段仍是真源（本步稳定为兼容壳的语义就位，不双写、不改逻辑）；
+    //   * 禁双写红线：不得在 Ruler 字段 与 IWarehouse.Deposit 对新账并行记账（会资源复制）——迁移完成一次性切换真源。
     public void ModifyResource(ResourceType type, bool isIncrease, int amount)
     {
         amount = Mathf.Abs(amount);  // 防止负数反向操作
