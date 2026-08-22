@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8bf1014191bf58541adcfa1d00981805, type: 3}
   m_Name: MovementConfig
   m_EditorClassIdentifier: 
-  npcSpeed: 2
+  npcSpeed: 0.716
   arriveRadiusCells: 0.3
   repathCooldownSeconds: 1
   pendingTimeoutSeconds: 3

@@ -20,9 +20,9 @@ public class MovementConfig : ScriptableObject
         }
     }
 
-    [Header("移动手感（2_3 §1.6 格单位分量归一化距离）")]
-    [Tooltip("NPC 基础速度（世界单位/秒；单位个体速度取 UnitData.walkSpeed/runSpeed，本值为全局基础）")]
-    public float npcSpeed = 2.0f;
+    [Header("移动手感（HH.3 裁决 2026-08-22 统一 iso：格四邻步长全等 0.716/格）")]
+    [Tooltip("NPC 基础速度（世界单位/秒，按 iso 步长 0.716/格重标=1格/秒基准；单位个体速度取 UnitData.walkSpeed/runSpeed，本值为全局基础）")]
+    public float npcSpeed = 0.716f;
 
     [Tooltip("到达半径（格单位，§1.6：√((Δx/cellW)²+(Δy/cellH)²) ≤ 此值视为到达）")]
     public float arriveRadiusCells = 0.3f;

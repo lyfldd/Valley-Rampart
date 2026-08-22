@@ -231,8 +231,12 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Register TaskScheduler 失败: " + ex.Message); }
         }
 
-        try { EventBus.Publish(new BuildingPlacedEvent(b)); }
-        catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
+        // 仅玩家建造的 Publish（HH.4 裁决：发布侧剔除，地图自然预置建筑不 Publish——无订阅者时避免全图丢弃刷屏）。
+        if (isPlayerBuilt)
+        {
+            try { EventBus.Publish(new BuildingPlacedEvent(b)); }
+            catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
+        }
 
         return true;
     }
