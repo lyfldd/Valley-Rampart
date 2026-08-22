@@ -106,8 +106,28 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     [Header("生命周期")]
     public BuildingState state = BuildingState.Active;
     [Range(0f, 1f)] public float constructProgress;
-    [Tooltip("建造/升级进度时长（秒）。首版自动累计模式。")]
+    /// <summary>建造/升级进度时长（秒）。SO 铁律：运行时读取 BuildConfig.constructionBaseSeconds + 协作缩放（EffectiveDuration）。此字段仅作编辑器参考/回退。</summary>
+    [Tooltip("基础施工时长（秒）。运行时以 BuildConfig.constructionBaseSeconds 为准（2_12 步骤4 C+）")]
     public float constructDuration = 5f;
+
+    private static BuildConfig _buildConfig;
+
+    /// <summary>
+    /// 实际施工时长（2_12 步骤4 / HH.9 裁决 C+）：读取 BuildConfig SO 基础值 × 协作缩放。
+    /// 公式 = base / (1 + (n-1)×k)，n=该建筑实际被派工人数（CountAssignedWorkers，不虚增理想工人数），
+    /// k=BuildConfig.cooperativeBuildK。k=0 或 n≤1 退化为纯计时基础时长。
+    /// </summary>
+    public float EffectiveDuration()
+    {
+        if (_buildConfig == null)
+            _buildConfig = Resources.Load<BuildConfig>("Config/BuildConfig");
+        float baseSeconds = _buildConfig != null ? Mathf.Max(0.01f, _buildConfig.constructionBaseSeconds) : Mathf.Max(0.01f, constructDuration);
+        if (_buildConfig == null || _buildConfig.cooperativeBuildK <= 0f) return baseSeconds;
+        int n = TaskScheduler.Instance != null ? TaskScheduler.Instance.CountAssignedWorkers(this) : 1;
+        if (n <= 1) return baseSeconds;
+        float divisor = 1f + (n - 1) * _buildConfig.cooperativeBuildK;
+        return baseSeconds / Mathf.Max(0.01f, divisor);
+    }
 
     private bool _pendingUpgrade;   // 当前 Constructing 是升级而非首次建造
     private SpriteRenderer _renderer;
@@ -322,7 +342,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         if (state != BuildingState.Constructing) return;
         // 暂停时不推进（Time.deltaTime 在 timeScale=0 时为 0，天然支持）
-        constructProgress += Time.deltaTime / Mathf.Max(0.01f, constructDuration);
+        constructProgress += Time.deltaTime / Mathf.Max(0.01f, EffectiveDuration());
         if (constructProgress >= 1f)
         {
             constructProgress = 1f;

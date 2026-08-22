@@ -54,4 +54,12 @@
 - 裁决：A×3 + 补强 · 依据：AI 北极星（D255 同源=决策核可见；真源单一）/ 单人 1 月规模（壳退役表防债滚雪球）/ 兼容风险（Metal 提前入枚举踩存档序列）
 
 ### 衍生产物
-- 新建清单/文档：无新增（步骤3 验收行按裁决补三条注记：金路径临时壳 / RulerController 归步骤8 / Ruler 迁移验收缩围）
+- 新建清单/文档：无新增（步骤3 验收行按裁决补四条注记：金路径临时壳 / RulerController 归步骤8 / Metal 归属 / 定位器过渡实现）。
+
+## sim 侧握手指令（HH.8 拍板二，待训练仓执行）
+
+> 目标：训练仓提交 `ai决策大脑强化训练/harness/Core/IWarehouse.cs`（执行端已落盘 + `dotnet build` 通过）。
+> 内容：纯新增 IWarehouse 接口 + ResourceType/ResourceAmount（无现有引用，理论上零行为影响）；签名与 Unity `Systems/Kingdom/IWarehouse.cs` **逐字对齐**已做（D255/HH.8 裁决三）。
+> 验收：走训练仓门禁——`champion baseline` 无退化 >5% + holdout 不退 → 通过即 commit；失败按 AGENTS.md 铁律回滚 + 记 `cards/{卡}/decisions/` 台账。
+> 优先级：下次训练会话第一件事（纯新增文件，铁律走完才落地）。
+> 边界：门禁完成前接口形状以 Unity 侧为准；sim 侧**不许单侧改签名**（HH.8 裁决三纪律）。

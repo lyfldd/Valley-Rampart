@@ -16,4 +16,10 @@ public class BuildConfig : ScriptableObject
     [Header("桥（2_2 §3.5）")]
     [Tooltip("单条桥链最长段数（防无限拼桥，占位可调）")]
     public int bridgeMaxSegments = 8;
+
+    [Header("协作施工（2_12 步骤4 / HH.9 裁决 C+）")]
+    [Tooltip("建筑基础施工时长（秒）。替代 Building.constructDuration 硬编码 5f；升级/修复也按此基础时长")]
+    public float constructionBaseSeconds = 5f;
+    [Tooltip("协作施工加成系数 k：实际施工时长 = base / (1 + (n-1)×k)，n=该建筑实际被派工人数。k=0 退化为纯计时")]
+    [Range(0f, 1f)] public float cooperativeBuildK = 0.25f;
 }
