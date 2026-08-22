@@ -543,6 +543,22 @@ public class AIDebugSpawnController : MonoBehaviour
     }
 
     /// <summary>
+    /// 稳定相机（小剧场自动验收前置）：锁定 CameraRig 输入 + 对准主城中心 iso 世界点。
+    /// 解决实机验收时鼠标滞留 Game View 边缘触发边缘滚屏、把相机推离主城的干扰（2026-08-22 实锤）。
+    /// 非锁定：只对准主城（保留输入，供人工检查）。
+    /// </summary>
+    public void SetupStableCamera(bool lockInput = true)
+    {
+        var rig = CameraRig.Instance;
+        rig.inputEnabled = !lockInput;
+        var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
+        if (map == null) return;
+        var center = MapRenderService.GridToIso(new GridCoord(map.width / 2, map.height / 2));
+        rig.FocusOn(center);
+        Debug.Log($"[AIDebugSpawn] 稳定相机: lockInput={lockInput} 对准主城 iso={center}");
+    }
+
+    /// <summary>
     /// 坐标基准探针（实证：逻辑层中心原点正交 vs 渲染层等轴 Iso）。
     /// 在主城中心格分别以 GridSystem.CoordToWorld(逻辑) 与 MapRenderService.GridToIso(等轴) 放两个黄块探针，
     /// 供截图确认两者世界基准是否一致（决定单位铺放该用哪套坐标）。

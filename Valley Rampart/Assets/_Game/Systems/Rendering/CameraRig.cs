@@ -16,6 +16,10 @@ public class CameraRig : Singleton<CameraRig>
     [Header("配置（Resources/Config/CameraConfig.asset 懒加载）")]
     [SerializeField] private CameraConfig config;
 
+    [Header("输入（小剧场自动验收需锁定，防边缘滚屏/滚轮把相机推离主城）")]
+    [Tooltip("false 时 Update 内 WASD/边缘滚屏/中键/滚轮全部失效；手动 FocusOn/Pan/Zoom 不受影响，便于验收编排稳定构图")]
+    public bool inputEnabled = true;
+
     private Camera _cam;
     private int _zoomIndex;
     private Rect _mapRectLimit;        // 等轴地图矩形（世界单位，中心坐标原点对齐 GridSystem）
@@ -188,6 +192,8 @@ public class CameraRig : Singleton<CameraRig>
     {
         if (_cam == null || !_mapReady) return;
         if (config == null) return;
+        // 输入锁定（小剧场自动验收/截图）：禁用 WASD/边缘滚屏/中键/滚轮，避免鼠标滞留窗口边缘把相机推离主城
+        if (!inputEnabled) return;
 
         // WASD 键盘平移（世界轴：W/S=上下，A/D=左右；等轴俯视下指屏幕上下/左右）
         Vector2 kbd = Vector2.zero;
