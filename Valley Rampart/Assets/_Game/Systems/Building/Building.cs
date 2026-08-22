@@ -141,6 +141,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     private bool _pendingUpgrade;   // 当前 Constructing 是升级而非首次建造
     private bool _pendingRepair;    // 2_12 步骤7 / D156：当前 Constructing 是从废墟重建（完成满血回原级，不升级）
     private SpriteRenderer _renderer;
+    private BuildProgressBar _progressBar;   // 2_12 步骤7B / D117：头顶施工进度条（Constructing/Ruined/Upgrading 态显示，惰性创建）
 
     /// <summary>关联的 UI 面板（运行时注入，可为 null）。</summary>
     private IUIPanel _panel;
@@ -366,15 +367,60 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     private void Update()
     {
-        if (state != BuildingState.Constructing) return;
-        // 暂停时不推进（Time.deltaTime 在 timeScale=0 时为 0，天然支持）
-        constructProgress += Time.deltaTime / Mathf.Max(0.01f, EffectiveDuration());
-        if (constructProgress >= 1f)
+        // 施工/废墟进度推进（仅 Constructing 态推进进度；暂停时 deltaTime=0 天然停）
+        if (state == BuildingState.Constructing)
         {
-            constructProgress = 1f;
-            OnConstructionComplete();
+            constructProgress += Time.deltaTime / Mathf.Max(0.01f, EffectiveDuration());
+            if (constructProgress >= 1f)
+            {
+                constructProgress = 1f;
+                OnConstructionComplete();
+                return;   // 转 Active 后下方会隐藏进度条（state 已变）
+            }
         }
+        UpdateProgressBar();
     }
+
+    /// <summary>
+    /// 2_12 步骤7B / D117：驱动头顶施工进度条。
+    /// Constructing/Upgrading→显示 constructProgress；Ruined→显示空"待重建"条；Active/其他→隐藏。
+    /// 位置：footprint 中部上方（建筑头顶）。惰性创建 BuildProgressBar，尺寸=footprint 世界宽。
+    /// </summary>
+    private void UpdateProgressBar()
+    {
+        bool show = state == BuildingState.Constructing || state == BuildingState.Ruined;
+        float progress = state == BuildingState.Constructing ? constructProgress : 0f;
+
+        if (!show)
+        {
+            if (_progressBar != null) _progressBar.SetProgress(0f, false);
+            return;
+        }
+
+        if (_progressBar == null)
+        {
+            var go = new GameObject("BuildProgressBar");
+            go.transform.SetParent(transform, false);
+            _progressBar = go.AddComponent<BuildProgressBar>();
+            _progressBar.building = this;
+        }
+
+        // 世界宽度 = footprint.x × cellSize；头顶 = footprint 顶 + 偏移
+        float cellX = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
+        float cellY = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.y : 2.26f;
+        float worldW = Mathf.Max(1f, footprint.x) * cellX;
+        // 进度条挂在本物体 root 下，但父 localScale=footprint×cell（UpdateVisual）。需用 localScale=1/parent 抵消，使进度条以世界宽/高真实显示。
+        float parentScale = Mathf.Max(0.0001f, transform.localScale.x);
+        _progressBar.Init(worldW, barWorldHeight);
+        float offY = (Mathf.Max(1f, footprint.y) * cellY) * 0.5f + 0.45f;
+        // 抵消父缩放：父 scale = footprint.x*cellX（≈worldW），故进度条维持世界 1:1
+        _progressBar.transform.localScale = new Vector3(1f / parentScale, 1f / parentScale, 1f);
+        _progressBar.transform.localPosition = new Vector3(0f, offY, 0f);
+        _progressBar.SetProgress(progress, true);
+    }
+
+    /// <summary>进度条世界高度（常量占位，2_10 美术可调）。</summary>
+    private const float barWorldHeight = 0.18f;
 
     /// <summary>建造/升级/修复完成。升级则提级，修复则满血回原级，统一转 Active 并发激活事件。</summary>
     void OnConstructionComplete()
