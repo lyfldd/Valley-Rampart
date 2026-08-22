@@ -54,6 +54,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             case FeatureType.Tree: return BuildingType.Tree;
             case FeatureType.Mine: return BuildingType.Mine;
             case FeatureType.OreVein: return BuildingType.OreVein;
+            case FeatureType.WoodPile: return BuildingType.WoodPile;   // HH.10 裁决三：扩到三类
+            case FeatureType.StonePile: return BuildingType.StonePile;
             default: return null;   // SnowMountain 等纯视觉/地形阻挡特征物跳过
         }
     }
@@ -117,6 +119,30 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
         Debug.Log($"[BuildingFactory] 2D 地图预置建筑实例化完成：{count} 个（自然建筑 + 主城）");
         return count;
+    }
+
+    /// <summary>
+    /// 单体一次性资源实体重建（HH.10 裁决三：实体路径到点重生调）。
+    /// 由 ResourceRespawnSystem 在记录格到期时调用，重建一棵被采走的 OreVein/WoodPile/StonePile。
+    /// 逻辑镜像 InstantiateFromMap 内循环（feature→type→def→CreateBuildingInstance），不做整图重派生。
+    /// </summary>
+    public bool ReSpawnNaturalBuilding(GridCoord coord, FeatureType feature)
+    {
+        var type = FeatureToBuildingType(feature);
+        if (!type.HasValue) return false;
+        var table = GetMappingTable();
+        if (table == null) return false;
+        var def = table.Get(type.Value);
+        if (def == null)
+        {
+            Debug.LogWarning($"[BuildingFactory] 资源重生：{feature} 未配置 BuildingDef，跳过");
+            return false;
+        }
+        var fp = new Vector2Int(1, 1);   // 一次性资源均是 1×1
+        return CreateBuildingInstance(def, type.Value, coord, fp,
+            FootprintCenterWorld(coord, fp),
+            isPlayerBuilt: false, grade: ResourceGrade.Normal,
+            isConsumable: true, initialState: BuildingState.Active);
     }
 
     /// <summary>footprint 中心世界坐标（origin 左上格 + w/h 中心偏移）。</summary>

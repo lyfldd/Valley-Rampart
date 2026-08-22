@@ -602,6 +602,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         //    （Tree/Mine 非一次性，由 WorldManager.TryConsumeResourceNode 建筑覆盖路径触发。）
         if (GridSystem.Instance != null)
             GuardDeploymentSystem.HandleResourceConsumed(coord);
+        // HH.10 裁决三：一次性可采实体（OreVein/WoodPile/StonePile）采集销毁 → 记实体路径重生，到点重建实体
+        if (ResourceRespawnSystem.HasInstance)
+            ResourceRespawnSystem.Instance.HandleEntityDepleted(coord, FeatureOf(sourceType));
         // ③ 对象池回收（DR-11：不直接 Destroy，与 UnitFactory 一致）
         if (BuildingFactory.Instance != null)
             BuildingFactory.Instance.ReturnBuildingToPool(this);
@@ -609,6 +612,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             Destroy(gameObject);
         Debug.Log($"[Building] 一次性资源点 {def.id} 采集完成，已回收。");
     }
+
+    /// <summary>BuildingType → FeatureType（HH.10 实体重生记录用；一次性可采资源映射）。</summary>
+    private static FeatureType FeatureOf(BuildingType bt) => bt switch
+    {
+        BuildingType.WoodPile => FeatureType.WoodPile,
+        BuildingType.StonePile => FeatureType.StonePile,
+        _ => FeatureType.OreVein   // OreVein 及未识别退化到矿脉
+    };
 
     /// <summary>
     /// QQQ.2 T19 / DR-11：玩家确认采集一次性资源点（BuildingPanel 采集按钮调）。

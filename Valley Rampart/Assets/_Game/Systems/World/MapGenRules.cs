@@ -285,7 +285,10 @@ public static class MapGenRules
             for (int x = 0; x < map.width; x++)
             {
                 var f = map.features[Idx(map, x, y)];
-                if (f != FeatureType.OreVein) continue;   // 仅一次性可采实体（OreVein）
+                // HH.10 裁决三：一次性可采集实体扩到 OreVein/WoodPile/StonePile 三类。
+                //   （此前仅 OreVein → WoodPile/StonePile 格存在但无实体，工人采不到，木/石断供。）
+                //   Tree 走数据格采集（数据化，不建实体，防止 A+ 复辟），故不在此派生。
+                if (f != FeatureType.OreVein && f != FeatureType.WoodPile && f != FeatureType.StonePile) continue;
                 map.naturalBuildings.Add(new NaturalBuilding
                 {
                     cellX = x, cellY = y, w = 1, h = 1,

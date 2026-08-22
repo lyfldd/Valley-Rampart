@@ -570,6 +570,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 }
                 // QQQ.2 T19：采集完成 → 资源点销毁三步（①GridSystem.Free ②BuildingRegistry移除 ③对象池Despawn）
                 if (comp is Building b) b.OnGatherCompleted();
+                // HH.10 裁决三：数据格树采集源（非实体）完成 → 格翻 Plain + 记重生（TreeGatherSource.OnGatherCompletion 处理）
+                else if (task.source is TreeGatherSource tg) tg.OnGatherCompletion();
                 break;
         }
     }

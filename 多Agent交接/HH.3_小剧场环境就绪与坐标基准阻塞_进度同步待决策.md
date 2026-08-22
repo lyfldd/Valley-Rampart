@@ -47,7 +47,7 @@
 ## 四、环境使用说明（下次会话开箱即跑）
 
 - 进 Play GameScene → 控制台/脚本调用 `AIDebugSpawnController.Instance.StartNewGameDebug()` → 地图生成 → 再调用各场景编排。
-- **相机前置约定（2026-08-22 补，随相机自查闭环提交 ee5be68）：所有 Play 自动验收/正式截图前必须先 `AIDebugSpawnController.Instance.SetupStableCamera(true)`（锁定输入 + 对准主城等轴中心），防边缘滚屏/滚轮把相机推离主城导致构图漂移取不到图。**
+- **相机前置约定（2026-08-22 补）：所有 Play 自动验收/截图必须先 `AIDebugSpawnController.Instance.SetupStableCamera(true)`**（锁定 CameraRig 输入 + 对准主城）——否则鼠标滞留 GameView 边缘会触发边缘滚屏把相机推离主城，污染构图与取证。已实锤并修复（HH.3 §外部相机结论），验收编排第一行固定先锁相机。
 - 单位铺放进度：**未建**（被坐标基准阻塞），以下为计划内的四链编排目标，取证关键字已备好：
 
 ## 五、四链 PASS 判据与取证标准（事件日志 grep，逐条列出）
@@ -90,6 +90,12 @@
 **附带裁决**：Vector2.Distance 系启发式（感知/威胁/索敌）在 iso 下形状语义变化（圆→菱形拉伸）可接受——本就是模糊感知且 sim 侧走格距，不要求改格距换算。
 
 **相机 bug**（CameraRig 未接管）：非裁决项，执行端自查，下次会话第一件事。
+
+**（执行端自查结论回写，2026-08-22）相机"未对准主城"实锤为假象，非 CameraRig 缺陷**：
+- 实机证据：MapReady=True、FocusHome 生效、相机 y=77.60（=GridToIso 主城中心 − 半屏）正确；但 **x 被推满到 clamp 上限 147.50**。
+- 根因：`Input.mousePosition=(2366,224)` 而屏宽仅 1387 → 光标滞留 Game View 右边缘 → **CameraRig 边缘滚屏每帧向右 Pan**直至 clamp。
+- **修复已落地并验证**：`CameraRig` 新增 `inputEnabled` 锁定开关（Update 里 WASD/边滚/中键/滚轮整体失效，手动 FocusOn 不受影响）；[AIDebugSpawnController.SetupStableCamera](file:///c:/Users/trs/Desktop/Valley Rampart/Valley Rampart/Assets/_Game/Systems/AI/AIDebugSpawnController.cs)（验收前置稳定构图）。验证：锁定后相机稳定 (0,81.92) 主城中心不再漂移。
+- **经验**：所有 Play 截图/自动验收必须先 `SetupStableCamera(true)`，否则边缘滚屏会污染构图。
 
 ### 分歧裁决记录
 - 执行端意见：推荐 A（解法见三.1）；BuildingPlacedEvent 并入环境清理。

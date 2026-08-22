@@ -163,6 +163,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         MapGenRules.PlaceThreatSpawns(rng, map, _mapGenRulesConfig, difficulty); // 步骤10
         MapGenRules.DeriveNaturalBuildings(map);                                 // 步骤11
 
+        // HH.10：新地图/读档 → 清空全资源刷新重生记录（禁跨图残留幽灵坐标）
+        if (ResourceRespawnSystem.HasInstance) ResourceRespawnSystem.Instance.ResetRespawns();
+
         Debug.Log($"[WorldManager] 地图生成（2_1）: mapId={mapId}, seed={seed}, {width}x{height}, " +
                   $"出生点={map.kingdomSpawns.Count}, 威胁点={map.threatSpawns.Count}, 自然建筑={map.naturalBuildings.Count}");
         return map;
