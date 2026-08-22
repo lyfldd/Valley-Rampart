@@ -200,12 +200,9 @@ public class BuildController : Singleton<BuildController>
         GridCoord coord = check.snappedOrigin;
         var fp = OrientedFootprint(orient);
 
-        // 扣资源
-        if (RulerController.Instance != null)
-        {
-            if (!RulerController.Instance.CanAfford(_selectedDef.cost)) return;
-            RulerController.Instance.Spend(_selectedDef.cost);
-        }
+        // 扣资源（2_12 步骤3：建造点击=结算时点，走王国仓库多仓凑单，金直通国库）
+        if (!WarehouseHelper.CanAfford(_selectedDef.cost)) return;
+        if (!WarehouseHelper.TrySettle(_selectedDef.cost)) return;
 
         // 放置即改造：工具建筑（采石场/农场）建在资源格上，覆盖原资源节点
         // A+（HH.2）：树/矿不再建 Building 实体；改为数据覆盖该格 feature（Tree/Mine→Plain）+ 刷新渲染
