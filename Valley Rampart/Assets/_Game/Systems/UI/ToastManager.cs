@@ -124,18 +124,13 @@ public class ToastManager : Singleton<ToastManager>
     }
 
     /// <summary>
-    /// 解析受袭区域名：Building.def.displayName → def.id → 世界坐标兜底。
+    /// 解析受袭区域名：数据句柄 GuardResourceNode.name → 世界坐标兜底（A+ 口径，非 Building 实体）。
     /// </summary>
-    private static string ResolveRegionName(Building node)
+    private static string ResolveRegionName(GuardResourceNode node)
     {
-        if (node == null) return "未知";
-        var def = node.def;
-        if (def != null)
-        {
-            if (!string.IsNullOrEmpty(def.displayName)) return def.displayName;
-            if (!string.IsNullOrEmpty(def.id)) return def.id;
-        }
-        return $"({node.transform.position.x:0},{node.transform.position.y:0})";
+        if (!string.IsNullOrEmpty(node.name)) return node.name;
+        Vector2 w = GridSystem.Instance != null ? GridSystem.Instance.CoordToWorld(node.coord) : Vector2.zero;
+        return $"({w.x:0},{w.y:0})";
     }
 
     /// <summary>

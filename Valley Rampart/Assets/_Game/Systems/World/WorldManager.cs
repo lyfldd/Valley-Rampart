@@ -211,6 +211,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             GridSystem.Instance.RefreshCellFromFeature(coord, FeatureType.Plain);
         if (MapRenderService.Instance != null)
             MapRenderService.Instance.UpdateCell(new GridCoord(coord.x, coord.y));
+        // A+ 守卫锚点语义（HH.3 §六 / HH.6 裁决二）：资源点被建筑覆盖即失去守卫意义，
+        // 守卫该格的守卫区域随之失去覆盖 → 触发 GuardRegionLostEvent。
+        GuardDeploymentSystem.HandleResourceConsumed(coord);
         return true;
     }
 
