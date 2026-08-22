@@ -23,6 +23,7 @@ public static class VisionSystem
         if (grid == null || grid.Config == null) return;
         _dirty = true;
 
+        int before = _explored.Count;   // [取证/⑥探雾] 揭雾增量用
         float cs = Mathf.Max(0.01f, grid.Config.cellSize.x);
         int range = Mathf.CeilToInt(radiusWorld / cs);
         var center = grid.WorldToCoord(selfPos);
@@ -41,6 +42,9 @@ public static class VisionSystem
                 _explored[key] = true;
             }
         }
+        // [取证/⑥探雾] 仅当本帧有"新揭格"时打一条，避免高频
+        if (_explored.Count > before)
+            Debug.Log($"[ChainPatrol] 揭雾新增 {_explored.Count - before} 格 (center {cx},{cy}, r={range})");
     }
 
     /// <summary>感知过滤：位置是否可见/已被探索。关闭（enabled=false）恒返回 true（全可见，回退基线）。</summary>

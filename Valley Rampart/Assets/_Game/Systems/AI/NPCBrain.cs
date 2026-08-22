@@ -700,7 +700,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         else
         {
             Vector2 fallback = RetreatToSafeAnchorBehavior.ResolveRetreatTarget(
-                selfPos, safetyScore, _config.wanderThreshold, homePoint);
+                selfPos, safetyScore, _config.wanderThreshold, homePoint, _controller.npcId);
             float cs0 = GetCellSize();
             float retreatR = (AIDistConfig.Instance != null ? AIDistConfig.Instance.baseRetreatCells : 6f) * cs0;
             if (enemyPositions != null && enemyPositions.Count > 0

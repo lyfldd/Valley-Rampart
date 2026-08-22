@@ -386,6 +386,8 @@ public class DamageSystem : Singleton<DamageSystem>
         }
         _lastEventTime[victim] = Time.time;
         EventBus.Publish(new UnitDamagedEvent(victim, source, damage, victim.GetPosition()));
+        // [取证/②守卫交锋] 完成段证据：节流点后打入，避免高频刷屏
+        Debug.Log($"[ChainFox] 守卫交锋: {victim} 受击 {damage} @ {victim.GetPosition()} <- {source}");
     }
 
     // ===== 死亡清理（决策 24，订阅 UnitDiedEvent 自清三表）=====
