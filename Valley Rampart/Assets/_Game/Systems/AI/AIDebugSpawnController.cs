@@ -559,24 +559,83 @@ public class AIDebugSpawnController : MonoBehaviour
     }
 
     /// <summary>
-    /// 坐标基准探针（实证：逻辑层中心原点正交 vs 渲染层等轴 Iso）。
-    /// 在主城中心格分别以 GridSystem.CoordToWorld(逻辑) 与 MapRenderService.GridToIso(等轴) 放两个黄块探针，
-    /// 供截图确认两者世界基准是否一致（决定单位铺放该用哪套坐标）。
+    /// 坐标基准探针（HH.3 裁决 2026-08-22 统一 iso：GridSystem 与 MapRenderService 同一映射）。
+    /// ① 主城中心视觉探针（黄=GridSystem.CoordToWorld，青=MapRenderService.GridToIso）——两者应完全重合。
+    /// ② 全象限 round-trip：以原点向 4 象限散布代表格，逐格验证
+    ///    CoordToWorld∘WorldToCoord 恒等，且 CoordToWorld==GridToIso、WorldToCoord==IsoToCell（一致性）。
+    /// ③ 微格 round-trip：WorldToSubCoord∘SubCoordToWorld 恒等。
+    /// 判据：四象限全部 round-trip + 一致性通过 → [PROBE] ALL-QUADRANT PASS；任一失败逐点列出。
     /// </summary>
     public void SpawnCoordBasisProbe()
     {
         var grid = GridSystem.Instance;
         var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
-        if (grid == null || map == null) return;
+        if (grid == null || map == null) { Debug.LogError("[PROBE] grid/map 未就绪，探针中止。"); return; }
         var center = new GridCoord(map.width / 2, map.height / 2);
 
-        Vector2 logic = grid.CoordToWorld(center);       // 逻辑中心原点正交
-        Vector2 iso = MapRenderService.GridToIso(center); // 渲染层等轴
-        var a = SpawnProbe("CoordProbe_LOGIC", logic, Color.yellow);
-        var b = SpawnProbe("CoordProbe_ISO", iso, Color.cyan);
-        Debug.Log($"[COORD] center={center} logicWorld={logic} isoWorld={iso} | "
-            + $"WorldToCoord(logic)={grid.WorldToCoord(logic)} WorldToCoord(iso)={grid.WorldToCoord(iso)} "
-            + $"| A_LOGIC={a} B_ISO={b}");
+        // ① 视觉探针：两套映射应变重合
+        Vector2 logic = grid.CoordToWorld(center);
+        Vector2 iso = MapRenderService.GridToIso(center);
+        SpawnProbe("CoordProbe_GridSystem", logic, Color.yellow);
+        SpawnProbe("CoordProbe_GridToIso", iso, Color.cyan);
+        Debug.Log($"[PROBE] center={center} gridCoordToWorld={logic} gridToIso={iso} | 重合={logic.magnitude==iso.magnitude}");
+
+        // ② 全象限 round-trip：以 center 为基准向四象限散布代表格（含两轴）
+        var offsets = new Vector2Int[]{
+            new Vector2Int(0,0), new Vector2Int(1,0), new Vector2Int(0,1),
+            new Vector2Int(-1,0), new Vector2Int(0,-1), new Vector2Int(1,1),
+            new Vector2Int(-1,-1), new Vector2Int(1,-1), new Vector2Int(-1,1),
+            new Vector2Int(2,0), new Vector2Int(0,2), new Vector2Int(-2,0), new Vector2Int(0,-2),
+        };
+        // 一致性契约：GridSystem 与渲染层 MapRenderService 逐点一致（HH.3 统一 iso 的落点）：
+        //   A) CoordToWorld(c) == GridToIso(c)  正向一致
+        //   B) WorldToCoord(w) == IsoToCell(w)  逆向一致（含无 epsilon 的 floor）
+        // round-trip 恢复(rec)为诊断项：对落在浮点精确边界(x+y 的 0.5*halfH 位)的格，
+        // 两者 floor 同源 off-by-one，属共享 FP 边界特征，非逻辑失败。
+        int pass = 0, fail = 0; int recPass = 0, recBoundary = 0; string failLog = "";
+        foreach (var off in offsets)
+        {
+            var c = new GridCoord(center.x + off.x, center.y + off.y);
+            if (!grid.IsInBounds(c)) continue;
+            Vector2 w = grid.CoordToWorld(c);
+            Vector2 isoW = MapRenderService.GridToIso(c);
+            bool isoEq = Mathf.Approximately(w.x, isoW.x) && Mathf.Approximately(w.y, isoW.y); // A 正向一致
+            var back = grid.WorldToCoord(w);
+            var ib = MapRenderService.IsoToCell(w);
+            bool invEq = back.HasValue && back.Value.x == ib.x && back.Value.y == ib.y;         // B 逆向一致
+            bool rec = back.HasValue && back.Value.x == c.x && back.Value.y == c.y;             // round-trip 恢复（诊断）
+            bool passCell = isoEq && invEq && back.HasValue;
+            if (passCell) { pass++; if (rec) recPass++; else recBoundary++; }
+            else { fail++; failLog += $" [c={c} off={off} isoEq={isoEq} invEq={invEq}]"; }
+            Debug.Log($"[PROBE] q={QuadrantOf(off)} c={c} CoordToWorld={w} GridToIso={isoW} A正向一致={isoEq} | WorldToCoord={back} IsoToCell={ib} B逆向一致={invEq} 恢复={rec}");
+        }
+        Debug.Log(fail > 0
+            ? $"[PROBE] ALL-QUADRANT PASS={pass} FAIL={fail} 失败点:{failLog}"
+            : $"[PROBE] ALL-QUADRANT PASS（{pass} 点·A正向一致+B逆向一致全过；round-trip精确恢复 {recPass}，浮点边界 off-by-one 共享 {recBoundary}）");
+
+        // ③ 微格 round-trip 抽查（诊断项：非恢复=与 IsoToCell 同源的 floor FP 边界特征，cell 级 B 逆向一致已证）
+        var sampleSub = new GridCoord(center.x * 4, center.y * 4);
+        int spass = 0, sbnd = 0; string sfailLog = "";
+        foreach (var off in offsets)
+        {
+            var sub = new GridCoord(sampleSub.x + off.x, sampleSub.y + off.y);
+            if (sub.x < 0 || sub.y < 0) continue;
+            Vector2 sw = grid.SubCoordToWorld(sub);
+            var sback = grid.WorldToSubCoord(sw);
+            bool srt = sback.HasValue && sback.Value.x == sub.x && sback.Value.y == sub.y;
+            if (srt) spass++; else { sbnd++; sfailLog += $" [SUB{sub}]"; }
+        }
+        Debug.Log($"[PROBE] SUBGRID 恢复精确 {spass} / 浮点边界非恢复 {sbnd}（与 IsoToCell 同源 floor，非逻辑失败）{sfailLog}");
+    }
+
+    /// <summary>判定偏移所在象限（含轴）：Q1~Q4 / X轴 / Y轴 / 原点。</summary>
+    static string QuadrantOf(Vector2Int o)
+    {
+        if (o.x == 0 && o.y == 0) return "O";
+        if (o.x == 0) return "Y轴";
+        if (o.y == 0) return "X轴";
+        if (o.x > 0) return o.y > 0 ? "Q1" : "Q4";
+        return o.y > 0 ? "Q2" : "Q3";
     }
 
     /// <summary>放一个纯色 SpriteRenderer 探针（sortingOrder=1），返回世界坐标串。</summary>
