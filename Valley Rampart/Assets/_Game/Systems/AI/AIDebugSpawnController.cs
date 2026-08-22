@@ -505,4 +505,76 @@ public class AIDebugSpawnController : MonoBehaviour
             def, BuildingType.None, coord, fp, worldPos,
             isPlayerBuilt: true, ResourceGrade.Normal, def.isConsumable, BuildingState.Active);
     }
+
+    // ===== 小剧场环境（2_10 串联验收前置，2026-08-22 策划拍板 2+：环境就绪，四链取证新会话）=====
+
+    /// <summary>
+    /// 调试出图入口：复用 GameBootstrap.StartNewGame 既有链路（LoadManager.InitializeNewGame +
+    /// PopulationSystem.SpawnInitialEntities + VagrantCampSystem.OnNewGameMapReady），**不另写一套生成逻辑**。
+    /// 直接 Play GameScene 时 GameSceneEntrance.NewGameConfig 为 null（MainMenu 未传）→ 地图不生成；
+    /// 本方法在 Ready 后补一个默认新建配置触发既有链出图。幂等：已有地图则跳过。
+    /// </summary>
+    public void StartNewGameDebug()
+    {
+        if (WorldManager.Instance != null && WorldManager.Instance.ActiveMap != null)
+        {
+            Debug.Log("[AIDebugSpawn] 地图已生成，跳过 StartNewGameDebug 出图。");
+            return;
+        }
+        if (!LoadManager.Instance)
+        {
+            Debug.LogError("[AIDebugSpawn] LoadManager 不可用，无法出图。");
+            return;
+        }
+        var config = new NewGameConfig
+        {
+            rulerName = "调试君主",
+            difficulty = 1,               // Easy：小剧场期尽量少怪，便于观测行为链
+            selectedSlotId = "slot_debug",// 空字符串=不写初始存档（小剧场不进存档，避免污染）
+            worldSize = WorldSize.Medium,
+            worldSeed = 0,                 // 0=随机；可用固定 seed 复现
+        };
+        // 复用既有出图链：世界初始化 + 君主生成
+        LoadManager.Instance.InitializeNewGame(config);
+        // 复用 GameBootstrap.StartNewGame 补齐的人口/营地桥接（引导书 3.5.1）
+        PopulationSystem.Instance.SpawnInitialEntities();
+        VagrantCampSystem.Instance.OnNewGameMapReady();
+        Debug.Log("[AIDebugSpawn] 调试出图完成（StartNewGameDebug 复用 LoadManager 既有链）。");
+    }
+
+    /// <summary>
+    /// 坐标基准探针（实证：逻辑层中心原点正交 vs 渲染层等轴 Iso）。
+    /// 在主城中心格分别以 GridSystem.CoordToWorld(逻辑) 与 MapRenderService.GridToIso(等轴) 放两个黄块探针，
+    /// 供截图确认两者世界基准是否一致（决定单位铺放该用哪套坐标）。
+    /// </summary>
+    public void SpawnCoordBasisProbe()
+    {
+        var grid = GridSystem.Instance;
+        var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
+        if (grid == null || map == null) return;
+        var center = new GridCoord(map.width / 2, map.height / 2);
+
+        Vector2 logic = grid.CoordToWorld(center);       // 逻辑中心原点正交
+        Vector2 iso = MapRenderService.GridToIso(center); // 渲染层等轴
+        var a = SpawnProbe("CoordProbe_LOGIC", logic, Color.yellow);
+        var b = SpawnProbe("CoordProbe_ISO", iso, Color.cyan);
+        Debug.Log($"[COORD] center={center} logicWorld={logic} isoWorld={iso} | "
+            + $"WorldToCoord(logic)={grid.WorldToCoord(logic)} WorldToCoord(iso)={grid.WorldToCoord(iso)} "
+            + $"| A_LOGIC={a} B_ISO={b}");
+    }
+
+    /// <summary>放一个纯色 SpriteRenderer 探针（sortingOrder=1），返回世界坐标串。</summary>
+    Vector2 SpawnProbe(string name, Vector2 pos, Color color)
+    {
+        var t = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+        var px = new Color[32 * 32];
+        for (int i = 0; i < px.Length; i++) px[i] = color;
+        t.SetPixels(px); t.Apply();
+        var go = new GameObject(name);
+        go.transform.position = new Vector3(pos.x, pos.y, 0f);
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = Sprite.Create(t, new Rect(0, 0, 32, 32), new Vector2(0.5f, 0.5f), 32f);
+        sr.sortingOrder = 2;
+        return pos;
+    }
 }

@@ -225,6 +225,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         _renderer = GetComponent<SpriteRenderer>();
         _rb = GetComponent<Rigidbody2D>();
+        // D104 排序遮挡：单位与建筑同 sortingOrder 基底，靠全局 CustomAxis (0,1,0) Y-sort + spriteSortPoint=Pivot
+        // 决定遮挡（单位在墙/建筑下方→单位在前；上方→建筑挡），而非 1D 时代的固定 order 盖层。
+        _renderer.sortingOrder = 1;
+        _renderer.spriteSortPoint = SpriteSortPoint.Pivot;
         // Kinematic：不受物理力/重力影响，只受 MovePosition 控制，杜绝"停不下来"
         _rb.bodyType = RigidbodyType2D.Kinematic;
         // 冻结旋转：NPC 不会因物理碰撞翻倒
