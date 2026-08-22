@@ -28,7 +28,7 @@ public static class BuildingVisual
         // 2. sourceType=None 的玩家建造建筑，按 role 选
         switch (role)
         {
-            case BuildingRole.Production: return "lumbermill";
+            case BuildingRole.Production: return "mine";   // 生产建筑（采石/矿场/农场）占位；木作废产能建筑(2_12)
             case BuildingRole.Economy:    return "castle";
             case BuildingRole.Defense:    return "tower_arrow";
             case BuildingRole.Wall:       return "wall";

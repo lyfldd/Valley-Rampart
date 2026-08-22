@@ -39,7 +39,7 @@ public enum KingdomTaskType
     WaterCarry, // 挑水 → C
     GoldMine,   // 产金（税务所）→ C
     // ===== QQQ.2 §10.1 扩展（末尾追加保持旧值稳定）=====
-    Production, // 生产（农场/伐木/采石/矿洞，原地劳作；与 Produce 语义对齐，供 KingdomTask 用）
+    Production, // 生产（农场/采石/矿洞，原地劳作；与 Produce 语义对齐，供 KingdomTask 用）
     WaterHaul,  // 搬水（水井→水网）
     Gather      // 采集（一次性资源点）
 }

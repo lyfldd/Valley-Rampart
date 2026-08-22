@@ -11,7 +11,7 @@ namespace ValleyRampart.Rendering
 ///   - key = artId（feat_*/bld_*/ground_*/mark_*），占位期 = 菱形/几何 + 调试配色。
 ///   - pivot = 地基菱形底面中心（锚点铁律，§1.1）；heightLayer 决定 CreateIsoTile(无高)/CreateIsoCube(有高)。
 ///   - sprite 总高 = 地基高(64×footprintH) + 高度层数×32；总宽 = footprintW×128（§4.2）。
-///   - bld_lumber（伐木场）**不生成**（2_12 作废），Get 返回 null。
+///   - 已作废建筑**不生成**（2_12），Get 返回 null。
 ///   - 地形高度（ground tile）默认 footprint 1×1 无高度 → CreateIsoTile。
 /// 使用：美术到位后把本表占位替换为 ArtAsset 查询（SpriteRefTable，2_10 步骤10），逻辑零改动。
 /// </summary>
@@ -70,7 +70,7 @@ public static class PlaceholderSprites
 
     private static readonly Dictionary<string, Sprite> _cache = new Dictionary<string, Sprite>();
 
-    /// <summary>取占位 sprite（命不中返回 null；bld_lumber 无定义→null 符合 2_12 作废）。</summary>
+    /// <summary>取占位 sprite（命不中返回 null；已作废建筑无定义→null 符合 2_12）。</summary>
     public static Sprite Get(string artId)
     {
         if (string.IsNullOrEmpty(artId)) return null;

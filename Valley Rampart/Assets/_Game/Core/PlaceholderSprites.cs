@@ -25,7 +25,7 @@ public static class PlaceholderSprites
             "monarch", "villager", "monster_small", "monster_boss",
             "soldier_infantry", "soldier_archer", "soldier_cavalry",
             "tower_arrow", "tower_catapult", "trap", "wall",
-            "farm", "mine", "lumbermill", "shipyard", "castle",
+            "farm", "mine", "shipyard", "castle",
             "projectile_arrow", "projectile_stone", "rift", "unknown",
             // 3.3.4 问题12：地图资源点 + 一次性采集占位
             "tree", "farmland", "treasure_box", "ruins",
@@ -59,7 +59,6 @@ public static class PlaceholderSprites
             // ===== 资源建筑 =====
             case "farm":              return SpriteFactory.CreateSquare(48, new Color(0.7f, 0.8f, 0.2f));
             case "mine":              return SpriteFactory.CreateCircle(48, new Color(0.3f, 0.3f, 0.3f));
-            case "lumbermill":        return SpriteFactory.CreateSquare(48, new Color(0.1f, 0.4f, 0.1f));
             case "shipyard":          return SpriteFactory.CreateSquare(64, new Color(0.2f, 0.6f, 0.6f));
             case "castle":            return SpriteFactory.CreateSquare(128, new Color(0.9f, 0.8f, 0.2f));
 

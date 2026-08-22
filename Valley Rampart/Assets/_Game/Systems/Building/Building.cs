@@ -708,7 +708,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             return true;
         }
 
-        // ④ 挑水：仅农场（产粮耗水）在水网缺水时发挑水任务（伐木/采石/矿洞不耗水，不派）
+        // ④ 挑水：仅农场（产粮耗水）在水网缺水时发挑水任务（采石/矿洞不耗水，不派）
         if (producer != null && producer.OutputResource == ResourceType.Food
             && WaterNetwork.Instance != null && WaterNetwork.Instance.Stored < waterThreshold)
         {

@@ -86,7 +86,7 @@ public enum ClimateZone { Tropical, Subtropical, Temperate, Cold }
 public enum FeatureType
 {
     Plain,             // 可走/可建
-    Tree,              // 一次性木（可刷新，无伐木场）
+    Tree,              // 一次性木（可刷新，木无产能建筑 2_12）
     Mountain,          // 阻挡
     SnowMountain,      // 阻挡
     Mine,              // 矿洞（石，需争夺；可走，Locked 由 2_2/2_7 置）
@@ -126,7 +126,7 @@ public enum BuildingCategory
 public enum BuildingRole
 {
     Defense,     // 防御建筑（箭塔/投石机/陷阱）
-    Production,  // 产能建筑（农场/伐木场/矿场）
+    Production,  // 产能建筑（农场/矿场/采石场）
     Economy,     // 经济建筑（仓库/市场）
     Wall,        // 城墙/障碍
     Special      // 特殊（裂隙/主城/遗迹/宝箱）

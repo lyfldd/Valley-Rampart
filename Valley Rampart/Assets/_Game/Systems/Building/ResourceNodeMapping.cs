@@ -3,13 +3,12 @@ using System.Collections.Generic;
 /// <summary>
 /// 资源点↔工具建筑映射（3.3.4 批次6 资源点+工具模型）。
 /// 资源点是前置（自身不产出），工具建筑激活后才产出。放置即改造。
-/// 映射：伐木场↔树、采石场↔矿洞、农场↔农田。
+/// 映射：采石场↔矿洞、农场↔农田（木已无产能建筑 2_12，=一次性树）。
 /// </summary>
 public static class ResourceNodeMapping
 {
     private static readonly Dictionary<string, BuildingType> _toolToNode = new Dictionary<string, BuildingType>
     {
-        { "lumbermill", BuildingType.Tree },      // 伐木场 -> 树
         { "quarry",     BuildingType.Mine },      // 采石场 -> 矿洞
         { "farm",       BuildingType.Farmland },  // 农场 -> 农田
     };

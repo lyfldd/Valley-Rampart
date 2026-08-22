@@ -207,7 +207,7 @@ public class BuildController : Singleton<BuildController>
             RulerController.Instance.Spend(_selectedDef.cost);
         }
 
-        // 放置即改造：工具建筑（伐木场/采石场）建在树/矿格上，覆盖原资源节点
+        // 放置即改造：工具建筑（采石场/农场）建在资源格上，覆盖原资源节点
         // A+（HH.2）：树/矿不再建 Building 实体；改为数据覆盖该格 feature（Tree/Mine→Plain）+ 刷新渲染
         if (ResourceNodeMapping.RequiresResourceNode(_selectedDef.id)
             && WorldManager.Instance != null)
