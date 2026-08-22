@@ -51,6 +51,7 @@ U盘拷贝日志.log
 垃圾文件夹/
 
 # ===== 工具 / AI 助手配置与产物（2026-08-20 收口排除，不入库）=====
+.codely/
 .codely-cli/
 Tools/
 screenshots/

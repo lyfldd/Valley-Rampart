@@ -97,7 +97,7 @@ public enum WalkFlags : byte
 **旧字段迁移**（旧值 → 新处置）：
 | 旧字段 | 旧默认 | 处置 |
 |--------|--------|------|
-| `cellSize` | 2.26（float 标量） | **改 `Vector2 (1.28, 0.64)`**；**双分量，距离公式见 §1.6，禁标量化** |
+| `cellSize` | 2.26（float 标量） | **改 `Vector2 (1.28, 0.64)`**（=Tile 全尺寸，轴向步长取半尺寸 0.64/0.32，2026-08-22 裁决 HH.3）；**双分量，距离公式见 §1.6，禁标量化** |
 | `regionCellCount` | 16 | **改名 `chunkSize = 16`**（语义变边长） |
 | `midRegionCellCount` | 4 | **改名 `midChunkSize = 4`** |
 | `originX` | 0 | **删除**（改地图中心原点，§5.2） |
@@ -198,8 +198,8 @@ public struct SpawnDef
 | `_cells: Dictionary<GridCoord, GridCell>` | **换稠密数组** | `GridCell[] _cells`（W×H），索引 `y*W+x`；GridCell 保留 class 承载单位列表（懒分配，R2） |
 | `_unitCells: Dictionary<UnitController, GridCoord>` | 保留 | 语义不变（微格主表，D70） |
 | `MapCellCount` | 换 `MapWidth / MapHeight` | 边界校验改矩形 |
-| `WorldToCoord(Vector2)` | 重写 | 2D 平面换算 + 地图中心原点（§5.2）；**返回 `GridCoord?`（null=越界，D2 P0）** |
-| `CoordToWorld(GridCoord)` | 重写 | 返回格中心；删除 `flyHeight`/`Baseline_y=-3` 特判 |
+| `WorldToCoord(Vector2)` | 重写 | 2D 平面换算 + 地图中心原点（§5.2）；**返回 `GridCoord?`（null=越界，D2 P0）**。2026-08-22 裁决(HH.3)：改等轴逆变换（§1.6），iso 契约代码待落 |
+| `CoordToWorld(GridCoord)` | 重写 | 返回格中心；删除 `flyHeight`/`Baseline_y=-3` 特判。2026-08-22 裁决(HH.3)：改等轴嵌入（`wx=(i−j)*0.64`、`wy=(i+j)*0.32`），iso 契约代码待落 |
 | `CellToRegionIndex(int cellX)` | 换 `CellToChunk(GridCoord)` | 返回 `Vector2Int` chunk 坐标（`coord / chunkSize`） |
 | `CellToMidRegionIndex(int cellX)` | 换 `CellToMidChunk(GridCoord)` | `coord / midChunkSize` |
 | `TryEnter(unit, coord)` | 保留签名 | 微格登记 + 堆叠上限检查 → 换格登记 → 跨 Chunk 检测 → 发 `EnemyEnteredChunkEvent` |
