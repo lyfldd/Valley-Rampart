@@ -137,44 +137,51 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         _unitSubCells.Clear();
     }
 
-    // ===== 坐标换算（中心原点，doc 1 §5.2）=====
+    // ===== 坐标换算（HH.3 裁决 2026-08-22 统一 iso：世界坐标=等轴嵌入，与 MapRenderService.GridToIso/IsoToCell 同一映射，doc 1 §1.6）=====
     public GridCoord? WorldToCoord(Vector2 pos)
     {
         if (config == null || _w <= 0 || _h <= 0) return null;
         float cellW = config.cellSize.x, cellH = config.cellSize.y;
-        int x = Mathf.FloorToInt((pos.x + _w * cellW * 0.5f) / cellW);
-        int y = Mathf.FloorToInt((pos.y + _h * cellH * 0.5f) / cellH);
+        float halfW = cellW * 0.5f, halfH = cellH * 0.5f;
+        // 由 wx=(gx-gy)*halfW, wy=(gx+gy)*halfH 反解（同 IsoToCell，origin-free）
+        float gx = pos.x / halfW * 0.5f + pos.y / halfH * 0.5f;
+        float gy = pos.y / halfH * 0.5f - pos.x / halfW * 0.5f;
+        int x = Mathf.FloorToInt(gx);
+        int y = Mathf.FloorToInt(gy);
         return InBounds(x, y) ? new GridCoord(x, y) : (GridCoord?)null;
     }
 
     public Vector2 CoordToWorld(GridCoord coord)
     {
-        float cellW = config != null ? config.cellSize.x : 1f;
-        float cellH = config != null ? config.cellSize.y : 1f;
-        return new Vector2((coord.x + 0.5f) * cellW - _w * cellW * 0.5f,
-                           (coord.y + 0.5f) * cellH - _h * cellH * 0.5f);
+        float cellW = config != null ? config.cellSize.x : MapRenderService.DefaultCellSize.x;
+        float cellH = config != null ? config.cellSize.y : MapRenderService.DefaultCellSize.y;
+        return new Vector2((coord.x - coord.y) * cellW * 0.5f,
+                           (coord.x + coord.y) * cellH * 0.5f);
     }
 
-    // ===== 微格 SubCell（doc 1 §5.2/§5.4）=====
+    // ===== 微格 SubCell（HH.3 裁决 2026-08-22 统一 iso：与 CoordToWorld 同一条 iso 映射，doc 1 §1.6）=====
     public GridCoord? WorldToSubCoord(Vector2 pos)
     {
         if (config == null || _w <= 0 || _h <= 0) return null;
         int div = config.subCellDivisor > 0 ? config.subCellDivisor : 4;
         float subW = config.cellSize.x / div, subH = config.cellSize.y / div;
-        int sx = Mathf.FloorToInt((pos.x + _w * config.cellSize.x * 0.5f) / subW);
-        int sy = Mathf.FloorToInt((pos.y + _h * config.cellSize.y * 0.5f) / subH);
+        float halfW = subW * 0.5f, halfH = subH * 0.5f;
+        float gx = pos.x / halfW * 0.5f + pos.y / halfH * 0.5f;
+        float gy = pos.y / halfH * 0.5f - pos.x / halfW * 0.5f;
         int subWCount = _w * div, subHCount = _h * div;
+        int sx = Mathf.FloorToInt(gx);
+        int sy = Mathf.FloorToInt(gy);
         return (sx >= 0 && sy >= 0 && sx < subWCount && sy < subHCount) ? new GridCoord(sx, sy) : (GridCoord?)null;
     }
 
     public Vector2 SubCoordToWorld(GridCoord sub)
     {
-        float cellW = config != null ? config.cellSize.x : 1f;
-        float cellH = config != null ? config.cellSize.y : 1f;
+        float cellW = config != null ? config.cellSize.x : MapRenderService.DefaultCellSize.x;
+        float cellH = config != null ? config.cellSize.y : MapRenderService.DefaultCellSize.y;
         int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
         float subW = cellW / div, subH = cellH / div;
-        return new Vector2((sub.x + 0.5f) * subW - _w * cellW * 0.5f,
-                           (sub.y + 0.5f) * subH - _h * cellH * 0.5f);
+        return new Vector2((sub.x - sub.y) * subW * 0.5f,
+                           (sub.x + sub.y) * subH * 0.5f);
     }
 
     public GridCoord SubToCell(GridCoord sub)

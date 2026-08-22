@@ -8,8 +8,8 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "ValleyRampart/GridConfig", fileName = "GridConfig")]
 public class GridConfig : ScriptableObject
 {
-    [Header("区块尺寸（doc 1 §1.6：逻辑正交，等轴投影归 2_10）")]
-    [Tooltip("世界单位/格，双分量（1.28, 0.64）。禁止任何公式把 cellSize 当标量用；1 小区块 = 1 等轴 Tile = 128×64px @PPU100")]
+    [Header("区块尺寸（doc 1 §1.6：逻辑=格基准，世界=等轴嵌入；HH.3 裁决 2026-08-22 统一 iso）")]
+    [Tooltip("世界单位/格，双分量（1.28, 0.64）。禁止任何公式把 cellSize 当标量用；坐标轴向步长取半尺寸(0.64/0.32)；1 小区块 = 1 等轴 Tile = 128×64px @PPU100")]
     public Vector2 cellSize = new Vector2(1.28f, 0.64f);
 
     [Tooltip("小区块 ÷ 此数 = 微格（寻路粒度，固定 4）。每小区块 = 4×4 = 16 微格（0.32×0.16）")]
