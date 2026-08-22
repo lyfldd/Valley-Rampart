@@ -233,6 +233,8 @@ public Vector2 CoordToWorld(GridCoord coord)       // 格中心正交坐标，wy
 public bool IsInBounds(GridCoord coord)            // 矩形边界校验
 ```
 
+> 2026-08-22 裁决（HH.3）：上段 `WorldToCoord`/`CoordToWorld` 为**当前正交实现**，仅作现状留档、**不先行改写**（避免代码仍正交而文档说 iso 的误导，见 §1.6 / §5.2 iso 契约）；世界坐标将统一为等轴嵌入（`wx=(i−j)*0.64`、`wy=(i+j)*0.32`，逆变换 §1.6），**GridSystem 迁移待落**。
+
 **验收**：空场景初始化 256×256 网格 < 100ms，网格层内存 < 2MB；`WorldToCoord → CoordToWorld` 往返误差 < 0.001；地图中心 = 世界 (0,0)；地形写入/直查 10 万次无 GC。
 
 ### 步骤 6：微格（SubCell）API

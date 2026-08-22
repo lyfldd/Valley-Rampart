@@ -47,6 +47,7 @@
 ## 四、环境使用说明（下次会话开箱即跑）
 
 - 进 Play GameScene → 控制台/脚本调用 `AIDebugSpawnController.Instance.StartNewGameDebug()` → 地图生成 → 再调用各场景编排。
+- **相机前置约定（2026-08-22 补，随相机自查闭环提交 ee5be68）：所有 Play 自动验收/正式截图前必须先 `AIDebugSpawnController.Instance.SetupStableCamera(true)`（锁定输入 + 对准主城等轴中心），防边缘滚屏/滚轮把相机推离主城导致构图漂移取不到图。**
 - 单位铺放进度：**未建**（被坐标基准阻塞），以下为计划内的四链编排目标，取证关键字已备好：
 
 ## 五、四链 PASS 判据与取证标准（事件日志 grep，逐条列出）
