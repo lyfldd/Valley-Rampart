@@ -54,5 +54,11 @@ public class RiftComponent : MonoBehaviour, IBuildingComponent
 /// <summary>主城核心组件（HQ 面板 / 科技解锁 / 失败条件）。批次7 做最小实现支撑主城流程。</summary>
 public class CastleCoreComponent : MonoBehaviour, IBuildingComponent
 {
-    public void Init(Building building) { }
+    public void Init(Building building)
+    {
+        // 2_12 步骤5：主城挂王座/旗帜锚点（ThroneAnchor，D2/D49/D249）——王国失败判定锚点。
+        // 上帝视角无君主实体，IsKingdomLost = 工人全灭（D249 终审：主城被破不再判负）。
+        if (building != null && ThroneAnchor.Instance == null)
+            building.gameObject.AddComponent<ThroneAnchor>().castle = building;
+    }
 }

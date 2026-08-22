@@ -597,6 +597,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
         // 存档注销（防 SaveManager 残留条目）
         if (SaveManager.Instance != null) SaveManager.Instance.UnregisterSaveable(this);
+        // ③ 守卫锚点语义（HH.3 §六 / HH.6 裁决二 / HH.7 验收）：一次性资源点（OreVein 等）采集销毁
+        //    = 该格高价值资源点失去 → 守卫该格的守卫区域随之失去覆盖 → 触发 GuardRegionLostEvent。
+        //    （Tree/Mine 非一次性，由 WorldManager.TryConsumeResourceNode 建筑覆盖路径触发。）
+        if (GridSystem.Instance != null)
+            GuardDeploymentSystem.HandleResourceConsumed(coord);
         // ③ 对象池回收（DR-11：不直接 Destroy，与 UnitFactory 一致）
         if (BuildingFactory.Instance != null)
             BuildingFactory.Instance.ReturnBuildingToPool(this);
