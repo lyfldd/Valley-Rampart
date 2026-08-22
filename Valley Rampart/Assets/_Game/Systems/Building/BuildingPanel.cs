@@ -63,7 +63,22 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
 
         // 标题：废弃态显示"废弃城堡"，修复后(Active)显示 def.displayName（主城）
         if (_nameLabel != null)
-            _nameLabel.text = _target.state == BuildingState.Abandoned ? "废弃城堡" : def.displayName;
+            _nameLabel.text = _target.state == BuildingState.Abandoned ? "废弃城堡"
+                : (_target.state == BuildingState.Ruined ? "废墟" : def.displayName);
+
+        // 废墟重建按钮（Ruined 态，2_12 步骤7 / D156：修复=同建造，成本 D155）
+        if (_target.state == BuildingState.Ruined)
+        {
+            if (_upgradeButton != null)
+            {
+                _upgradeButton.style.display = DisplayStyle.Flex;
+                var rc = _target.GetRepairCost();
+                _upgradeButton.text = $"重建废墟 (金{rc.gold} 石{rc.stone} 木{rc.wood} 粮{rc.food})";
+                _upgradeButton.SetEnabled(WarehouseHelper.CanAfford(rc));
+            }
+            if (_demolishButton != null) _demolishButton.style.display = DisplayStyle.None;
+            return;
+        }
 
         // 修复按钮（Abandoned 态，复用升级按钮；3.3.4 批次7）
         // 3.5 步骤2：修复消耗按 KingdomConfig Lv1 修复档（§2.1 木10/石6/粮6/金2），回退 def.cost
@@ -288,6 +303,22 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private void OnUpgradeClicked()
     {
         if (_target == null || _target.def == null) return;
+
+        // 废墟重建（2_12 步骤7 / D156：修复=同建造，仓库积满→协作施工，走 WarehouseHelper.TrySettle 多仓库凑单 D51）
+        if (_target.state == BuildingState.Ruined)
+        {
+            var rc = _target.GetRepairCost();
+            if (WarehouseHelper.TrySettle(rc))   // 原子凑单：不足整笔回滚；成功已扣
+            {
+                _target.StartRebuildFromRuins();
+                UIManager.Instance?.Pop();
+            }
+            else
+            {
+                Debug.Log("[BuildingPanel] 仓库资源不足，无法重建废墟");
+            }
+            return;
+        }
 
         // 修复废弃主城（3.3.4 批次7 / 3.5 步骤2：消耗按 KingdomConfig）
         if (_target.state == BuildingState.Abandoned)

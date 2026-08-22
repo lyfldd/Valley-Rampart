@@ -401,6 +401,22 @@ public readonly struct BuildingUpgradedEvent
     }
 }
 
+// 建筑进入废墟事件（2_12 步骤7 / D154）。建筑被击破进 Ruined 态时由 Building.EnterRuined 发布。
+// 消费方：2_10 废墟视觉 / 3.5 主城破城（D163/D164） / UI 提示修。与 UnitDiedEvent 不同：建筑仍在场（废墟可选可修）。
+public readonly struct BuildingRuinedEvent
+{
+    public readonly Building Building;
+    public BuildingRuinedEvent(Building building) { Building = building; }
+}
+
+// 建筑修复完成事件（2_12 步骤7 / D156）。废墟重建/受损修复完成转 Active 时由 Building.OnConstructionComplete 发布。
+// 消费方：2_13 刷新面板、2_10 切换正式视觉。
+public readonly struct BuildingRepairedEvent
+{
+    public readonly Building Building;
+    public BuildingRepairedEvent(Building building) { Building = building; }
+}
+
 // 城门开关变化事件（2_2 §3.4）。开门=可走，关门=阻挡；2_6 寻路订阅此事件做失效重寻（repath）。
 public readonly struct GateStateChangedEvent
 {

@@ -352,6 +352,11 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
         var producer = b.GetComponent<ProducerComponent>();
         if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
+
+        // 2_12 步骤7 / D155：累计投入恢复（D155 修复成本基数 / D162 拆除返还基数）。旧档缺字段 → 兜底按 def.cost。
+        b.totalInvested = data.totalInvested > 0
+            ? data.totalInvested
+            : (b.def != null ? b.def.cost.gold + b.def.cost.stone + b.def.cost.wood + b.def.cost.food : 0);
     }
 
     /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。</summary>

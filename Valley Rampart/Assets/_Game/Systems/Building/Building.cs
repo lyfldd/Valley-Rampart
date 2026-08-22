@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using static ResourceRespawnSystem;
 
 /// <summary>建筑生命周期状态（3.3.4 批次3）。</summary>
 public enum BuildingState
@@ -8,7 +9,8 @@ public enum BuildingState
     Constructing,   // 建造中（脚手架，不产出/不战斗）
     Active,         // 活跃（产出/战斗/可交互）
     Dead,           // 死亡（待销毁）
-    Abandoned       // 废弃（主城初始，可修复但不产出）
+    Abandoned,      // 废弃（主城初始，可修复但不产出）
+    Ruined          // 废墟（占格+阻挡 D154，修复=同建造 D156，先修复回原级才能升级 D157）
 }
 
 /// <summary>
@@ -89,6 +91,13 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public int hp;
     public int maxHp;
     public ResourceGrade grade = ResourceGrade.Normal;
+    /// <summary>
+    /// 累计投入资源量（2_12 步骤7 / D155：修复成本 = 累计投入 × SO 比例）。
+    /// 建造首付/升级费累加；拆除返还（D162）读它；修复按它算 D155。入档（BuildingSaveData）。
+    /// 用单一近似总量（resourcepack 求和）而非四资源分账——返还/修复粗糙按比例缩放同一 pack。
+    /// </summary>
+    [Tooltip("累计投入（建造+升级累加）。D155 修复成本基数 / D162 拆除返还基数")]
+    public int totalInvested;
 
     // ===== 3.5 P1-15 当前在册工人（3.5.3 §7.4 / 3.5.4 §8.5）=====
     // 本建筑当前服务的通用工人引用列表。建筑被摧毁时由 Die() 扫描 → 工人逃出存活。
@@ -130,13 +139,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     }
 
     private bool _pendingUpgrade;   // 当前 Constructing 是升级而非首次建造
+    private bool _pendingRepair;    // 2_12 步骤7 / D156：当前 Constructing 是从废墟重建（完成满血回原级，不升级）
     private SpriteRenderer _renderer;
 
     /// <summary>关联的 UI 面板（运行时注入，可为 null）。</summary>
     private IUIPanel _panel;
 
-    /// <summary>当前是否可被交互（Active/Abandoned 可交互）。</summary>
-    public bool IsInteractable => state == BuildingState.Active || state == BuildingState.Abandoned;
+    /// <summary>当前是否可被交互（Active/Abandoned/Ruined 可交互——Ruined 可点开面板重建，D156）。</summary>
+    public bool IsInteractable => state == BuildingState.Active || state == BuildingState.Abandoned || state == BuildingState.Ruined;
 
     /// <summary>是否已完成建造（Active 态）。</summary>
     public bool IsActive => state == BuildingState.Active;
@@ -282,6 +292,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         this.level = 1;
         this.footprint = footprintOverride.x > 0 && footprintOverride.y > 0 ? footprintOverride : Vector2Int.one;
 
+        // 2_12 步骤7 / D155：玩家建造记录首付为累计投入（修复/拆除返还基数）。地图预置建筑 totalInvested=0。
+        totalInvested = isPlayerBuilt && def != null
+            ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food
+            : 0;
+
         ApplyDef();
         state = BuildingState.Active;
     }
@@ -332,6 +347,17 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         UpdateVisual();
     }
 
+    /// <summary>2_12 步骤7 / D156：从废墟开始重建（若在 Ruined 态）。同建造流程（仓库凑单→协作施工），完成时满血回原级。</summary>
+    public void StartRebuildFromRuins()
+    {
+        if (state != BuildingState.Ruined) return;
+        _pendingRepair = true;
+        _pendingUpgrade = false;
+        state = BuildingState.Constructing;
+        constructProgress = 0f;
+        UpdateVisual();
+    }
+
     private void Start()
     {
         // 地图预置建筑初始化视觉（含 Abandoned 暗化 + 占位缩放）
@@ -350,7 +376,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         }
     }
 
-    /// <summary>建造/升级/修复完成。升级则提级，统一转 Active 并发激活事件。</summary>
+    /// <summary>建造/升级/修复完成。升级则提级，修复则满血回原级，统一转 Active 并发激活事件。</summary>
     void OnConstructionComplete()
     {
         if (_pendingUpgrade && def != null && def.levels != null && level - 1 < def.levels.Length)
@@ -370,6 +396,13 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
                 storage.storedAmount = Mathf.Min(storage.storedAmount, storage.capacity);
             }
             EventBus.Publish(new BuildingUpgradedEvent(this, level - 1, level));
+        }
+        else if (_pendingRepair)
+        {
+            // 2_12 步骤7 / D156/D159：废墟重建完成 → 满血回原级（不升级）。hp 已在此前置 0，恢复满。
+            hp = maxHp;
+            _pendingRepair = false;
+            EventBus.Publish(new BuildingRepairedEvent(this));
         }
         state = BuildingState.Active;
         UpdateVisual();
@@ -393,6 +426,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             if (_renderer == null) _renderer = gameObject.AddComponent<SpriteRenderer>();
             _renderer.sprite = PlaceholderSprites.Get("scaffold");
             _renderer.sortingOrder = 1;
+        }
+        else if (state == BuildingState.Ruined)
+        {
+            // 2_12 步骤7 / D154：废墟占位（2_10 提供 ruinsTile 美术，此处用灰暗废墟占位）
+            if (_renderer == null) _renderer = gameObject.AddComponent<SpriteRenderer>();
+            _renderer.sprite = PlaceholderSprites.Get("ruins");
+            _renderer.sortingOrder = 1;
+            _renderer.color = new Color(0.45f, 0.42f, 0.4f, 1f);   // 灰暗废墟色调
         }
         else
         {
@@ -438,18 +479,32 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         _pendingUpgrade = true;
         state = BuildingState.Constructing;
         constructProgress = 0f;
+        // 2_12 步骤7 / D155：升级投入累加进累计投入（玩家已在外层扣款，此处记账更新 totalInvested）
+        var uc = def.levels[level - 1].upgradeCost;
+        totalInvested += uc.gold + uc.stone + uc.wood + uc.food;
         UpdateVisual();
         return true;
     }
 
     // ===== 拆除（按 HP 比例返还资源）=====
 
-    /// <summary>拆除建筑（由 BuildingPanel 调）。按 HP 比例返还造价资源。</summary>
+    /// <summary>拆除建筑（由 BuildingPanel 调）。按累计投入×HP 比例返还（2_12 步骤7 / D162）。</summary>
     public void Demolish()
     {
         if (!isPlayerBuilt || def == null || !def.isDestructible || def.isResourceNode) return;
         float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
-        RulerController.Instance?.Refund(def.cost, ratio);
+        // D162：返还 = 累计投入 × (当前HP/满HP)。累计投入按 def.cost 四资源占比摊回 pack。
+        int invested = totalInvested > 0 ? totalInvested
+            : (def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food);
+        int baseSum = Mathf.Max(1, def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food);
+        var refundPack = new ResourcePack
+        {
+            gold = Mathf.FloorToInt((float)invested * def.cost.gold / baseSum),
+            stone = Mathf.FloorToInt((float)invested * def.cost.stone / baseSum),
+            wood = Mathf.FloorToInt((float)invested * def.cost.wood / baseSum),
+            food = Mathf.FloorToInt((float)invested * def.cost.food / baseSum)
+        };
+        RulerController.Instance?.Refund(refundPack, ratio);
         Die(DeathCause.Demolished);
     }
 
@@ -475,7 +530,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             storedAmount = storage != null ? storage.storedAmount : 0,
             byproductType = producer != null ? (int)producer.ByproductType : 0,
             byproductAmount = producer != null ? producer.ByproductAmount : 0,
-            grade = (int)grade   // QQQ.3 B8-5 / LC-B2：grade 入档
+            grade = (int)grade,   // QQQ.3 B8-5 / LC-B2：grade 入档
+            totalInvested = totalInvested  // 2_12 步骤7 / D155：累计投入入档
         };
         return new SavePayload
         {
@@ -505,6 +561,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         maxHp = Mathf.Max(1, data.maxHp);
         hp = Mathf.Clamp(data.hp, 0, maxHp);
 
+        // 2_12 步骤7 / D155：累计投入恢复。旧档缺字段(data.totalInvested=0，且玩家建筑无默认) → 兜底按 def.cost 计
+        totalInvested = data.totalInvested > 0
+            ? data.totalInvested
+            : (isPlayerBuilt && def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food : 0);
+
         var storage = GetComponent<StorageComponent>();
         if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
 
@@ -521,17 +582,74 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         }
     }
 
+    /// <summary>
+    /// 2_12 步骤7 / D155：修复/废墟重建成本（库存储入时点调用，勿入每帧路径）。
+    /// = 累计投入 × RepairConfig.repairCostRatio，按 def.cost 的 金/石/木/粮 比例分摊回 ResourcePack。
+    /// 累计投入用 totalInvested（建造+升级累加）；旧档/地图预置无累计投入 → 回退 def.cost。
+    /// </summary>
+    public ResourcePack GetRepairCost()
+    {
+        int invested = totalInvested > 0 ? totalInvested
+            : (def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food : 0);
+        if (invested <= 0 || def == null) return ResourcePack.Zero;
+
+        float ratio = RepairConfig.Instance != null ? Mathf.Clamp01(RepairConfig.Instance.repairCostRatio) : 0.5f;
+        int total = Mathf.Max(1, Mathf.RoundToInt(invested * ratio));
+
+        // 按 def.cost 四资源占比分摊（避免纯按总额使单一资源爆表）
+        int baseSum = Mathf.Max(1, def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food);
+        return new ResourcePack
+        {
+            gold = Mathf.RoundToInt((float)total * def.cost.gold / baseSum),
+            stone = Mathf.RoundToInt((float)total * def.cost.stone / baseSum),
+            wood = Mathf.RoundToInt((float)total * def.cost.wood / baseSum),
+            food = Mathf.RoundToInt((float)total * def.cost.food / baseSum)
+        };
+    }
+
     // ===== 战斗（3.4 实现 IDamageable）=====
+
+    /// <summary>是否工事（2_12 步骤7 / D165）：城墙/城门/桥/防御塔被破直接销毁，不进废墟。主城(Special)例外进废墟可修。</summary>
+    public bool IsFortification
+        => def != null && (def.role == BuildingRole.Wall || def.isGate || def.isBridge
+                           || (def.role == BuildingRole.Defense && sourceType != BuildingType.CastleCore));
 
     /// <summary>
     /// 受到伤害，只扣血。伤害已由 DamageSystem 算好+取整。
-    /// 血量≤0 触发 Die(Killed)。非 Active 态不受伤。
+    /// 血量≤0：工事(D165)直接销毁；非工事(含主城 D163)进废墟(Ruined)可修复，不直接判负。
+    /// 非 Active 态不受伤。
     /// </summary>
     public void TakeDamage(int amount)
     {
         if (state != BuildingState.Active) return; // 非 Active 不受伤
         hp = Mathf.Max(0, hp - amount);
-        if (hp <= 0) Die(DeathCause.Killed);
+        if (hp <= 0)
+        {
+            if (IsFortification)
+                Die(DeathCause.Killed);   // 工事被破直接销毁（D165，无废墟）
+            else
+                EnterRuined();            // 策略建筑/主城被破 → 废墟可修（D154/D163）
+        }
+    }
+
+    /// <summary>
+    /// 2_12 步骤7 / D154：建筑被击破 → 进入废墟态。保持 footprint 占用 + 阻挡（不 Free），
+    /// 停止生产/不去 Active，等待修复（D156 同建造）。废墟不判负（D249：主城被破可修）。
+    /// </summary>
+    public void EnterRuined()
+    {
+        state = BuildingState.Ruined;
+
+        // 在册工人撤出（废墟不供职；工人在内可能被打/被卡，撤出存活）
+        EscapeWorkers();
+        // 训练中断回退（若为训练建筑）
+        if (TrainingSystem.Instance != null)
+            TrainingSystem.Instance.OnBuildingDestroyed(this);
+        // 从任务调度器注销（不再是 Active 源）；保持 GridSystem 占格 → D154 阻挡持续
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
+
+        UpdateVisual();
+        EventBus.Publish(new BuildingRuinedEvent(this));
     }
 
     /// <summary>
