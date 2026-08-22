@@ -257,7 +257,7 @@ public class AIDebugSpawnController : MonoBehaviour
 
     /// <summary>
     /// 在指定世界位置生成单位。
-    /// UI 传 worldPos（世界坐标，y 基线 -3 自动吸附）。
+    /// UI 传 worldPos（等轴世界坐标，HH.3 裁决 origin-free）。
     /// </summary>
     public DebugSpawnResult Spawn(DebugSpawnType type, Vector2 worldPos)
     {
@@ -267,8 +267,8 @@ public class AIDebugSpawnController : MonoBehaviour
             return new DebugSpawnResult { Success = false, Message = "单位工厂未就绪（等加载完成）" };
         }
 
-        // y 吸附到地面基线 -3
-        Vector2 pos = new Vector2(worldPos.x, -3f);
+        // 等轴坐标（HH.3 裁决 2026-08-22 统一 iso，origin-free）：直接用调用方世界坐标，不再强制 y=-3 正交基线
+        Vector2 pos = worldPos;
 
         // 生成（复用 UnitFactory 完整链路：UnitData 查找 + Prefab 实例化 + NPCBrain.Init）
         GameObject go = UnitFactory.Instance.SpawnUnit(GetFaction(type), GetOccupation(type), pos);

@@ -241,6 +241,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     /// <summary>
     /// 计算君主出生位置：废弃城堡左侧 1 格（固定左边），走 WorldManager 王国锚点（3.5.1 E-S3 统一）。
+    /// HH.3 裁决 2026-08-22 统一 iso：左侧偏移取等轴邻格世界差（CoordToWorld 同一条映射），不再用 cellSize.x 当正交标量。
     /// 地图未就绪或找不到城堡时，回退 Inspector 配置的 spawnPosition。
     /// </summary>
     private Vector2 ResolveSpawnPosition()
@@ -249,11 +250,17 @@ public class RulerController : Singleton<RulerController>, ISaveable
         var grid = GridSystem.Instance;
         if (wm != null && grid != null && grid.Config != null)
         {
-            Vector2 anchor = wm.GetKingdomAnchorWorld();
-            if (anchor != Vector2.zero)
+            var map = wm.ActiveMap;
+            if (map != null)
             {
-                // 锚点=城堡中心（2 格交界）；左侧 1 格 = 锚点左移 1.5 格（doc1 改造：cellSize 取 .x 分量）
-                return new Vector2(anchor.x - 1.5f * grid.Config.cellSize.x, anchor.y);
+                Vector2 anchor = wm.GetKingdomAnchorWorld();
+                if (anchor != Vector2.zero)
+                {
+                    // 左侧 1 格 = 中心格 (x-1,y) 的等轴世界差（doc 1 §1.6，iso origin-free）
+                    var centerCoord = new GridCoord(map.width / 2, map.height / 2);
+                    Vector2 leftNeighbor = grid.CoordToWorld(new GridCoord(centerCoord.x - 1, centerCoord.y));
+                    return anchor + (leftNeighbor - anchor);
+                }
             }
         }
         return spawnPosition;
