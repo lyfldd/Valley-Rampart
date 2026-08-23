@@ -28,10 +28,19 @@ public class SpawnerComponent : MonoBehaviour, IBuildingComponent
     public void Init(Building building) { }
 }
 
-/// <summary>战斗组件（箭塔/投石机/魔法塔）。依赖：3.4 伤害管线 / 3.5 防御建筑。后续阶段实现。</summary>
+/// <summary>战斗组件（箭塔/弩炮/魔法塔）。依赖：3.4 伤害管线 / 3.5 防御建筑。
+/// 2_12 步骤12（P1 接缝）：补全 2_5 射程圆 + 360° 瞄准 + 最近目标（2D 欧氏距离）→ DamageSystem.RegisterAttack。
+/// 工事/弹药/AOE 等细分工事规则归 2_5；本组件只做防御建筑"建筑层"战斗接入驱动。</summary>
 public class CombatComponent : MonoBehaviour, IBuildingComponent
 {
     private Building _building;
+    private float _cooldown;
+    private const float AttackCD = 0.5f;   // 2_5 攻速 SO 占位（CombatConfig 无攻击CD，P1 固定值，后续迁 SO）
+
+    /// <summary>当前是否锁定目标（供表现层绘制射程圆/瞄准线）。</summary>
+    public bool HasTarget { get; private set; }
+    /// <summary>当前瞄准世界坐标（射程圆内最近敌，360° 朝向）。</summary>
+    public Vector2 AimPoint { get; private set; }
 
     /// <summary>是否可开火（工人操作解锁：Catapult 等 crewRequired>0 建筑需工人操作才可发射，改动②）。</summary>
     public bool IsOperational => _building != null && _building.HasEnoughCrew();
@@ -39,9 +48,83 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
     public void Init(Building building)
     {
         _building = building;
-        // 预留：建筑攻击驱动（射程内最近敌 -> DamageSystem.RegisterAttack）在此实现时，
-        // 发射前必须 gating on IsOperational——工人不足停火停机（对齐 sim CrewMachineThinkCore）。
-        // 现状：建筑战斗仍在"后续阶段实现"，本组件仅落地 crew 解锁接口 + 说明落点。
+        _cooldown = 0f;
+        HasTarget = false;
+    }
+
+    private void Update()
+    {
+        if (_building == null || DamageSystem.Instance == null || GridSystem.Instance == null) return;
+        var def = _building.def;
+        if (def == null || def.combat.attack <= 0) { HasTarget = false; return; }
+
+        // 工人门控：工人不足停火停机（对齐 sim CrewMachineThinkCore，改动②）
+        if (!IsOperational) { HasTarget = false; return; }
+
+        if (_cooldown > 0f) _cooldown -= Time.deltaTime;
+
+        // 2_5 射程圆：圈内最近目标按欧氏距离（360° 无朝向限制）
+        float rangeWorld = def.combat.range * GridSystem.Instance.Config.cellSize.x;
+        IDamageable target = FindNearestEnemyInRange(rangeWorld);
+        HasTarget = target != null;
+        if (target == null) return;
+
+        AimAt(target.GetPosition());
+
+        if (_cooldown <= 0f)
+        {
+            _cooldown = AttackCD;
+            var profile = new AttackProfile
+            {
+                attack = def.combat.attack,
+                range = def.combat.range,
+                cd = AttackCD,
+                isRanged = true,
+                projectileType = ProjectileType.Arrow, // 2_5 按塔种细分弹种（箭塔/弩塔/投掷机）
+            };
+            DamageSystem.Instance.RegisterAttack(_building, target, profile);
+        }
+    }
+
+    /// <summary>射程圆内最近敌对单位（GridSystem 邻近格扫描，y 地面+飞行两层，欧氏距离）。</summary>
+    private IDamageable FindNearestEnemyInRange(float rangeWorld)
+    {
+        float cellSize = GridSystem.Instance.Config.cellSize.x;
+        var centerOpt = GridSystem.Instance.WorldToCoord(_building.transform.position);
+        if (!centerOpt.HasValue) return null;
+        GridCoord center = centerOpt.Value;
+        int cellRange = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
+
+        IDamageable nearest = null;
+        float nearestDist = float.MaxValue;
+        // 2_5 射程圆：以建筑为中心的方形邻格扫描（dx、dy 全向），再用欧氏距离做圆形半径过滤（360° 无朝向限制）。
+        for (int dx = -cellRange; dx <= cellRange; dx++)
+        {
+            for (int dy = -cellRange; dy <= cellRange; dy++)
+            {
+                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, center.y + dy));
+                foreach (var unit in units)
+                {
+                    var uc = unit as UnitController;
+                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+                    var f = uc.GetFaction();
+                    if (f == _building.GetFaction() || f == Faction.None) continue;
+                    float d = Vector2.Distance((Vector2)_building.transform.position, uc.transform.position);
+                    if (d <= rangeWorld && d < nearestDist) { nearestDist = d; nearest = uc; }
+                }
+            }
+        }
+        return nearest;
+    }
+
+    /// <summary>360° 旋转朝目标（2D z 朝向瞄准线）。</summary>
+    private void AimAt(Vector2 targetPos)
+    {
+        AimPoint = targetPos;
+        Vector2 dir = targetPos - (Vector2)_building.transform.position;
+        if (dir.sqrMagnitude < 0.0001f) return;
+        float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+        _building.transform.rotation = Quaternion.Euler(0f, 0f, angle);
     }
 }
 
