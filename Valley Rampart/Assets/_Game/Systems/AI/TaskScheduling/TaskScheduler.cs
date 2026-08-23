@@ -633,16 +633,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (inv == null || inv.IsEmpty) return;
         int amount = inv.UnloadAll();
 
-        StorageComponent best = null;
-        float bestDist = float.MaxValue;
-        var storages = FindObjectsOfType<StorageComponent>();
-        for (int i = 0; i < storages.Length; i++)
-        {
-            var s = storages[i];
-            if (s == null || s.resourceType != inv.carriedType || s.capacity <= s.storedAmount) continue;
-            float d = GridMath.DistCells(s.transform.position, brain.transform.position);
-            if (d < bestDist) { bestDist = d; best = s; }
-        }
+        // 步骤11：切注册表（WarehouseRegistry.FindNearestAvailable 替 FindObjectsOfType 全场景扫描，D51 就近卸货）
+        StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position);
         if (best != null)
         {
             int added = best.Add(amount);

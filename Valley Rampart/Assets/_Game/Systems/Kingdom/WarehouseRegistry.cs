@@ -45,4 +45,23 @@ public static class WarehouseRegistry
         }
         return result;
     }
+
+    /// <summary>
+    /// 找距 worldPos 最近的"同 resourceType 且还有余量"的 StorageComponent（搬运第二段卸货落点）。
+    /// 步骤11 切替 TaskScheduler.UnloadInventory 的 FindObjectsOfType 全场景扫描（D51 就近卸货）。
+    /// 返回 null=无可用仓库（调用方兜底国库）。
+    /// </summary>
+    public static StorageComponent FindNearestAvailable(ResourceType type, UnityEngine.Vector3 worldPos)
+    {
+        StorageComponent best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < _storages.Count; i++)
+        {
+            var s = _storages[i];
+            if (s == null || s.resourceType != type || s.capacity <= s.storedAmount) continue;
+            float d = (s.transform.position - worldPos).sqrMagnitude;
+            if (d < bestDist) { bestDist = d; best = s; }
+        }
+        return best;
+    }
 }

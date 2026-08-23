@@ -88,9 +88,40 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
     public int GetAmount(ResourceType type)
         => _vaults.TryGetValue(type, out var s) ? s.storedAmount : 0;
 
-    /// <summary>入国库（满则 clamp 拒收返回 0；调用方据实际入库量记账）。</summary>
+    /// <summary>
+    /// 入国库（步骤11 堵溢出黑洞，D222/D223"溢出装箱"）。先装库内容量，超容部分**装箱落主城格**（杜绝静默丢资源）。
+    /// 返回实际入库量；装箱超额部分不走返回值（已落箱，不丢）。
+    /// </summary>
     public int Deposit(ResourceType type, int amt)
-        => _vaults.TryGetValue(type, out var s) ? s.Add(amt) : 0;
+    {
+        if (!_vaults.TryGetValue(type, out var s)) return 0;
+        int added = s.Add(amt);
+        int overflow = amt - added;
+        if (overflow > 0) SpillToChest(type, overflow);   // 国库满 → 溢出装箱（D222/D223）
+        return added;
+    }
+
+    /// <summary>国库满溢（或未纳管资源）→ 超额装箱落主城格，防资源静默丢失（步骤11 堵 ModifyResource 黑洞）。</summary>
+    private void SpillToChest(ResourceType type, int amount)
+    {
+        if (amount <= 0 || ChestManager.HasInstance == false) return;
+        var pack = new ResourcePack();
+        switch (type)
+        {
+            case ResourceType.Stone: pack.stone = amount; break;
+            case ResourceType.Wood: pack.wood = amount; break;
+            case ResourceType.Food: pack.food = amount; break;
+            case ResourceType.SpecialFood: pack.food = amount; break;
+            case ResourceType.Meat: pack.food = amount; break;
+            case ResourceType.Metal: pack.metal = amount; break;
+            default: return; // 弹药不走国库（HH.19 口径2），其余类型无装箱语义
+        }
+        var cell = Castle != null && GridSystem.Instance != null
+            ? GridSystem.Instance.WorldToCoord(Castle.transform.position).GetValueOrDefault()
+            : new GridCoord(0, 0);
+        ChestManager.Instance.SpawnChest(cell, pack, Faction.Human_Player);
+        Debug.Log($"[TreasureVault] 国库满 {type} 溢出 {amount} → 装箱落主城格 ({cell.x},{cell.y})（D223 不丢资源）");
+    }
 
     /// <summary>出国库（≤存量），返回实际取走量。</summary>
     public int Take(ResourceType type, int amt)
