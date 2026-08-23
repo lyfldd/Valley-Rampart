@@ -60,8 +60,8 @@ public class ThroneAnchor : MonoBehaviour
     }
 
     // ===== GameOver 轮询（2_12 步骤8.4 / D249，替代 RulerController 君主死亡判定）=====
-    // 实际 GameOver 由 RulerController.OnMonarchDied（君主死亡）驱动，逐步把它切到本锚点的
-    // "工人全灭→GameOver"（HH.9 记债归 8.4 清）。间隔轮询避免逐帧遍历单位。
+    // 已切换：GameOver 由本锚点"工人全灭→IsKingdomLost"驱动（8.4 落地），君主死亡不再判负
+    // （D249 终审 2026-08-14；8.4 已切，注解与代码一致）。间隔轮询避免逐帧遍历单位。
     private float _pollTimer;
     private const float PollInterval = 0.5f;
 
