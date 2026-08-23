@@ -10,60 +10,50 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
-  m_Name: wall
+  m_Name: Blacksmith
   m_EditorClassIdentifier: 
-  id: wall
-  displayName: "\u57CE\u5899"
-  description: 
+  id: Blacksmith
+  displayName: "\u94C1\u5320\u94FA"
+  description: "\u77F3\u2192Metal"
   faction: 1
-  role: 3
+  role: 1
   cost:
-    gold: 0
-    stone: 10
+    gold: 50
+    stone: 60
     wood: 0
     food: 0
-    metal: 0
-  footprint: {x: 1, y: 1}
-  allowedTerrain: 00000000
+  footprint: {x: 2, y: 1}
+  allowedTerrain: 
   heightLayer: 0
   canPlaceOnWater: 0
   isBridge: 0
   isGate: 0
   rotatable: 0
-  moduleType: 0
-  isObstacle: 1
+  moduleType: 1
+  isObstacle: 0
   producer:
     kind: 0
-    rate: 0
-    capacity: 0
+    rate: 0.5
+    capacity: 250
   combat:
     attack: 0
-    defense: 10
-    maxHp: 200
+    defense: 0
+    maxHp: 0
     range: 0
     damageType: 0
   levels:
   - upgradeCost:
-      gold: 0
-      stone: 10
-      wood: 12
+      gold: 75
+      stone: 90
+      wood: 0
       food: 0
-      metal: 10
-    statScale: 2
-    prerequisites: []
-  - upgradeCost:
-      gold: 0
-      stone: 24
-      wood: 30
-      food: 0
-      metal: 10
-    statScale: 2
+    statScale: 1.2
     prerequisites: []
   crewRequired: 0
   crewRadiusCells: 0
-  outputResource: 0
+  outputResource: 9
   isResourceNode: 0
-  isBlacksmith: 0
+  isBlacksmith: 1
   concurrentWorkers: 0
   trainingSlots: 0
   unlockLevel: 1

@@ -30,5 +30,6 @@ public struct TrainingDef
     public Occupation toOccupation;     // 目标职业（如 Worker/Porter）
     public int costGold;                // 训练消耗金（§10 金1）
     public int costCrystal;             // 训练消耗水晶（§10 法师/治疗师 水晶1；无则0）
+    public int costMetal;               // 2_12 步骤8 D132：兵种强化消耗铁（重装战士/盾卫/骑兵 5/5/8 占位；0=无铁消耗）
     public int costDays;                // 训练时长（天，§10 1天）
 }

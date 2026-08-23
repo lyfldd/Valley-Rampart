@@ -56,6 +56,8 @@ public class BuildingDef : ScriptableObject
     public ResourceType outputResource;
     [Tooltip("是否为资源点（原始矿洞/树林/农田）。true=自身不产出，仅作工具放置前置（批次6）")]
     public bool isResourceNode = false;
+    [Tooltip("是否为铁匠铺（2_12 步骤8，D199~D201）。true=挂 BlacksmithBuilding（石→Metal 就地加工 D200），跳过通用 ProducerComponent")]
+    public bool isBlacksmith = false;
 
     [Header("产能并发与训练（3.5 P0-5：3.5.4 建筑数据卡 §8.2/§8.4）")]
     [Tooltip("产能建筑并发工人数（0=不限/默认，允许任意数量工人同时操作该建筑）")]

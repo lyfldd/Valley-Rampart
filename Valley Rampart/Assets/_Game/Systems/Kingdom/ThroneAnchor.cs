@@ -58,4 +58,25 @@ public class ThroneAnchor : MonoBehaviour
         }
         return count;
     }
+
+    // ===== GameOver 轮询（2_12 步骤8.4 / D249，替代 RulerController 君主死亡判定）=====
+    // 实际 GameOver 由 RulerController.OnMonarchDied（君主死亡）驱动，逐步把它切到本锚点的
+    // "工人全灭→GameOver"（HH.9 记债归 8.4 清）。间隔轮询避免逐帧遍历单位。
+    private float _pollTimer;
+    private const float PollInterval = 0.5f;
+
+    void Update()
+    {
+        _pollTimer -= Time.deltaTime;
+        if (_pollTimer > 0f) return;
+        _pollTimer = PollInterval;
+
+        var gsm = GameStateManager.Instance;
+        if (gsm == null) return;
+        var s = gsm.CurrentState;
+        if (s != GameState.Playing && s != GameState.Paused) return;   // 仅游戏内判定，避免菜单/加载误触发
+        if (!IsKingdomLost) return;
+        Debug.Log("[ThroneAnchor] 工人全灭，王国覆灭 → GameOver（D249）。");
+        gsm.SetState(GameState.GameOver);
+    }
 }

@@ -529,7 +529,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         constructProgress = 0f;
         // 2_12 步骤7 / D155：升级投入累加进累计投入（玩家已在外层扣款，此处记账更新 totalInvested）
         var uc = def.levels[level - 1].upgradeCost;
-        totalInvested += uc.gold + uc.stone + uc.wood + uc.food;
+        totalInvested += uc.gold + uc.stone + uc.wood + uc.food + uc.metal;   // 2_12 步骤8 D131：含铁
         UpdateVisual();
         return true;
     }
@@ -632,26 +632,28 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 2_12 步骤7 / D155：修复/废墟重建成本（库存储入时点调用，勿入每帧路径）。
-    /// = 累计投入 × RepairConfig.repairCostRatio，按 def.cost 的 金/石/木/粮 比例分摊回 ResourcePack。
+    /// = 累计投入 × RepairConfig.repairCostRatio，按 def.cost 的 金/石/木/粮/铁 比例分摊回 ResourcePack。
     /// 累计投入用 totalInvested（建造+升级累加）；旧档/地图预置无累计投入 → 回退 def.cost。
+    /// 2_12 步骤8 D131：def.cost/分摊含铁，修复摊回不静默丢铁。
     /// </summary>
     public ResourcePack GetRepairCost()
     {
         int invested = totalInvested > 0 ? totalInvested
-            : (def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food : 0);
+            : (def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food + def.cost.metal : 0);
         if (invested <= 0 || def == null) return ResourcePack.Zero;
 
         float ratio = RepairConfig.Instance != null ? Mathf.Clamp01(RepairConfig.Instance.repairCostRatio) : 0.5f;
         int total = Mathf.Max(1, Mathf.RoundToInt(invested * ratio));
 
-        // 按 def.cost 四资源占比分摊（避免纯按总额使单一资源爆表）
-        int baseSum = Mathf.Max(1, def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food);
+        // 按 def.cost 五资源占比分摊（避免纯按总额使单一资源爆表）
+        int baseSum = Mathf.Max(1, def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food + def.cost.metal);
         return new ResourcePack
         {
             gold = Mathf.RoundToInt((float)total * def.cost.gold / baseSum),
             stone = Mathf.RoundToInt((float)total * def.cost.stone / baseSum),
             wood = Mathf.RoundToInt((float)total * def.cost.wood / baseSum),
-            food = Mathf.RoundToInt((float)total * def.cost.food / baseSum)
+            food = Mathf.RoundToInt((float)total * def.cost.food / baseSum),
+            metal = Mathf.RoundToInt((float)total * def.cost.metal / baseSum)
         };
     }
 

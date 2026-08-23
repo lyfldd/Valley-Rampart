@@ -80,11 +80,34 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
         Add(amt);
     }
 
-    /// <summary>就地加工增值。2_12 步骤3 仅立接口；Metal 加工链归步骤8 铁匠铺（D200），此分支暂空。</summary>
+    private static BlacksmithDef _blacksmithDefCache;
+
+    /// <summary>
+    /// 就地加工增值。2_12 步骤8：兑现铁匠铺 Metal 分支（D200，石→Metal）。
+    /// 其余 in/out 组合仍返回 0（未实现）。本仓库承诺存 Metal（outputResource=Metal）。
+    /// 流程：校验输入石足够（RulerController 国库真源）→ 扣石 → 加 Metal 入本仓库（容量内整批）。
+    /// </summary>
     public int Transform(ResourceType @in, ResourceType @out, int amt)
     {
-        // TODO(2_12步骤8)：铁匠铺 Metal 加工（石→Metal，D200 Transform 就地加工）。签名先立住防 sim 漂移。
-        return 0;
+        if (@in != ResourceType.Stone || @out != ResourceType.Metal) return 0;   // 仅铁匠铺 Metal 加工
+        if (amt <= 0) return 0;
+        int room = capacity - storedAmount;
+        if (room <= 0) return 0;
+
+        if (_blacksmithDefCache == null)
+            _blacksmithDefCache = Resources.Load<BlacksmithDef>("Config/BlacksmithDef");
+        int ratio = _blacksmithDefCache != null && _blacksmithDefCache.stoneToMetalRatio > 0
+            ? _blacksmithDefCache.stoneToMetalRatio
+            : 2;   // 兜底占位 2:1
+
+        int metal = Mathf.Min(Mathf.Max(1, amt / ratio), room);
+        int stoneNeeded = metal * ratio;
+        var ruler = RulerController.Instance;
+        if (ruler == null || ruler.Stone < stoneNeeded) return 0;   // 石不足 → 整批不产（累计器保留，等石攒够）
+
+        ruler.ModifyResource(ResourceType.Stone, false, stoneNeeded);
+        int added = Add(metal);
+        return added;
     }
 
     public int Harvest()

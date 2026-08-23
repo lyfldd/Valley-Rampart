@@ -129,7 +129,7 @@ public struct SaveConfig
     public int autoSaveIntervalDays;  // 默认 3
 }
 
-/// <summary>资源包（四资源统一结构）。</summary>
+/// <summary>资源包（金/石/木/粮/铁统一结构）。metal 为 2_12 步骤8 消费方（D131/D132）新增，默认 0 向后兼容。</summary>
 [Serializable]
 public struct ResourcePack
 {
@@ -137,20 +137,23 @@ public struct ResourcePack
     public int stone;
     public int wood;
     public int food;
+    public int metal;   // 2_12 步骤8：铁（工事升级 D131 消耗；0=无铁消耗，旧资产/旧档兼容）
 
-    public bool IsZero => gold == 0 && stone == 0 && wood == 0 && food == 0;
+    public bool IsZero => gold == 0 && stone == 0 && wood == 0 && food == 0 && metal == 0;
     public static ResourcePack Zero => new ResourcePack();
 
     public static ResourcePack operator +(ResourcePack a, ResourcePack b) => new ResourcePack
     {
         gold = a.gold + b.gold, stone = a.stone + b.stone,
-        wood = a.wood + b.wood, food = a.food + b.food
+        wood = a.wood + b.wood, food = a.food + b.food,
+        metal = a.metal + b.metal
     };
 
-    /// <summary>按比例缩放（拆除退款 ratio=0.5 等）。</summary>
+    /// <summary>按比例缩放（拆除退款 ratio=0.5 等）。metal 随同比缩放，保拆除/修复不静默丢铁。</summary>
     public static ResourcePack operator *(ResourcePack a, float scale) => new ResourcePack
     {
         gold = Mathf.RoundToInt(a.gold * scale), stone = Mathf.RoundToInt(a.stone * scale),
-        wood = Mathf.RoundToInt(a.wood * scale), food = Mathf.RoundToInt(a.food * scale)
+        wood = Mathf.RoundToInt(a.wood * scale), food = Mathf.RoundToInt(a.food * scale),
+        metal = Mathf.RoundToInt(a.metal * scale)
     };
 }

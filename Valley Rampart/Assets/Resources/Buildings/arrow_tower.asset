@@ -22,8 +22,14 @@ MonoBehaviour:
     stone: 10
     wood: 0
     food: 0
+    metal: 0
   footprint: {x: 1, y: 1}
   allowedTerrain: 00000000
+  heightLayer: 0
+  canPlaceOnWater: 0
+  isBridge: 0
+  isGate: 0
+  rotatable: 0
   moduleType: 0
   isObstacle: 1
   producer:
@@ -42,6 +48,7 @@ MonoBehaviour:
       stone: 12
       wood: 16
       food: 0
+      metal: 10
     statScale: 1.5
     prerequisites: []
   - upgradeCost:
@@ -49,12 +56,14 @@ MonoBehaviour:
       stone: 30
       wood: 36
       food: 0
+      metal: 10
     statScale: 1.4
     prerequisites: []
   crewRequired: 0
   crewRadiusCells: 0
   outputResource: 0
   isResourceNode: 0
+  isBlacksmith: 0
   concurrentWorkers: 0
   trainingSlots: 0
   unlockLevel: 1
@@ -64,6 +73,7 @@ MonoBehaviour:
   maxHp: 150
   sourceType: 0
   isConsumable: 0
+  gatherSeconds: 2
   gradeScale:
   - 0.7
   - 1

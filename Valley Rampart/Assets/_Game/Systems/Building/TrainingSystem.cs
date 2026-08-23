@@ -177,6 +177,12 @@ public class TrainingSystem : Singleton<TrainingSystem>
             Debug.Log("[TrainingSystem] 转职失败：水晶不足");
             return false;
         }
+        // 2_12 步骤8 D132：兵种强化耗铁（重装战士/盾卫/骑兵 costMetal）
+        if (def.costMetal > 0 && RulerController.Instance.Metal < def.costMetal)
+        {
+            Debug.Log("[TrainingSystem] 转职失败：铁不足");
+            return false;
+        }
 
         // P2：将军训练限量（KingdomConfig.generalLimit，§10 将军限量 2 可配置）
         if (def.toOccupation == Occupation.General && !CanTrainGeneral())
@@ -186,6 +192,8 @@ public class TrainingSystem : Singleton<TrainingSystem>
         RulerController.Instance.ModifyResource(ResourceType.Gold, false, def.costGold);
         if (def.costCrystal > 0)
             RulerController.Instance.ModifyResource(ResourceType.Crystal, false, def.costCrystal);
+        if (def.costMetal > 0)
+            RulerController.Instance.ModifyResource(ResourceType.Metal, false, def.costMetal);
 
         // 入队列（P1-10）：有空槽立即开始训练，否则排队
         if (!_queues.TryGetValue(building, out var q))

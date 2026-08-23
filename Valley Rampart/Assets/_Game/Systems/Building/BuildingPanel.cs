@@ -158,7 +158,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                     }
                     else
                     {
-                        _upgradeButton.text = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food})";
+                        _upgradeButton.text = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food}{(lvCost.metal > 0 ? $" 铁{lvCost.metal}" : "")})";   // 2_12 步骤8 D131：工事升级含铁
                         _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(lvCost));
                     }
                 }

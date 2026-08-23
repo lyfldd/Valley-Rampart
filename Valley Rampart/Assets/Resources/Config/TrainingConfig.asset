@@ -18,40 +18,70 @@ MonoBehaviour:
     toOccupation: 23
     costGold: 1
     costCrystal: 0
+    costMetal: 0
     costDays: 1
   - buildingId: TrainingGround
     fromOccupation: 22
     toOccupation: 24
     costGold: 1
     costCrystal: 0
+    costMetal: 0
     costDays: 1
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 3
     costGold: 2
     costCrystal: 0
+    costMetal: 0
     costDays: 2
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 2
     costGold: 2
     costCrystal: 0
+    costMetal: 0
     costDays: 2
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 5
     costGold: 4
     costCrystal: 1
+    costMetal: 0
     costDays: 3
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 6
     costGold: 3
     costCrystal: 1
+    costMetal: 0
     costDays: 3
   - buildingId: Barracks
     fromOccupation: 22
     toOccupation: 1
     costGold: 6
     costCrystal: 0
+    costMetal: 0
     costDays: 5
+  - buildingId: Barracks
+    fromOccupation: 3
+    toOccupation: 8
+    costGold: 3
+    costCrystal: 0
+    costMetal: 5
+    costDays: 4
+  - buildingId: Barracks
+    fromOccupation: 3
+    toOccupation: 10
+    costGold: 3
+    costCrystal: 0
+    costMetal: 5
+    costDays: 4
+  - buildingId: Barracks
+    fromOccupation: 3
+    toOccupation: 12
+    costGold: 3
+    costCrystal: 0
+    costMetal: 8
+    costDays: 5
+  supportedOccupations: 
+  trainDurationDays: []

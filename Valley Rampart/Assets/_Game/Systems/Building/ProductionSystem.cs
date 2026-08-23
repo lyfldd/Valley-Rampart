@@ -34,6 +34,9 @@ public class ProductionSystem : Singleton<ProductionSystem>
             if (b == null) continue;
             var producer = b.GetComponent<ProducerComponent>();
             if (producer != null) producer.Tick();
+            // 2_12 步骤8：铁匠铺逐秒加工（石→Metal，D199~D201）
+            var blacksmith = b.GetComponent<BlacksmithBuilding>();
+            if (blacksmith != null) blacksmith.Tick();
         }
     }
 

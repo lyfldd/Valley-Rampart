@@ -274,7 +274,11 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         if (def.producer.rate > 0f && def.producer.kind == ProduceKind.Resource && !def.isResourceNode)
         {
             b.gameObject.AddComponent<StorageComponent>()?.Init(b);
-            b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
+            // 铁匠铺（2_12 步骤8 D200）：挂 BlacksmithBuilding 替代通用 ProducerComponent（石→Metal 就地加工）
+            if (def.isBlacksmith)
+                b.gameObject.AddComponent<BlacksmithBuilding>()?.Init(b);
+            else
+                b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
         }
         if (def.combat.attack > 0)
             b.gameObject.AddComponent<CombatComponent>()?.Init(b);

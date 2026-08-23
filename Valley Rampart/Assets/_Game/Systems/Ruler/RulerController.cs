@@ -63,6 +63,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // ===== 3.5 P1 粮大类子资源（§13.11 特殊食物/肉；君主国库跟踪，供饱食/贸易用）=====
     public int SpecialFood { get; private set; }
     public int Meat { get; private set; }
+    // ===== 2_12 步骤8 铁艺（D199；实体资源，暂走国库槽过渡，8.4 退役迁移仓库时一并处置）=====
+    public int Metal { get; private set; }
 
     // 统治者名字（新建游戏时玩家输入，存档恢复时从 RulerSaveData 读取）
     public string RulerName { get; private set; } = "无名君主";
@@ -367,6 +369,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
         Food = 0;
         SpecialFood = 0;
         Meat = 0;
+        Metal = 0;
         Debug.Log("[RulerController] ResetState: 引用已清除，资源归零");
     }
 
@@ -438,7 +441,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
     /// <summary>是否负担得起该资源包（四资源全部满足，原子校验）。</summary>
     public bool CanAfford(ResourcePack cost)
     {
-        return Gold >= cost.gold && Stone >= cost.stone && Wood >= cost.wood && Food >= cost.food;
+        // 2_12 步骤8 D131：工事升级含铁（metal），纳入原子校验
+        return Gold >= cost.gold && Stone >= cost.stone && Wood >= cost.wood && Food >= cost.food && Metal >= cost.metal;
     }
 
     /// <summary>扣除资源包（调用前需先 CanAfford；逐项调 ModifyResource 保证事件发布）。</summary>
@@ -448,15 +452,17 @@ public class RulerController : Singleton<RulerController>, ISaveable
         if (cost.stone > 0) ModifyResource(ResourceType.Stone, false, cost.stone);
         if (cost.wood > 0) ModifyResource(ResourceType.Wood, false, cost.wood);
         if (cost.food > 0) ModifyResource(ResourceType.Food, false, cost.food);
+        if (cost.metal > 0) ModifyResource(ResourceType.Metal, false, cost.metal);
     }
 
-    /// <summary>按比例退还资源包（拆除退款 ratio=0.5）。</summary>
+    /// <summary>按比例退还资源包（拆除退款 ratio=0.5）。metal 随比退还，不静默丢铁。</summary>
     public void Refund(ResourcePack cost, float ratio = 1.0f)
     {
         if (cost.gold > 0) ModifyResource(ResourceType.Gold, true, Mathf.RoundToInt(cost.gold * ratio));
         if (cost.stone > 0) ModifyResource(ResourceType.Stone, true, Mathf.RoundToInt(cost.stone * ratio));
         if (cost.wood > 0) ModifyResource(ResourceType.Wood, true, Mathf.RoundToInt(cost.wood * ratio));
         if (cost.food > 0) ModifyResource(ResourceType.Food, true, Mathf.RoundToInt(cost.food * ratio));
+        if (cost.metal > 0) ModifyResource(ResourceType.Metal, true, Mathf.RoundToInt(cost.metal * ratio));
     }
 
     // 按资源类型获取当前值
@@ -485,6 +491,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
             case ResourceType.Food: Food = value; break;
             case ResourceType.SpecialFood: SpecialFood = value; break;
             case ResourceType.Meat: Meat = value; break;
+            case ResourceType.Metal: Metal = value; break;
         }
     }
 
@@ -500,15 +507,14 @@ public class RulerController : Singleton<RulerController>, ISaveable
         }
     }
 
-    // 君主阵亡处理：清除引用，推进游戏状态到 GameOver
+    // 君主阵亡处理（2_12 步骤8.4 / D249 修订：君主死亡**不再判负**）。
+    // GameOver 唯一条件=工人全灭（ThroneAnchor.IsKingdomLost 轮询驱动，见 ThroneAnchor.Update）。
+    // 君主死亡仅清引用+记日志；王国只要存有工人即可继续（破城期风味，D164）。
     public void OnMonarchDied()
     {
-        // ⚠️ 游戏结束是正常游戏流程，用 Log 而非 LogError：
-        // 团结引擎编辑器对 LogError 会"自动暂停 Play Mode"（Error Pause），
-        // 暂停期间 UI Toolkit 输入冻结 → GameOver 面板按钮点击无效（玩家需手动取消暂停）。
-        Debug.Log("[RulerController] ☠ 君主已阵亡！游戏结束。");
+        // ⚠️ 君主阵亡是正常游戏流程，用 Log 而非 LogError，避免触发 Error Pause 冻结 UI。
+        Debug.Log("[RulerController] 君主阵亡（D249：不再判负）。工人仍在则王国继续。");
         monarchUnit = null;
-        GameStateManager.Instance.SetState(GameState.GameOver);
     }
 
     // ===== 新建游戏时设置统治者名字 =====
