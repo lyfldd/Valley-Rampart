@@ -74,7 +74,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
     {
         var cfg = GetCfg();
         return cfg != null && RulerController.Instance != null
-               && RulerController.Instance.Food >= cfg.recruitFoodCost;
+               && RulerController.Instance.GetResource(ResourceType.Food) >= cfg.recruitFoodCost;
     }
 
     /// <summary>

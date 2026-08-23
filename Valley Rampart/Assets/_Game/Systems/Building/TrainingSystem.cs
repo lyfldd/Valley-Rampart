@@ -178,7 +178,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
             return false;
         }
         // 2_12 步骤8 D132：兵种强化耗铁（重装战士/盾卫/骑兵 costMetal）
-        if (def.costMetal > 0 && RulerController.Instance.Metal < def.costMetal)
+        if (def.costMetal > 0 && RulerController.Instance.GetResource(ResourceType.Metal) < def.costMetal)
         {
             Debug.Log("[TrainingSystem] 转职失败：铁不足");
             return false;

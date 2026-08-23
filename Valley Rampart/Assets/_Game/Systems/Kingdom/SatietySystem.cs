@@ -108,7 +108,7 @@ public class SatietySystem : Singleton<SatietySystem>
         // 1. 进食（数据层）：饱食不满阈值 且 国库粮足 → 消耗粮恢复饱食
         bool fed = false;
         if (unit.Satiety < cfg.feedSatietyThreshold && RulerController.Instance != null
-            && RulerController.Instance.Food >= dailyFoodCost)
+            && RulerController.Instance.GetResource(ResourceType.Food) >= dailyFoodCost)
         {
             RulerController.Instance.ModifyResource(ResourceType.Food, false, dailyFoodCost);
             unit.Satiety = Mathf.Clamp(unit.Satiety + cfg.foodRestoreGrain, 0, 100);

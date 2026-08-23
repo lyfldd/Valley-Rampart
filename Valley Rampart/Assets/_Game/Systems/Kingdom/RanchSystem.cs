@@ -94,7 +94,7 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
             int growDays = Mathf.Max(1, def.Value.growDays);
 
             // 喂粮：国库粮足则喂并生长；断粮停长
-            if (RulerController.Instance.Food >= feedPerAnimal)
+            if (RulerController.Instance.GetResource(ResourceType.Food) >= feedPerAnimal)
             {
                 RulerController.Instance.ModifyResource(ResourceType.Food, false, feedPerAnimal);
                 entry.daysGrown++;

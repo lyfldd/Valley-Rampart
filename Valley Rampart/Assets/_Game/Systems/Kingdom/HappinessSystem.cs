@@ -119,7 +119,7 @@ public class HappinessSystem : Singleton<HappinessSystem>
         // 食品品质：王国产出高档食品（特殊食物/肉）时小幅加成
         int foodQualityFactor = 0;
         if (RulerController.Instance != null
-            && (RulerController.Instance.SpecialFood > 0 || RulerController.Instance.Meat > 0))
+            && (RulerController.Instance.GetResource(ResourceType.SpecialFood) > 0 || RulerController.Instance.GetResource(ResourceType.Meat) > 0))
             foodQualityFactor = Mathf.RoundToInt(cfg.happinessFoodQualityWeight * 100f);
 
         int h = cfg.happinessBase
