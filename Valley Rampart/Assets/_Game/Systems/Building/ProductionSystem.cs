@@ -37,6 +37,9 @@ public class ProductionSystem : Singleton<ProductionSystem>
             // 2_12 步骤8：铁匠铺逐秒加工（石→Metal，D199~D201）
             var blacksmith = b.GetComponent<BlacksmithBuilding>();
             if (blacksmith != null) blacksmith.Tick();
+            // 2_12 步骤9：投掷机厂逐秒产丹（D207~D212，HH.19 A×4；与铁匠铺并列专属组件）
+            var siege = b.GetComponent<SiegeWorkshopBuilding>();
+            if (siege != null) siege.Tick();
         }
     }
 

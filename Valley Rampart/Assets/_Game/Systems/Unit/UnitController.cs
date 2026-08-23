@@ -20,7 +20,7 @@ public enum Facing8 { E, NE, N, NW, W, SW, S, SE }
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(Rigidbody2D))]
-public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle, IClickInteractable
+public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle, IClickInteractable, ITaskSource
 {
     // ===== ISaveable =====
 
@@ -316,6 +316,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
         UnitRegistry.Instance.Register(this);
 
+        // 2_12 步骤9：弹药单位（ammoMax>0 的战争机器/塔）注册为装填任务源——弹仓不足时发布 AmmoReload（HH.19 A×4）。
+        if (_professionSnapshot.ammoMax > 0 && TaskScheduler.HasInstance)
+            TaskScheduler.Instance.Register(this);
+
         // 分配唯一 SaveId 并注册为可存档对象
         SaveId = $"Unit_{data.faction}_{data.occupation}_{System.Guid.NewGuid():N}";
         SaveManager.Instance.RegisterSaveable(this);
@@ -572,6 +576,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         // 再从注册中心注销
         UnitRegistry.Instance.Unregister(this);
 
+        // 2_12 步骤9：弹药单位注销装填任务源（弹仓需求不再发布；TaskScheduler.Unregister 亦清该源在派任务）
+        if (_professionSnapshot.ammoMax > 0 && TaskScheduler.HasInstance)
+            TaskScheduler.Instance.Unregister(this);
+
         // 从空间分区注销（3.0.1 感知广播用）
         GridSystem.Instance?.RemoveUnit(this);
         // 重置网格注册标志（回池后位置移动缓存失效，防出池跳过首格登记）
@@ -615,8 +623,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     private void Update()
     {
-        // B1 弹药补给（对齐 sim SimWorld.TickAmmoResupply）：战争机器石弹缓慢自动恢复（模拟工人搬运往返）
-        TickAmmoResupply();
+        // 2_12 步骤9 / HH.19 决策3-A：退役假搬运定时器 TickAmmoResupply（石弹自动回充→弹药经济名义化），
+        // 石弹与火/魔统一走"工人装填真实链"（SiegeWorkshopBuilding 厂仓/通用仓库 → 装填任务 → A* 弹仓）。
+        // sim 侧行为差已登记 HH.15 台账，是否对齐由训练仓会话决策。
 
         // 3.7 P1 静态单位攻击（塔/弩炮/投掷机）：射程内最近敌注册攻击，无目标停手。
         // 静态单位无 NPCBrain，本分支是唯一攻击驱动（isStatic 判定开销极小，仅静态 prefab 命中）。
@@ -771,6 +780,128 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (AmmoStone > 0) { ammoType = ProjectileType.Stone; return true; }
         return false;
     }
+
+    // ===== 2_12 步骤9 装填真实链（D207~D212，HH.19 A×4）=====
+
+    /// <summary>
+    /// 装填写入：把对应 ResourceType 弹药填入弹仓（Ammo* 字段，对齐 sim SimUnit 弹仓储备）。
+    /// 工人装填任务到达后调用（TaskScheduler.UnloadToMagazine）。弹仓满则拒收返回 0。
+    /// </summary>
+    public int AmmoTypeFor(ResourceType ammo)
+    {
+        switch (ammo)
+        {
+            case ResourceType.StoneAmmo: return 0;   // 0=Stone 槽位
+            case ResourceType.FireballAmmo: return 1;
+            case ResourceType.MagicAmmo: return 2;
+            default: return -1;
+        }
+    }
+
+    /// <summary>某弹药子仓当前余量（弹仓满停止装填判定）。</summary>
+    public int AmmoSlotAmount(int slot)
+    {
+        switch (slot)
+        {
+            case 0: return AmmoStone;
+            case 1: return AmmoFireball;
+            default: return AmmoMagic;
+        }
+    }
+
+    /// <summary>某弹药子仓容量上限（弹仓余量，非补贴决定装填量）。</summary>
+    public int AmmoSlotCapacity(int slot)
+    {
+        int max = _professionSnapshot.ammoMax;
+        if (max <= 0) return 0;   // 非弹药单位无弹仓
+        switch (slot)
+        {
+            case 1: return Mathf.Max(0, max / 4);   // 昂贵弹（火/魔）各占 1/4 槽（对齐 Initialize）
+            case 2: return Mathf.Max(0, max / 4);
+            default: return max;
+        }
+    }
+
+    /// <summary>
+    /// 装填一单位 ResourceType 弹药入弹仓（≤余量），返回实际填入量（工人背陪伴扣减调用方保证）。
+    /// 弹仓满/类型不符返回 0。
+    /// </summary>
+    public int FillMagazine(ResourceType ammo, int amt)
+    {
+        int slot = AmmoTypeFor(ammo);
+        if (slot < 0 || amt <= 0) return 0;
+        int cap = AmmoSlotCapacity(slot);
+        int cur = AmmoSlotAmount(slot);
+        if (cap <= 0 || cur >= cap) return 0;
+        int fill = Mathf.Min(amt, cap - cur);
+        switch (slot)
+        {
+            case 0: AmmoStone += fill; break;
+            case 1: AmmoFireball += fill; break;
+            default: AmmoMagic += fill; break;
+        }
+        return fill;
+    }
+
+    /// <summary>该单位是否有弹药缺口（任一弹仓未满，且缺该弹种可装填）。</summary>
+    public bool HasMagazineSpace()
+    {
+        int max = _professionSnapshot.ammoMax;
+        if (max <= 0) return false;
+        for (int i = 0; i < 3; i++)
+            if (AmmoSlotAmount(i) < AmmoSlotCapacity(i)) return true;
+        return false;
+    }
+
+    // ===== ITaskSource 实现（2_12 步骤9：装填需求的源=弹仓需求的塔/机器自身）=====
+
+    /// <summary>装填目标单位世界坐标（单位自身位置）。</summary>
+    public Vector2 SourcePos => transform.position;
+
+    /// <summary>装填任务源有效（存活且弹仓未满）。</summary>
+    public bool IsValid => this != null && IsAlive && HasMagazineSpace();
+
+    /// <summary>
+    /// 发布装填任务：弹仓有缺口（且缺该弹种可补）→ 发 AmmoReload 任务（dest=UnitMagazine，自身位置）。
+    /// 同类去重由调度器按源+类型处理；装填量按最小缺口附 args。
+    /// </summary>
+    public bool TryAdvertiseTask(out KingdomTask task)
+    {
+        task = null;
+        if (!IsAlive || !HasMagazineSpace()) return false;
+        var plan = PickReloadPlan();
+        if (plan == null) return false;
+        task = new KingdomTask(KingdomTaskType.AmmoReload, this, intensity: 1f);
+        task.destType = KingdomDestType.UnitMagazine;
+        task.destPos = transform.position;
+        task.args = new ReloadAmmoArgs
+        {
+            ammoType = plan.Value.ammo,
+            amount = plan.Value.amount
+        };
+        return true;
+    }
+
+    private struct AmmoNeed { public ResourceType ammo; public int amount; }
+
+    /// <summary>选一个待装填弹药（最缺档位的弹种；昂贵弹只在其容量>0 且缺口时）。</summary>
+    private AmmoNeed? PickReloadPlan()
+    {
+        int max = _professionSnapshot.ammoMax;
+        if (max <= 0) return null;
+        // 优先石弹（主力、容量=max）缺口；其次火/魔（昂贵弹各自 1/4 槽）
+        int needStone = max - AmmoStone;
+        if (needStone > 0) return new AmmoNeed { ammo = ResourceType.StoneAmmo, amount = needStone };
+        int capF = Mathf.Max(0, max / 4), needF = capF - AmmoFireball;
+        if (needF > 0) return new AmmoNeed { ammo = ResourceType.FireballAmmo, amount = needF };
+        int capM = Mathf.Max(0, max / 4), needM = capM - AmmoMagic;
+        if (needM > 0) return new AmmoNeed { ammo = ResourceType.MagicAmmo, amount = needM };
+        return null;
+    }
+
+    /// <summary>装填任务源注册/注销（塔/机器出生/死亡时由 Initialize/OnDestroy 调）。</summary>
+    public void OnRegister() { }
+    public void OnUnregister() { }
 
     /// <summary>B1 目标价值评估（对齐 sim SimBrain.IsHighValueTarget）：残血 / 重甲 / 邻域密集。
     /// D3 清理轮：阈值读字段（NPCBrain 注入 tuning.hv*）；邻域密集用 GridSystem 邻近格扫描（对齐 sim AOE 溅射半径）。</summary>

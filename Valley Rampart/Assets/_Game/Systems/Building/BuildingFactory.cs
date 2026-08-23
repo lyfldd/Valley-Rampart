@@ -273,12 +273,21 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         if (b == null || def == null) return;
         if (def.producer.rate > 0f && def.producer.kind == ProduceKind.Resource && !def.isResourceNode)
         {
-            b.gameObject.AddComponent<StorageComponent>()?.Init(b);
-            // 铁匠铺（2_12 步骤8 D200）：挂 BlacksmithBuilding 替代通用 ProducerComponent（石→Metal 就地加工）
-            if (def.isBlacksmith)
-                b.gameObject.AddComponent<BlacksmithBuilding>()?.Init(b);
+            // 投掷机厂（2_12 步骤9 D207~D212 / HH.19 A×4）：挂专属组件产出弹药（厂级 3 子仓），替代通用 ProducerComponent。
+            // 弹性逻辑：仍需本地无 StorageComponent（厂仓 3 子弹药不附建筑本体），故跳过通用 StorageComponent 挂载。
+            if (def.isSiegeWorkshop)
+            {
+                b.gameObject.AddComponent<SiegeWorkshopBuilding>()?.Init(b);
+            }
             else
-                b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
+            {
+                b.gameObject.AddComponent<StorageComponent>()?.Init(b);
+                // 铁匠铺（2_12 步骤8 D200）：挂 BlacksmithBuilding 替代通用 ProducerComponent（石→Metal 就地加工）
+                if (def.isBlacksmith)
+                    b.gameObject.AddComponent<BlacksmithBuilding>()?.Init(b);
+                else
+                    b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
+            }
         }
         if (def.combat.attack > 0)
             b.gameObject.AddComponent<CombatComponent>()?.Init(b);

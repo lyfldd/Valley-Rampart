@@ -58,6 +58,8 @@ public class BuildingDef : ScriptableObject
     public bool isResourceNode = false;
     [Tooltip("是否为铁匠铺（2_12 步骤8，D199~D201）。true=挂 BlacksmithBuilding（石→Metal 就地加工 D200），跳过通用 ProducerComponent")]
     public bool isBlacksmith = false;
+    [Tooltip("是否为投掷机厂（2_12 步骤9，D207~D212）。true=挂 SiegeWorkshopBuilding（弹药产出入厂级弹药仓，仿 BlacksmithBuilding 专属组件），跳过通用 ProducerComponent；弹仓容量取 producer.capacity（HH.19 A×4）")]
+    public bool isSiegeWorkshop = false;
 
     [Header("产能并发与训练（3.5 P0-5：3.5.4 建筑数据卡 §8.2/§8.4）")]
     [Tooltip("产能建筑并发工人数（0=不限/默认，允许任意数量工人同时操作该建筑）")]

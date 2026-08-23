@@ -9,7 +9,9 @@ public enum KingdomDestType
     Treasury,         // 国库
     NearestWarehouse, // 最近可用仓库（无则回退国库）
     WaterNetwork,     // 水网
-    SpecificBuilding  // 指定建筑
+    SpecificBuilding, // 指定建筑
+    // ===== 2_12 步骤9 弹药（D207~D212，HH.19 A×4；末尾追加保持序列化稳定）=====
+    UnitMagazine      // 单位弹仓（战争机器/塔本体；装填任务到达即把背包弹药写入 Ammo* 字段）
 }
 
 /// <summary>
@@ -58,4 +60,11 @@ public interface ITaskSource
 
     /// <summary>从调度器注销时回调（Building.Die 调 Unregister 时触发）。</summary>
     void OnUnregister();
+}
+
+/// <summary>装填任务参数（2_12 步骤9，HH.19 A×4）：该源（塔/机器）需要补的弹种与数量。</summary>
+public class ReloadAmmoArgs
+{
+    public ResourceType ammoType;   // 需要的弹种（StoneAmmo/FireballAmmo/MagicAmmo）
+    public int amount;              // 需要数量（缺口量，≤单次搬运携带量由调度器 clamp）
 }

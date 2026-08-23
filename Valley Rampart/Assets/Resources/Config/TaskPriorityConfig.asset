@@ -27,3 +27,5 @@ MonoBehaviour:
     priority: 1
   - taskType: 6
     priority: 1
+  - taskType: 10
+    priority: 2

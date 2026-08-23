@@ -48,7 +48,7 @@ MonoBehaviour:
   chargeGroupCooldown: 20
   chargeDamageReduce: 0.7
   fortification: {fileID: 11400000, guid: 523250b72f4ed1947ac218fde8d2450d, type: 2}
-  ammoMax: 0
+  ammoMax: 10
   ammoCostStone: 1
   ammoCostFireball: 3
   ammoCostMagic: 5

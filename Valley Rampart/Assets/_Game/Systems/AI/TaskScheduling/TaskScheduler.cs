@@ -425,6 +425,21 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                                 stale.Add(id);
                             }
                         }
+                        else if (task.type == KingdomTaskType.AmmoReload)
+                        {
+                            // 2_12 步骤9（HH.19 A×4）：装填段——从最近同类弹药仓库取弹入背包 → 转 MovingToDest（回单位弹仓卸货）。
+                            // 源=装填目标单位（SourcePos=单位），故取货不走 Building StorageComponent，改走弹药仓库。
+                            if (LoadAmmoToBackpack(brain, task))
+                            {
+                                _npcStateMap[id] = TaskState.MovingToDest;
+                                InjectCarryStimulus(brain, task);
+                            }
+                            else
+                            {
+                                Complete(id, task, brain);   // 弹药仓空/类型不足 → 完成（等下轮需求）
+                                stale.Add(id);
+                            }
+                        }
                         else
                         {
                             Complete(id, task, brain);
@@ -435,11 +450,15 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 
                 case TaskState.MovingToDest:
                     // QQQ.4 T11：搬运段——背包资源送往 dest（仓库/国库），到达卸货后完成
+                    // 2_12 步骤9：装填段——背包弹药送往单位弹仓（UnitMagazine），到达 FillMagazine 后完成
                     {
                         float arrive = ArrivalThreshold(brain, cellSize);
                         if (Vector2.Distance(brain.transform.position, task.destPos) <= arrive)
                         {
-                            UnloadInventory(brain, task);
+                            if (task.type == KingdomTaskType.AmmoReload)
+                                UnloadAmmoToMagazine(brain, task);   // 装填：背包弹药写入单位 A* 弹仓
+                            else
+                                UnloadInventory(brain, task);        // 搬运：背包资源入仓库/国库
                             Complete(id, task, brain);
                             stale.Add(id);
                         }
@@ -637,6 +656,81 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         }
     }
 
+    // ===== 2_12 步骤9 装填两段式（D207~D212，HH.19 A×4）：取弹（弹药仓库→背包）→ 卸入单位弹仓 =====
+
+    /// <summary>
+    /// 装填取货段：从最近"所需弹种"的 StorageComponent（厂级弹药仓子仓 / 通用仓库）取弹入工人背包。
+    /// 源=装填目标单位（非 StorageComponent），故不走 Building 取货，直接扫同类弹药仓。
+    /// </summary>
+    private bool LoadAmmoToBackpack(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null || task == null || !(task.args is ReloadAmmoArgs ra) || ra.ammoType == ResourceType.Gold) return false;
+        var inv = GetInventory(brain);
+        if (inv == null || inv.IsFull) return false;
+
+        // 找最近且该弹种有余的弹药仓（厂级子仓 / 通用仓库 StorageComponent）
+        StorageComponent best = null;
+        float bestDist = float.MaxValue;
+        var storages = FindObjectsOfType<StorageComponent>();
+        for (int i = 0; i < storages.Length; i++)
+        {
+            var s = storages[i];
+            if (s == null || s.resourceType != ra.ammoType || s.storedAmount <= 0) continue;
+            float d = GridMath.DistCells(s.transform.position, brain.transform.position);
+            if (d < bestDist) { bestDist = d; best = s; }
+        }
+        if (best == null) return false;
+
+        int max = Mathf.Max(1, WorkerTask.GetCarryAmount(ra.ammoType));
+        int amount = Mathf.Min(best.storedAmount, max, ra.amount);   // 适配缺口/装载量/携带量
+        if (amount <= 0) return false;
+        int stored = inv.TryStore(ra.ammoType, amount);
+        if (stored <= 0) return false;
+        best.TakeOut(stored);   // 扣弹药仓存量（真源扣一次，防双写）
+        return true;
+    }
+
+    /// <summary>
+    /// 装填卸货段：把背包弹药写入目标单位弹仓（UnitController.FillMagazine）。
+    /// 背包剩余（弹仓满）保留留待下轮或入国库兜底不丢。
+    /// </summary>
+    private void UnloadAmmoToMagazine(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null || task == null) return;
+        var inv = GetInventory(brain);
+        if (inv == null || inv.IsEmpty) return;
+        // 源=装填目标单位（塔/机器自身），其 UnitController 即弹仓载体
+        var target = task.source as UnitController;
+        if (target == null || !target.IsAlive) return;
+        int amount = inv.UnloadAll();
+        int filled = target.FillMagazine(inv.carriedType, amount);
+        // 装满后若仍有剩余（不该发生：装填前按缺口取量），回倒下匣——库存仍归还原地仓库
+        if (filled < amount)
+        {
+            int leftover = amount - filled;
+            DepositAmmoBack(inv.carriedType, leftover, target.transform.position);
+        }
+    }
+
+    /// <summary>装填剩余弹药退回最近同类仓库（不丢资源）。</summary>
+    private void DepositAmmoBack(ResourceType type, int amount, Vector2 nearPos)
+    {
+        if (amount <= 0) return;
+        StorageComponent best = null;
+        float bestDist = float.MaxValue;
+        var storages = FindObjectsOfType<StorageComponent>();
+        for (int i = 0; i < storages.Length; i++)
+        {
+            var s = storages[i];
+            if (s == null || s.resourceType != type || s.capacity <= s.storedAmount) continue;
+            float d = GridMath.DistCells(s.transform.position, nearPos);
+            if (d < bestDist) { bestDist = d; best = s; }
+        }
+        if (best != null) { best.Add(amount); return; }
+        // 无同类仓 → 入国库兜底（弹药不入国库除非改此兜底，此处保守：退回源仓失败才走国库）
+        RulerController.Instance?.ModifyResource(type, true, amount);
+    }
+
     /// <summary>搬运段刺激注入：目标 = destPos（仓库/国库），区别于 Working 段的 SourcePos 刺激。</summary>
     private void InjectCarryStimulus(NPCBrain brain, KingdomTask task)
     {
@@ -669,6 +763,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 task.destPos = ResolveWaterSource(task);
                 break;
             case KingdomDestType.SpecificBuilding:
+            case KingdomDestType.UnitMagazine:   // 2_12 步骤9：终点=单位自身位置（发布时已设 destPos）；此处保持
             default:
                 break;   // 已由任务带 destPos
         }

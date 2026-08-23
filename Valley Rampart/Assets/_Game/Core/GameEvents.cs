@@ -96,7 +96,13 @@ public enum ResourceType
     SpecialFood,// 特殊食物（粮食加工坊：粮×2→1；饱食+8/幸福+1；贸易额度6/4天）
     Meat,       // 肉（牧场屠宰制；饱食+20/幸福+3；贸易额度4/4天）
     // ===== 2_12 步骤8 铁匠铺（D199，末尾追加保持旧值稳定；2026-08-23 步骤8）=====
-    Metal       // 金属（铁匠铺石→Metal 就地加工 D200；兵种强化 D132/工事升级 D131 消耗）实体资源，可搬运/装箱/存储/交易
+    Metal,      // 金属（铁匠铺石→Metal 就地加工 D200；兵种强化 D132/工事升级 D131 消耗）实体资源，可搬运/装箱/存储/交易
+    // ===== 2_12 步骤9 弹药（D207~D212，末尾追加保持旧值稳定；2026-08-23 步骤9）=====
+    // 裁决 HH.19 A×4：弹药=可搬运资源，真源=投掷机厂/仓库 StorageComponent；不纳国库（GameEvents 前例同 Ore/Crystal/FireOil）。
+    // 命名避开两侧 ProjectileType.Stone/Fireball/Magic 撞名（sim 训练仓同），用 XxAmmo 后缀（HH.19 裁决口径1）。
+    StoneAmmo,    // 石头弹（投掷机厂：石→石弹 D207/D210；战争机器/塔弹仓）
+    FireballAmmo, // 火弹（投掷机厂：火油→火弹 D128）
+    MagicAmmo     // 魔弹（投掷机厂：水晶→魔弹 D128）
 }
 
 // 君主资源变化事件。由 RulerController.ModifyResource 发布。

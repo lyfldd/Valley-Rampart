@@ -29,4 +29,10 @@ MonoBehaviour:
     carryAmount: 10
   - resourceType: 8
     carryAmount: 10
+  - resourceType: 10
+    carryAmount: 10
+  - resourceType: 11
+    carryAmount: 10
+  - resourceType: 12
+    carryAmount: 10
   defaultCarryAmount: 10
