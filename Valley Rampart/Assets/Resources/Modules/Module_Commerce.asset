@@ -17,17 +17,15 @@ MonoBehaviour:
   - tier: 1
     requiredCastleLevel: 1
     upgradeBuildings:
-    - Market
+    - market
     unlockBuildings: []
   - tier: 2
     requiredCastleLevel: 2
     upgradeBuildings:
-    - Market
-    unlockBuildings:
-    - Shop
+    - market
+    unlockBuildings: []
   - tier: 3
     requiredCastleLevel: 3
     upgradeBuildings:
-    - Market
-    unlockBuildings:
-    - GoldMine
+    - market
+    unlockBuildings: []

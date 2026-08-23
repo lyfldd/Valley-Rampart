@@ -31,10 +31,11 @@ public class TaxSystem : Singleton<TaxSystem>
         return _config;
     }
 
-    /// <summary>是否商业建筑（建筑税来源，§六 市场/商店）。</summary>
+    /// <summary>是否商业建筑（建筑税来源，§六）。D144：商业只留市场——商店/税务所已移除，仅市场（资产 id="market" 小写）。</summary>
     public static bool IsCommercialBuilding(string buildingId)
     {
-        return buildingId == "Market" || buildingId == "Shop";
+        // 大小写修复：资产 id 为小写 "market"，旧写 "Market" 匹配不到导致市场商业税收不到
+        return buildingId == "market";
     }
 
     /// <summary>

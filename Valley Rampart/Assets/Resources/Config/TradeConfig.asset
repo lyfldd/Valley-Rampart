@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11cbcb6beba15b847add9d440064edf9, type: 3}
+  m_Name: TradeConfig
+  m_EditorClassIdentifier: 
+  foodToGoldIn: 4
+  goldToFoodOut: 3
+  tradeSellUnitsPerGold: 04000000030000000200000002000000010000000100000001000000020000000200000002000000010000000100000001000000
+  tradeBuyUnitsPerGold: 03000000020000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+  marketMaxTradeLevel: 04000000090000000d000000
+  merchantQuotas:
+  - resourceLevel: 1
+    amountPerCycle: 20
+    refreshDays: 1
+  - resourceLevel: 2
+    amountPerCycle: 12
+    refreshDays: 1
+  - resourceLevel: 3
+    amountPerCycle: 10
+    refreshDays: 1
+  - resourceLevel: 4
+    amountPerCycle: 4
+    refreshDays: 1
+  - resourceLevel: 5
+    amountPerCycle: 4
+    refreshDays: 1
+  - resourceLevel: 6
+    amountPerCycle: 2
+    refreshDays: 1
+  - resourceLevel: 7
+    amountPerCycle: 2
+    refreshDays: 1
+  - resourceLevel: 8
+    amountPerCycle: 6
+    refreshDays: 1
+  - resourceLevel: 9
+    amountPerCycle: 4
+    refreshDays: 1
+  - resourceLevel: 10
+    amountPerCycle: 4
+    refreshDays: 1
+  - resourceLevel: 11
+    amountPerCycle: 6
+    refreshDays: 1
+  - resourceLevel: 12
+    amountPerCycle: 4
+    refreshDays: 1
+  - resourceLevel: 13
+    amountPerCycle: 2
+    refreshDays: 1

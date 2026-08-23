@@ -38,6 +38,11 @@ public class TradePanel : MonoBehaviour, IUIPanel
         (ResourceType.FireOil, "火油"),
         (ResourceType.SpecialFood, "特殊食物"),
         (ResourceType.Meat, "肉"),
+        // ===== 2_12 步骤10：档位扩到 13（Metal + 3 弹药，D219 买紧缺）=====
+        (ResourceType.Metal, "金属"),
+        (ResourceType.StoneAmmo, "石弹"),
+        (ResourceType.FireballAmmo, "火弹"),
+        (ResourceType.MagicAmmo, "魔弹"),
     };
 
     // ===== 对外 API（由 BuildingPanel.OnTradeClicked 调用 SetTarget → Push）=====
@@ -223,21 +228,21 @@ public class TradePanel : MonoBehaviour, IUIPanel
     {
         int level = TradeSystem.GetResourceLevel(type);
         var km = KingdomManager.Instance;
-        if (km == null || level < 1 || level > 9) return 0;
+        if (km == null || level < 1 || level > 13) return 0;
         return km.TradeQuotaRemaining[level - 1];
     }
 
     /// <summary>卖出兑换率：多少单位换 1 金（KingdomConfig，默认 4）。</summary>
     private static int SellRateOf(int resourceLevel)
     {
-        var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+        var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.TradeConfig : null;
         return cfg != null ? cfg.GetTradeSellRate(resourceLevel) : 4;
     }
 
-    /// <summary>买入兑换率：1 金换多少单位（KingdomConfig，默认 3）。</summary>
+    /// <summary>买入兑换率：1 金换多少单位（TradeConfig，默认 3）。</summary>
     private static int BuyRateOf(int resourceLevel)
     {
-        var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+        var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.TradeConfig : null;
         return cfg != null ? cfg.GetTradeBuyRate(resourceLevel) : 3;
     }
 

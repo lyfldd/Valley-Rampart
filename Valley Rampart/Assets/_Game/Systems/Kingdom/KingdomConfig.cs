@@ -12,9 +12,6 @@ public class KingdomConfig : ScriptableObject
     [Header("主城升级消耗（索引 0=Lv1 修复，1=Lv2 ... 5=Lv6；§2.1 ÷5）")]
     public ResourcePack[] castleUpgradeCosts;
 
-    [Header("商人贸易梯度额度（索引 = 资源等级-1；§7 贸易）")]
-    public TradeQuotaDef[] merchantQuotas;
-
     [Header("人口系统（数据层先行，§13.5）")]
     public int initialPopulation = 9;       // 开局人口目标（HH.17 决策3 去君主：4 工人 + 5 居民 = 9，§3.3）
     [Header("3.5.1 §3.3 开局人口分布（实体化 E-S3：1 君主由 SpawnMonarch 生成，此处为其余实体）")]
@@ -66,16 +63,6 @@ public class KingdomConfig : ScriptableObject
     public int commercialTaxPerLevel = 1;      // 商业建筑（市场/商店）每级每日建筑税基数（无交易额统计时的等级抽成）
     public float lowHappinessTaxFloor = 0.5f;  // 幸福 0 时税收保底系数（§六 幸福0收0.5倍）
 
-    [Header("贸易系统（§七，不对称兑换）")]
-    public int foodToGoldIn = 4;               // 4 粮 → 1 金
-    public int goldToFoodOut = 3;              // 1 金 → 3 粮
-    [Tooltip("各资源等级兑换率（索引=资源等级-1，9 档）：卖出时多少单位换 1 金（粮4，越高级越少）")]
-    public int[] tradeSellUnitsPerGold;        // 卖出：单位/金
-    [Tooltip("各资源等级兑换率（买入）：1 金换多少单位（粮3）")]
-    public int[] tradeBuyUnitsPerGold;         // 买入：单位/金
-    [Tooltip("市场等级可交易最高资源档位（索引=市场等级-1；§3.5 商业 市场 Lv1 粮↔金 / Lv2 解锁水晶火油 / Lv3 全开）")]
-    public int[] marketMaxTradeLevel = { 4, 6, 9 };
-
     [Header("幸福度系统（§五，多因素权重占位）")]
     public float happinessSatietyWeight = 0.4f;   // 饱食满足权重
     public float happinessHouseWeight = 0.2f;     // 有房住权重
@@ -100,11 +87,7 @@ public class KingdomConfig : ScriptableObject
     public int ranchFeedPerAnimal = 1;            // 每动物每日喂粮
     public int ranchMeatHappiness = 3;            // 肉幸福加成（复用 foodHappinessMeat）
 
-    [Header("金矿（§13.3 直接产金入国库，SO 可调）")]
-    [Tooltip("金矿每日产金数（金=货币不占存储，直接进国库 RulerController.Gold）")]
-    public int goldMineGoldPerDay = 2;            // 金矿每日产金
-    [Tooltip("3.5 P1-21：税务所（原金矿）独立产金每日数，与 TaxSystem 并存（TaxSystem 管人头/商业税，税务所管独立产金）")]
-    public int taxOfficeGoldPerDay = 2;           // 税务所独立产金（>0 优先于 goldMineGoldPerDay）
+    [Header("时间换算（产率）")]
     [Tooltip("1 天秒数（与 TimeManager 白天120/黄昏30/夜晚30 同步，用于 rate 换算）")]
     public int kingdomSecondsPerDay = 180;        // 1 天秒数
 
@@ -173,39 +156,4 @@ public class KingdomConfig : ScriptableObject
         if (castleUpgradeCosts == null || castleLevel - 1 >= castleUpgradeCosts.Length) return ResourcePack.Zero;
         return castleUpgradeCosts[castleLevel - 1];
     }
-
-    /// <summary>获取资源等级（1..9）对应的贸易额度配置。</summary>
-    public TradeQuotaDef GetQuota(int resourceLevel)
-    {
-        if (resourceLevel < 1 || resourceLevel > 9) return TradeQuotaDef.Zero;
-        if (merchantQuotas == null || resourceLevel - 1 >= merchantQuotas.Length) return TradeQuotaDef.Zero;
-        return merchantQuotas[resourceLevel - 1];
-    }
-
-    /// <summary>卖出兑换率：资源等级 → 多少单位换 1 金（默认粮 4）。</summary>
-    public int GetTradeSellRate(int resourceLevel)
-    {
-        if (tradeSellUnitsPerGold == null || resourceLevel < 1 || resourceLevel - 1 >= tradeSellUnitsPerGold.Length)
-            return foodToGoldIn;
-        return Mathf.Max(1, tradeSellUnitsPerGold[resourceLevel - 1]);
-    }
-
-    /// <summary>买入兑换率：资源等级 → 1 金换多少单位（默认粮 3）。</summary>
-    public int GetTradeBuyRate(int resourceLevel)
-    {
-        if (tradeBuyUnitsPerGold == null || resourceLevel < 1 || resourceLevel - 1 >= tradeBuyUnitsPerGold.Length)
-            return goldToFoodOut;
-        return Mathf.Max(1, tradeBuyUnitsPerGold[resourceLevel - 1]);
-    }
-}
-
-/// <summary>商人贸易额度条目（资源等级 → 每次额度 + 刷新周期天数）。</summary>
-[Serializable]
-public struct TradeQuotaDef
-{
-    public int resourceLevel;   // 1粮/2木/3石/4矿/5金/6水晶/7火油
-    public int amountPerCycle;  // 每次额度
-    public int refreshDays;     // 刷新周期（天）
-
-    public static TradeQuotaDef Zero => new TradeQuotaDef { resourceLevel = 0, amountPerCycle = 0, refreshDays = 0 };
 }

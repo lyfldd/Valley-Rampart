@@ -14,18 +14,18 @@ using UnityEngine;
 /// </summary>
 public class TradeSystem : Singleton<TradeSystem>
 {
-    private KingdomConfig _config;
+    private TradeConfig _config;
 
     protected override void Awake()
     {
         base.Awake();
         if (_instance != this) return;
-        _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        _config = Resources.Load<TradeConfig>("Config/TradeConfig");
     }
 
-    private KingdomConfig Cfg()
+    private TradeConfig Cfg()
     {
-        if (_config == null) _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        if (_config == null) _config = Resources.Load<TradeConfig>("Config/TradeConfig");
         return _config;
     }
 
@@ -43,6 +43,11 @@ public class TradeSystem : Singleton<TradeSystem>
             ResourceType.FireOil => 7,
             ResourceType.SpecialFood => 8,
             ResourceType.Meat => 9,
+            // ===== 2_12 步骤10：档位扩到 13（HH.19 预圈；Metal + 3 弹药）=====
+            ResourceType.Metal => 10,       // 金属（铁匠铺/工事/兵种强化，国库持有 D199）
+            ResourceType.StoneAmmo => 11,   // 石弹（弹药买紧缺 D219）
+            ResourceType.FireballAmmo => 12,
+            ResourceType.MagicAmmo => 13,
             _ => 0
         };
     }
@@ -64,7 +69,8 @@ public class TradeSystem : Singleton<TradeSystem>
     {
         return type == ResourceType.Food || type == ResourceType.Wood
             || type == ResourceType.Stone || type == ResourceType.SpecialFood
-            || type == ResourceType.Meat;
+            || type == ResourceType.Meat
+            || type == ResourceType.Metal;   // D199/D219 Metal：国库持有，可买可卖（买紧缺优先）
     }
 
     /// <summary>

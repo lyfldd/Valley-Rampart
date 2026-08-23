@@ -19,6 +19,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
 
     // ===== 配置引用 =====
     private KingdomConfig _config;
+    private TradeConfig _tradeConfig;
     private CastleUnlockTable _unlockTable;
     private List<ModuleDef> _moduleDefs;   // 6 模块资产（建筑模块归属/特殊建筑判定用）
 
@@ -29,11 +30,11 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>六大模块等级 [Civil,Production,Livelihood,Military,Commerce,Science]。</summary>
     public int[] ModuleLevels { get; private set; } = new int[6];
 
-    /// <summary>贸易剩余额度（索引=资源等级-1，9 档：1粮/2木/3石/4矿/5金/6水晶/7火油/8特殊食物/9肉）。</summary>
-    public int[] TradeQuotaRemaining { get; private set; } = new int[9];
+    /// <summary>贸易剩余额度（索引=资源等级-1，13 档：1粮/2木/3石/4矿/5金/6水晶/7火油/8特食/9肉/10Metal/11石弹/12火弹/13魔弹）。</summary>
+    public int[] TradeQuotaRemaining { get; private set; } = new int[13];
 
-    /// <summary>贸易额度刷新倒计时（天，索引=资源等级-1，9 档）。</summary>
-    public int[] TradeCooldownDays { get; private set; } = new int[9];
+    /// <summary>贸易额度刷新倒计时（天，索引=资源等级-1，13 档；D220 每日全量重置后保留数组兼容存档，语义退化为占位）。</summary>
+    public int[] TradeCooldownDays { get; private set; } = new int[13];
 
     /// <summary>
     /// 各模块研究等级（索引=模块，与 ModuleLevels 同构；研究完成提升，独立于主城解锁）。
@@ -47,12 +48,16 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>全局配置（供其他王国系统读取）。</summary>
     public KingdomConfig Config => _config;
 
+    /// <summary>市场贸易配置（D216~D220，步骤10 从 KingdomConfig 迁出）。</summary>
+    public TradeConfig TradeConfig => _tradeConfig;
+
     protected override void Awake()
     {
         base.Awake();
         if (_instance != this) return;
 
         _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        _tradeConfig = Resources.Load<TradeConfig>("Config/TradeConfig");
         _unlockTable = Resources.Load<CastleUnlockTable>("Config/CastleUnlockTable");
         LoadModuleDefs();
 
@@ -68,14 +73,14 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>按配置初始化各资源档贸易额度 + 刷新倒计时（新建游戏/读档无损时调用）。</summary>
     public void InitTradeQuotas()
     {
-        if (_config == null || _config.merchantQuotas == null) return;
-        TradeQuotaRemaining = new int[9];
-        TradeCooldownDays = new int[9];
+        if (_tradeConfig == null) return;
+        TradeQuotaRemaining = new int[13];
+        TradeCooldownDays = new int[13];
         for (int i = 0; i < TradeQuotaRemaining.Length; i++)
         {
-            var quota = _config.GetQuota(i + 1);
+            var quota = _tradeConfig.GetQuota(i + 1);
             TradeQuotaRemaining[i] = quota.amountPerCycle;
-            TradeCooldownDays[i] = quota.refreshDays;
+            TradeCooldownDays[i] = 1;   // D220：每日全量重置
         }
     }
 
@@ -282,23 +287,15 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
 
     // ===== 贸易额度（步骤6：额度/周期存 KingdomManager）=====
 
-    /// <summary>每日结算时刷新贸易额度冷却（由 DayCycleSettlement 调用）。</summary>
+    /// <summary>每日结算刷新贸易额度（由 DayCycleSettlement 调用）。D220：每日全量重置——各档额度恢复满额（去皮 refreshDays 多天递减）。</summary>
     public void TickTradeCooldowns()
     {
-        for (int i = 0; i < TradeCooldownDays.Length; i++)
+        for (int i = 0; i < TradeQuotaRemaining.Length; i++)
         {
-            if (TradeCooldownDays[i] <= 0) continue;
-            TradeCooldownDays[i]--;
-            if (TradeCooldownDays[i] <= 0)
-                ResetQuota(i);
+            var quota = _tradeConfig != null ? _tradeConfig.GetQuota(i + 1) : TradeQuotaDef.Zero;
+            TradeQuotaRemaining[i] = quota.amountPerCycle;   // 每日全量恢复
+            TradeCooldownDays[i] = 1;
         }
-    }
-
-    private void ResetQuota(int resourceLevelIndex)
-    {
-        var quota = _config != null ? _config.GetQuota(resourceLevelIndex + 1) : TradeQuotaDef.Zero;
-        TradeQuotaRemaining[resourceLevelIndex] = quota.amountPerCycle;
-        TradeCooldownDays[resourceLevelIndex] = quota.refreshDays;
     }
 
     /// <summary>尝试从某资源等级扣减贸易额度（P1 贸易实际执行用；额度不足返回 false）。</summary>
@@ -384,15 +381,15 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     public int TreasuryMeat { get; private set; }
     public int TreasuryMetal { get; private set; }
 
-    /// <summary>把旧存档（7 档）额度数组扩展到当前 9 档（v1 兼容：缺档补初始额度）。</summary>
+    /// <summary>把旧存档（7/9 档）额度数组扩展到当前 13 档（v1 兼容：缺档补初始额度）。</summary>
     private int[] ResizeQuotaArray(int[] old)
     {
-        int[] result = new int[9];
+        int[] result = new int[13];
         for (int i = 0; i < result.Length; i++)
         {
             if (i < old.Length) { result[i] = old[i]; continue; }
-            // 缺档：按配置初始额度填入（特殊食物=8，肉=9）
-            var quota = _config != null ? _config.GetQuota(i + 1) : TradeQuotaDef.Zero;
+            // 缺档：按配置初始额度填入（新增 Metal/弹药档）
+            var quota = _tradeConfig != null ? _tradeConfig.GetQuota(i + 1) : TradeQuotaDef.Zero;
             result[i] = quota.amountPerCycle;
         }
         return result;
@@ -404,8 +401,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         CastleLevel = 0;
         ModuleLevels = new int[6];
         ResearchLevels = new int[6];
-        TradeQuotaRemaining = new int[9];
-        TradeCooldownDays = new int[9];
+        TradeQuotaRemaining = new int[13];
+        TradeCooldownDays = new int[13];
         _castleBuilding = null;
         InitTradeQuotas();   // 新建游戏重新初始化贸易额度
         // 2_12 步骤8.4：清国库读档缓存（防新建局读到上局残留）

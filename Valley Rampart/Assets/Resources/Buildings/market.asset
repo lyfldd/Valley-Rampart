@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: market
   displayName: "\u5E02\u573A"
-  description: "\u4EA7\u51FA\u91D1\u5E01"
+  description: "\u8D38\u6613\u4E0E\u5546\u4E1A\u7A0E"
   faction: 1
   role: 2
   cost:
@@ -22,13 +22,13 @@ MonoBehaviour:
     stone: 0
     wood: 0
     food: 0
-  footprint: {x: 1, y: 1}
+  footprint: {x: 2, y: 2}
   allowedTerrain: 
   moduleType: 4
   isObstacle: 0
   producer:
     kind: 0
-    rate: 5
+    rate: 0
     capacity: 100
   combat:
     attack: 0
