@@ -37,23 +37,12 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 君主的配置数据（ScriptableObject 引用），包含初始资源等
     public RulerData RulerData => rulerData;
 
-    // 君主运行时单位引用。如果引用已失效（对象被销毁），自动清理为 null。
-    public UnitController MonarchUnit
-    {
-        get
-        {
-            // Unity null-check：对象被销毁后 C# 引用非 null 但 Unity 判定为 null
-            if (monarchUnit != null && monarchUnit.gameObject == null)
-            {
-                Debug.LogWarning("[RulerController] MonarchUnit 引用已失效（对象已销毁），自动清除。");
-                monarchUnit = null;
-            }
-            return monarchUnit;
-        }
-    }
+    // 君主运行时单位引用。2_12 步骤8.4 / HH.17 裁决：上帝视角君主实体退役，恒返回 null。
+    // 玩家="看不见的手"，开局可框选工人/居民（PopulationSystem，决策3 去君主 10→9）。
+    public UnitController MonarchUnit => null;
 
-    // 君主是否存活（单位存在且 HP > 0）
-    public bool IsMonarchAlive => MonarchUnit != null && MonarchUnit.CurrentHp > 0;
+    // 君主是否存活（退役后恒 false；GameOver 已由 ThroneAnchor.IsKingdomLost 轮询驱动，D249）
+    public bool IsMonarchAlive => false;
 
     // 国家资源（金币/石材/木材/食物），通过 ModifyResource 统一修改
     public int Gold { get; private set; }
@@ -155,87 +144,12 @@ public class RulerController : Singleton<RulerController>, ISaveable
         Debug.Log($"[RulerController] 已从资产同步君主数据: {rulerData.name}");
     }
 
-    // 在出生位置创建君主单位，场景上没有君主时代码兜底
-    // 流程：验证已有引用 → 清理重复 → 确保数据 → 查找已有 → 代码创建
-    // 3.5.1 E-S3：新建游戏君主必落废弃城堡旁——历史遗留（跨局残留/场景预置君主停在旧位置）
-    // 通过绑定后统一 Teleport(spawnPos) 根治。
+    // 3.5.1 E-S3 原：新建游戏君主必落废弃城堡旁。
+    // 2_12 步骤8.4 / HH.17 裁决（决策2/3）：上帝视角君主实体退役——不再创建君主单位。
+    // 玩家="看不见的手"，开局人口由 PopulationSystem 生成（决策3 去君主 10→9：4工人+5居民）。
     public void SpawnMonarch()
     {
-        // 出生位置先算好（废弃城堡左侧 1 格；地图未就绪回退 Inspector spawnPosition）
-        Vector2 spawnPos = ResolveSpawnPosition();
-
-        // Step 0: 验证已有引用是否仍然有效
-        if (monarchUnit != null)
-        {
-            if (monarchUnit.gameObject != null)  // Unity null-check：对象未被销毁
-            {
-                Debug.LogWarning("[RulerController] 君主已存在，跳过重复创建（强制归位城堡旁）。");
-                monarchUnit.Teleport(spawnPos);
-                return;
-            }
-            else
-            {
-                Debug.LogWarning("[RulerController] 君主引用已失效（对象已销毁），清除后重新查找。");
-                monarchUnit = null;
-            }
-        }
-
-        // Step 1: 清理场景中可能存在的重复君主（防御：如果之前某次调用创建了多余的）
-        int removed = RemoveDuplicateMonarchs();
-        if (removed > 0)
-        {
-            Debug.LogWarning($"[RulerController] 清理了 {removed} 个重复的君主单位。");
-        }
-
-        // Step 2: 确保我们有君主的配置数据
-        if (rulerData == null)
-        {
-            FetchRulerDataFromManager();
-        }
-
-        if (rulerData == null)
-        {
-            Debug.LogError("[RulerController] 没有君主 RulerData，无法创建君主！");
-            return;
-        }
-
-        // Step 3: 在场景中查找已有的君主（已初始化 或 未初始化但有 PlayerInputHandler）
-        monarchUnit = FindExistingMonarch();
-
-        if (monarchUnit != null)
-        {
-            // 如果找到的是未初始化的，注入数据
-            if (monarchUnit.Data == null)
-            {
-                monarchUnit.Initialize(rulerData);
-                Debug.Log($"[RulerController] 使用场景中已有的君主: {monarchUnit.name}，已注入数据");
-            }
-            else
-            {
-                Debug.Log($"[RulerController] 绑定到已初始化的君主: {monarchUnit.name}");
-            }
-            // E-S3：绑定后强制归位城堡旁（根治跨局残留/预置单位停在旧位置的老毛病）
-            monarchUnit.Teleport(spawnPos);
-            Debug.Log($"[RulerController] 君主已归位废弃城堡旁: {spawnPos}");
-            return;
-        }
-
-        // Step 4: 场景中确实没有君主，代码兜底创建
-        // Prefab 已由 LoadManager 阶段1 预加载，无需再 PreloadAll
-        Debug.Log($"[RulerController] 场景中未找到君主，通过 UnitFactory 创建（位置={spawnPos}）...");
-        GameObject rulerGo = LoadManager.Instance.SpawnUnit(rulerData, spawnPos);
-        if (rulerGo != null)
-        {
-            monarchUnit = rulerGo.GetComponent<UnitController>();
-            Debug.Log($"[RulerController] 君主已创建: "
-                + $"位置={spawnPos}, "
-                + $"HP={monarchUnit.CurrentHp}/{rulerData.maxHp}, "
-                + $"攻击={rulerData.attack}");
-        }
-        else
-        {
-            Debug.LogError("[RulerController] 君主 Prefab 实例化失败！");
-        }
+        Debug.Log("[RulerController] 上帝视角：君主实体退役，不生成君主单位（HH.17 裁决）");
     }
 
     /// <summary>
@@ -376,22 +290,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 新建模式不需要调用（SpawnMonarch 中已完成绑定）。
     public void BindExistingMonarch()
     {
-        if (monarchUnit != null && monarchUnit.gameObject != null)
-        {
-            Debug.Log("[RulerController] 君主已绑定，跳过。");
-            return;
-        }
-
-        monarchUnit = FindExistingMonarch();
-
-        if (monarchUnit != null)
-        {
-            Debug.Log($"[RulerController] 读档后绑定到君主: {monarchUnit.name} (HP={monarchUnit.CurrentHp}/{monarchUnit.MaxHp})");
-        }
-        else
-        {
-            Debug.LogWarning("[RulerController] 读档后未找到君主单位！场景中可能没有君主。");
-        }
+        // 2_12 步骤8.4 / HH.17 裁决：上帝视角君主实体退役，读档不再绑定君主单位。
+        Debug.Log("[RulerController] 上帝视角：君主实体退役，不绑定君主单位（HH.17 裁决）");
     }
 
     // ===== 资源管理 =====

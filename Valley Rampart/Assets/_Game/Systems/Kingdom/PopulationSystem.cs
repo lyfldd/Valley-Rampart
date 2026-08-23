@@ -138,8 +138,8 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     // ===== 开局实体生成（3.5.1 §3.3，E-S3）=====
 
     /// <summary>
-    /// 新建游戏生成开局人口实体（君主由 RulerController.SpawnMonarch 先行生成于城堡旁；
-    /// 此处生成 4 工人 + 5 居民于城堡两侧）。实体经 UnitSpawnedEvent 自动入册，人口=10。
+    /// 新建游戏生成开局人口实体（2_12 步骤8.4 / HH.17 决策3：君主实体退役；
+    /// 此处生成 4 工人 + 5 居民于城堡两侧，人口目标=9）。实体经 UnitSpawnedEvent 自动入册。
     /// </summary>
     public void SpawnInitialEntities()
     {
@@ -170,7 +170,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
 
         BirthCooldownDays = cfg.birthCooldownDefault;
         Debug.Log($"[PopulationSystem] 开局实体生成完成：{ok}/{cfg.initialWorkerCount + cfg.initialResidentCount} " +
-                  $"（+君主=目标 {cfg.initialPopulation}；当前注册人口 {PopulationCount}）");
+                  $"（God-view 无君主；目标人口 {cfg.initialPopulation}；当前注册 {PopulationCount}）");
     }
 
     /// <summary>城堡两侧交替落位生成单个实体（idx 偶左奇右，逐圈外扩）。</summary>

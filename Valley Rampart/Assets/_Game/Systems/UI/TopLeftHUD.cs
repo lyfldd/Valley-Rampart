@@ -51,8 +51,25 @@ public class TopLeftHUD : MonoBehaviour
     private void Start()
     {
         if (!_labelsBound) BindLabels();
-        TryBindMonarch();
+        // 2_12 步骤8.4 / HH.17 决策1A：上帝视角无君主，HUD 君主面改王国信息（王国名/人口/金，删血量条）
+        ShowKingdomInfo();
         RefreshDayAndSeasonDisplay();
+    }
+
+    /// <summary>上帝视角王国信息面板：王国名 + 人口 + 国库金（郡取代君主血条，HH.17 决策1A）。</summary>
+    private void ShowKingdomInfo()
+    {
+        var ruler = RulerController.Instance;
+        if (ruler == null) return;
+        string kingdomName = string.IsNullOrEmpty(ruler.RulerName) ? "王国" : ruler.RulerName;
+        int gold = ruler.Gold;
+        int pop = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : -1;
+        // 复用原君主血条/攻防标签承载王国信息；血条隐藏（王国无 HP）
+        if (_hpBarFill != null) _hpBarFill.style.display = DisplayStyle.None;
+        if (_hpTextLabel != null) _hpTextLabel.text = kingdomName;
+        if (_attackLabel != null) _attackLabel.text = $"人口 {pop}";
+        if (_defenseLabel != null) _defenseLabel.text = $"金币 {gold}";
+        if (_hpTextLabel != null) _hpTextLabel.MarkDirtyRepaint();
     }
 
     private void Update()
