@@ -28,10 +28,11 @@
 
 ## 三、sim 同步待办（交接训练仓会话处理，执行端不代做）
 
-- [ ] **harness/Core 落盘 `IWarehouse.cs`**：使训练仓真身存在该接口，`ResourceType` 枚举含 `Metal`（与 Unity `GameEvents.cs` 末尾追加同值，保旧值稳定），签名对齐 Unity `Systems/Kingdom/IWarehouse.cs`（Query/CanTake/Take/Deposit/Transform + ResourceAmount）。
+- [ ] **harness/Core 落盘 `IWarehouse.cs`**：使训练仓真身存在该接口，`ResourceType` 枚举含 `Metal` **及 HH.19 裁决 3 弹种（StoneAmmo/FireballAmmo/MagicAmmo）**（与 Unity `GameEvents.cs` 末尾追加同值，保旧值稳定），签名对齐 Unity `Systems/Kingdom/IWarehouse.cs`（Query/CanTake/Take/Deposit/Transform + ResourceAmount）。**命名锁定 Xxx Ammo 后缀，避开训练仓既有 `ProjectileType.Stone/Fireball/Magic` 撞名（SimBrain.cs:39 实盘确有）**。
 - [ ] **走训练仓自身门禁**（HH.8 裁决三纪律）：训练仓内 commit → 改 → 双门禁 → 过则留；训练仓会话自治，执行端不代管、不在训练仓 commit。
 - [ ] **台账登记**：更新训练仓/交接台账，记录 IWarehouse 落盘与 Metal 枚举同步。
 - [ ] **Metal 加工 sim 真值**：接口真实存在后，"Metal 加工同源真值挂 2_9/步骤14"前提成立（HH.14 决策 A 方向保留）。
+- [ ] **HH.19 行为差登记（2026-08-23 裁决回写追加）**：Unity 侧 `UnitController.TickAmmoResupply` 假搬运定时器已随 2_12 步骤9 退役（真实后勤链：工人装填真耗仓库存量）；sim 侧 SimUnit/SimBrain 石弹自动补给仍在——**是否对齐真实后勤（或保留快照基线）由训练仓会话按训练目标决策**并记台账，勿默认照搬。
 
 ## 四、对步骤8 的影响
 

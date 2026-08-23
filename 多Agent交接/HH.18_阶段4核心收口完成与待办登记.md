@@ -27,13 +27,22 @@
 - **根因线索（非代码 bug）**：开局依赖场景流 `MainMenu→GameSceneEntrance.SetNewGame→GameBootstrap.StartNewGame`，harness 直接进 Play 未驱动 New Game，故装配层铁闭环未展开。
 - **处置**：记录为待查 bug（"国库就绪时序"），不自行为绕过验证而降级为构造式。自动验需脚本驱动 `SetNewGame` + 场景切换。
 
+### 2026-08-23 补跑收口：✅ 三件套全 PASS（脚本驱动真实场景流，零代码改动）
+
+执行端按§四建议完成补跑验证：
+
+1. **驱动链（等价 GUI 路径）**：MainMenuScene 进 Play → `MainMenuController.OnCharacterCreateConfirmed(config)`（slot_test / seed=20260823 / 普通）→ SetNewGame → LoadScene(GameScene) → GameBootstrap.StartNewGame 全链。
+2. **开局现场**：gameState=Playing、TreasureVault READY（BaseCapacity=250）、popCount=9（4工人+5居民）、ruler 单位=0；场景预置调试单位 `ruler`/`VFriendly`（Data=null）2 个残留属预期（R2 规则：预置单位仅读档路径经 TeardownScene 清理，新建路径不清）。
+3. **存档→读档往返（含防 no-op 扰动）**：`ModifyResource` 官方写路径扰动 R0→R1（石133/木100/粮130/铁7/金105）→ `SaveManager.Save(slot_test)`（2755 模块；磁盘 JSON 交叉核验：KingdomManager `treasuryMetal=7` 含铁✅、RulerController 非金写零✅）→ 内存再扰动 R2（石123/金155）制造内存≠磁盘分叉 → `TeardownForReturnToMenu(false)` → 主菜单 `OnSaveSlotSelected(slot_test)` → ContinueFromSave（TeardownScene+LoadSave+BindExistingMonarch）→ **读档后验收**：国库 6 资源含铁==R1 逐项相等（Stone=133/Wood=100/Food=130/SFood=0/Meat=0/Metal=7）、Gold=105（非 R2 的 155）、unit total=9（worker=4/resident=5/ruler=0/noData=0/预置单位已清）、popCount=9、rulerName 恢复。
+4. **结论**：三件套全 PASS，铁闭环无代码 bug；§2"国库就绪时序"确认为 harness 未驱动 NewGame 场景流的症状，根因闭合，待查撤销。全程 Console 0 error/0 exception（仅 1 条既有无关 PanelSettings 主题告警）。测试档 `slot_test.json` 已删除，编辑器场景已复位。
+
 ## 三、待决策事项
 
 无。本批两个决策（monarch 留 2_14 / Play 补跑）已由用户拍板并落地。
 
 ## 四、下一步建议（执行端下次恢复入口）
 
-- **Play 铁闭环补跑**（兑现用户"随阶段④ Play 补跑"承诺）：脚本驱动 New Game 后走"存档→读档→国库 6 资源相等含铁 + 人口 9 + 无多余单位"验收；若仍不可靠，把"国库就绪时序"作为 bug 深入排查（主城初始化时序）。
+- ~~**Play 铁闭环补跑**~~ ✅ 2026-08-23 完成，三件套全 PASS（见§2 补跑收口节）。
 - **sim 侧 IWarehouse 同步待办**（HH.15，登记不代做）：训练仓会话落盘 harness/Core + 双门禁 + 台账，交接训练仓。
 - **后续指令开门判据**：用户预告下次大概率是 步骤9/10/11（市场贸易/科技/箱子溢出）或 2_13——届时按 HH 开门判据自行判断，无需事事请示。
 
