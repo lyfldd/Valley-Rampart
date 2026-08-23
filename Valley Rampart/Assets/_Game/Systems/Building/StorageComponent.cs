@@ -19,6 +19,13 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
         if (building == null || building.def == null) return;
         resourceType = building.def.outputResource;
         RefreshCapacity();
+        // 2_12 步骤8.4：加入王国仓库注册表（替代 WarehouseHelper 全场景扫描）
+        WarehouseRegistry.Register(this);
+    }
+
+    void OnDestroy()
+    {
+        WarehouseRegistry.Unregister(this);
     }
 
     /// <summary>

@@ -63,19 +63,11 @@ public static class WarehouseHelper
             && TryCheckEnough(warehouses, ResourceType.Food, cost.food);
     }
 
-    // ===== 定位器（过渡实现）=====
-    // TODO(2_12步骤8)：仓库注册表随 RulerController 全量迁移落地，替换 FindObjectsOfType 全场景扫描。
+    // ===== 定位器（2_12 步骤8.4：仓库注册表替代 FindObjectsOfType 全场景扫描）=====
     // 调用频率红线：只许结算时点调用，禁入 Update/每帧路径（过渡实现安全边界）。
     private static List<IWarehouse> GatherWarehouses()
     {
-        var result = new List<IWarehouse>();
-        var storages = Object.FindObjectsOfType<StorageComponent>();
-        for (int i = 0; i < storages.Length; i++)
-        {
-            var s = storages[i];
-            if (s != null && s.storedAmount > 0) result.Add(s);
-        }
-        return result;
+        return WarehouseRegistry.GatherActive();
     }
 
     /// <summary>校验所有仓库对该资源累计可取量是否达标。</summary>
