@@ -15,4 +15,13 @@ public class KingdomSaveData
     public int[] tradeCooldownDays;         // 各资源额度刷新倒计时（索引=资源等级-1）
     public int[] researchLevels;            // 各研究方向等级（科技模块，P1 占位）
     public int waveProgress;                // 夜间波次进度（P2 占位）
+
+    // 2_12 步骤8.4（HH.16 裁决 B）：国库（主城 TreasureVault）非金资源真源持久化。
+    // 金=货币直通 Ruler 单独存；其余 6 种（石/木/粮/特食/肉/铁）存此。
+    public int treasuryStone;
+    public int treasuryWood;
+    public int treasuryFood;
+    public int treasurySpecialFood;
+    public int treasuryMeat;
+    public int treasuryMetal;
 }

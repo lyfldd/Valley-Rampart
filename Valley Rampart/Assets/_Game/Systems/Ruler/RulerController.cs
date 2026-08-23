@@ -57,14 +57,16 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     // 国家资源（金币/石材/木材/食物），通过 ModifyResource 统一修改
     public int Gold { get; private set; }
-    public int Stone { get; private set; }
-    public int Wood { get; private set; }
-    public int Food { get; private set; }
-    // ===== 3.5 P1 粮大类子资源（§13.11 特殊食物/肉；君主国库跟踪，供饱食/贸易用）=====
-    public int SpecialFood { get; private set; }
-    public int Meat { get; private set; }
-    // ===== 2_12 步骤8 铁艺（D199；实体资源，暂走国库槽过渡，8.4 退役迁移仓库时一并处置）=====
-    public int Metal { get; private set; }
+    // 2_12 步骤8.4（HH.16 裁决 B：多仓库聚合）：非金资源真源迁国库仓库（主城 TreasureVault），
+    // 旧字段改为只读中转国库；金(Gold)=货币直通保留字段（HH.8）。
+    // ===== 3.5 P1 粮大类子资源（§13.11 特殊食物/肉；真源同迁国库）=====
+    public int Stone => GetResourceValue(ResourceType.Stone);
+    public int Wood => GetResourceValue(ResourceType.Wood);
+    public int Food => GetResourceValue(ResourceType.Food);
+    public int SpecialFood => GetResourceValue(ResourceType.SpecialFood);
+    public int Meat => GetResourceValue(ResourceType.Meat);
+    // ===== 2_12 步骤8 铁（D199；真源同迁国库铁仓库）=====
+    public int Metal => GetResourceValue(ResourceType.Metal);
 
     // 统治者名字（新建游戏时玩家输入，存档恢复时从 RulerSaveData 读取）
     public string RulerName { get; private set; } = "无名君主";
@@ -148,14 +150,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
     {
         if (rulerData == null) return;
 
-        // 初始国家资源（来自 RulerData 子类的额外字段）
+        // 2_12 步骤8.4：金=货币直通字段；非金初始由难度初始化/读档统一入国库，不再直写旧字段。
         Gold = rulerData.initialGold;
-        Stone = rulerData.initialStone;
-        Wood = rulerData.initialWood;
-        Food = rulerData.initialFood;
-
-        Debug.Log($"[RulerController] 已从资产同步国家资源: "
-            + $"Gold={Gold}, Stone={Stone}, Wood={Wood}, Food={Food}");
+        Debug.Log($"[RulerController] 已从资产同步君主数据: {rulerData.name}");
     }
 
     // 在出生位置创建君主单位，场景上没有君主时代码兜底
@@ -364,12 +361,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
         monarchUnit = null;
         RulerName = "无名君主";
         Gold = 0;
-        Stone = 0;
-        Wood = 0;
-        Food = 0;
-        SpecialFood = 0;
-        Meat = 0;
-        Metal = 0;
+        // 2_12 步骤8.4：非金真源=国库仓库，随主城一并清空
+        TreasureVault.Instance?.ResetAll();
         Debug.Log("[RulerController] ResetState: 引用已清除，资源归零");
     }
 
@@ -416,14 +409,29 @@ public class RulerController : Singleton<RulerController>, ISaveable
     {
         amount = Mathf.Abs(amount);  // 防止负数反向操作
 
-        int oldValue = GetResourceValue(type);
-        int newValue = isIncrease ? oldValue + amount : oldValue - amount;
-        newValue = Mathf.Max(0, newValue);  // 防止资源变为负数
+        // 金：货币直通，字段记账（HH.8）。
+        if (type == ResourceType.Gold)
+        {
+            int old = Gold;
+            int nv = Mathf.Max(0, isIncrease ? old + amount : old - amount);
+            Gold = nv;
+            Debug.Log($"[RulerController] 金 {(isIncrease ? "+" : "-")}{amount}，当前: {nv}");
+            EventBus.Publish(new RulerResourceChangedEvent(type, old, nv));
+            return;
+        }
 
-        SetResourceValue(type, newValue);
-
-        Debug.Log($"[RulerController] {type} {(isIncrease ? "+" : "-")}{amount}，当前: {newValue}");
-        EventBus.Publish(new RulerResourceChangedEvent(type, oldValue, newValue));
+        // 2_12 步骤8.4（禁双写红线物理落点，HH.8）：非金真源=国库仓库，旧字段退役。
+        var tv = TreasureVault.Instance;
+        if (tv == null)
+        {
+            Debug.LogWarning($"[RulerController] 国库未就绪，忽略非金资源变化: {type} {amount}");
+            return;
+        }
+        int before = tv.GetAmount(type);
+        int moved = isIncrease ? tv.Deposit(type, amount) : tv.Take(type, amount);
+        int after = tv.GetAmount(type);
+        Debug.Log($"[RulerController] 国库 {type} {(isIncrease ? "+" : "-")}{moved}，当前: {after}");
+        EventBus.Publish(new RulerResourceChangedEvent(type, before, after));
     }
 
     // ===== 资源包批量操作（3.3.1 P7，供 BuildController / BuildingPanel 用）=====
@@ -468,31 +476,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 按资源类型获取当前值
     private int GetResourceValue(ResourceType type)
     {
-        return type switch
-        {
-            ResourceType.Gold => Gold,
-            ResourceType.Stone => Stone,
-            ResourceType.Wood => Wood,
-            ResourceType.Food => Food,
-            ResourceType.SpecialFood => SpecialFood,
-            ResourceType.Meat => Meat,
-            _ => 0
-        };
-    }
-
-    // 按资源类型设置值（仅 ModifyResource 内部调用）
-    private void SetResourceValue(ResourceType type, int value)
-    {
-        switch (type)
-        {
-            case ResourceType.Gold: Gold = value; break;
-            case ResourceType.Stone: Stone = value; break;
-            case ResourceType.Wood: Wood = value; break;
-            case ResourceType.Food: Food = value; break;
-            case ResourceType.SpecialFood: SpecialFood = value; break;
-            case ResourceType.Meat: Meat = value; break;
-            case ResourceType.Metal: Metal = value; break;
-        }
+        if (type == ResourceType.Gold) return Gold;   // 金=货币直通字段
+        // 2_12 步骤8.4：非金真源=国库仓库（HH.16 裁决 B）
+        return TreasureVault.Instance != null ? TreasureVault.Instance.GetAmount(type) : 0;
     }
 
     // ===== 君主死亡处理 =====
@@ -536,11 +522,28 @@ public class RulerController : Singleton<RulerController>, ISaveable
             return;
         }
         var res = DifficultyManager.Instance.GetInitialResources();
+        // 2_12 步骤8.4：金=货币直通字段；非金一次性绝对入国库（先清后入，防累积重复）
         Gold = Mathf.Max(0, res.gold);
-        Stone = Mathf.Max(0, res.stone);
-        Wood = Mathf.Max(0, res.wood);
-        Food = Mathf.Max(0, res.food);
-        Debug.Log($"[RulerController] 按难度应用初始资源: Gold={Gold}, Stone={Stone}, Wood={Wood}, Food={Food}");
+        var tv = TreasureVault.Instance;
+        if (tv != null)
+        {
+            tv.ResetAll();
+            DepositToTreasury(ResourceType.Stone, res.stone);
+            DepositToTreasury(ResourceType.Wood, res.wood);
+            DepositToTreasury(ResourceType.Food, res.food);
+        }
+        else
+        {
+            Debug.LogWarning("[RulerController] 按难度初始化：国库未就绪，非金初始暂不落地");
+        }
+        Debug.Log($"[RulerController] 按难度应用初始资源: Gold={Gold}, Stone={tv?.GetAmount(ResourceType.Stone) ?? 0}, Wood={tv?.GetAmount(ResourceType.Wood) ?? 0}, Food={tv?.GetAmount(ResourceType.Food) ?? 0}");
+    }
+
+    /// <summary>非金资源一次性入国库（初始/读档迁移共用；绝对置入前提是国库已清空）。</summary>
+    private void DepositToTreasury(ResourceType type, int amount)
+    {
+        if (amount <= 0) return;
+        TreasureVault.Instance?.Deposit(type, amount);
     }
 
     // ===== ISaveable 实现 =====
@@ -552,11 +555,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
         {
             rulerName = RulerName,
             gold = Gold,
-            stone = Stone,
-            wood = Wood,
-            food = Food,
-            specialFood = SpecialFood,
-            meat = Meat
+            // 2_12 步骤8.4（修正1：保留字段 + 读档迁入 + 写档置零）：
+            // 非金真源已迁国库仓库，此处固定写 0；字段保留供旧档读档迁移期识别。
+            stone = 0, wood = 0, food = 0,
+            specialFood = 0, meat = 0
         };
         return new SavePayload
         {
@@ -575,12 +577,42 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
         var data = JsonUtility.FromJson<RulerSaveData>(payload.json);
         RulerName = string.IsNullOrEmpty(data.rulerName) ? "无名君主" : data.rulerName;
+        // 2_12 步骤8.4：金=货币直通字段恢复。
         Gold = data.gold;
-        Stone = data.stone;
-        Wood = data.wood;
-        Food = data.food;
-        SpecialFood = data.specialFood;
-        Meat = data.meat;
+        // 修正1：旧档非金字段检测到非零 → 一次性迁入国库（防读档回退）；
+        // 若国库未就绪（读档时序），先缓存在 _pendingLoadTreasury，待国库就绪后补入——见 EnsureTreasuryMigration()。
+        _pendingLoadTreasury = null;
+        if (data.stone > 0 || data.wood > 0 || data.food > 0 || data.specialFood > 0 || data.meat > 0)
+        {
+            _pendingLoadTreasury = new ResourcePack
+            {
+                stone = data.stone, wood = data.wood, food = data.food
+            };
+            // 特殊食物/肉不在 ResourcePack，单独缓存
+            _pendingLoadSpecial = data.specialFood;
+            _pendingLoadMeat = data.meat;
+            EnsureTreasuryMigration();
+        }
+    }
+
+    // 旧档非金读档迁移缓存（国库未就绪时先存，Info/Global 之后由 EnsureTreasuryMigration 补入）
+    private ResourcePack? _pendingLoadTreasury;
+    private int _pendingLoadSpecial;
+    private int _pendingLoadMeat;
+
+    /// <summary>确保旧档缓存非金迁入国库（国库就绪后调用，防读档回退）。</summary>
+    public void EnsureTreasuryMigration()
+    {
+        var tv = TreasureVault.Instance;
+        if (tv == null || !_pendingLoadTreasury.HasValue) return;
+        var p = _pendingLoadTreasury.Value;
+        DepositToTreasury(ResourceType.Stone, p.stone);
+        DepositToTreasury(ResourceType.Wood, p.wood);
+        DepositToTreasury(ResourceType.Food, p.food);
+        DepositToTreasury(ResourceType.SpecialFood, _pendingLoadSpecial);
+        DepositToTreasury(ResourceType.Meat, _pendingLoadMeat);
+        _pendingLoadTreasury = null;
+        Debug.Log("[RulerController] 旧档非金资源已迁入国库");
     }
 }
 

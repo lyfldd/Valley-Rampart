@@ -315,6 +315,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
 
     public SavePayload SaveState()
     {
+        // 2_12 步骤8.4：国库非金真源持久化（金走 Ruler 直通不在此列）
+        var tv = TreasureVault.Instance;
         var data = new KingdomSaveData
         {
             saveDataVersion = 1,
@@ -324,7 +326,13 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
             tradeQuotaRemaining = (int[])TradeQuotaRemaining.Clone(),
             tradeCooldownDays = (int[])TradeCooldownDays.Clone(),
             researchLevels = (int[])ResearchLevels.Clone(),
-            waveProgress = 0
+            waveProgress = 0,
+            treasuryStone = tv != null ? tv.GetAmount(ResourceType.Stone) : 0,
+            treasuryWood = tv != null ? tv.GetAmount(ResourceType.Wood) : 0,
+            treasuryFood = tv != null ? tv.GetAmount(ResourceType.Food) : 0,
+            treasurySpecialFood = tv != null ? tv.GetAmount(ResourceType.SpecialFood) : 0,
+            treasuryMeat = tv != null ? tv.GetAmount(ResourceType.Meat) : 0,
+            treasuryMetal = tv != null ? tv.GetAmount(ResourceType.Metal) : 0
         };
         return new SavePayload
         {
@@ -357,8 +365,24 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         if (data.researchLevels != null && data.researchLevels.Length == 6)
             ResearchLevels = (int[])data.researchLevels.Clone();
 
+        // 2_12 步骤8.4：读到国库字段缓存（国库=主城学堂后建，vault 就绪后由 TreasureVault 读出恢复）
+        TreasuryStone = data.treasuryStone;
+        TreasuryWood = data.treasuryWood;
+        TreasuryFood = data.treasuryFood;
+        TreasurySpecialFood = data.treasurySpecialFood;
+        TreasuryMeat = data.treasuryMeat;
+        TreasuryMetal = data.treasuryMetal;
+
         Debug.Log($"[KingdomManager] 读档恢复：主城 Lv.{CastleLevel}，模块=[{string.Join(",", ModuleLevels)}]，研究=[{string.Join(",", ResearchLevels)}]");
     }
+
+    // ===== 2_12 步骤8.4 国库读档缓存（读档 Global 先落字段，主城 TreasureVault 就绪后据此恢复）=====
+    public int TreasuryStone { get; private set; }
+    public int TreasuryWood { get; private set; }
+    public int TreasuryFood { get; private set; }
+    public int TreasurySpecialFood { get; private set; }
+    public int TreasuryMeat { get; private set; }
+    public int TreasuryMetal { get; private set; }
 
     /// <summary>把旧存档（7 档）额度数组扩展到当前 9 档（v1 兼容：缺档补初始额度）。</summary>
     private int[] ResizeQuotaArray(int[] old)
@@ -384,5 +408,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         TradeCooldownDays = new int[9];
         _castleBuilding = null;
         InitTradeQuotas();   // 新建游戏重新初始化贸易额度
+        // 2_12 步骤8.4：清国库读档缓存（防新建局读到上局残留）
+        TreasuryStone = TreasuryWood = TreasuryFood = TreasurySpecialFood = TreasuryMeat = TreasuryMetal = 0;
     }
 }

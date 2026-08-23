@@ -60,5 +60,9 @@ public class CastleCoreComponent : MonoBehaviour, IBuildingComponent
         // 上帝视角无君主实体，IsKingdomLost = 工人全灭（D249 终审：主城被破不再判负）。
         if (building != null && ThroneAnchor.Instance == null)
             building.gameObject.AddComponent<ThroneAnchor>().castle = building;
+
+        // 2_12 步骤8.4：主城挂国库仓库（HH.16 裁决 B 多仓库聚合）——非金资源真源。
+        if (building != null && building.gameObject.GetComponent<TreasureVault>() == null)
+            building.gameObject.AddComponent<TreasureVault>()?.Init(building);
     }
 }
