@@ -12,10 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2abb5acb7a6500c45851d5c45096774e, type: 3}
   m_Name: Raider
   m_EditorClassIdentifier: 
+  prefab: {fileID: 7957045772478622183, guid: c5dcb3ba3f923ed4aa8d1ecc47ce0aa6, type: 3}
   type: 0
   hp: 100
   attack: 10
   attackInterval: 2
+  attackRangeCells: 1.2
+  isRangedAttack: 0
+  projectileSpeed: 0
   speedCellsPerSec: 1
   visionRadiusCells: 8
   valueWeight: 1

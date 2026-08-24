@@ -12,10 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2abb5acb7a6500c45851d5c45096774e, type: 3}
   m_Name: Brute
   m_EditorClassIdentifier: 
+  prefab: {fileID: 7957045772478622183, guid: c5dcb3ba3f923ed4aa8d1ecc47ce0aa6, type: 3}
   type: 2
   hp: 300
   attack: 30
   attackInterval: 2
+  attackRangeCells: 1.2
+  isRangedAttack: 0
+  projectileSpeed: 0
   speedCellsPerSec: 1.1
   visionRadiusCells: 12
   valueWeight: 3

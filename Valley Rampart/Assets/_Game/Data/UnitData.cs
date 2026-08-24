@@ -37,6 +37,8 @@ public enum Occupation
     // ===== 3.5.1 实体化（E-S1，末尾追加保持 int 稳定；§2.1 两地职业）=====
     Vagrant,        // 流浪汉：王国领域外无业者（营地生成），招募花 1 粮变居民走回王国；不耗国会粮
     Child,          // 小孩：繁殖产物，吃粮（1/日）不干活；天数事件累积 2 次长成居民
+    // ===== 2_14 敌怪（末尾追加保持 int 稳定；怪物运行时 UnitData 不入 UnitDataManager，占格查询走 Undead 阵营）=====
+    Monster,        // 敌怪（2_14 传送门灾害）：运行时合成 UnitData（faction=Undead），挂 MonsterController；GetCategory 归 Enemy
 }
 
 // 注意：Faction 枚举已迁入 AI.Core/Ports/Faction.cs（M1 决策核提取，asmdef 边界要求），
