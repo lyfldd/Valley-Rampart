@@ -8,7 +8,8 @@ using System.Collections.Generic;
 [Serializable]
 public class GameSaveSummary
 {
-    public string rulerName;       // 统治者名字
+    public string rulerName;       // 统治者名字（保留兼容旧档；新建不再写入）
+    public string kingdomName;     // 王国名（2_13 取代君主名；存档槽摘要显示）
     public int currentDay;         // 第几天
     public int currentSeason;      // 季节
     public int difficulty;         // 难度

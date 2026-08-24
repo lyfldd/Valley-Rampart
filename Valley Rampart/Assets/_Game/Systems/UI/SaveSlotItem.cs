@@ -31,9 +31,12 @@ public class SaveSlotItem : VisualElement
         metaLabel.AddToClassList("slot-meta");
         if (HasSave)
         {
-            string rulerName = string.IsNullOrEmpty(meta.summary?.rulerName) ? "未知君主" : meta.summary.rulerName;
+            // 2_13 步骤6：优先显示王国名（新建写 kingdomName）；旧档无则回退君主名/未知
+            string name = !string.IsNullOrEmpty(meta.summary?.kingdomName)
+                ? meta.summary.kingdomName
+                : (string.IsNullOrEmpty(meta.summary?.rulerName) ? "未知王国" : meta.summary.rulerName);
             int day = meta.summary?.currentDay ?? 0;
-            metaLabel.text = $"{rulerName} · 第{day}天 · {meta.saveTime}";
+            metaLabel.text = $"{name} · 第{day}天 · {meta.saveTime}";
         }
         else
         {

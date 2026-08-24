@@ -436,6 +436,15 @@ public class SaveManager : Singleton<SaveManager>
 
         try
         {
+            if (KingdomManager.Instance != null)
+            {
+                summary.kingdomName = KingdomManager.Instance.KingdomName;
+            }
+        }
+        catch { }
+
+        try
+        {
             if (TimeManager.Instance != null)
             {
                 summary.currentDay = TimeManager.Instance.CurrentDay;
