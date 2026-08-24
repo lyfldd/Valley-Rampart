@@ -21,6 +21,9 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
     private float _arriveScanTimer;
     private bool _mapReady;
 
+    /// <summary>运行期随机源（每日补员等非世界生成的玩法随机，R4 确定性纪律：世界生成走 System.Random(seed) 派生，本字段仅供 gameplay 随机）。</summary>
+    private readonly System.Random _runRng = new System.Random();
+
     protected override void Awake()
     {
         base.Awake();
@@ -33,20 +36,46 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         return _config;
     }
 
-    /// <summary>新游戏地图就绪：每个营地初始生成 campInitialVagrants 名流浪汉（GameBootstrap 调）。</summary>
+    /// <summary>新游戏地图就绪：按 D308 地图级口径预置初始流民（GameBootstrap 调）。
+    /// 全图 4~6 人（档内 rng 取值）——保底 baseline=3 人同点（早期必结营）+ 余数散投无主地；
+    /// 确定性：rng 由世界种子派生，同 seed 复现（冒烟 #9）。KingdomConfig.campInitialVagrants 退役。</summary>
     public void OnNewGameMapReady()
     {
-        var cfg = GetCfg();
         _mapReady = true;
-        if (cfg == null) return;
 
-        var camps = FindCamps();
+        var fc = Resources.Load<KingdomFoundingConfig>("Config/Kingdoms/KingdomFoundingConfig");
+        var wm = WorldManager.Instance;
+        var map = wm != null ? wm.ActiveMap : null;
+        if (map == null)
+        {
+            Debug.LogWarning("[VagrantCampSystem] D308：无 ActiveMap，跳过初始流民预置。");
+            return;
+        }
+
+        int seed = map.seed != 0 ? map.seed : (wm != null ? wm.MapSeed : 1);
+        var rng = new System.Random(seed);
+        int total = fc != null ? rng.Next(fc.initialVagrantTotalMin, fc.initialVagrantTotalMax + 1) : 4;
+        int baseline = fc != null ? Mathf.Max(1, fc.baselineGroupSize) : 3;
+        int rest = Mathf.Max(0, total - baseline);
+
         int spawned = 0;
-        for (int i = 0; i < camps.Count; i++)
-            for (int v = 0; v < cfg.campInitialVagrants; v++)
-                if (SpawnVagrantNear(camps[i])) spawned++;
+        // 保底 3 人同点（早期必结营）
+        var anchor = PickCell(map, rng, 6);
+        if (anchor.x >= 0)
+        {
+            var anchorWorld = CellToWorld(anchor);
+            for (int i = 0; i < baseline; i++)
+                if (SpawnVagrantAt(anchorWorld, rng)) spawned++;
+        }
+        // 余数散投无主地
+        for (int i = 0; i < rest; i++)
+        {
+            var cell = PickCell(map, rng, 8);
+            if (cell.x < 0) continue;
+            if (SpawnVagrantAt(CellToWorld(cell), rng)) spawned++;
+        }
 
-        Debug.Log($"[VagrantCampSystem] 初始流浪汉生成: {spawned}（营地={camps.Count}，每营地{cfg.campInitialVagrants}）");
+        Debug.Log($"[VagrantCampSystem] D308 初始流民预置: {spawned}/{total}（保底同点 {baseline} + 散投 {rest}）seed={seed}");
     }
 
     /// <summary>每日补员（DayCycleSettlement 调）：不满营地补 campDailyRefill，刷满 campMaxVagrants 停。</summary>
@@ -63,7 +92,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
             if (count >= cfg.campMaxVagrants) continue;
             int refill = Mathf.Min(cfg.campMaxVagrants - count, cfg.campDailyRefill);
             for (int v = 0; v < refill; v++)
-                if (SpawnVagrantNear(camps[i])) spawned++;
+                if (SpawnVagrantNear(camps[i], _runRng)) spawned++;
         }
         if (spawned > 0)
             Debug.Log($"[VagrantCampSystem] 每日补员: +{spawned} 流浪汉");
@@ -175,8 +204,8 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         return count;
     }
 
-    /// <summary>在营地半径内随机位置生成 1 名流浪汉实体。</summary>
-    bool SpawnVagrantNear(Building camp)
+    /// <summary>在营地半径内随机位置生成 1 名流浪汉实体（每日补员用；rng 传入，R4 禁 UnityEngine.Random）。</summary>
+    bool SpawnVagrantNear(Building camp, System.Random rng)
     {
         var cfg = GetCfg();
         if (camp == null || cfg == null || UnitFactory.Instance == null) return false;
@@ -184,7 +213,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         Vector2 campPos = camp.GetPosition();
         var grid = GridSystem.Instance;
         float cs = grid != null && grid.Config != null ? grid.Config.cellSize.x : 2.26f;
-        float offsetX = Random.Range(-cfg.campVagrantRadiusCells * 0.5f, cfg.campVagrantRadiusCells * 0.5f) * cs;
+        float offsetX = (float)((rng.NextDouble() * 2.0 - 1.0) * cfg.campVagrantRadiusCells * 0.5f) * cs;
 
         var go = UnitFactory.Instance.SpawnUnit(
             Faction.Human_Player, Occupation.Vagrant,
@@ -195,5 +224,60 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         var uc = go.GetComponent<UnitController>();
         if (uc != null) uc.BirthCampPos = campPos;
         return true;
+    }
+
+    // ===== D308 初始流民（地图级预置，确定性派生自世界种子）=====
+
+    /// <summary>在指定世界点生成 1 名流浪汉（带微小抖动避免完全叠位；滞留该处游荡——BirthCampPos=落点）。</summary>
+    bool SpawnVagrantAt(Vector2 worldPos, System.Random rng)
+    {
+        if (UnitFactory.Instance == null) return false;
+        var grid = GridSystem.Instance;
+        float cs = grid != null && grid.Config != null ? grid.Config.cellSize.x : 2.26f;
+        float jx = (float)((rng.NextDouble() * 2.0 - 1.0) * 0.3 * cs);
+        var go = UnitFactory.Instance.SpawnUnit(
+            Faction.Human_Player, Occupation.Vagrant,
+            new Vector2(worldPos.x + jx, worldPos.y));
+        if (go == null) return false;
+        var uc = go.GetComponent<UnitController>();
+        if (uc != null) uc.BirthCampPos = new Vector2(worldPos.x, worldPos.y);   // 滞留该处游荡（HomePoint=落点，不朝王国走）
+        return true;
+    }
+
+    /// <summary>取 D308 落点：rng 抽样→就近可走格，且离王国出生点（含玩家）足够远放下（无主地粗口径）。回退地图中心。</summary>
+    Vector2Int PickCell(MapData map, System.Random rng, int minDistToSpawn)
+    {
+        for (int a = 0; a < 32; a++)
+        {
+            int x = rng.Next(4, Mathf.Max(8, map.width - 4));
+            int y = rng.Next(4, Mathf.Max(8, map.height - 4));
+            var cell = MapGenRules.NearestWalkable(map, x, y);
+            if (cell.x < 0) continue;
+            if (FarFromSpawns(cell, map, minDistToSpawn)) return cell;
+        }
+        return MapGenRules.NearestWalkable(map, map.width / 2, map.height / 2);
+    }
+
+    static bool FarFromSpawns(Vector2Int p, MapData map, int minDist)
+    {
+        if (map.kingdomSpawns == null) return true;
+        for (int i = 0; i < map.kingdomSpawns.Count; i++)
+        {
+            var s = map.kingdomSpawns[i];
+            if (Mathf.Abs(s.x - p.x) + Mathf.Abs(s.y - p.y) < minDist) return false;
+        }
+        return true;
+    }
+
+    static Vector2 CellToWorld(Vector2Int cell)
+    {
+        var grid = GridSystem.Instance;
+        if (grid != null && grid.Config != null)
+        {
+            var v = grid.CoordToWorld(new GridCoord(cell.x, cell.y));
+            return new Vector2(v.x, v.y);
+        }
+        float cs = 2.26f;
+        return new Vector2(cell.x * cs, cell.y * cs);
     }
 }

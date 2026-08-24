@@ -104,10 +104,10 @@ public class KingdomConfig : ScriptableObject
     public int vagrantCampFootprint = 4;
     [Tooltip("单营地流浪汉上限（刷满停补）")]
     public int campMaxVagrants = 3;
-    [Tooltip("单营地初始流浪汉数")]
+    [Tooltip("单营地初始流浪汉数（已退役：2_16 步骤6 D308 改地图级预置，本字段保留不再读取）")]
     public int campInitialVagrants = 2;
-    [Tooltip("营地不满时每日补员数")]
-    public int campDailyRefill = 2;
+    [Tooltip("营地不满时每日补员数（D371=1，2_16 步骤6 回填）")]
+    public int campDailyRefill = 1;
     [Tooltip("流浪汉与营地关联半径（格）：半径内计入该营地人口")]
     public float campVagrantRadiusCells = 4f;
     [Tooltip("招募流浪汉粮耗（决策13：花 1 粮招募即变居民）")]
