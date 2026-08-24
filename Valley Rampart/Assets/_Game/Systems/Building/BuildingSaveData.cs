@@ -33,4 +33,6 @@ public struct BuildingSaveData
     public int grade;           // (int)ResourceGrade 资源等级（仅资源点建筑有效；旧档缺字段→默认 0=Barren 但由 SpawnFromSave 兜底 Normal）
     // 2_12 步骤7 / D155：累计投入（修复成本基数 / 拆除返还基数）。旧档缺字段→默认 0（D155 兜底按 def.cost 算）。
     public int totalInvested;   // 建造+升级累加投入总量
+    // 2_16 步骤2：王国归属（D329 门面）。旧档缺字段→默认 0（玩家），向后兼容。
+    public int kingdomId;       // 王国归属 id（0=玩家；AI/动态王国=Registry id）
 }

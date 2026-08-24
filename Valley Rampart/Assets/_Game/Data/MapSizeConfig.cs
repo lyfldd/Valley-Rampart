@@ -11,8 +11,8 @@ public class MapSizeConfig : ScriptableObject
     [Header("地图大小规格（2D 档位：128²/256²/384²，D19）")]
     public MapSizeEntry[] sizes = new MapSizeEntry[3];
 
-    [Header("同图 AI 王国数（按难度决定，不按 worldSize；数值重审归 2_1/2_8）")]
-    [Tooltip("索引 0/1/2 对应 Easy/Normal/Hard 的基础数")]
+    [Header("同图 AI 王国数（2_16 步骤3 起按 D288 档位，读 KingdomFoundingConfig；本数组退役保留兼容旧档序列化）")]
+    [Tooltip("已退役（D288：AI 数改由 KingdomFoundingConfig.GetAiCountRange 按 worldSize 档位决定，难度取档内低/随机/高值）。保留字段避免旧 assets 反序列化告警。")]
     public int[] enemyByDifficulty = new int[3] { 1, 2, 3 };
 
     /// <summary>按 WorldSize 查单档规格。</summary>
@@ -37,11 +37,16 @@ public class MapSizeConfig : ScriptableObject
         return e.height > 0 ? e.height : 256;
     }
 
-    /// <summary>按难度查同图 AI 王国基础数。</summary>
-    public int GetEnemyMapBase(int difficulty)
+    /// <summary>同图 AI 王国数（2_16 步骤3 / D288：按 worldSize 档位 + 难度，rng 种子化取档内值）。</summary>
+    public int GetEnemyMapBase(WorldSize size, int difficulty, System.Random rng)
     {
-        int idx = Mathf.Clamp(difficulty, 1, 3) - 1;
-        return idx >= 0 && idx < enemyByDifficulty.Length ? enemyByDifficulty[idx] : 2;
+        var fc = Resources.Load<KingdomFoundingConfig>("Config/Kingdoms/KingdomFoundingConfig");
+        var range = fc != null ? fc.GetAiCountRange(size) : new Vector2Int(2, 4);
+        int lo = Mathf.Max(1, range.x);
+        int hi = Mathf.Max(lo, range.y);
+        if (difficulty <= 1) return lo;          // Easy → 档内取低
+        if (difficulty >= 3) return hi;          // Hard → 档内取高
+        return (rng != null) ? rng.Next(lo, hi + 1) : lo;   // Normal → 档内随机
     }
 }
 

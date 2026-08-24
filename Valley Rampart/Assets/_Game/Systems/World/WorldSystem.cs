@@ -55,6 +55,11 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
             return;
         }
 
+        // 0. 王国名（存 KingdomManager，落王国存档）+ 玩家王国 id=0 注册（2_16 步骤1，D303）
+        //    玩家注册须在 ApplyConfig（地图生成末尾 Foundry 立 AI 国）之前，保证玩家占 id=0。
+        KingdomManager.Instance.KingdomName = newConfig.kingdomName;
+        KingdomRegistry.Instance.EnsurePlayerRegistered();
+
         // 1. 世界管理器（世界种子 + 地图大小 + 难度）
         WorldManager.Instance.ApplyConfig(newConfig.worldSeed, newConfig.worldSize, newConfig.difficulty);
 
@@ -65,8 +70,7 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
         //    这里补设 daysPerSeason）
         ApplyTimeConfig();
 
-        // 4. 王国名（存 KingdomManager，落王国存档） + 按难度应用初始资源
-        KingdomManager.Instance.KingdomName = newConfig.kingdomName;
+        // 4. 按难度应用初始资源
         RulerController.Instance.ApplyInitialResourcesFromDifficulty();
 
         Debug.Log($"[WorldSystem] 世界初始化完成: 难度={newConfig.difficulty}, 种子={newConfig.mapSeed}");

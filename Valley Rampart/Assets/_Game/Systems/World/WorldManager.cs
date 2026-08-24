@@ -154,14 +154,21 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         // §5.2 管线：温度带 → 特征物 → 出生点 → 资源就近补 → 连通性 → 水域 → 复跑连通 → 威胁刷点 → 自然建筑派生
         MapGenRules.FillClimateZones(rng, map, _mapGenRulesConfig);             // 步骤3
         MapGenRules.FillFeatures(rng, map);                                     // 步骤4
-        int aiCount = _mapSizeConfig != null ? _mapSizeConfig.GetEnemyMapBase(difficulty) : 2;
-        MapGenRules.PlaceKingdomSpawns(rng, map, _mapGenRulesConfig, size, aiCount);   // 步骤6
+        int aiCount = _mapSizeConfig != null ? _mapSizeConfig.GetEnemyMapBase(size, difficulty, rng) : 2;   // 步骤6（2_16 重锚 D288 档位）
+        // 2_16 步骤3↔4联动：同 rng 链绘制 AI 王国模板，写入 map.kingdomTemplates 供步骤5 Foundry 消费（保证放置/立国同模板+确定性）
+        var tplLib = Resources.Load<KingdomTemplateLibrary>("Config/Kingdoms/KingdomTemplateLibrary");
+        var templates = tplLib != null ? tplLib.DrawWithoutReplacement(rng, aiCount) : new List<KingdomDef>();
+        MapGenRules.PlaceKingdomSpawns(rng, map, _mapGenRulesConfig, size, aiCount, templates);   // 步骤6
         MapGenRules.EnsureNearbyResources(rng, map, _mapGenRulesConfig);        // 步骤7
         MapValidator.ValidateConnectivity(map);                                  // 步骤8
         MapGenRules.PlaceWater(rng, map, size);                                  // 步骤9（海洋/湖/河）
         MapValidator.ValidateConnectivity(map);                                  // 水域后复跑连通（审计）
         MapGenRules.PlaceThreatSpawns(rng, map, _mapGenRulesConfig, difficulty); // 步骤10
         MapGenRules.DeriveNaturalBuildings(map);                                 // 步骤11
+
+        // 2_16 步骤5：第一代立国——消费 spawns[1..N]+kingdomTemplates（步骤3 已抽模板/放置），
+        // 注册 AI 王国 + 错峰档预置建筑/人口台账/起始国库，发布立国事件。同 rng 链保确定性。
+        KingdomFoundry.FoundFirstGeneration(rng, map, difficulty);               // 2_16 步骤5
 
         // HH.10：新地图/读档 → 清空全资源刷新重生记录（禁跨图残留幽灵坐标）
         if (ResourceRespawnSystem.HasInstance) ResourceRespawnSystem.Instance.ResetRespawns();

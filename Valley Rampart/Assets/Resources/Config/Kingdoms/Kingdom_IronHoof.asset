@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4667a0d1dc6cdfd4b986b1bb58cfb77c, type: 3}
+  m_Name: Kingdom_IronHoof
+  m_EditorClassIdentifier: 
+  templateName: IronHoof
+  namePool:
+  - "\u94C1\u8E44\u738B\u56FD"
+  - "\u77F3\u57CE\u56FD"
+  - "\u6218\u6B4C\u56FD"
+  bannerColor: {r: 0.55, g: 0.4, b: 0.3, a: 1}
+  preferredClimates: 0200000001000000
+  preferredFeature: 0
+  militant: 0.85
+  economic: 0.4
+  defensive: 0.7
+  expansionist: 0.65
+  diplomatic: 0.3
+  preferredTechTags:
+  - Infantry
+  initialUnlocks: []
+  baseBuildingDefIds:
+  - castle
+  - farm
+  - mine
+  - Warehouse
+  - quarry
+  baseWorkers: 6
+  baseWarriors: 2
+  baseStockpile:
+    gold: 0
+    stone: 25
+    wood: 40
+    food: 40
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0

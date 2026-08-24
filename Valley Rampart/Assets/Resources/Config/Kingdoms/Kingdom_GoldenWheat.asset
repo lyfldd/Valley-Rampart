@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4667a0d1dc6cdfd4b986b1bb58cfb77c, type: 3}
+  m_Name: Kingdom_GoldenWheat
+  m_EditorClassIdentifier: 
+  templateName: GoldenWheat
+  namePool:
+  - "\u91D1\u7A57\u738B\u56FD"
+  - "\u9EA6\u6D6A\u56FD"
+  - "\u8C37\u4E30\u56FD"
+  bannerColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  preferredClimates: 02000000
+  preferredFeature: 0
+  militant: 0.4
+  economic: 0.85
+  defensive: 0.45
+  expansionist: 0.4
+  diplomatic: 0.6
+  preferredTechTags:
+  - Infantry
+  initialUnlocks: []
+  baseBuildingDefIds:
+  - castle
+  - farm
+  - mine
+  - Warehouse
+  - quarry
+  baseWorkers: 6
+  baseWarriors: 2
+  baseStockpile:
+    gold: 0
+    stone: 25
+    wood: 40
+    food: 40
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0

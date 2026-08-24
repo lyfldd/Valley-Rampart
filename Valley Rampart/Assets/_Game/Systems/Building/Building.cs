@@ -83,6 +83,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     [Header("来源")]
     public BuildingType sourceType = BuildingType.None;
     public bool isPlayerBuilt = true;
+    // ===== 2_16 步骤2：王国归属（D329 门面，默认 0=玩家；AI/动态王国由 Foundry 传入非 0 id）=====
+    [Tooltip("王国归属 id（0=玩家；AI/动态王国=KingdomRegistry 分配的 id）。2_16 步骤2，随 BuildingSaveData 存档恢复")]
+    public int kingdomId;
 
     // ===== 配置与运行时状态（3.3 主体）=====
     [Header("配置")]

@@ -35,8 +35,9 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
 
     /// <summary>
     /// 根据 UnitData 创建单位实例（2_3 步骤0：用 data.prefab，无命名回退）。
+    /// kingdomId 参数（2_16 步骤2，默认 0=玩家）：Entity 归属标注，AI/动态王国传入 Registry id。
     /// </summary>
-    public GameObject SpawnUnit(UnitData data, Vector2 position)
+    public GameObject SpawnUnit(UnitData data, Vector2 position, int kingdomId = 0)
     {
         if (data == null)
         {
@@ -69,6 +70,7 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
         if (controller != null)
         {
             controller.Initialize(data);
+            controller.kingdomId = kingdomId;   // 2_16 步骤2：Entity 王国归属（默认 0=玩家）
         }
 
         // 3.0.1: 如果有 NPCBrain 且 data 是 NpcProfessionDef，初始化 AI 大脑
@@ -104,12 +106,12 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
     }
 
     /// <summary>
-    /// 按 Faction + Occupation 直接创建单位。
+    /// 按 Faction + Occupation 直接创建单位。kingdomId 默认 0=玩家（2_16 步骤2 门面 D329）。
     /// </summary>
-    public GameObject SpawnUnit(Faction faction, Occupation occupation, Vector2 position)
+    public GameObject SpawnUnit(Faction faction, Occupation occupation, Vector2 position, int kingdomId = 0)
     {
         UnitData data = UnitDataManager.Instance.GetData(faction, occupation);
-        return SpawnUnit(data, position);
+        return SpawnUnit(data, position, kingdomId);
     }
 
     // ===== ISaveableSpawner 实现 =====
@@ -145,7 +147,7 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
         }
 
         Vector2 pos = new Vector2(data.posX, data.posY);
-        GameObject go = SpawnUnit(config, pos);  // 触发 Initialize → 注册 ISaveable（新 GUID）
+        GameObject go = SpawnUnit(config, pos, data.kingdomId);  // 触发 Initialize → 注册 ISaveable（新 GUID）；kingdomId 归属
 
         if (go != null)
         {

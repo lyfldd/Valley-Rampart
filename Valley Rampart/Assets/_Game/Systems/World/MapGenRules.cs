@@ -89,32 +89,98 @@ public static class MapGenRules
         return FeatureType.Plain;
     }
 
-    // ===== 步骤 6：王国出生点 =====
-    public static void PlaceKingdomSpawns(System.Random rng, MapData map, MapGenRulesConfig cfg, WorldSize size, int aiCount)
+    // ===== 步骤 6：王国出生点（2_16 步骤3：温度带匹配 D288/D292/D298/D302）=====
+    /// <summary>
+    /// 王国出生点放置：spawns[0]=玩家主城（温带保底 D302），spawns[1..N]=AI 王国按模板偏好气候带匹配（D298），
+    /// 全偏好带失败回退全局兜底+日志（D292）。D41 间距与 NearestWalkable 兜底保留。模板绑定写入 map.kingdomTemplates。
+    /// </summary>
+    public static void PlaceKingdomSpawns(System.Random rng, MapData map, MapGenRulesConfig cfg,
+                                          WorldSize size, int aiCount, List<KingdomDef> templates)
     {
         int count = 1 + Mathf.Max(0, aiCount);
         int minDist = cfg != null ? cfg.GetSpawnMinDistance(size) : 32;
-        int margin = ChunkSize;                       // 避开海洋边缘
+        int margin = ChunkSize;
         var spawns = new List<Vector2Int>();
+        var templateBindings = new List<KingdomDef>();
 
+        // spawns[0] = 玩家主城：仅温带选点（D302，可走约 75% 的带），不再全域随机
+        Vector2Int player = PickWalkableInClimate(rng, map, margin, ClimateZone.Temperate, 0, spawns);
+        if (player.x < 0)
+        {
+            Debug.LogWarning("[MapGenRules] 玩家主城温带保底失败，回退全域随机可走格（D302 兜底）。");
+            player = PlaceRandomWalkable(rng, map, margin, spawns, minDist);
+        }
+        spawns.Add(player);
+        templateBindings.Add(null);
+
+        // AI 王国：按各自 KingdomDef.preferredClimates 数组按序匹配
+        for (int i = 0; i < aiCount; i++)
+        {
+            var tpl = templates != null && i < templates.Count ? templates[i] : null;
+            spawns.Add(PickSpawnForTemplate(rng, map, margin, minDist, spawns, tpl));
+            templateBindings.Add(tpl);
+        }
+
+        map.kingdomSpawns = spawns.Count > 0 ? spawns : map.kingdomSpawns;
+        map.kingdomTemplates = templateBindings;
+    }
+
+    /// <summary>AI 出生点：偏好带按序匹配，全部失败回退全局兜底+日志（D292）。</summary>
+    static Vector2Int PickSpawnForTemplate(System.Random rng, MapData map, int margin, int minDist,
+                                           List<Vector2Int> spawns, KingdomDef tpl)
+    {
+        if (tpl != null && tpl.preferredClimates != null && tpl.preferredClimates.Length > 0)
+        {
+            for (int b = 0; b < tpl.preferredClimates.Length; b++)
+            {
+                var p = PickWalkableInClimate(rng, map, margin, tpl.preferredClimates[b], minDist, spawns);
+                if (p.x >= 0) return p;
+            }
+            Debug.LogWarning($"[MapGenRules] 模板 {tpl.templateName} 偏好气候带均失败，回退全局无可走格兜底（D292）。");
+        }
+        return PlaceRandomWalkable(rng, map, margin, spawns, minDist);
+    }
+
+    /// <summary>在指定气候带内随机抽可走格（带间距校验）。找不到返回 (-1,-1)。</summary>
+    static Vector2Int PickWalkableInClimate(System.Random rng, MapData map, int margin, ClimateZone climate,
+                                            int minDist, List<Vector2Int> spawns)
+    {
         int guard = 0;
-        while (spawns.Count < count && guard++ < 5000)
+        while (guard++ < 3000)
         {
             int x = rng.Next(margin, Mathf.Max(margin + 1, map.width - margin));
             int y = rng.Next(margin, Mathf.Max(margin + 1, map.height - margin));
-
-            // 间距校验
-            bool tooClose = false;
-            for (int i = 0; i < spawns.Count; i++)
-                if (Vector2Int.Distance(spawns[i], new Vector2Int(x, y)) < minDist) { tooClose = true; break; }
-            if (tooClose) continue;
-
-            var p = NearestWalkable(map, x, y);       // R6：落可走格，否则就近
+            if (ZoneOf(map, x, y) != climate) continue;
+            if (minDist > 0 && TooClose(spawns, new Vector2Int(x, y), minDist)) continue;
+            var p = NearestWalkable(map, x, y);
             if (p.x < 0) continue;
-            spawns.Add(p);
+            return p;
         }
+        return new Vector2Int(-1, -1);
+    }
 
-        map.kingdomSpawns = spawns;
+    /// <summary>全局随机可走格兜底（D292/D41 间距校验）。</summary>
+    static Vector2Int PlaceRandomWalkable(System.Random rng, MapData map, int margin,
+                                          List<Vector2Int> spawns, int minDist)
+    {
+        int guard = 0;
+        while (guard++ < 3000)
+        {
+            int x = rng.Next(margin, Mathf.Max(margin + 1, map.width - margin));
+            int y = rng.Next(margin, Mathf.Max(margin + 1, map.height - margin));
+            if (minDist > 0 && TooClose(spawns, new Vector2Int(x, y), minDist)) continue;
+            var p = NearestWalkable(map, x, y);
+            if (p.x < 0) continue;
+            return p;
+        }
+        return new Vector2Int(margin, margin);
+    }
+
+    static bool TooClose(List<Vector2Int> spawns, Vector2Int p, int minDist)
+    {
+        for (int i = 0; i < spawns.Count; i++)
+            if (Vector2Int.Distance(spawns[i], p) < minDist) return true;
+        return false;
     }
 
     /// <summary>就近找可走格（螺旋外扩，R6）。找不到返回 (-1,-1)。</summary>

@@ -40,6 +40,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>NPC 死亡事件（传 npcId）。TaskScheduler 订阅用清指派。</summary>
     public static event System.Action<int> OnUnitDied;
 
+    // ===== 2_16 步骤2：王国归属（D329 门面，默认 0=玩家；AI/动态王国由 Foundry/转化管线传入非 0 id）=====
+    /// <summary>王国归属 id（0=玩家；AI/动态王国=KingdomRegistry 分配的 id）。2_16 步骤2，随 UnitSaveData 存档恢复。</summary>
+    public int kingdomId;
+
     // ===== 3.5 P0 步骤4：运行时职业覆盖（转职用，不污染共享 UnitData SO）=====
     private int _runtimeOccupation = -1;   // -1 = 未设置，回退 Data.occupation
     /// <summary>有效职业（优先运行时覆盖，否则 Data.occupation）。</summary>
@@ -388,7 +392,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             birthCampY = BirthCampPos.y,
             // v5：工人背包（QQQ.4 T9 / 需求5 资源生命周期）
             carriedType = (int)inv.carriedType,
-            carriedAmount = inv.carriedAmount
+            carriedAmount = inv.carriedAmount,
+            // v6：王国归属（2_16 步骤2，D329 门面）
+            kingdomId = kingdomId
         };
         return new SavePayload
         {
@@ -1594,4 +1600,6 @@ public class UnitSaveData
     // ===== v5（QQQ.4 T9 / 需求5 资源生命周期）：工人背包 =====
     public int carriedType;
     public int carriedAmount;
+    // ===== v6（2_16 步骤2）：王国归属（D329 门面）。旧档缺字段→默认 0（玩家），向后兼容。=====
+    public int kingdomId;
 }

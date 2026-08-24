@@ -559,3 +559,12 @@ public readonly struct EnemyEnteredChunkEvent
         Enemy = enemy;
     }
 }
+
+// ===== 2_16 AI 王国事件 =====
+// 王国诞生（玩家开局 / 第一代 FoundFirstGeneration / 动态立国共用，D303/D294）。
+// 本片只发事件；消费方：2_10 染色（kingdomId→色/格集）、2_13 开局汇总播报一条/动态立国播报（步骤7/11）。
+public readonly struct KingdomFoundedEvent
+{
+    public readonly KingdomState Kingdom;
+    public KingdomFoundedEvent(KingdomState kingdom) { Kingdom = kingdom; }
+}

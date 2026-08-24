@@ -26,6 +26,7 @@ public class MapData
     public ClimateZone[] climateZones;        // 温度带，按大区块 16×16 存（长度 = width/16 × height/16）
     public FeatureType[] features;            // W×H，唯一功能源（可走/阻挡由此派生）
     public List<Vector2Int> kingdomSpawns;    // 王国出生点（0=玩家，1..N=AI 王国，2_1 生成）
+    public List<KingdomDef> kingdomTemplates; // 与 kingdomSpawns 并行：0=null(玩家)，1..N=AI 模板绑定（2_16 步骤3 落，供步骤5 Foundry 立国用，保证放置/立国同模板）
     public List<SpawnDef>   threatSpawns;     // 敌人晚上刷点/威胁方向（2_1 写入、2_8 消费）
     public List<NaturalBuilding> naturalBuildings; // 自然建筑占位（features 派生的视觉层，供 2_2 实例化）
 }

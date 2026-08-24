@@ -158,7 +158,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
     /// <summary>按占用/注册/挂件/发事件创建 Building 实例。供地图与玩家放置共用逻辑（BuildController 保留自身放置路径）。</summary>
     public bool CreateBuildingInstance(BuildingDef def, BuildingType sourceType, GridCoord coord, Vector2Int footprint,
                                        Vector3 worldPos, bool isPlayerBuilt, ResourceGrade grade, bool isConsumable,
-                                       BuildingState initialState)
+                                       BuildingState initialState, int kingdomId = 0)
     {
         if (def == null) return false;
         var fp = new Vector2Int(
@@ -201,6 +201,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             b.level = 1;
             b.faction = def.faction;
             b.isObstacle = def.isObstacle;
+            b.kingdomId = kingdomId;   // 2_16 步骤2：王国归属（默认 0=玩家）
 
             // HP：统一入口 = def.maxHp（3.5.1 E-S10）× gradeScale
             int baseHp = def.maxHp > 0 ? def.maxHp : 100;
@@ -340,7 +341,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             state = BuildingState.Active;   // 主城修复后读档不应回到废墟（castoeLevel≥1）
 
         bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, fp, worldPos,
-                                         isPlayerBuilt: true, (ResourceGrade)data.grade, false, state);
+                                         isPlayerBuilt: true, (ResourceGrade)data.grade, false, state,
+                                         kingdomId: data.kingdomId);
         if (!ok) return;
 
         var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) as Building : null;
