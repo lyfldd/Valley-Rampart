@@ -61,7 +61,11 @@ public class TopLeftHUD : MonoBehaviour
     {
         var ruler = RulerController.Instance;
         if (ruler == null) return;
-        string kingdomName = string.IsNullOrEmpty(ruler.RulerName) ? "王国" : ruler.RulerName;
+        // 2_13：王国名优先取 KingdomManager（取代君主名）；君主名兜底兼容旧档
+        var km = KingdomManager.Instance;
+        string kingdomName = (km != null && !string.IsNullOrEmpty(km.KingdomName))
+            ? km.KingdomName
+            : (string.IsNullOrEmpty(ruler.RulerName) ? "王国" : ruler.RulerName);
         int gold = ruler.Gold;
         int pop = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : -1;
         // 复用原君主血条/攻防标签承载王国信息；血条隐藏（王国无 HP）
