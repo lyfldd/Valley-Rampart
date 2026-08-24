@@ -58,8 +58,8 @@ public static class KingdomFoundry
             state.workerCount = Mathf.Max(0, tier.workerCount);
             state.warriorCount = Mathf.Max(0, tier.warriorCount);
 
-            // 起始国库过渡账本（AI 2_17 前无脑不消费，零风险）
-            if (tier.stockpile != null) state.resources = tier.stockpile;
+            // 起始国库过渡账本（AI 2_17 前无脑不消费，零风险；ResourcePack 为 struct 无需判空）
+            state.resources = tier.stockpile;
 
             // 建筑预置（王座 castle + 错峰前 buildingCount-1 个产能）+ 困难档围墙环
             PlaceBuildings(rng, map, map.kingdomSpawns[i], tpl, tier, state.id, cfg, difficulty, foundedDay);
@@ -120,7 +120,6 @@ public static class KingdomFoundry
         if (index == 0) return MapGenRules.NearestWalkable(map, spawn.x, spawn.y);
         int r = 2 + (index - 1) / 4;             // 环半径，前 4 个在 r=2 环，后续扩环
         int slot = index - 1;                     // 环内序号
-        int perRing = 8;
         int edge = slot % 4;                      // 0上 1右 2下 3左
         int step = slot / 4;
         int stepMax = r * 2;
