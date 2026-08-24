@@ -5,9 +5,9 @@ using UnityEngine;
 public class PortalDisasterConfig : ScriptableObject
 {
     [Header("触发规则（§2.1）")]
-    public float triggerProbability = 0.3f;      // 每晚触发概率
+    public float triggerProbability = 0.2f;      // 每晚触发概率（Base 0.2，08-21 Q1 裁决迁移）
     public int minDaysBeforeFirst = 3;           // 首次触发最小天数（给玩家发展期）
-    public int forceTriggerAfterDays = 7;        // 保底天数（连续 N 天未触发则强制触发）
+    public int forceTriggerAfterDays = 3;        // 保底天数（连续 N 天未触发则强制触发；08-21 裁决占位 7→3）
 
     [Header("生成规则（§2.2）")]
     public int maxPortalPerNight = 1;            // 同夜最多同时存在传送门数

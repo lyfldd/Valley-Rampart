@@ -653,30 +653,6 @@ public class AIDebugSpawnController : MonoBehaviour
         return pos;
     }
 
-    // ===== 段①+段② 合并 Play 冒烟脚手架（2026-08-24，临时调试入口，冒烟完可删）=====
-    /// <summary>
-    /// 出图 → 主城旁放传送门实体 → Portal.Update 召唤循环驱动出怪
-    /// （普通怪走 MonsterAI 四态态机 + 精英 Brute 走 NPCBrain 决策核）。
-    /// 复用 StartNewGameDebug 出图链，不触碰正式波次逻辑（WaveDirector D261 步骤8 正式入口）。
-    /// </summary>
-    public void StartPortalSmokeTest()
-    {
-        StartNewGameDebug();
-        if (GridSystem.Instance == null) { Debug.LogError("[PortalSmoke] GridSystem 未就绪，冒烟中止。"); return; }
-        if (MonsterController.ActiveCount > 0) { Debug.LogWarning("[PortalSmoke] 已有怪物在场，跳过重复冒烟。"); return; }
-
-        // 主城旁空地放传送门（占 2×2）。取主城锚点格 → 右移 3 格避免与建筑重叠。
-        Vector2 anchor = WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
-        GridCoord baseCoord = GridSystem.Instance.WorldToCoord(anchor) ?? new GridCoord(0, 0);
-        GridCoord portalCoord = new GridCoord(baseCoord.x + 3, baseCoord.y + 3);
-        Vector2 portalWorld = GridSystem.Instance.CoordToWorld(portalCoord);
-
-        var pgo = new GameObject("Portal_SmokeTest");
-        pgo.transform.position = new Vector3(portalWorld.x, portalWorld.y, 0f);
-        var portal = pgo.AddComponent<Portal>();
-        var portalDef = Resources.Load<PortalDef>("Config/Disaster/PortalDef");
-        portal.Initialize(portalCoord, portalDef);
-
-        Debug.Log($"[PortalSmoke] 传送门已放置 @ {portalCoord} 世界={portalWorld}，召唤循环驱动出怪（普通怪四态 + 精英决策核）。");
-    }
+    // ===== 段①+段② 怪物流冒烟：请直接发布 PortalDisasterTriggeredEvent 走正式链路 =====
+    // （WaveDirector.SpawnPortalDisasterWaves 已接管传送门生成 + 6:3:1 波次；本调试类不再内置手动放置脚手架）
 }

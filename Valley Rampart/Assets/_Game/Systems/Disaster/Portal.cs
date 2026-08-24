@@ -75,34 +75,7 @@ public class Portal : MonoBehaviour, IDamageable, IGridOccupant
         state = evt.NewPhase == TimePhase.Day ? PortalState.DayProtected : PortalState.Active;
     }
 
-    // ===== 召唤锚点（步骤8 WaveDirector 波次构成前的临时驱动；波次调度落地后此循环交还 WaveDirector）=====
-    private MonsterDef[] _defs;
-    private float _summonTimer;
-    private int _summonIdx;
-
-    private void Update()
-    {
-        if (state != PortalState.Active || def == null) return;
-        if (MonsterController.ActiveCount >= def.maxConcurrentMonsters) { _summonTimer = 0f; return; }
-        _summonTimer -= Time.deltaTime;
-        if (_summonTimer <= 0f)
-        {
-            _summonTimer = CurrentSummonInterval;
-            SummonMonster();
-        }
-    }
-
-    private void SummonMonster()
-    {
-        if (_defs == null || _defs.Length == 0)
-            _defs = Resources.LoadAll<MonsterDef>("Config/Disaster");   // Raider/Slinger/Brute
-        if (_defs == null || _defs.Length == 0) return;
-        MonsterDef md = _defs[_summonIdx % _defs.Length];
-        _summonIdx++;
-        // 召唤出生点=传送门中心附近（出生表现偏移非决策，R4 界内）；错峰 2~5s 归步骤8
-        Vector2 spawnPos = (Vector2)transform.position + (Vector2)Random.insideUnitCircle * 0.8f;
-        MonsterSpawner.Spawn(md, spawnPos);
-    }
+    // ===== 召唤：收编入 WaveDirector.SpawnPortalDisasterWaves（2_14 步骤8 单轨收拢）。本实体不再自驱召唤 =====
 
     /// <summary>占格登记（2×2 + 阻挡）。摧毁由 DestroyPortal 释放。</summary>
     public void RegisterOccupancy()

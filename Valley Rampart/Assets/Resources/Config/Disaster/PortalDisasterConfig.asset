@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2e0c4244b600544d9a33fc56cea7b30, type: 3}
   m_Name: PortalDisasterConfig
   m_EditorClassIdentifier: 
-  triggerProbability: 0.3
+  triggerProbability: 0.2
   minDaysBeforeFirst: 3
-  forceTriggerAfterDays: 7
+  forceTriggerAfterDays: 3
   maxPortalPerNight: 1
   recheckRadius: 10
   maxPlacementRetries: 5

@@ -25,6 +25,10 @@ public class WaveConfig : ScriptableObject
     [Tooltip("单波规模上限（高强度）")]
     public int strengthCap = 60;
 
+    [Header("传送门波次配比（2_14 步骤8 / D258）")]
+    [Tooltip("近战(Raider):远程(Slinger):精英(Brute) 波次构成比（占位 6:3:1，SO 可配）")]
+    public Vector3 waveCompositionRatio = new Vector3(6f, 3f, 1f);
+
     [Header("方向聚合（R1）")]
     [Tooltip("同波次刷点方向聚合成一组的最大夹角（度）")]
     public float directionMergeAngle = 45f;
