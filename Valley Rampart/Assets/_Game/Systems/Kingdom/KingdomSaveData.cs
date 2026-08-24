@@ -14,7 +14,6 @@ public class KingdomSaveData
     public int[] tradeQuotaRemaining;       // 各资源贸易剩余额度（索引=资源等级-1，7 档）
     public int[] tradeCooldownDays;         // 各资源额度刷新倒计时（索引=资源等级-1）
     public int[] researchLevels;            // 各研究方向等级（科技模块，P1 占位）
-    public string[] researchedTechIds;      // 2_12 步骤13：已研究科技 id（D224~D227 增益/解锁真源）
     public int waveProgress;                // 夜间波次进度（P2 占位）
 
     // 2_12 步骤8.4（HH.16 裁决 B）：国库（主城 TreasureVault）非金资源真源持久化。

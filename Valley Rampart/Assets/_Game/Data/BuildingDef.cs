@@ -39,10 +39,6 @@ public class BuildingDef : ScriptableObject
     [Tooltip("所属王国模块。Civil=土木/Production=生产/Livelihood=民生/Military=军事/Commerce=商业/Science=科技。用于模块级解锁判定")]
     public ModuleType moduleType;       // 3.5：建筑归属模块（模块级解锁门槛依据）
 
-    [Header("科技解锁（2_12 步骤13 D224~D227）")]
-    [Tooltip("建造前置科技 id（对应 ResearchProject id，如 metalSmelting/crossbow/magic）。非空且未研究 → 该建筑不可建（学院研究后解锁）")]
-    public string requiredTechId;        // 科技解锁新内容：非空=需先研究该科技才可建（空=不受科技门控）
-
     [Header("行为标记")]
     public bool isObstacle;            // 是否阻挡移动/寻路（城墙=是；资源点=否）
     public ProducerConfig producer;    // 非空 = 生成物（产资源 or 产单位）
@@ -122,6 +118,8 @@ public struct CombatConfig
     public int maxHp;
     public float range;
     public DamageType damageType;
+    [Tooltip("攻击冷却（秒）。防御建筑攻速 SO（2_12 步骤14 顺手项：步骤12 自记 AttackCD=0.5 占位迁入）；0=回退 0.5s")]
+    public float attackCooldown;
 }
 
 [Serializable]

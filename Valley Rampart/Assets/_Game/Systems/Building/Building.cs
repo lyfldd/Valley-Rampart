@@ -146,9 +146,6 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
                 duration = baseSeconds / Mathf.Max(0.01f, divisor);
             }
         }
-        // 2_12 步骤13（D224~D227）：建筑科技缩短施工/升级时长（<1 更快）
-        if (KingdomManager.Instance != null)
-            duration *= KingdomManager.Instance.GetBuildEfficiencyMultiplier();
         return Mathf.Max(0.01f, duration);
     }
 

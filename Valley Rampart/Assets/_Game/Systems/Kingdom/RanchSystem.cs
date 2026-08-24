@@ -39,15 +39,11 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
         return _config;
     }
 
-    /// <summary>牧场容量（KingdomConfig.ranchCapacity × 畜牧科技倍率；默认 10）。</summary>
+    /// <summary>牧场容量（KingdomConfig.ranchCapacity，默认 10）。</summary>
     public int Capacity()
     {
         var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
-        int baseCap = cfg != null ? cfg.ranchCapacity : 10;
-        // 2_12 步骤13（D224~D227）：畜牧科技提升牧场容量（牧场Lv2）
-        if (KingdomManager.Instance != null)
-            baseCap = (int)(baseCap * KingdomManager.Instance.GetRanchCapacityMultiplier());
-        return Mathf.Max(0, baseCap);
+        return cfg != null ? cfg.ranchCapacity : 10;
     }
 
     /// <summary>按动物类型取定义（无则 null）。</summary>

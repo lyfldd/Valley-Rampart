@@ -35,7 +35,15 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
 {
     private Building _building;
     private float _cooldown;
-    private const float AttackCD = 0.5f;   // 2_5 攻速 SO 占位（CombatConfig 无攻击CD，P1 固定值，后续迁 SO）
+    private const float DefaultAttackCD = 0.5f;   // 攻速回退值（CombatConfig.attackCooldown 未配 0 时用）
+
+    /// <summary>攻击冷却秒（2_12 步骤14：攻速迁 SO——读取 CombConfig.attackCooldown；0 回退默认 0.5s）。</summary>
+    private float GetAttackCD()
+    {
+        if (_building != null && _building.def != null && _building.def.combat.attackCooldown > 0f)
+            return _building.def.combat.attackCooldown;
+        return DefaultAttackCD;
+    }
 
     /// <summary>当前是否锁定目标（供表现层绘制射程圆/瞄准线）。</summary>
     public bool HasTarget { get; private set; }
@@ -73,12 +81,12 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
 
         if (_cooldown <= 0f)
         {
-            _cooldown = AttackCD;
+            _cooldown = GetAttackCD();
             var profile = new AttackProfile
             {
                 attack = def.combat.attack,
                 range = def.combat.range,
-                cd = AttackCD,
+                cd = GetAttackCD(),
                 isRanged = true,
                 projectileType = ProjectileType.Arrow, // 2_5 按塔种细分弹种（箭塔/弩塔/投掷机）
             };

@@ -198,13 +198,4 @@ public struct ResearchProject
     public int researchLevel;      // 研究方向等级（1/2/3 科技 Lv，匹配模块等级门槛）
     public int durationDays;       // 研究时长（天）
     public ResourcePack cost;      // 研究消耗（金+时长）
-
-    // 2_12 步骤13（D224~D227）：科技"少量全增益+解锁新内容"数值。研究完成产生真实效果，SO 可调（so-data-driven）。
-    // 默认 0 = 无该效果（聚合倍率时仅纳入 >0 项）；"解锁新内容"类（铁匠铺/弩塔/魔法塔）经 BuildingDef.requiredTechId 匹配本 id 门控可建。
-    [Tooltip("研究后市场每日贸易额度倍率（0=无贸易效果）")]
-    public float tradeQuotaMult;        // 贸易→图层：每日额度 ×本值
-    [Tooltip("研究后建筑建造/升级效率倍率（0=无加速；0<x<1 缩短施工时长）")]
-    public float buildEfficiencyMult;   // 建筑→建筑: 施工/升级时长 ×本值
-    [Tooltip("研究后牧场容量倍率（0=无效果）")]
-    public float ranchCapacityMult;     // 畜牧→牧场Lv2: 牧场容量 ×本值
 }

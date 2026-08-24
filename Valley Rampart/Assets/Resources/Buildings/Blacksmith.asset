@@ -30,7 +30,6 @@ MonoBehaviour:
   isGate: 0
   rotatable: 0
   moduleType: 1
-  requiredTechId: metalSmelting
   isObstacle: 0
   producer:
     kind: 0
