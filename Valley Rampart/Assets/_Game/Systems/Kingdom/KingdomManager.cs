@@ -22,6 +22,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     private TradeConfig _tradeConfig;
     private CastleUnlockTable _unlockTable;
     private List<ModuleDef> _moduleDefs;   // 6 模块资产（建筑模块归属/特殊建筑判定用）
+    private ResearchProjectList _projectList;   // 2_12 步骤13：科技项目列表（增益聚合查）
 
     // ===== 运行时状态 =====
     /// <summary>主城等级（0=废墟未修复，1-6）。</summary>
@@ -42,6 +43,9 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// </summary>
     public int[] ResearchLevels { get; private set; } = new int[6];
 
+    /// <summary>已研究科技 id 集（2_12 步骤13 D224~D227：研究完成即解锁对应增益/建筑。持久化，读档恢复）。</summary>
+    private readonly HashSet<string> _researchedTechs = new HashSet<string>();
+
     /// <summary>主城 Building 引用（修复/升级时同步 level）。</summary>
     private Building _castleBuilding;
 
@@ -59,6 +63,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
         _tradeConfig = Resources.Load<TradeConfig>("Config/TradeConfig");
         _unlockTable = Resources.Load<CastleUnlockTable>("Config/CastleUnlockTable");
+        _projectList = Resources.Load<ResearchProjectList>("Config/ResearchProjectList");
         LoadModuleDefs();
 
         // 初始化贸易额度（P1 修复：P0 遗留——TradeQuotaRemaining 从未填充，导致贸易永远额度不足）
@@ -76,10 +81,11 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         if (_tradeConfig == null) return;
         TradeQuotaRemaining = new int[13];
         TradeCooldownDays = new int[13];
+        float mult = GetTradeQuotaMultiplier();   // 2_12 步骤13：贸易科技提升每日额度
         for (int i = 0; i < TradeQuotaRemaining.Length; i++)
         {
             var quota = _tradeConfig.GetQuota(i + 1);
-            TradeQuotaRemaining[i] = quota.amountPerCycle;
+            TradeQuotaRemaining[i] = (int)(quota.amountPerCycle * mult);
             TradeCooldownDays[i] = 1;   // D220：每日全量重置
         }
     }
@@ -207,6 +213,10 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         int moduleLevel = GetModuleLevel(module);
         if (moduleLevel < 1) return false;
 
+        // 2_12 步骤13（D224~D227）：科技解锁新内容——铁匠铺/弩塔/魔法塔等需先研究对应科技才可建
+        if (!string.IsNullOrEmpty(def.requiredTechId) && !IsTechResearched(def.requiredTechId))
+            return false;
+
         int specialTier = FindSpecialUnlockTier(def.id);
         if (specialTier > 0)
             return moduleLevel >= specialTier;   // 特殊建筑
@@ -228,13 +238,81 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         return idx >= 0 && idx < ResearchLevels.Length ? ResearchLevels[idx] : 0;
     }
 
-    /// <summary>研究完成：提升对应模块研究等级（学院/工坊均属 Science 模块，QQQ.2 Q4）。</summary>
+    /// <summary>研究完成：提升对应模块研究等级（学院/工坊均属 Science 模块，QQQ.2 Q4）+ 登记已研究科技（2_12 步骤13 D224~D227）。</summary>
     public void ApplyResearch(ResearchProject project)
     {
         int idx = (int)ModuleType.Science;
         if (idx < 0 || idx >= ResearchLevels.Length) return;
         ResearchLevels[idx] = Mathf.Max(ResearchLevels[idx], project.researchLevel);
-        Debug.Log($"[KingdomManager] 研究完成：{project.displayName} → 科技研究等级 {ResearchLevels[idx]}");
+        if (!string.IsNullOrEmpty(project.id)) _researchedTechs.Add(project.id);
+        Debug.Log($"[KingdomManager] 研究完成：{project.displayName} → 科技研究等级 {ResearchLevels[idx]}（已解锁科技数 {_researchedTechs.Count}）");
+    }
+
+    // ===== 2_12 步骤13（D224~D227）：科技状态查询 + 增益聚合 =====
+
+    /// <summary>某科技是否已研究（_researchedTechs 含 id 即 true；用 canonical 研究项目存在性兜底校验）。</summary>
+    public bool IsTechResearched(string techId)
+    {
+        return !string.IsNullOrEmpty(techId) && _researchedTechs.Contains(techId);
+    }
+
+    /// <summary>已研究科技 id（存档序列化用）。</summary>
+    public string[] GetResearchedTechIds()
+    {
+        var arr = new string[_researchedTechs.Count];
+        _researchedTechs.CopyTo(arr);
+        return arr;
+    }
+
+    /// <summary>读档恢复已研究科技集合（幂等，可在 Init 后随时调）。</summary>
+    public void SetResearchedTechIds(string[] ids)
+    {
+        _researchedTechs.Clear();
+        if (ids == null) return;
+        for (int i = 0; i < ids.Length; i++)
+            if (!string.IsNullOrEmpty(ids[i])) _researchedTechs.Add(ids[i]);
+    }
+
+    /// <summary>某研究项目（按 id 查 _projectList；找不到返回 default）。</summary>
+    private ResearchProject GetResearch(string id)
+    {
+        return _projectList != null ? _projectList.GetById(id) : default;
+    }
+
+    /// <summary>贸易额度倍率：聚合并已研究科技中 tradeQuotaMult>0 项的乘积（默认 1）。</summary>
+    public float GetTradeQuotaMultiplier()
+    {
+        float m = 1f;
+        foreach (var id in _researchedTechs)
+        {
+            var p = GetResearch(id);
+            if (p.tradeQuotaMult > 0f) m *= p.tradeQuotaMult;
+        }
+        return m;
+    }
+
+    /// <summary>建筑效率倍率：聚合并已研究科技中 buildEfficiencyMult>0 项的乘积（默认 1；&lt;1 缩短施工时长）。</summary>
+    public float GetBuildEfficiencyMultiplier()
+    {
+        float m = 1f;
+        foreach (var id in _researchedTechs)
+        {
+            var p = GetResearch(id);
+            if (p.buildEfficiencyMult > 0f) m *= p.buildEfficiencyMult;
+        }
+        return m;
+    }
+
+    /// <summary>牧场容量倍率：聚合并已研究科技中 ranchCapacityMult>0 项的乘积（默认 1）。</summary>
+    public float GetRanchCapacityMultiplier()
+    {
+        float m = 1f;
+        foreach (var id in _researchedTechs)
+        {
+            var p = GetResearch(id);
+            if (p.ranchCapacityMult > 0f) m *= p.ranchCapacityMult;
+        }
+        return m;
     }
 
     /// <summary>解析建筑归属模块（优先 BuildingDef.moduleType，回退 ModuleDef 查表）。</summary>
@@ -290,10 +368,11 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>每日结算刷新贸易额度（由 DayCycleSettlement 调用）。D220：每日全量重置——各档额度恢复满额（去皮 refreshDays 多天递减）。</summary>
     public void TickTradeCooldowns()
     {
+        float mult = GetTradeQuotaMultiplier();   // 2_12 步骤13：贸易科技提升每日额度
         for (int i = 0; i < TradeQuotaRemaining.Length; i++)
         {
             var quota = _tradeConfig != null ? _tradeConfig.GetQuota(i + 1) : TradeQuotaDef.Zero;
-            TradeQuotaRemaining[i] = quota.amountPerCycle;   // 每日全量恢复
+            TradeQuotaRemaining[i] = (int)(quota.amountPerCycle * mult);   // 每日全量恢复
             TradeCooldownDays[i] = 1;
         }
     }
@@ -323,6 +402,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
             tradeQuotaRemaining = (int[])TradeQuotaRemaining.Clone(),
             tradeCooldownDays = (int[])TradeCooldownDays.Clone(),
             researchLevels = (int[])ResearchLevels.Clone(),
+            researchedTechIds = GetResearchedTechIds(),
             waveProgress = 0,
             treasuryStone = tv != null ? tv.GetAmount(ResourceType.Stone) : 0,
             treasuryWood = tv != null ? tv.GetAmount(ResourceType.Wood) : 0,
@@ -361,6 +441,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         // 研究等级（旧档缺失=0 保留）
         if (data.researchLevels != null && data.researchLevels.Length == 6)
             ResearchLevels = (int[])data.researchLevels.Clone();
+        // 2_12 步骤13：读档恢复已研究科技（旧档缺失=空集，无科技效果）
+        SetResearchedTechIds(data.researchedTechIds);
 
         // 2_12 步骤8.4：读到国库字段缓存（国库=主城学堂后建，vault 就绪后由 TreasureVault 读出恢复）
         TreasuryStone = data.treasuryStone;

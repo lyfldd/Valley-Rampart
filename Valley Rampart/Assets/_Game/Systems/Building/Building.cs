@@ -131,11 +131,25 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (_buildConfig == null)
             _buildConfig = Resources.Load<BuildConfig>("Config/BuildConfig");
         float baseSeconds = _buildConfig != null ? Mathf.Max(0.01f, _buildConfig.constructionBaseSeconds) : Mathf.Max(0.01f, constructDuration);
-        if (_buildConfig == null || _buildConfig.cooperativeBuildK <= 0f) return baseSeconds;
-        int n = TaskScheduler.Instance != null ? TaskScheduler.Instance.CountAssignedWorkers(this) : 1;
-        if (n <= 1) return baseSeconds;
-        float divisor = 1f + (n - 1) * _buildConfig.cooperativeBuildK;
-        return baseSeconds / Mathf.Max(0.01f, divisor);
+        float duration;
+        if (_buildConfig == null || _buildConfig.cooperativeBuildK <= 0f)
+        {
+            duration = baseSeconds;
+        }
+        else
+        {
+            int n = TaskScheduler.Instance != null ? TaskScheduler.Instance.CountAssignedWorkers(this) : 1;
+            if (n <= 1) duration = baseSeconds;
+            else
+            {
+                float divisor = 1f + (n - 1) * _buildConfig.cooperativeBuildK;
+                duration = baseSeconds / Mathf.Max(0.01f, divisor);
+            }
+        }
+        // 2_12 步骤13（D224~D227）：建筑科技缩短施工/升级时长（<1 更快）
+        if (KingdomManager.Instance != null)
+            duration *= KingdomManager.Instance.GetBuildEfficiencyMultiplier();
+        return Mathf.Max(0.01f, duration);
     }
 
     private bool _pendingUpgrade;   // 当前 Constructing 是升级而非首次建造
