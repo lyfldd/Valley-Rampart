@@ -65,8 +65,8 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
         //    这里补设 daysPerSeason）
         ApplyTimeConfig();
 
-        // 4. 君主名字 + 按难度应用初始资源
-        RulerController.Instance.SetRulerName(newConfig.rulerName);
+        // 4. 王国名（存 KingdomManager，落王国存档） + 按难度应用初始资源
+        KingdomManager.Instance.KingdomName = newConfig.kingdomName;
         RulerController.Instance.ApplyInitialResourcesFromDifficulty();
 
         Debug.Log($"[WorldSystem] 世界初始化完成: 难度={newConfig.difficulty}, 种子={newConfig.mapSeed}");

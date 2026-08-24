@@ -119,7 +119,7 @@ public class MainMenuController : MonoBehaviour
         }
 
         GameSceneEntrance.SetNewGame(config);
-        Debug.Log($"[MainMenu] 新建游戏: ruler={config.rulerName}, slot={config.selectedSlotId}");
+        Debug.Log($"[MainMenu] 新建游戏: kingdom={config.kingdomName}, slot={config.selectedSlotId}");
         LoadGameScene();
     }
 

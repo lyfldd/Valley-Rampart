@@ -13,7 +13,7 @@ public class CharacterCreationPanel : MonoBehaviour
     public static readonly string[] SlotIds = { "slot_1", "slot_2", "slot_3" };
 
     private MainMenuController _controller;
-    private TextField _nameInput;
+    private TextField _kingdomNameInput;
     private DropdownField _difficultySelect;
     private DropdownField _mapSizeSelect;
     private IntegerField _worldSeedInput;
@@ -32,7 +32,7 @@ public class CharacterCreationPanel : MonoBehaviour
             return;
         }
 
-        _nameInput = root.Q<TextField>("ruler-name-input");
+        _kingdomNameInput = root.Q<TextField>("kingdom-name-input");
         _difficultySelect = root.Q<DropdownField>("difficulty-select");
         _mapSizeSelect = root.Q<DropdownField>("map-size-select");
         _worldSeedInput = root.Q<IntegerField>("world-seed-input");
@@ -109,14 +109,14 @@ public class CharacterCreationPanel : MonoBehaviour
             return;
         }
 
-        string name = string.IsNullOrEmpty(_nameInput.value) ? "无名君主" : _nameInput.value;
+        string kingdomName = string.IsNullOrEmpty(_kingdomNameInput.value) ? "河谷王国" : _kingdomNameInput.value;
         int difficulty = DifficultyTextToValue(_difficultySelect?.value ?? "普通");
         WorldSize worldSize = MapSizeTextToValue(_mapSizeSelect?.value ?? "中");
         int worldSeed = _worldSeedInput?.value ?? 0;
 
         var config = new NewGameConfig
         {
-            rulerName = name,
+            kingdomName = kingdomName,
             difficulty = difficulty,
             selectedSlotId = slotId,
             worldSeed = worldSeed,

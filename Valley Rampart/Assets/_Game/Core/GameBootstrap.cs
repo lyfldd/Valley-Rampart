@@ -137,7 +137,7 @@ public class GameBootstrap : MonoBehaviour
             // 3.5.1 §4.1（E-S7）：营地初始流浪汉生成（地图已就绪，营地由 WorldManager 占位实例化）
             VagrantCampSystem.Instance.OnNewGameMapReady();
             Debug.Log($"[GameBootstrap] 应用新建游戏配置: "
-                + $"ruler={config.rulerName}, seed={config.mapSeed}, difficulty={config.difficulty}");
+                + $"kingdom={config.kingdomName}, seed={config.mapSeed}, difficulty={config.difficulty}");
 
             // 新建游戏自动创建初始存档，确保玩家随时可以读档回到初始状态
             string slotId = config.selectedSlotId;

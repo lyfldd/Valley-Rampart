@@ -6,10 +6,10 @@
             <ui:Label text="创建角色" class="creation-title" />
 
             <ui:VisualElement class="creation-form">
-                <!-- 名字 -->
+                <!-- 王国名 -->
                 <ui:VisualElement class="form-row">
-                    <ui:Label text="统治者名字" class="form-label" />
-                    <ui:TextField name="ruler-name-input" value="无名君主" max-length="12" class="form-input" />
+                    <ui:Label text="王国名" class="form-label" />
+                    <ui:TextField name="kingdom-name-input" value="河谷王国" max-length="12" class="form-input" />
                 </ui:VisualElement>
 
                 <!-- 难度（下拉选择） -->

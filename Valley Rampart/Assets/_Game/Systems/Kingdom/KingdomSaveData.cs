@@ -8,6 +8,7 @@ using System;
 public class KingdomSaveData
 {
     public int saveDataVersion = 1;
+    public string kingdomName = "河谷王国"; // 王国名（2_13 取代君主名；存档显示用）
     public int castleLevel;                 // 主城等级（0=废墟未修复，1-6）
     public int[] moduleLevels;              // 6 模块等级 [土木,生产,民生,军事,商业,科技]
     public int currentDay;                  // 冗余天数（与 TimeManager 交叉校验）

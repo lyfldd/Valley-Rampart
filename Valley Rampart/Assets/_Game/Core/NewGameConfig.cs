@@ -5,8 +5,8 @@
 [System.Serializable]
 public class NewGameConfig
 {
-    /// <summary>玩家输入的统治者名字。</summary>
-    public string rulerName = "无名君主";
+    /// <summary>王国名（可选，默认"河谷王国"；2_13 取代君主名）。</summary>
+    public string kingdomName = "河谷王国";
 
     /// <summary>地图生成种子（0 = 随机生成）。兼容旧字段，实际由 worldSeed 派生。</summary>
     public int mapSeed;

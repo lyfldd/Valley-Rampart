@@ -27,6 +27,9 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>主城等级（0=废墟未修复，1-6）。</summary>
     public int CastleLevel { get; private set; }
 
+    /// <summary>王国名（2_13 取代君主名；存档显示用，默认"河谷王国"）。</summary>
+    public string KingdomName { get; set; } = "河谷王国";
+
     /// <summary>六大模块等级 [Civil,Production,Livelihood,Military,Commerce,Science]。</summary>
     public int[] ModuleLevels { get; private set; } = new int[6];
 
@@ -317,6 +320,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         var data = new KingdomSaveData
         {
             saveDataVersion = 1,
+            kingdomName = KingdomName,
             castleLevel = CastleLevel,
             moduleLevels = (int[])ModuleLevels.Clone(),
             currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1,
@@ -346,6 +350,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
 
         int level = Mathf.Clamp(data.castleLevel, 0, 6);
         CastleLevel = level;
+        KingdomName = string.IsNullOrEmpty(data.kingdomName) ? "河谷王国" : data.kingdomName;
 
         // 模块等级：优先存值，空/越界则按解锁表重算（迁移兜底）
         if (data.moduleLevels != null && data.moduleLevels.Length == 6)

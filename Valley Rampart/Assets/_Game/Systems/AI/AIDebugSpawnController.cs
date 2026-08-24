@@ -528,7 +528,7 @@ public class AIDebugSpawnController : MonoBehaviour
         }
         var config = new NewGameConfig
         {
-            rulerName = "调试君主",
+            kingdomName = "调试王国",
             difficulty = 1,               // Easy：小剧场期尽量少怪，便于观测行为链
             selectedSlotId = "slot_debug",// 空字符串=不写初始存档（小剧场不进存档，避免污染）
             worldSize = WorldSize.Medium,
