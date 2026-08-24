@@ -34,6 +34,12 @@
 - [ ] **Metal 加工 sim 真值**：接口真实存在后，"Metal 加工同源真值挂 2_9/步骤14"前提成立（HH.14 决策 A 方向保留）。
 - [ ] **HH.19 行为差登记（2026-08-23 裁决回写追加）**：Unity 侧 `UnitController.TickAmmoResupply` 假搬运定时器已随 2_12 步骤9 退役（真实后勤链：工人装填真耗仓库存量）；sim 侧 SimUnit/SimBrain 石弹自动补给仍在——**是否对齐真实后勤（或保留快照基线）由训练仓会话按训练目标决策**并记台账，勿默认照搬。
 - [ ] **2_14 段② 精英 Brute 决策核行为差登记（2026-08-24 执行端段②收官追加，HH.21 关联）**：Unity 侧为精英怪（Brute，isElite=true）挂 NPCBrain 壳层加 MonsterMode 模式开关（FactorContext 未扩任何字段，NearestPortalDist 仍为未填占位）。sim 侧 SimBrain 无此行为——**是否镜像精英怪模式切换（归巢门=传送门锚点 / Looting 掠夺停留注入 TaskStimulus）由训练仓会话按训练目标决策**并记台账，勿默认照搬；FactorContext/sim schema 无变更，不涉双仓契约同步。
+- [ ] **2_14 步骤12 怪物入训 sim 义务（2026-08-24 策划端代录，基于步骤8~13 已验提交 098807e/7bf9cd2/4865628）**，交训练仓会话处理：
+  ① **怪物种类 sim 场景扩展**（2_9 §6.3）：Raider（近战）/ Slinger（远程 6 格）/ Brute（精英）三种 Monsters 训练场景——注意"场景引用即训练覆盖"教训（教训#3：代码里有≠被训练，场景 JSON 必须引用）；
+  ② **出怪调度对齐**：WaveDirector 侧 System.Random(worldSeed 派生) 种子化、6:3:1 配比（D258 占位）、波次数 Easy3/Normal4/Hard5（D97）、强度曲线（难度×D236 系数×天数增长×aftermathDecayRate 烈度递减×strengthCap 封顶）——sim 对应场景建模口径，是否全量复刻由训练仓按训练目标裁定；
+  ③ 精英 MonsterMode 行为差见上条（不重复实施）；
+  ④ **NearestPortalDist 双仓占位仍未填值**：若怪物入训建模需要该输入，两侧同时填值（届时才触发 FactorContext 同步义务，勿单侧先行）；
+  ⑤ HH.20 §五三项（主教/大法师职业库退役、ThroneAnchor 判官退役对拍、sim 塔 ammoMax 10→0）随本批一并处理（工作日志已登记，此处归口防散）。
 
 ## 四、对步骤8 的影响
 
