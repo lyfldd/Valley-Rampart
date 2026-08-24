@@ -13,6 +13,7 @@ using UnityEngine;
 public class WaveDirector : Singleton<WaveDirector>
 {
     private WaveConfig _config;
+    private PortalDisasterConfig _disasterConfig;
     private System.Random _rng = new System.Random();
 
     /// <summary>当前活跃传送门（无则不生成怪物，由触发序保证先建门再波次）。</summary>
@@ -24,7 +25,9 @@ public class WaveDirector : Singleton<WaveDirector>
         if (_instance != this) return;
         // Data/WaveConfig.asset 不存在时回退到类内默认值（字段初始值即 §三 占位表）。
         _config = Resources.Load<WaveConfig>("Data/WaveConfig") ?? ScriptableObject.CreateInstance<WaveConfig>();
+        _disasterConfig = Resources.Load<PortalDisasterConfig>("Config/Disaster/PortalDisasterConfig");
         EventBus.Subscribe<PortalDisasterTriggeredEvent>(OnPortalDisasterTriggered);
+        EventBus.Subscribe<TimePhaseChangedEvent>(OnTimePhaseChanged);
     }
 
     public WaveConfig Config => _config;
@@ -32,6 +35,7 @@ public class WaveDirector : Singleton<WaveDirector>
     protected override void OnDestroy()
     {
         EventBus.Unsubscribe<PortalDisasterTriggeredEvent>(OnPortalDisasterTriggered);
+        EventBus.Unsubscribe<TimePhaseChangedEvent>(OnTimePhaseChanged);
         base.OnDestroy();
     }
 
@@ -50,27 +54,50 @@ public class WaveDirector : Singleton<WaveDirector>
     {
         if (_config == null || !gameObject.activeInHierarchy) return;
         SeedRandom();
-        StartCoroutine(SpawnPortalDisasterWaves(evt.Day, evt.PortalWorldPos));
+        StartCoroutine(SpawnNewDisaster(evt.Day, evt.PortalWorldPos));
     }
 
     /// <summary>
-    /// 2_14 步骤8/10 主链（D261 定案入口）：放传送门实体 → 按波次构成出怪。
-    /// 判定已由 Trigger 完成；此处只摆战场 + 出 6:3:1 波次。
+    /// 步骤9/11：昼夜驱动。入夜（Night）时，若仍有存活传送门（未摧毁）→ 每夜续战（烈度递减，§4.4）。
+    /// 正常夜无波次的例外：门在场 = 持续灾害，不依赖再次触发灾害。
     /// </summary>
-    public IEnumerator SpawnPortalDisasterWaves(int day, Vector2 portalWorldVec)
+    private void OnTimePhaseChanged(TimePhaseChangedEvent evt)
+    {
+        if (evt.NewPhase != TimePhase.Night) return;          // 只在入夜触发
+        if (ActivePortal == null || ActivePortal.state == PortalState.Destroying) return;
+        if (_config == null || !gameObject.activeInHierarchy) return;
+        SeedRandom();
+        int day = TimeManager.Instance != null ? Mathf.Max(1, TimeManager.Instance.CurrentDay) : 1;
+
+        // 存活夜 +1 → 强度 ×aftermathDecayRate 递减
+        ActivePortal.OnSurviveNight();
+        Debug.Log($"[WaveDirector] 传送门存活夜#{ActivePortal.survivedNights}，续战（烈度递减），第{day}天。");
+        StartCoroutine(SpawnPortalWaves(ActivePortal, day));
+    }
+
+    /// <summary>首夜灾害（8/10 主链，D261）：判定已由 Trigger 完成，此处新建传送门 + 出首波。</summary>
+    private IEnumerator SpawnNewDisaster(int day, Vector2 portalWorldVec)
     {
         Vector2 portalPos = portalWorldVec;
-
         // 事件未携带合法坐标（Trigger 占位发 Vector2.zero）→ 由本类按规则选放置位
         if (portalPos == Vector2.zero)
             portalPos = PickPortalPlacement();
 
-        ActivePortal = SpawnPortalEntity(portalPos);
-        if (ActivePortal == null)
+        Portal portal = SpawnPortalEntity(portalPos);
+        if (portal == null)
         {
             Debug.LogWarning("[WaveDirector] 传送门放置失败，本夜灾害流止（占位：脚手架场景可能缺网格）。");
             yield break;
         }
+        ActivePortal = portal;
+        Debug.Log($"[WaveDirector] 灾害发生，新建传送门@{portalPos}，第{day}天。");
+        yield return SpawnPortalWaves(portal, day);
+    }
+
+    /// <summary>对一个传送门出 6:3:1 波次（首波或续战共用；强度随门存活夜递减）。</summary>
+    private IEnumerator SpawnPortalWaves(Portal portal, int day)
+    {
+        if (portal == null) yield break;
 
         // 波次构成：baseWaves + 难度×wavePerDifficulty → Easy3/Normal4/Hard5（D97）
         int difficulty = DifficultyManager.Instance != null
@@ -80,10 +107,10 @@ public class WaveDirector : Singleton<WaveDirector>
         float winterMult = TimeManager.Instance != null
             ? TimeManager.Instance.MonsterStrengthMultiplierForCurrentSeason : 1f;
 
-        Debug.Log($"[WaveDirector] 灾害波次启动 第{day}天 {waveCount}波（传送门@{portalPos}）。");
+        Debug.Log($"[WaveDirector] 传送门@{portal.name} 出 {waveCount} 波（存活夜#{portal.survivedNights}）。");
         for (int w = 0; w < waveCount; w++)
         {
-            int strength = ComputeWaveStrength(winterMult);
+            int strength = ComputeWaveStrength(winterMult, portal);
             Debug.Log($"[WaveDirector] 第{w + 1}/{waveCount}波来袭: 强度={strength} 第{day}天");
             yield return SpawnWavePortion(w, strength);
             yield return new WaitForSeconds(NextIntervalSeconds());
@@ -125,15 +152,35 @@ public class WaveDirector : Singleton<WaveDirector>
     //  波次强度（复用 2_8 强度曲线，冬季/非线性D266 共享）
     // ========================================================================
 
-    /// <summary>单波规模 = strengthBase + 天数增长，封顶 strengthCap，冬季 + 非线性强度放大。</summary>
-    private int ComputeWaveStrength(float winterMult)
+    /// <summary>
+    /// 单波规模（步骤9 强度曲线）：基础成长 + 难度系数(D236) + 冬季 + 烈度递减。
+    /// raw = strengthBase + 天数增长；× 难度waveCoeff；× 冬季倍率；× 烈度递减 aftermathDecayRate^存活夜；封顶 strengthCap。
+    /// </summary>
+    private int ComputeWaveStrength(float winterMult, Portal portal)
     {
         int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
         float raw = _config.strengthBase + _config.strengthGrowthPerDay * day;
+
+        // 难度系数（D236：Easy 0.7 / Normal 1.0 / Hard 1.3）
+        if (_disasterConfig != null)
+        {
+            int difficulty = DifficultyManager.Instance != null
+                ? Mathf.Max(1, DifficultyManager.Instance.CurrentDifficulty) : 1;
+            raw *= _disasterConfig.GetWaveCoefficient(difficulty);
+        }
+
         raw *= winterMult;
+
+        // 非线性加压（D266）
         if (_config.enableNonLinearDifficulty)
             raw *= 1f + day * _config.disasterStrengthGrowPerDay;
-        return Mathf.Min(Mathf.Max(1, Mathf.RoundToInt(raw)), _config.strengthCap);
+
+        // 烈度递减：未摧毁传送门持续袭击 → 每存活夜 ×aftermathDecayRate（§4.4，默认0.8=-20%）
+        if (portal != null && portal.Def != null && portal.survivedNights > 0)
+            raw *= Mathf.Pow(portal.Def.aftermathDecayRate, portal.survivedNights);
+
+        int cap = _disasterConfig != null ? _disasterConfig.strengthCap : _config.strengthCap;
+        return Mathf.Min(Mathf.Max(1, Mathf.RoundToInt(raw)), cap);
     }
 
     // ========================================================================

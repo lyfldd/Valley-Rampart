@@ -57,7 +57,10 @@ public class Portal : MonoBehaviour, IDamageable, IGridOccupant
         {
             footprint = def.footprint;
             int difficulty = DifficultyManager.Instance != null ? DifficultyManager.Instance.CurrentDifficulty : 2;
-            maxHp = def.GetBaseHp(difficulty);
+            // 步骤9 强度曲线：传送门 HP = 基础(难度) × (1 + 天×growthRate)
+            maxHp = Mathf.RoundToInt(def.GetBaseHp(difficulty) * PortalHpDayScale());
+            // 难度系数(D236)亦作用于传送门韧性
+            maxHp = Mathf.Max(1, Mathf.RoundToInt(maxHp * PortalDifficultyScale(difficulty)));
         }
         else
         {
@@ -73,6 +76,23 @@ public class Portal : MonoBehaviour, IDamageable, IGridOccupant
     {
         // 设计§4.4：白天无敌 + 不召唤；夜晚恢复可攻击/可召唤
         state = evt.NewPhase == TimePhase.Day ? PortalState.DayProtected : PortalState.Active;
+    }
+
+    /// <summary>步骤9 传送门 HP 天数缩放 = (1 + 天×growthRate)，缺配置回退 1。</summary>
+    private static float PortalHpDayScale()
+    {
+        var cfg = Resources.Load<PortalDisasterConfig>("Config/Disaster/PortalDisasterConfig");
+        if (cfg == null) return 1f;
+        int day = TimeManager.Instance != null ? Mathf.Max(1, TimeManager.Instance.CurrentDay) : 1;
+        return 1f + day * cfg.growthRate;
+    }
+
+    /// <summary>步骤9 难度系数(D236) 作用于传送门韧性（Easy 0.7 / Normal 1.0 / Hard 1.3）。</summary>
+    private static float PortalDifficultyScale(int difficulty)
+    {
+        var cfg = Resources.Load<PortalDisasterConfig>("Config/Disaster/PortalDisasterConfig");
+        if (cfg == null) return 1f;
+        return cfg.GetWaveCoefficient(Mathf.Max(1, difficulty));
     }
 
     // ===== 召唤：收编入 WaveDirector.SpawnPortalDisasterWaves（2_14 步骤8 单轨收拢）。本实体不再自驱召唤 =====

@@ -134,9 +134,6 @@ public class MonsterController : UnitController
 /// <summary>怪物生成器：把 MonsterDef 桥接成运行时 UnitData，走 UnitFactory.SpawnUnit（复用对象池/注册/事件/IDamageable）。</summary>
 public static class MonsterSpawner
 {
-    // 运行时合成的 UnitData 按 MonsterType 缓存（每类型一份，规避每召唤 CreateInstance 泄漏）。
-    private static readonly Dictionary<MonsterType, UnitData> s_dataCache = new();
-
     public static MonsterController Spawn(MonsterDef def, Vector2 position)
     {
         if (def == null || def.prefab == null)
@@ -169,9 +166,11 @@ public static class MonsterSpawner
 
     private static UnitData GetUnitData(MonsterDef def)
     {
-        if (s_dataCache.TryGetValue(def.type, out var cached)) return cached;
-
         float cell = CellSize();
+        // 步骤9 强度曲线：怪物属性 × 难度系数(D236) × 天数增长(1 + day×growthRate)。
+        // 属性随 day/difficulty 变 → 不缓存，每只按需生成（UnitFactory 走对象池复用）。
+        float scale = CurrentScale();
+
         UnitData u;
         if (def.isElite)
         {
@@ -183,8 +182,8 @@ public static class MonsterSpawner
             npc.faction = Faction.Undead;
             npc.occupation = Occupation.Monster;
             npc.prefab = def.prefab;
-            npc.maxHp = def.hp;
-            npc.attack = def.attack;
+            npc.maxHp = Mathf.RoundToInt(def.hp * scale);
+            npc.attack = Mathf.RoundToInt(def.attack * scale);
             npc.defense = 0;
             // 格/秒 -> 世界单位/秒
             npc.walkSpeed = def.speedCellsPerSec * cell;
@@ -204,8 +203,8 @@ public static class MonsterSpawner
             bu.faction = Faction.Undead;
             bu.occupation = Occupation.Monster;
             bu.prefab = def.prefab;
-            bu.maxHp = def.hp;
-            bu.attack = def.attack;
+            bu.maxHp = Mathf.RoundToInt(def.hp * scale);
+            bu.attack = Mathf.RoundToInt(def.attack * scale);
             bu.defense = 0;
             // 格/秒 -> 世界单位/秒
             bu.walkSpeed = def.speedCellsPerSec * cell;
@@ -213,8 +212,20 @@ public static class MonsterSpawner
             u = bu;
         }
 
-        s_dataCache[def.type] = u;
         return u;
+    }
+
+    /// <summary>步骤9 强度缩放因子 = 难度系数(D236) × (1 + day×growthRate)。缺配置回退 1（原始 MonsterDef 值）。</summary>
+    private static float CurrentScale()
+    {
+        var cfg = Resources.Load<PortalDisasterConfig>("Config/Disaster/PortalDisasterConfig");
+        if (cfg == null) return 1f;
+        int difficulty = DifficultyManager.Instance != null
+            ? Mathf.Max(1, DifficultyManager.Instance.CurrentDifficulty) : 2;
+        int day = TimeManager.Instance != null ? Mathf.Max(1, TimeManager.Instance.CurrentDay) : 1;
+        float difficultyScale = cfg.GetWaveCoefficient(difficulty);
+        float dayScale = 1f + day * cfg.growthRate;
+        return Mathf.Max(0.1f, difficultyScale * dayScale);
     }
 
     private static float CellSize()
