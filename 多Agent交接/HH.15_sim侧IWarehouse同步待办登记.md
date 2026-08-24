@@ -40,6 +40,7 @@
   ③ 精英 MonsterMode 行为差见上条（不重复实施）；
   ④ **NearestPortalDist 双仓占位仍未填值**：若怪物入训建模需要该输入，两侧同时填值（届时才触发 FactorContext 同步义务，勿单侧先行）；
   ⑤ HH.20 §五三项（主教/大法师职业库退役、ThroneAnchor 判官退役对拍、sim 塔 ammoMax 10→0）随本批一并处理（工作日志已登记，此处归口防散）。
+- [ ] **2_16 步骤2 实体王国归属 sim 自查（2026-08-24 执行端登记）**：Unity 侧 Unit/Building 实体新增 `kingdomId`（D329 门面，默认 0=玩家），作为 2_16/2_17 王国归属数据 plumbing，随 UnitSaveData/BuildingSaveData 存档恢复。**harness 实盘自查**：决策核用 `SimUnit`（非字节一致 UnitData 镜像），harness 无 `kingdomId`/`KingdomState` 对应 schema；本步**未动 FactorContext / sim schema（零同步）**。训练仓按训练目标裁定是否需建模"王国归属"（2_16/2_17 决策核消费该输入时才触发同步义务），勿默认照搬。
 
 ## 四、对步骤8 的影响
 
