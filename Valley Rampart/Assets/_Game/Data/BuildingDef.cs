@@ -91,6 +91,12 @@ public class BuildingDef : ScriptableObject
     [Header("表现")]
     public GameObject prefab;
 
+    [Header("怪物目标（2_14 步骤7：价值×距离选目标 D83，SO 化禁硬编码）")]
+    [Tooltip("怪物目标选择价值分（0=怪物不选此目标；乘 MonsterDef.valueWeight 参与 CombatRules.TargetScore 价值×距离评分）")]
+    public float monsterTargetValue = 1f;
+    [Tooltip("高价值标志（主城/矿洞/仓库/铁匠铺等高价值目标；配合价值分决定怪物目标优先级）")]
+    public bool monsterIsHighValue = false;
+
     /// <summary>按资源等级获取缩放系数。</summary>
     public float GetGradeScale(ResourceGrade grade)
     {

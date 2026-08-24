@@ -22,6 +22,10 @@ MonoBehaviour:
     stone: 60
     wood: 0
     food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
   footprint: {x: 2, y: 1}
   allowedTerrain: 
   heightLayer: 0
@@ -41,12 +45,17 @@ MonoBehaviour:
     maxHp: 0
     range: 0
     damageType: 0
+    attackCooldown: 0
   levels:
   - upgradeCost:
       gold: 75
       stone: 90
       wood: 0
       food: 0
+      metal: 0
+      stoneAmmo: 0
+      fireballAmmo: 0
+      magicAmmo: 0
     statScale: 1.2
     prerequisites: []
   crewRequired: 0
@@ -54,6 +63,7 @@ MonoBehaviour:
   outputResource: 9
   isResourceNode: 0
   isBlacksmith: 1
+  isSiegeWorkshop: 0
   concurrentWorkers: 0
   trainingSlots: 0
   unlockLevel: 1
@@ -69,3 +79,5 @@ MonoBehaviour:
   - 1
   - 1.5
   prefab: {fileID: 0}
+  monsterTargetValue: 25
+  monsterIsHighValue: 0

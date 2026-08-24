@@ -22,8 +22,17 @@ MonoBehaviour:
     stone: 4
     wood: 0
     food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
   footprint: {x: 2, y: 1}
   allowedTerrain: 
+  heightLayer: 0
+  canPlaceOnWater: 0
+  isBridge: 0
+  isGate: 0
+  rotatable: 0
   moduleType: 1
   isObstacle: 0
   producer:
@@ -36,31 +45,50 @@ MonoBehaviour:
     maxHp: 0
     range: 0
     damageType: 0
+    attackCooldown: 0
   levels:
   - upgradeCost:
       gold: 0
       stone: 10
       wood: 10
       food: 0
-    statScale: 2.0
+      metal: 0
+      stoneAmmo: 0
+      fireballAmmo: 0
+      magicAmmo: 0
+    statScale: 2
     prerequisites: []
   - upgradeCost:
       gold: 0
       stone: 20
       wood: 24
       food: 0
-    statScale: 2.0
+      metal: 0
+      stoneAmmo: 0
+      fireballAmmo: 0
+      magicAmmo: 0
+    statScale: 2
     prerequisites: []
+  crewRequired: 0
+  crewRadiusCells: 0
   outputResource: 2
   isResourceNode: 0
+  isBlacksmith: 0
+  isSiegeWorkshop: 0
+  concurrentWorkers: 0
+  trainingSlots: 0
   unlockLevel: 1
   interactableType: 0
   isPlayerBuilt: 1
   isDestructible: 1
+  maxHp: 100
   sourceType: 0
   isConsumable: 0
+  gatherSeconds: 2
   gradeScale:
   - 0.7
   - 1
   - 1.5
   prefab: {fileID: 0}
+  monsterTargetValue: 40
+  monsterIsHighValue: 0

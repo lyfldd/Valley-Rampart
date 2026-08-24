@@ -23,6 +23,14 @@ public class MonsterDef : ScriptableObject
     [Header("行为（§3.3/§4.3）")]
     public float retreatHpRatio = 0.2f;          // 撤退血量阈值（HP<20% 尝试退回传送门）
     public int carryResource = 5;                // 掠夺资源量（每怪）
+    [Tooltip("击杀掉落/掠夺的资源类型（须在 ResourcePack 8 承载槽内；未映射槽自动回退 Food）")]
+    public ResourceType lootResource = ResourceType.Food;
+    [Tooltip("价值×距离评分的距离权重（CombatRules.TargetScore distWeight；守卫战斗力权重守卫权重亦 SO 化于此）")]
+    public float targetDistWeight = 1f;
+    [Tooltip("守卫战斗力权重（SO 化红线；段②目标选择/战斗意愿消费，段①遇守卫不主动寻，被拦截才战）")]
+    public float guardCombatWeight = 1f;
+    [Tooltip("掠夺停留秒数（到达资源点后掠夺动画占位等待，段①用）")]
+    public float lootingStaySeconds = 2.5f;
 
     [Header("回援（§4.1 守门）")]
     public float guardRecallRatio = 0.5f;        // 传送门被打时回援比例（占位 50%）

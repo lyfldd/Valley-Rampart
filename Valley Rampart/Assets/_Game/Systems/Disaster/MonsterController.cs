@@ -14,13 +14,21 @@ using UnityEngine;
 public class MonsterController : UnitController
 {
     public MonsterDef def;
-    public MonsterMode mode = MonsterMode.Raiding;   // 当前行为模式（守门/出击/撤退/掠夺；完整态机步骤7）
+    public MonsterMode mode = MonsterMode.Raiding;   // 当前行为模式（守门/出击/撤退/掠夺）
+
+    /// <summary>本怪所属传送门召唤锚点（出生记录，回援/撤退的 home）。由 MonsterSpawner 在生成时写入。</summary>
+    public Vector2 HomePortalPos;
 
     public MonsterType Type => def != null ? def.type : MonsterType.Raider;
     public bool IsElite { get; private set; }
     public float VisionRadiusCells { get; private set; } = 8f;
     public int CarryResource { get; private set; } = 5;
     public float RetreatHpRatio { get; private set; } = 0.2f;
+
+    // 存活计数（MonsterSpawner/Portal 召唤上限 maxConcurrentMonsters 判据；InitMonster +1 / Die -1）。
+    private static int s_activeCount;
+    private bool _counted;   // 防重复计数（池化/未 InitMonster 兜底）
+    public static int ActiveCount => s_activeCount;
 
     /// <summary>由 MonsterSpawner 在 SpawnUnit.Initialize(base) 之后调用，把 MonsterDef 注入驱动怪物行为字段。</summary>
     public void InitMonster(MonsterDef monsterDef)
@@ -31,9 +39,52 @@ public class MonsterController : UnitController
         VisionRadiusCells = monsterDef.visionRadiusCells;
         CarryResource = monsterDef.carryResource;
         RetreatHpRatio = monsterDef.retreatHpRatio;
+        if (!_counted) { _counted = true; s_activeCount++; }
     }
 
     public void SetMode(MonsterMode newMode) => mode = newMode;
+
+    /// <summary>
+    /// 2_14 怪物死亡：D213 掉落箱子（内容=所携掠夺资源），再走基类注销/回池。
+    /// 若成功回传送门（Looting 结束后携带回门吸收入口）则在 MonsterAI 处清除携带标志，不落箱。
+    /// </summary>
+    protected override void Die()
+    {
+        if (_counted) { _counted = false; s_activeCount--; }
+        DropLoot();
+        base.Die();
+    }
+
+    /// <summary>怪物被击杀 → 在死亡点掉一只箱子（CarryResource 量），供玩家拾取。</summary>
+    private void DropLoot()
+    {
+        if (def == null || CarryResource <= 0) return;
+        if (!ChestManager.HasInstance || GridSystem.Instance == null) return;
+        var cellOpt = GridSystem.Instance.WorldToCoord(transform.position);
+        if (!cellOpt.HasValue) return;
+        var pack = BuildLootPack();
+        if (pack.IsZero) return;
+        ChestManager.Instance.SpawnChest(cellOpt.Value, pack, Faction.Undead);
+    }
+
+    /// <summary>把 CarryResource 装进 ResourcePack（按 MonsterDef.lootResource 映射，未映射槽回退 Food）。</summary>
+    private ResourcePack BuildLootPack()
+    {
+        var p = new ResourcePack();
+        ResourceType t = def != null ? def.lootResource : ResourceType.Food;
+        switch (t)
+        {
+            case ResourceType.Gold: p.gold = CarryResource; break;
+            case ResourceType.Stone: p.stone = CarryResource; break;
+            case ResourceType.Wood: p.wood = CarryResource; break;
+            case ResourceType.Metal: p.metal = CarryResource; break;
+            case ResourceType.StoneAmmo: p.stoneAmmo = CarryResource; break;
+            case ResourceType.FireballAmmo: p.fireballAmmo = CarryResource; break;
+            case ResourceType.MagicAmmo: p.magicAmmo = CarryResource; break;
+            default: p.food = CarryResource; break;   // Food 及未映射槽（Ore/Crystal/... 无承载槽）
+        }
+        return p;
+    }
 
     /// <summary>攻击配置（从 MonsterDef 构造；Slinger 远程射程圆=6 格 D258，近战肉搏）。</summary>
     public AttackProfile BuildAttackProfile()
@@ -100,7 +151,11 @@ public static class MonsterSpawner
         if (go == null) return null;
 
         MonsterController mc = go.GetComponent<MonsterController>();
-        mc?.InitMonster(def);
+        if (mc != null)
+        {
+            mc.HomePortalPos = position;   // 召唤锚点：回援/撤退 home
+            mc.InitMonster(def);
+        }
         return mc;
     }
 

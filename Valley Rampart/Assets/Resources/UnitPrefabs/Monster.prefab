@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 340414117005594263}
   - component: {fileID: 7628022956643534818}
   - component: {fileID: 185506661238504096}
+  - component: {fileID: 7554104239825722743}
   m_Layer: 0
   m_HasEditorInfo: 1
   m_Name: Monster
@@ -213,6 +214,7 @@ MonoBehaviour:
   AmmoConserveRatio: 0.3
   def: {fileID: 0}
   mode: 0
+  HomePortalPos: {x: 0, y: 0}
 --- !u!114 &185506661238504096
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -223,5 +225,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 168290c90df7ec247b5df92156cb3c27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &7554104239825722743
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7957045772478622183}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5516c205dde7dfd419572419f6f0d178, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
