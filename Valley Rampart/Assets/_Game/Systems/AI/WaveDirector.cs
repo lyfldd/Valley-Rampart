@@ -187,8 +187,26 @@ public class WaveDirector : Singleton<WaveDirector>
     //  传送门实体生成（2_14 步骤4 注释约定"步骤5 传送门生成订阅"，本类为此订阅落地方）
     // ========================================================================
 
-    /// <summary>按规则选放置位：主城锚点沿随机方向外推一段（王国保护偏移），供事件缺坐标兜底。</summary>
+    /// <summary>
+    /// 步骤13 放置检测（§2.2）：随机选点 + 半径 recheckRadius 内无王国建筑(Active+Human)才合法；
+    /// 不合法则重试，最多 maxPlacementRetries 次，全失败则返回 zero（调用侧决定当晚放弃）。
+    /// </summary>
     private Vector2 PickPortalPlacement()
+    {
+        int recheckRadius = _disasterConfig != null ? _disasterConfig.recheckRadius : 10;
+        int maxRetries = _disasterConfig != null ? _disasterConfig.maxPlacementRetries : 5;
+
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            Vector2 cand = RandomPortalPoint();
+            if (IsPlacementLegal(cand, recheckRadius)) return cand;
+        }
+        Debug.LogWarning("[WaveDirector] 传送门放置重试用尽，本夜不生成（极低概率）。");
+        return Vector2.zero;
+    }
+
+    /// <summary>生成候选点：主城锚点沿随机方向外推一段（王国区外，远离出生地），缺锚点用单位圆随机。</summary>
+    private Vector2 RandomPortalPoint()
     {
         if (WorldManager.Instance != null)
         {
@@ -197,10 +215,27 @@ public class WaveDirector : Singleton<WaveDirector>
             {
                 float ang = NextFloat() * 360f;
                 Vector2 dir = Quaternion.Euler(0, 0, ang) * Vector2.right;
-                return anchor + dir * 30f;   // 王国区外推（格→世界，占位 30）
+                // 外推 40~80 格（格→世界），确保落在王国区外；重试由调用方计数
+                float dist = (40f + NextFloat() * 40f) * CellSize();
+                return anchor + dir * dist;
             }
         }
-        return NextInsideUnitCircle() * 30f;
+        return NextInsideUnitCircle() * 40f;
+    }
+
+    /// <summary>半径 radius（格）内无任何 Active + Human 阵营王国建筑 → 合法。占位含 False（矿洞/据点是基建，禁邻近）。</summary>
+    private bool IsPlacementLegal(Vector2 worldPos, int radius)
+    {
+        if (BuildingRegistry.Instance == null) return true;   // 无建筑系统时放行（脚手架场景兜底）
+        float radiusWorld = radius * CellSize();
+        foreach (var b in BuildingRegistry.Instance.All)
+        {
+            if (b == null || !b.IsActive) continue;
+            if (b.GetFaction() != Faction.Human_Player) continue;      // 只避开玩家王国建筑（AI 王国后置预留）
+            float d = Vector2.Distance(b.GetPosition(), worldPos);
+            if (d <= radiusWorld) return false;
+        }
+        return true;
     }
 
     private Portal SpawnPortalEntity(Vector2 worldPos)
