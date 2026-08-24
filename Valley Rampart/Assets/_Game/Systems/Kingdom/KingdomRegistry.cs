@@ -7,9 +7,11 @@ using UnityEngine;
 /// Count 含玩家（D314：全局上限检查口径 = Count &lt; maxKingdomsGlobal，上限值落步骤4 FoundingConfig）。
 /// 事件：KingdomFoundedEvent（第一代/玩家）/KingdomEmergedEvent（动态立国）——本片只发事件，
 ///       消费方归 2_10（染色）/2_13（播报/名单）。无订阅者时不发布（对齐 RegionHeatChangedEvent 守卫）。
-/// 存档：步骤8 实现 ISaveable（KingdomRegistrySaveData）。
+/// 存档：ISaveable（KingdomRegistrySaveData）。2_16 步骤8——
+///       nextId 显式入档（D385：跨存档 id 不复用，不从存量 max 推导，防 P1/2_19 王国移除后复用已删 id）；
+///       旧档无 KingdomRegistry 模块 → 不 LoadState → 靠 WorldSystem.EnsurePlayerRegistered 兜底只注册玩家（Count=1）。
 /// </summary>
-public class KingdomRegistry : Singleton<KingdomRegistry>
+public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
 {
     private readonly List<KingdomState> _kingdoms = new List<KingdomState>();
 
@@ -22,10 +24,16 @@ public class KingdomRegistry : Singleton<KingdomRegistry>
     /// <summary>王国总数（含玩家 id=0）。</summary>
     public int Count => _kingdoms.Count;
 
+    // ===== ISaveable（2_16 步骤8）=====
+    public string SaveId => "KingdomRegistry";
+    /// <summary>Global：先于场景建筑/单位恢复，保证实体归属重建时 Registry 句柄已就绪。</summary>
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Global;
+
     protected override void Awake()
     {
         base.Awake();
         if (_instance != this) return;
+        SaveManager.Instance?.RegisterSaveable(this);   // 对齐 Building.Awake 注册惯例（常驻全局单例）
     }
 
     /// <summary>
@@ -92,4 +100,98 @@ public class KingdomRegistry : Singleton<KingdomRegistry>
         _playerRegistered = false;
         _nextId = 1;
     }
+
+    // ===== ISaveable：存档 =====
+
+    public SavePayload SaveState()
+    {
+        var data = new KingdomRegistrySaveData
+        {
+            nextId = _nextId,   // D385：显式入档
+            kingdoms = new List<KingdomEntryData>(_kingdoms.Count)
+        };
+        for (int i = 0; i < _kingdoms.Count; i++)
+        {
+            var k = _kingdoms[i];
+            data.kingdoms.Add(new KingdomEntryData
+            {
+                id = k.id,
+                name = k.name,
+                bannerColor = k.bannerColor,
+                foundedDay = k.foundedDay,
+                personality = k.personality != null ? k.personality : new float[5],
+                templateSourceId = k.templateSourceId,
+                resources = k.resources,
+                workerCount = k.workerCount,
+                warriorCount = k.warriorCount
+            });
+        }
+        return new SavePayload
+        {
+            typeName = typeof(KingdomRegistrySaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(KingdomRegistrySaveData).AssemblyQualifiedName) return;
+        _kingdoms.Clear();
+        _playerRegistered = false;
+        var data = JsonUtility.FromJson<KingdomRegistrySaveData>(payload.json);
+
+        // D385：nextId 显式恢复（不从存量 max 推导——王国移除后复用已删 id 违反 id 不复用铁律）
+        _nextId = data.nextId > 0 ? data.nextId : 1;
+
+        if (data.kingdoms != null)
+        {
+            for (int i = 0; i < data.kingdoms.Count; i++)
+            {
+                var e = data.kingdoms[i];
+                var state = new KingdomState
+                {
+                    id = e.id,
+                    name = e.name,
+                    bannerColor = e.bannerColor,
+                    foundedDay = e.foundedDay,
+                    personality = (e.personality != null && e.personality.Length == 5)
+                        ? e.personality : new float[5],
+                    templateSourceId = e.templateSourceId,
+                    resources = e.resources,
+                    workerCount = e.workerCount,
+                    warriorCount = e.warriorCount
+                };
+                if (state.IsPlayer) _playerRegistered = true;
+                _kingdoms.Add(state);
+            }
+        }
+
+        Debug.Log($"[KingdomRegistry] 读档恢复 {_kingdoms.Count} 个王国（nextId={_nextId}, 含玩家={_playerRegistered}）。");
+    }
+}
+
+/// <summary>王国注册表存档（2_16 步骤8）。旧档无此字段 → kingdoms=null → LoadState 不触发（WorldSystem 兜底玩家注册）。</summary>
+[System.Serializable]
+public struct KingdomRegistrySaveData
+{
+    /// <summary>下一个待分配 id（D385：跨存档不复用，必须显式入档，严禁从存量 max 推导）。</summary>
+    public int nextId;
+    /// <summary>王国条目列表（含玩家 id=0）。</summary>
+    public List<KingdomEntryData> kingdoms;
+}
+
+/// <summary>单王国存档条目（KingomState 全字段平铺，读档重建）。</summary>
+[System.Serializable]
+public struct KingdomEntryData
+{
+    public int id;
+    public string name;
+    public Color bannerColor;
+    public int foundedDay;
+    public float[] personality;          // 五轴（0好战/1经济/2防守/3扩张/4外交），读档缺省兜底中性
+    public int templateSourceId;          // -1=无来源（玩家/占位）
+    public ResourcePack resources;        // 起始过渡账本
+    public int workerCount;
+    public int warriorCount;
 }

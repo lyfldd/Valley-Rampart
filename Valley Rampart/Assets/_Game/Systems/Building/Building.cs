@@ -596,7 +596,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             byproductType = producer != null ? (int)producer.ByproductType : 0,
             byproductAmount = producer != null ? producer.ByproductAmount : 0,
             grade = (int)grade,   // QQQ.3 B8-5 / LC-B2：grade 入档
-            totalInvested = totalInvested  // 2_12 步骤7 / D155：累计投入入档
+            totalInvested = totalInvested,  // 2_12 步骤7 / D155：累计投入入档
+            kingdomId = kingdomId   // 2_16 步骤8：王国归属入档（读档恢复 AI/玩家归属）
         };
         return new SavePayload
         {
@@ -610,6 +611,15 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         if (payload.typeName != typeof(BuildingSaveData).AssemblyQualifiedName) return;
         var data = JsonUtility.FromJson<BuildingSaveData>(payload.json);
+
+        // 2_16 步骤8：读档恢复王国归属。自然建筑（一次性资源点 sourceType=Ore/Wood/Stone）读档侧一律强制 -1
+        //（哨兵配套，旧档缺 kingdomId 默认 0，若不强制则自然建筑全变"玩家王国"，污染传送门排除集）——与 SpawnFromSave 同规则幂等。
+        if (data.sourceType == (int)BuildingType.OreVein
+            || data.sourceType == (int)BuildingType.WoodPile
+            || data.sourceType == (int)BuildingType.StonePile)
+            kingdomId = -1;
+        else
+            kingdomId = data.kingdomId;
 
         level = Mathf.Max(1, data.level);
 
@@ -885,6 +895,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public bool TryAdvertiseTask(out KingdomTask task)
     {
         task = null;
+        // 2_16 步骤7 补丁D：AI 王国建筑（kingdomId>0）不发布任何派工/搬运/挑水任务——
+        // 防玩家 worker 到 AI 建筑作业（AI 产出静默流入玩家国库）。玩家(0)/自然建筑(-1)放行。
+        if (kingdomId > 0) return false;
         var producer = GetComponent<ProducerComponent>();
         var storage = GetComponent<StorageComponent>();
         var sched = TaskScheduler.Instance;
@@ -950,7 +963,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// <summary>建筑转 Active 时注册到任务调度器（IsValid 才注册）。</summary>
     private void RegisterWithTaskScheduler()
     {
-        if (TaskScheduler.HasInstance && state == BuildingState.Active)
+        // 2_16 步骤7 补丁D：AI 王国建筑（kingdomId>0）不注册任务源——防玩家 worker 赴 AI 建筑派工/搬运。
+        // 玩家(0)/自然建筑(-1)保留注册（自然资源点玩家可确认采集）。TryAdvertiseTask 另有双保险守卫。
+        if (TaskScheduler.HasInstance && state == BuildingState.Active && kingdomId <= 0)
             TaskScheduler.Instance.Register(this);
     }
 }

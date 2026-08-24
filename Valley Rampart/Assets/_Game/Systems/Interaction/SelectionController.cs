@@ -152,9 +152,9 @@ public class SelectionController : Singleton<SelectionController>
                 Selected.Add(unit);
                 return;
             }
-            // 建筑
+            // 建筑：2_16 步骤7 补丁B——仅可选中己方王国（kingdomId==0），防玩家框选 AI 建筑下指令
             var building = hit.GetComponentInParent<Building>();
-            if (building != null)
+            if (building != null && building.kingdomId == 0)
             {
                 SelectedBuilding = building;
                 return;

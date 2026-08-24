@@ -189,7 +189,7 @@ public class MonsterAI : MonoBehaviour
         foreach (var b in BuildingRegistry.Instance.All)
         {
             if (b == null || !b.IsActive) continue;
-            if (b.GetFaction() != Faction.Human_Player) continue;
+            if (b.kingdomId != 0) continue;   // 2_16 步骤7 补丁C P0 收窄：怪物只袭玩家王国(0)。AI 无防御单位（人口=台账），避免单向拆 AI；2_17 引入 AI Faction 防御后放开
             if (b.def == null || b.def.monsterTargetValue <= 0f) continue;
             if (b.IsFortification) continue;   // 不打工事（墙/门），掠夺功能建筑
             float val = b.def.monsterTargetValue;

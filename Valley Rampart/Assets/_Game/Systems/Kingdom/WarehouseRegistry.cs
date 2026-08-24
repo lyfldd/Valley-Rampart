@@ -41,7 +41,9 @@ public static class WarehouseRegistry
         for (int i = 0; i < _storages.Count; i++)
         {
             var s = _storages[i];
-            if (s != null && s.storedAmount > 0) result.Add(s);
+            // 2_16 步骤7 补丁D：仅玩家王国(kingdomId==0)仓储参与凑单，AI 仓储不计入玩家资源结算
+            if (s == null || KingdomOf(s) != 0) continue;
+            if (s.storedAmount > 0) result.Add(s);
         }
         return result;
     }
@@ -58,10 +60,19 @@ public static class WarehouseRegistry
         for (int i = 0; i < _storages.Count; i++)
         {
             var s = _storages[i];
-            if (s == null || s.resourceType != type || s.capacity <= s.storedAmount) continue;
+            // 2_16 步骤7 补丁D：卸货目标仅玩家王国(kingdomId==0)仓储，AI/自然仓储不被选为玩家卸货落点（防玩家资源流入他国库）
+            if (s == null || KingdomOf(s) != 0) continue;
+            if (s.resourceType != type || s.capacity <= s.storedAmount) continue;
             float d = (s.transform.position - worldPos).sqrMagnitude;
             if (d < bestDist) { bestDist = d; best = s; }
         }
         return best;
+    }
+
+    /// <summary>从属建筑王国 id（StorageComponent 挂在 Building 上；未挂建筑/构建中按非玩家兜底）。</summary>
+    private static int KingdomOf(StorageComponent s)
+    {
+        var b = s != null ? s.GetComponentInParent<Building>() : null;
+        return b != null ? b.kingdomId : -1;
     }
 }

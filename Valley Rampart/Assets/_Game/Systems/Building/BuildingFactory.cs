@@ -95,7 +95,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
                 var worldPos = FootprintCenterWorld(coord, fp);
                 if (CreateBuildingInstance(def, type.Value, coord, fp, worldPos,
                         isPlayerBuilt: false, grade: ResourceGrade.Normal,
-                        isConsumable: def.isConsumable, initialState: BuildingState.Active))
+                        isConsumable: def.isConsumable, initialState: BuildingState.Active,
+                        kingdomId: -1))   // 2_16 步骤7 哨兵三分：野生自然建筑=-1（非玩家非 AI，排除集不纳）
                     count++;
             }
         }
@@ -142,7 +143,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         return CreateBuildingInstance(def, type.Value, coord, fp,
             FootprintCenterWorld(coord, fp),
             isPlayerBuilt: false, grade: ResourceGrade.Normal,
-            isConsumable: true, initialState: BuildingState.Active);
+            isConsumable: true, initialState: BuildingState.Active,
+            kingdomId: -1);   // 2_16 步骤7 哨兵三分：重生自然建筑仍=-1，排除集不纳
     }
 
     /// <summary>footprint 中心世界坐标（origin 左上格 + w/h 中心偏移）。</summary>
@@ -342,7 +344,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
         bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, fp, worldPos,
                                          isPlayerBuilt: true, (ResourceGrade)data.grade, false, state,
-                                         kingdomId: data.kingdomId);
+                                         kingdomId: ReadArchiveKingdomId((BuildingType)data.sourceType, data.kingdomId));
         if (!ok) return;
 
         var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) as Building : null;
@@ -372,6 +374,15 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         b.totalInvested = data.totalInvested > 0
             ? data.totalInvested
             : (b.def != null ? b.def.cost.gold + b.def.cost.stone + b.def.cost.wood + b.def.cost.food : 0);
+    }
+
+    /// <summary>读档王国归属：自然建筑（OreVein/WoodPile/StonePile 一次性资源点）一律强制 -1（哨兵配套，
+    /// 旧档缺 kingdomId 默认 0，不强制则自然建筑全变"玩家王国"污染排除集）；其余取存栏 kingdomId。</summary>
+    private static int ReadArchiveKingdomId(BuildingType sourceType, int archivedKingdomId)
+    {
+        if (sourceType == BuildingType.OreVein || sourceType == BuildingType.WoodPile || sourceType == BuildingType.StonePile)
+            return -1;
+        return archivedKingdomId;
     }
 
     /// <summary>清空所有地图建筑（跨岛切换时由 WorldManager 调）。</summary>

@@ -79,6 +79,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             for (int i = 0; i < all.Count; i++)
             {
                 var b = all[i];
+                // 2_16 步骤7 补丁D：AI 王国建筑（kingdomId>0）不补登记为任务源（玩家 worker 不得赴 AI 建筑作业）
+                if (b != null && b.kingdomId > 0) continue;
                 if (b != null && b.state == BuildingState.Active && !_sources.Contains(b))
                     Register(b);
             }

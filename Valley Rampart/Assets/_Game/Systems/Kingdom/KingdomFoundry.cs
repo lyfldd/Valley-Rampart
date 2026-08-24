@@ -69,6 +69,10 @@ public static class KingdomFoundry
 
         Debug.Log($"[KingdomFoundry] 第一代立国完成：难度档 {tier.tierName}(difficulty={difficulty}), 立国 {aiFounded} 个 AI 王国, " +
                   $"Registry.Count={registry.Count}（含玩家）.");
+
+        // 2_16 步骤7 D305：开局汇总播报一条，不逐国刷屏（点击展开列国名单归 2_13）
+        if (ToastManager.Instance != null)
+            ToastManager.Instance.Show($"本大陆已有 {registry.Count} 国并存");
     }
 
     // ===== 建筑预置 =====

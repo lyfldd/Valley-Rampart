@@ -234,7 +234,9 @@ public class WaveDirector : Singleton<WaveDirector>, ISaveableSpawner
         foreach (var b in BuildingRegistry.Instance.All)
         {
             if (b == null || !b.IsActive) continue;
-            if (b.GetFaction() != Faction.Human_Player) continue;      // 只避开玩家王国建筑（AI 王国后置预留）
+            // 2_16 步骤7 补丁E：排除集 = kingdomId>=0 全王国（玩家 0 + AI 1..N，设计稿 §1.1 避王国）
+            // 自然建筑（矿/木/石堆）=-1 不排除，防资源密集图传送门放置饥饿
+            if (b.kingdomId < 0) continue;
             float d = Vector2.Distance(b.GetPosition(), worldPos);
             if (d <= radiusWorld) return false;
         }
