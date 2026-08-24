@@ -15,7 +15,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     private TerrainType[]   _terrain;      // W×H
     private PlainSubState[] _plainSub;     // W×H
     private WalkFlags[]     _walkFlags;    // W×H
-    private Building[]      _occupants;    // W×H（footprint 每格同引用）
+    private IGridOccupant[]  _occupants;   // W×H（footprint 每格同引用，2_14 A⁻ 泛化非 Building）
     private GridCell[]      _cells;        // W×H，懒分配 null 起步
     private readonly Dictionary<UnitController, GridCoord> _unitSubCells = new Dictionary<UnitController, GridCoord>();
 
@@ -246,24 +246,24 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     public bool IsObstacle(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return false;
-        var b = _occupants[ToIndex(c.x, c.y)];
-        return b != null && b.isObstacle;
+        var o = _occupants[ToIndex(c.x, c.y)];
+        return o != null && o.IsGridObstacle;
     }
 
-    public Building GetOccupant(GridCoord c)
+    public IGridOccupant GetOccupant(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return null;
         return _occupants[ToIndex(c.x, c.y)];
     }
 
-    public void MarkOccupied(GridCoord c, Building building)
+    public void MarkOccupied(GridCoord c, IGridOccupant occupant)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return;
         int i = ToIndex(c.x, c.y);
-        _occupants[i] = building;
-        if (building != null)
+        _occupants[i] = occupant;
+        if (occupant != null)
         {
-            if (building.isObstacle) _walkFlags[i] |= WalkFlags.BuildingBlocked;
+            if (occupant.IsGridObstacle) _walkFlags[i] |= WalkFlags.BuildingBlocked;
             else _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
             MarkCellOccupied(c);
         }
@@ -281,11 +281,11 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
     }
 
-    public void MarkOccupiedFootprint(GridCoord origin, int w, int h, Building building)
+    public void MarkOccupiedFootprint(GridCoord origin, int w, int h, IGridOccupant occupant)
     {
         for (int dy = 0; dy < h; dy++)
             for (int dx = 0; dx < w; dx++)
-                MarkOccupied(new GridCoord(origin.x + dx, origin.y + dy, origin.layer), building);
+                MarkOccupied(new GridCoord(origin.x + dx, origin.y + dy, origin.layer), occupant);
     }
 
     public void FreeFootprint(GridCoord origin, int w, int h)

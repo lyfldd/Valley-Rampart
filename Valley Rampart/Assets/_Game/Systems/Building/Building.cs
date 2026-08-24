@@ -26,7 +26,7 @@ public enum BuildingState
 /// 地图预置建筑（树/矿/裂隙/主城）由 BuildingFactory 实例化，isPlayerBuilt=false；
 /// 玩家建造由 BuildController 实例化，isPlayerBuilt=true。
 /// </summary>
-public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, ITaskSource
+public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, ITaskSource, IGridOccupant
 {
     // ===== ISaveable（3.5 实施计划 P0 步骤3）=====
     /// <summary>全局唯一存档 ID（Building_{guid}）。Awake 分配，读档时由 BuildingFactory.SpawnFromSave 覆盖。</summary>
@@ -56,6 +56,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public GridCoord coord;                    // footprint 左上格（2D）
     public Vector2Int footprint = Vector2Int.one; // 占地 w×h（小区块，2_2）
     public bool isObstacle = false;
+
+    /// <summary>IGridOccupant 实现：是否阻挡通行（对应 isObstacle，2_14 A⁻）。</summary>
+    public bool IsGridObstacle => isObstacle;
 
     /// <summary>桥链 id（2_2 §3.5：1×N 桥段共享同一 bridgeId；运行时派生，不入档）。</summary>
     [HideInInspector] public string bridgeId;

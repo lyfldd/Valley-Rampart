@@ -343,7 +343,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
                                          isPlayerBuilt: true, (ResourceGrade)data.grade, false, state);
         if (!ok) return;
 
-        var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) : null;
+        var b = GridSystem.Instance != null ? GridSystem.Instance.GetOccupant(coord) as Building : null;
         if (b == null)
         {
             Debug.LogWarning($"[BuildingFactory] 读档重建后未取到 Building（coord=({coord.x},{coord.y})），跳过状态恢复。");

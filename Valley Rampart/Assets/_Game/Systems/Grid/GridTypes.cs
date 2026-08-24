@@ -29,6 +29,14 @@ public struct GridCoord
     public override string ToString() => $"(x={x}, y={y}, layer={layer})";
 }
 
+/// <summary>占格物契约（2_14 A⁻ 决策：占格登记不硬绑 Building，非建筑实体如传送门 Portal 也可入表）。
+/// 对应原 Building.isObstacle 语义（D154 同建筑占格/阻挡/可攻击）。</summary>
+public interface IGridOccupant
+{
+    /// <summary>占格物是否阻挡通行（决定置/清 WalkFlags.BuildingBlocked）。</summary>
+    bool IsGridObstacle { get; }
+}
+
 /// <summary>可行走位标记（byte，每格一份）。可走判定规则：TerrainWalkable 置位
 /// 且 BuildingBlocked/Locked/Water 均未置位，或 Bridge 置位（桥面豁免水域阻挡，2_2 桥写入）。</summary>
 [System.Flags]
@@ -200,7 +208,7 @@ public class GridCell
     [System.Obsolete("GridCell.occupant 已下沉 GridSystem._occupants，改用 GridSystem.IsOccupied/GetOccupant")]
     public Building occupant
     {
-        get { var g = GridSystem.Instance; return g != null ? g.GetOccupant(Coord) : null; }
+        get { var g = GridSystem.Instance; return g != null ? g.GetOccupant(Coord) as Building : null; }
     }
 
     /// <summary>[过渡已废弃] 是否障碍格。改用 GridSystem.IsObstacle。</summary>
