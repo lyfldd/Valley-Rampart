@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ecceb29cb698c9d4dbde3307bd3615ff, type: 3}
+  m_Name: PortalDef
+  m_EditorClassIdentifier: 
+  hpByDifficulty: f4010000e8030000dc050000
+  footprint: {x: 2, y: 2}
+  summonInterval: 30
+  summonIntervalOnHit: 15
+  maxConcurrentMonsters: 30
+  aftermathDecayRate: 0.8

@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2e0c4244b600544d9a33fc56cea7b30, type: 3}
+  m_Name: PortalDisasterConfig
+  m_EditorClassIdentifier: 
+  triggerProbability: 0.3
+  minDaysBeforeFirst: 3
+  forceTriggerAfterDays: 7
+  maxPortalPerNight: 1
+  recheckRadius: 10
+  maxPlacementRetries: 5
+  easyTriggerMultiplier: 0.6
+  normalTriggerMultiplier: 1
+  hardTriggerMultiplier: 1.4
+  growthRate: 0.02
+  strengthCap: 60
+  easyWaveCoefficient: 0.7
+  normalWaveCoefficient: 1
+  hardWaveCoefficient: 1.3

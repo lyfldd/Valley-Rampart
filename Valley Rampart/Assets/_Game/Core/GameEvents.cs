@@ -270,6 +270,34 @@ public readonly struct TimePhaseChangedEvent
     }
 }
 
+// ===== 2_14 敌怪与传送门灾害事件 =====
+// 灾害触发：本夜触发灾害（PortalDisasterTrigger，步骤4）。UI 预警 / 2_10 渲染订阅。
+public readonly struct PortalDisasterTriggeredEvent
+{
+    public readonly int Day;
+    public readonly UnityEngine.Vector2 PortalWorldPos;
+
+    public PortalDisasterTriggeredEvent(int day, UnityEngine.Vector2 portalWorldPos)
+    {
+        Day = day;
+        PortalWorldPos = portalWorldPos;
+    }
+}
+
+// 传送门被攻击：触发防御性召唤反向强化 + 广播增援（守门回援，步骤5/7）。
+public readonly struct PortalAttackedEvent
+{
+    public readonly UnityEngine.Vector2 PortalWorldPos;
+    public PortalAttackedEvent(UnityEngine.Vector2 portalWorldPos) { PortalWorldPos = portalWorldPos; }
+}
+
+// 传送门被摧毁：清占格 → 恢复正常触发周期（步骤5）。
+public readonly struct PortalDestroyedEvent
+{
+    public readonly UnityEngine.Vector2 PortalWorldPos;
+    public PortalDestroyedEvent(UnityEngine.Vector2 portalWorldPos) { PortalWorldPos = portalWorldPos; }
+}
+
 // 季节变化事件。由 TimeManager 在跨季时发布。
 // 昼夜比例随之改变，DifficultyManager 也可能据此调整难度系数。
 public readonly struct SeasonChangedEvent
