@@ -50,7 +50,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         _terrain   = new TerrainType[n];
         _plainSub  = new PlainSubState[n];
         _walkFlags = new WalkFlags[n];
-        _occupants = new Building[n];
+        _occupants = new IGridOccupant[n];   // 2_14 A⁻：分配类型与声明 IGridOccupant[] 对齐（修 Portal 占格崩）
         _cells     = new GridCell[n];
         _unitSubCells.Clear();
     }
