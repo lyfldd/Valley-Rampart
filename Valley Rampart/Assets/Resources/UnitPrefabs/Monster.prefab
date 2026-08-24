@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 7628022956643534818}
   - component: {fileID: 185506661238504096}
   - component: {fileID: 7554104239825722743}
+  - component: {fileID: -6866607925842929595}
   m_Layer: 0
   m_HasEditorInfo: 1
   m_Name: Monster
@@ -239,3 +240,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5516c205dde7dfd419572419f6f0d178, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &-6866607925842929595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7957045772478622183}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f24d3f0c38e59084daa54c1becd4074d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  IsKingdomTaskWorker: 0

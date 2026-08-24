@@ -49,6 +49,15 @@ public class MonsterAI : MonoBehaviour
             _pf.SetDestination(_mc.HomePortalPos);
         }
 
+        // 段② Q1-B（D252）：精英（Brute）挂 NPCBrain——MonsterAI 只做规则态机切换（HP撤退=上方判定 / 守门=OnPortalAttacked），
+        // 不做移动/攻击驱动（由 NPCBrain 决策核接管，见 FactorContext 壳层模式开关注入）；切换后把 mode 同步给 NPCBrain。
+        if (_mc.IsElite)
+        {
+            var brain = GetComponent<NPCBrain>();
+            if (brain != null) brain.SetMonsterMode(_mc.mode);
+            return;
+        }
+
         switch (_mc.mode)
         {
             case MonsterMode.Raiding:  UpdateRaiding();   break;
@@ -154,6 +163,8 @@ public class MonsterAI : MonoBehaviour
         if (_mc == null || !_mc.IsAlive) return;
         if (_mc.mode == MonsterMode.Retreating || _mc.mode == MonsterMode.Looting) return;
         if (_mc.mode == MonsterMode.Guarding) { _guardUntil = Time.time + GuardHoldSeconds; return; }
+        // 段② Q1-B：精英回援只切 Guarding 态，不直接驱动 PathFollower（NPCBrain 决策核归巢门=HomePortalPos 自动回援）。
+        if (_mc.IsElite) { _mc.mode = MonsterMode.Guarding; _guardUntil = Time.time + GuardHoldSeconds; return; }
 
         float ratio = _mc.def != null ? _mc.def.guardRecallRatio : 0.5f;
         if (Deterministic01(_mc.npcId) < ratio)   // 稳定哈希：ratio 比例回援，禁 UnityEngine.Random

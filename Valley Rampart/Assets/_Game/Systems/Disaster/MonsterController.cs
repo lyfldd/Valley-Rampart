@@ -155,6 +155,14 @@ public static class MonsterSpawner
         {
             mc.HomePortalPos = position;   // 召唤锚点：回援/撤退 home
             mc.InitMonster(def);
+
+            // 段② Q1-B（D252）：仅精英怪挂 NPCBrain + MonsterMode 注入（桥接卡使 UnitFactory brain.Init 生效）。
+            // 普通怪即便 prefab 带 NPCBrain，也因 data 非 NpcProfessionDef 不 Init → 零影响。
+            if (def.isElite)
+            {
+                var brain = go.GetComponent<NPCBrain>();
+                if (brain != null) brain.ConfigureMonster(mc.mode, position);
+            }
         }
         return mc;
     }
@@ -164,17 +172,46 @@ public static class MonsterSpawner
         if (s_dataCache.TryGetValue(def.type, out var cached)) return cached;
 
         float cell = CellSize();
-        var u = ScriptableObject.CreateInstance<UnitData>();
-        u.name = "Monster_" + def.type;
-        u.faction = Faction.Undead;
-        u.occupation = Occupation.Monster;
-        u.prefab = def.prefab;
-        u.maxHp = def.hp;
-        u.attack = def.attack;
-        u.defense = 0;
-        // 格/秒 -> 世界单位/秒（doc 1 §1.6：一格的横向世界长度≈cellSize.x）
-        u.walkSpeed = def.speedCellsPerSec * cell;
-        u.runSpeed = u.walkSpeed * 2f;
+        UnitData u;
+        if (def.isElite)
+        {
+            // 段② Q2-A（D252）：精英（Brute）挂 NPCBrain，data 须为 NpcProfessionDef，
+            // UnitFactory.SpawnUnit 走 `data is NpcProfessionDef` 分支自动 brain.Init。
+            // MonsterDef.Brute 属性桥接成 NpcProfessionDef（决策核吃 profession 快照，怪物字段仍读 MonsterDef）。
+            var npc = ScriptableObject.CreateInstance<NpcProfessionDef>();
+            npc.name = "Monster_" + def.type;
+            npc.faction = Faction.Undead;
+            npc.occupation = Occupation.Monster;
+            npc.prefab = def.prefab;
+            npc.maxHp = def.hp;
+            npc.attack = def.attack;
+            npc.defense = 0;
+            // 格/秒 -> 世界单位/秒
+            npc.walkSpeed = def.speedCellsPerSec * cell;
+            npc.runSpeed = npc.walkSpeed * 2f;
+            // 战斗/感知从 MonsterDef 桥接（决策核消费）
+            npc.attackRange = def.attackRangeCells;
+            npc.attackCD = def.attackInterval;
+            npc.isRanged = def.isRangedAttack;
+            npc.projectileSpeed = def.projectileSpeed;
+            npc.perceptionRadius = def.visionRadiusCells;
+            u = npc;
+        }
+        else
+        {
+            var bu = ScriptableObject.CreateInstance<UnitData>();
+            bu.name = "Monster_" + def.type;
+            bu.faction = Faction.Undead;
+            bu.occupation = Occupation.Monster;
+            bu.prefab = def.prefab;
+            bu.maxHp = def.hp;
+            bu.attack = def.attack;
+            bu.defense = 0;
+            // 格/秒 -> 世界单位/秒
+            bu.walkSpeed = def.speedCellsPerSec * cell;
+            bu.runSpeed = bu.walkSpeed * 2f;
+            u = bu;
+        }
 
         s_dataCache[def.type] = u;
         return u;

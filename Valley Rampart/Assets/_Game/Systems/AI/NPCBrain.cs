@@ -190,11 +190,42 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// <summary>是否王国任务工人（T-K/T-R）：移动由 WorkerTask 独占，普通决策核不分发移动。</summary>
     public bool IsKingdomTaskWorker;
 
+    // ===== 段② Q1-B（D252）：精英怪 MonsterMode 模式开关（壳层字段，非 FactorContext 结构体；默认关闭，普通单位零影响）=====
+    private bool _isMonsterBrain;                              // 精英怪（Brute）并入 NPCBrain 时置位
+    private MonsterMode _monsterMode = MonsterMode.Raiding;     // 当前模式（Raiding 默认）
+    private Vector2 _monsterHomePortal;                         // 传送门召唤锚点（世界坐标）：Guarding 回援 / Retreating 撤退 目标
+
     /// <summary>威胁因子（上一帧 rawFactor，连续 0-1，映射训练侧 ThreatFactor）。</summary>
     public float ThreatFactor => _lastRaw;
 
     /// <summary>是否存活（QQQ.3 B8-8 / LC-N5：调度器判工人失效用，池化下死单位引用非 null，需用血量判）。</summary>
     public bool IsAlive => _controller != null && _controller.IsAlive;
+
+    /// <summary>段② Q1-B：精英怪接入 NPCBrain——注入 MonsterMode 模式开关 + 传送门归巢锚点。仅精英调，普通单位不调用则零影响。</summary>
+    public void ConfigureMonster(MonsterMode mode, Vector2 homePortal)
+    {
+        _isMonsterBrain = true;
+        _monsterMode = mode;
+        _monsterHomePortal = homePortal;
+    }
+
+    /// <summary>段②：运行时切换精英怪模式（MonsterController 态机按事件/血量驱动调）。</summary>
+    public void SetMonsterMode(MonsterMode mode) => _monsterMode = mode;
+
+    /// <summary>段②：按 MonsterMode 注入刺激源（仅精英怪）。Looting 掠夺停留原地停驻。</summary>
+    private void ApplyMonsterModeStimuli()
+    {
+        float now = Time.time;
+        if (_monsterMode == MonsterMode.Looting)
+        {
+            _attention.AddStimulus(new TaskStimulus(
+                TaskPriority.C,
+                targetPos: Vector2XUnity.FromUnity((Vector2)transform.position),
+                intensity: 1f,
+                expiry: now + 0.5f,
+                issuer: this));
+        }
+    }
 
     /// <summary>全局调参 SO（WorkerTask 读 abandonThreshold/taskResume*/arrivalThreshold）。</summary>
     public AttentionTuningConfig Config => _config;
@@ -535,6 +566,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 _attention.AddDynamicStimulus(stimuli[j]);
         }
 
+        // 段② Q1-B：精英怪（MonsterBrain）按 MonsterMode 注入刺激源（Looting 停留等）。
+        // 仅 _isMonsterBrain 生效，普通单位走下面不变逻辑，零影响。
+        if (_isMonsterBrain) ApplyMonsterModeStimuli();
+
         // 设置任务折扣（Caution 态对 TaskStimulus 打折）
         _attention.SetTaskDiscount(ctx.StateTaskDiscount);
 
@@ -641,7 +676,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     {
         float hpRatio = _self.MaxHp > 0 ? (float)_self.CurrentHp / _self.MaxHp : 0f;
         bool isNight = IsNight();
-        Vector2 homePoint = _homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero;
+        // 段② Q1-B：精英怪（MonsterBrain）归巢点/撤退目标=传送门召唤锚点（Guarding 回援 / Retreating 撤退 / SafetyStimulus 拉力），
+        // 而非默认 HomePointProvider（那是人类王国的出生营地/主城）。
+        Vector2 homePoint = _isMonsterBrain
+            ? _monsterHomePortal
+            : (_homePointProvider != null ? _homePointProvider.GetHomePoint(this) : Vector2.zero);
 
         // QQQ.2 T11：未招募流浪汉标记（HomePoint=出生营地，WanderStimulusProvider 特判营地徘徊，
         // 不抽全局锚点池——否则漫游目标被拉到城堡/建筑附近，表现为"不停往主城走"）
