@@ -129,6 +129,14 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
         var faction = (Faction)data.faction;
         var occupation = (Occupation)data.occupation;
 
+        // HH.17 裁决（决策2/3）：上帝视角君主实体已退役。旧档 occupation=Ruler 单位读档过滤，
+        // 不重建君主（新建档无君主，此分支仅旧档触发——2_14 步骤14 迁移待办在此落地）。
+        if (faction == Faction.Human_Player && occupation == Occupation.Ruler)
+        {
+            Debug.Log($"[UnitFactory] 旧档君主 occupation=Ruler 已退役（HH.17 上帝视角），读档过滤不重建（saveId={entry.saveId}）。");
+            return;
+        }
+
         UnitData config = UnitDataManager.Instance.GetData(faction, occupation);
         if (config == null)
         {

@@ -10,8 +10,10 @@ using UnityEngine;
 ///   - 正常夜晚无波次（步骤10）：判定不走到此即无任何出怪。
 /// 确定性纪律（R4）：出怪随机源用 System.Random(seed)（worldSeed 派生），禁用 UnityEngine.Random，供 sim 对拍。
 /// </summary>
-public class WaveDirector : Singleton<WaveDirector>
+public class WaveDirector : Singleton<WaveDirector>, ISaveableSpawner
 {
+    /// <summary>ISaveableSpawner：负责重建运行时生成的传送门（前缀 "Portal_"）。</summary>
+    public string SaveIdPrefix => "Portal_";
     private WaveConfig _config;
     private PortalDisasterConfig _disasterConfig;
     private System.Random _rng = new System.Random();
@@ -28,6 +30,7 @@ public class WaveDirector : Singleton<WaveDirector>
         _disasterConfig = Resources.Load<PortalDisasterConfig>("Config/Disaster/PortalDisasterConfig");
         EventBus.Subscribe<PortalDisasterTriggeredEvent>(OnPortalDisasterTriggered);
         EventBus.Subscribe<TimePhaseChangedEvent>(OnTimePhaseChanged);
+        SaveManager.Instance?.RegisterSpawner(this);
     }
 
     public WaveConfig Config => _config;
@@ -317,5 +320,39 @@ public class WaveDirector : Singleton<WaveDirector>
     private static float CellSize()
     {
         return MapRenderService.DefaultCellSize.x;
+    }
+
+    // ========================================================================
+    //  ISaveableSpawner（2_14 步骤14）：读档重建传送门
+    //  SaveManager 阶段 1.5 调此创建实例并注册 → 阶段 2 Scene 分发 Portal.LoadState 恢复
+    // ========================================================================
+
+    public void SpawnFromSave(ModuleSaveEntry entry)
+    {
+        if (entry == null || string.IsNullOrEmpty(entry.json)) return;
+        PortalSaveData data;
+        try { data = JsonUtility.FromJson<PortalSaveData>(entry.json); }
+        catch (System.Exception ex) { Debug.LogError($"[WaveDirector] PortalSaveData 反序列化失败: {ex}"); return; }
+
+        if (data == null) return;
+        if (ActivePortal != null)
+        {
+            Debug.LogWarning($"[WaveDirector] 读档重建时已存在传送门，跳过重复重建（saveId={entry.saveId}）。");
+            return;
+        }
+        if (GridSystem.Instance == null) { return; }
+
+        var coord = new GridCoord(data.portalGridX, data.portalGridY);
+        Vector2 worldPos = GridSystem.Instance.CoordToWorld(coord);
+
+        var pgo = new GameObject("Portal_Disaster_Reload");
+        pgo.transform.position = new Vector3(worldPos.x, worldPos.y, 0f);
+        var portal = pgo.AddComponent<Portal>();
+        var portalDef = Resources.Load<PortalDef>("Config/Disaster/PortalDef");
+        portal.Initialize(coord, portalDef);
+        // 覆盖 SaveId，使 SaveManager 阶段2 能把 LoadState 分发给正确实例
+        portal.OverrideSaveId(entry.saveId);
+        ActivePortal = portal;
+        Debug.Log($"[WaveDirector] 读档重建传送门 @ ({coord.x},{coord.y}) saveId={entry.saveId}。");
     }
 }

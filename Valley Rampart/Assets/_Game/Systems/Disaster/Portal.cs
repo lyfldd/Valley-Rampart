@@ -5,8 +5,64 @@ using UnityEngine;
 // A⁻ 决策：实现 IGridOccupant 以 2×2 入占格表 + IsGridObstacle=true（D154 同建筑占格语义），
 //   Portal 非 Building 却可被 GridSystem.IsOccupied/IsObstacle/GetOccupant 查询。
 // 视觉（崩塌动画/召唤动画）归 2_10；存档归 2_11；此处只做逻辑实体。
-public class Portal : MonoBehaviour, IDamageable, IGridOccupant
+public class Portal : MonoBehaviour, IDamageable, IGridOccupant, ISaveable
 {
+    // ===== ISaveable（2_14 步骤14：传送门持久化，SaveManager 场景阶段）=====
+    public string SaveId { get; private set; }
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Scene;
+
+    private void Awake()
+    {
+        // 运行期为每扇门分配唯一 SaveId 并注册；读档时由 WaveDirector.SpawnFromSave 覆盖并恢复。
+        if (string.IsNullOrEmpty(SaveId))
+        {
+            SaveId = $"Portal_{System.Guid.NewGuid():N}";
+            SaveManager.Instance?.RegisterSaveable(this);
+        }
+    }
+
+    /// <summary>用存档里的 SaveId 覆盖 Awake 分配的新 GUID（读档时由 WaveDirector spawner 调）。</summary>
+    public void OverrideSaveId(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        string oldId = SaveId;
+        SaveId = id;
+        SaveManager.Instance?.ChangeSaveId(oldId, id, this);
+    }
+
+    public SavePayload SaveState()
+    {
+        var data = new PortalSaveData
+        {
+            portalGridX = gridPos.x,
+            portalGridY = gridPos.y,
+            portalHp = hp,
+            portalSurvivedNights = survivedNights,
+            portalState = (int)state
+        };
+        return new SavePayload
+        {
+            typeName = typeof(PortalSaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(PortalSaveData).AssemblyQualifiedName) return;
+        var data = JsonUtility.FromJson<PortalSaveData>(payload.json);
+        // 占格位置由 spawner 读同一份 json 重建；此处恢复 HP/存活夜/状态（保证闭环）。
+        hp = Mathf.Min(maxHp, Mathf.Max(0, data.portalHp));
+        survivedNights = data.portalSurvivedNights;
+        state = (PortalState)data.portalState;
+    }
+
+    private void OnDestroy()
+    {
+        if (!string.IsNullOrEmpty(SaveId))
+            SaveManager.Instance?.UnregisterSaveable(this);
+    }
     [Tooltip("传送门属性 SO（缺省从 Resources/Config/Disaster 加载）")]
     [SerializeField] private PortalDef def;
 
