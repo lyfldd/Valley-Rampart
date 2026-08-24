@@ -101,7 +101,8 @@ public class SelectionController : Singleton<SelectionController>
         SelectedBuilding = building;
     }
 
-    /// <summary>右键指令：选中集 → 移动（归 2_8 消费）；空选 → 取消选择/平移。P0 占位。</summary>
+    /// <summary>右键指令：选中单位集 → 移动到目标点（PathFollower 寻路，2_3/2_6）；仅选中建筑 → 取消选择。
+    /// 空选 → 取消选择/平移。微操（D115）/守卫（D116）/跟随（D2）类型分派归 2_8（P1+，此处占位）。</summary>
     public void IssueRightClick()
     {
         if (!HasSelection)
@@ -111,8 +112,25 @@ public class SelectionController : Singleton<SelectionController>
             return;
         }
         Vector2 world = CursorToWorld();
-        Debug.Log($"[Selection] 右键指令：目标 {world}，选中单位 {Selected.Count}，建筑 {SelectedBuilding?.name ?? "无"} ——移动指令消费归 2_8（P0 占位）");
-        // TODO(2_8 / 编队)：把移动指令派发给选中集（走 PathFollower 寻路，2_3）。
+
+        if (Selected.Count > 0)
+        {
+            foreach (var u in Selected)
+            {
+                if (u == null || !u.IsAlive) continue;
+                var pf = u.GetComponent<PathFollower>();
+                if (pf != null) pf.SetDestination(world);
+            }
+            Debug.Log($"[Selection] 右键移动指令：{Selected.Count} 单位 → {world}");
+            // TODO(2_8)：右键目标类型分派——选中工人+资源点=PrioritizeHarvest(D115)、
+            //   选中士兵+高价值点=DeployGuard(D116)、右键己方单位=Follow(D2)。
+            // 深度覆盖（防 NPCBrain 即时重抢行为）归 2_8 任务/编队层。
+        }
+        else
+        {
+            Debug.Log($"[Selection] 右键：选中建筑 {SelectedBuilding?.name ?? "无"}（无移动目标，取消选择）");
+        }
+
         ClearSelection();   // 移动下发后取消当前框选（上帝视角惯例）
     }
 
