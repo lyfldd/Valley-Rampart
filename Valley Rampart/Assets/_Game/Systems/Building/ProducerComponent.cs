@@ -119,6 +119,9 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         // QQQ.2 T15：水井产水入网（DR-14：rate=4 水/秒；水为隐藏资源不占存储，UI 不显示）
         if (_isWell)
         {
+            // 2_17 步骤3：水井路径守卫（补丁 D 同模式）——AI 建筑（kingdomId>0）产水不得充入玩家级 WaterNetwork，
+            // 防王国脑/模板池/动态立国 castle 复用 Well def 时把 AI 产出泄入玩家供水网。
+            if (_building.kingdomId > 0) return;
             TickWaterToNetwork();
             return;
         }

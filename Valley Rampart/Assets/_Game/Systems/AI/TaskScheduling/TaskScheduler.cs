@@ -79,8 +79,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             for (int i = 0; i < all.Count; i++)
             {
                 var b = all[i];
-                // 2_16 步骤7 补丁D：AI 王国建筑（kingdomId>0）不补登记为任务源（玩家 worker 不得赴 AI 建筑作业）
-                if (b != null && b.kingdomId > 0) continue;
+                // 2_17 步骤3 补丁D收编：不再整块跳过 AI 建筑——收为池隔离主体，AI 建筑也登记为任务源，
+                // 但派工按 kingdomId 等路由（工人只领本国任务），玩家调度器天然不匹配 AI 源（见 Tick）。
+                // guard 暂留评注：此形式化"过滤器"收编进路由，去留凭步骤3 冒烟取证（裁决⑤-4）。
                 if (b != null && b.state == BuildingState.Active && !_sources.Contains(b))
                     Register(b);
             }
@@ -215,6 +216,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ② 收集空闲 NPC 候选
         var npcs = FindObjectsOfType<NPCBrain>();
         var idle = new List<NPCBrain>();
+        var idleKingdom = new List<int>();   // 2_17 步骤3：对齐 idle 池记录每空闲工人归属（池隔离路由用）
         for (int i = 0; i < npcs.Length; i++)
         {
             var n = npcs[i];
@@ -228,6 +230,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             if (occ != Occupation.Worker && occ != Occupation.Civilian) continue;
             if (_npcTaskMap.ContainsKey(uc.npcId)) continue;   // 幂等：已占用不重派
             idle.Add(n);
+            idleKingdom.Add(uc.kingdomId);
         }
 
         // ③ 收集可派任务（QQQ.4 T1：按"源+任务类型"去重，允许同一源并发不同类型任务——
@@ -255,20 +258,23 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         for (int j = 0; j < jobs.Count; j++)
         {
             var task = jobs[j];
+            // 2_17 步骤3 池隔离路由：任务源归属 kingdomId——工人只领本国任务（D330），玩家(0)不碰 AI 源、AI 不碰它国源
+            int tKingdom = SourceKingdom(task);
             // 规模派工（D95）：运输任务按容量可多派工人；其余独占任务派 1
             int slots = task.type == KingdomTaskType.Transport ? RemainingSlots(task) : 1;
             for (int k = 0; k < slots; k++)
             {
-                // 找到距源最近的仍空闲 NPC（2_8 步骤1：格单位排序）
+                // 找到距源最近的、同归属国且仍未空闲的 NPC（2_8 步骤1：格单位排序）
                 int best = -1;
                 float bestDist = float.MaxValue;
                 for (int i = 0; i < idle.Count; i++)
                 {
                     if (used[i]) continue;
+                    if (idleKingdom[i] != tKingdom) continue;   // 池隔离：跨归属国不派
                     float d = GridMath.DistCells(idle[i].transform.position, task.SourcePos);
                     if (d < bestDist) { bestDist = d; best = i; }
                 }
-                if (best < 0) break;   // 无空闲工人，剩余任务等待下 tick
+                if (best < 0) break;   // 无对应国空闲工人，剩余任务等待下 tick
                 used[best] = true;
                 Dispatch(idle[best], task);
             }
@@ -850,6 +856,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private TaskPriority GetPriority(KingdomTaskType type)
     {
         return _priorityConfig != null ? _priorityConfig.Get(type) : TaskPriority.B;
+    }
+
+    /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0）。</summary>
+    private int SourceKingdom(KingdomTask task)
+    {
+        return task != null && task.source is Building b ? b.kingdomId : 0;
     }
 
     private float ArrivalThreshold(NPCBrain brain, float cellSize)

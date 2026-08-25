@@ -147,7 +147,9 @@ public class SelectionController : Singleton<SelectionController>
         {
             // 己方单位优先（框选/点选仅收己方，R2）
             var unit = hit.GetComponentInParent<UnitController>();
-            if (unit != null && unit.GetFaction() == Faction.Human_Player)
+            // 2_17 步骤3 双条件过滤（守门员）：仅玩家王国(kingdomId==0)单位可被选中——AI 工人以外籍身份(kingdomId>0)出场时
+            // 不得被玩家选中下右键指令（GetFaction() 对 AI 工人仍返 Human_Player，须以 kingdomId 区分）
+            if (unit != null && unit.GetFaction() == Faction.Human_Player && unit.kingdomId == 0)
             {
                 Selected.Add(unit);
                 return;
@@ -176,7 +178,8 @@ public class SelectionController : Singleton<SelectionController>
         foreach (var c in cols)
         {
             var unit = c.GetComponentInParent<UnitController>();
-            if (unit != null && unit.GetFaction() == Faction.Human_Player && !Selected.Contains(unit))
+            // 2_17 步骤3：框选同做双条件过滤（仅玩家 kingdomId==0 单位，防纳 AI 工人）
+            if (unit != null && unit.GetFaction() == Faction.Human_Player && unit.kingdomId == 0 && !Selected.Contains(unit))
                 Selected.Add(unit);
         }
         Debug.Log($"[Selection] 框选 {Selected.Count} 个己方单位");

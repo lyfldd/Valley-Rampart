@@ -54,9 +54,13 @@ public static class KingdomFoundry
             state.personality = Perturb(rng, tpl.GetPersonalityArray(),
                 cfg.firstGenPerturbation, cfg.personalityClampMin, cfg.personalityClampMax);
 
-            // 人口台账（AI 无专属 Faction，不实例化单位实体，见文件头偏差说明）
+            // 人口台账（步骤4 人口系统 per-kingdom 时台账转派生统计、实体=唯一真源；此处为过渡态双写）
             state.workerCount = Mathf.Max(0, tier.workerCount);
             state.warriorCount = Mathf.Max(0, tier.warriorCount);
+
+            // 2_17 步骤3 实体化（裁①）：台账+实体双写——直出首代实体工人（收入侧前提，AI 真产出）。
+            // 守卫已就位：选中/人口台账均 kingdomId 过滤、任务路由池隔离、怪物仅袭玩家建筑（kingdomId==0）→ AI 工人安全出场。
+            SpawnAiWorkers(map, map.kingdomSpawns[i], state.workerCount, state.id);
 
             // 起始国库过渡账本（AI 2_17 前无脑不消费，零风险；ResourcePack 为 struct 无需判空）
             state.resources = tier.stockpile;
@@ -73,6 +77,53 @@ public static class KingdomFoundry
         // 2_16 步骤7 D305：开局汇总播报一条，不逐国刷屏（点击展开列国名单归 2_13）
         if (ToastManager.Instance != null)
             ToastManager.Instance.Show($"本大陆已有 {registry.Count} 国并存");
+    }
+
+    // ===== 2_17 步骤3 实体化：首代 AI 实体工人 =====
+
+    /// <summary>
+    /// 直出首代实体工人（裁①实体化过渡态：台账+实体双写）。
+    /// index 均布确定取点、不消耗 rng 流 → 同 seed 逐字节一致（2b ③-a 确定性，见 WorkerCell）。
+    /// 守卫已就位：选中/人口台账均 kingdomId 过滤、任务路由池隔离、水井/怪袭仅玩家建筑（kingdomId==0）→ AI 工人安全出场。
+    /// 步骤4 人口系统 per-kingdom 时，台账转派生统计、实体=唯一真源（防止双真源漂移）。
+    /// </summary>
+    private static void SpawnAiWorkers(MapData map, Vector2Int spawn, int count, int kingdomId)
+    {
+        if (UnitFactory.Instance == null || count <= 0) return;
+        int placed = 0;
+        var grid = GridSystem.Instance;
+        for (int k = 0; k < count; k++)
+        {
+            Vector2Int cell = WorkerCell(map, spawn, k);
+            Vector3 world = (grid != null && grid.Config != null)
+                ? (Vector3)grid.CoordToWorld(new GridCoord(cell.x, cell.y))
+                : new Vector3(cell.x, cell.y, 0f);
+            if (UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Worker, world, kingdomId) != null)
+                placed++;
+        }
+        if (placed > 0)
+            Debug.Log($"[KingdomFoundry] 王国(kingdomId={kingdomId}) 实体化工人 {placed}/{count}（台账已双写，2_17 步骤3）。");
+    }
+
+    /// <summary>首代工人确定取点：出生点 + index 均布环（足迹=1 独占格，spiral 展开；不消耗 rng 流，同 seed 一致）。</summary>
+    private static Vector2Int WorkerCell(MapData map, Vector2Int spawn, int index)
+    {
+        if (index == 0) return MapGenRules.NearestWalkable(map, spawn.x, spawn.y);
+        int r = 1 + (index - 1) / 8;              // 环半径（每环 8 方位，逐环外扩、不重叠）
+        int slot = (index - 1) % 8;               // 0E 1SE 2N 3SW 4W 5NW 6S 7NE（方位位次固定）
+        int x = spawn.x, y = spawn.y;
+        switch (slot)
+        {
+            case 0: x += r; break;
+            case 1: x += r; y += r; break;
+            case 2: y += r; break;
+            case 3: x -= r; y += r; break;
+            case 4: x -= r; break;
+            case 5: x -= r; y -= r; break;
+            case 6: y -= r; break;
+            default: x += r; y -= r; break;        // case 7: NE
+        }
+        return MapGenRules.NearestWalkable(map, x, y);
     }
 
     // ===== 建筑预置 =====

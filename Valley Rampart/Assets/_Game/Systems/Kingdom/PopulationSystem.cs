@@ -95,6 +95,9 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         if (unit == null || unit.Data == null) return false;
         if (unit.Data.faction != Faction.Human_Player) return false;
         if (!unit.IsAlive) return false;
+        // 2_17 步骤3 双条件过滤（守门员）：kingdomId>0 为 AI 王国工人（含动态立国实体），不得计入玩家人口台账。
+        // 仅有 faction==Human_Player 不够——流浪汉(kingdomId=0,待招募)与外籍工人需以 kingdomId 区分（判双条件铁律）。
+        if (unit.kingdomId > 0) return false;
         return IsPopulationOccupation(unit.EffectiveOccupation);
     }
 
