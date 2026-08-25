@@ -85,6 +85,8 @@ public class KingdomFoundingConfig : ScriptableObject
     public Vector3 gatherScoreWeights = new Vector3(1f, 1f, 1f);
     [Tooltip("聚集地候选集刷新间隔（秒，防每帧扫描；对齐 10~20s 锚点刷新惯例）")]
     public float gatherCandidateRefreshSeconds = 15f;
+    [Tooltip("聚集地评分影响半径（格）：资源/食物邻近分衰减到 0 的半径上限，距离越近分越高")]
+    public float gatherInfluenceRadiusCells = 8f;
 
     /// <summary>按地图档位取 AI 数量区间（D288；worldSize 转档）。</summary>
     public Vector2Int GetAiCountRange(WorldSize size)
