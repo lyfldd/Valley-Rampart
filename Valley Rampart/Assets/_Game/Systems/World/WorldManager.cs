@@ -94,7 +94,12 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     // ========================================================================
 
     /// <summary>生成世界。当前装配全 Plain 空地形（2_1 重写生成算法）。</summary>
-    void GenerateWorld(int worldSeed, WorldSize size, int difficulty)
+    /// <param name="instantiateBuildings">
+    /// 是否在本方法内实例化自然建筑 + 主城（路径 A）。
+    /// 新建游戏/legacy 读档 = true；v2 读档 = false（由 BuildingFactory.SpawnFromSave 全权重建，避免 A/B 双路径双份）。
+    /// </param>
+    /// <param name="foundKingdoms">显式门控（根因二）：仅新游戏=true；读档=false（王国由存档恢复，不重立）。</param>
+    void GenerateWorld(int worldSeed, WorldSize size, int difficulty, bool instantiateBuildings = true, bool foundKingdoms = true)
     {
         // 清理旧建筑对象（重新生成地图时销毁残留）
         if (BuildingFactory.Instance != null)
@@ -111,14 +116,16 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             activeMapId = 0
         };
 
-        var playerMap = GenerateMap(worldSeed, mapId: 0, size, difficulty);
+        var playerMap = GenerateMap(worldSeed, mapId: 0, size, difficulty, foundKingdoms);
         _world.maps.Add(playerMap);
 
         // 填充网格 + 实例化自然建筑/主城（2_2）+ 发布事件（单图初始化）
+        // 读档 v2 路径下跳过实例化（instantiateBuildings=false），避免与 B(SpawnFromSave) 双路径双份；网格映射仍保留。
         if (GridSystem.Instance != null)
             GridSystem.Instance.PopulateFromMap(playerMap);
-        if (BuildingFactory.Instance != null)
+        if (instantiateBuildings && BuildingFactory.Instance != null)
             BuildingFactory.Instance.InstantiateFromMap(playerMap);
+        // MapGeneratedEvent 必须照常发（MapRenderService.RenderMap 渲染依赖，不发=读档白屏回归）
         EventBus.Publish(new MapGeneratedEvent(0, true));
 
         Debug.Log($"[WorldManager] 世界已装配（2D 骨架）: seed={worldSeed}, size={size}, " +
@@ -129,7 +136,13 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     /// 生成一张 2D 地图（2_1 §5.2 六步管线，全程 System.Random(seed) 确定性）。
     /// features 唯一功能源；terrain/walkFlags 由 GridSystem.PopulateFromMap 派生。
     /// </summary>
-    MapData GenerateMap(int seed, int mapId, WorldSize size, int difficulty)
+    /// <param name="foundKingdoms">
+    /// 显式门控（读档建筑双份修复 根因二）：仅新游戏=true，读档=false。
+    /// 第一代立国（FoundFirstGeneration）只在新建时跑一次；读档由 KingdomRegistry.LoadState 恢复王国，
+    /// 若再立国会用确定性坐标把 AI 建筑叠回原格 → k4/k5/k6 同格双份。不用启发式（如 "Registry.Count>1 则跳过"）——
+    /// 那依赖读档时序且对"0 AI 王国存档"会误判复跑。不改新游戏默认（true）以保 rng 链/canonical 回归。
+    /// </param>
+    MapData GenerateMap(int seed, int mapId, WorldSize size, int difficulty, bool foundKingdoms = true)
     {
         int width = _mapSizeConfig != null ? _mapSizeConfig.GetWidth(size) : 256;
         int height = _mapSizeConfig != null ? _mapSizeConfig.GetHeight(size) : 256;
@@ -168,7 +181,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
 
         // 2_16 步骤5：第一代立国——消费 spawns[1..N]+kingdomTemplates（步骤3 已抽模板/放置），
         // 注册 AI 王国 + 错峰档预置建筑/人口台账/起始国库，发布立国事件。同 rng 链保确定性。
-        KingdomFoundry.FoundFirstGeneration(rng, map, difficulty);               // 2_16 步骤5
+        // 显式门控：仅新游戏立国（foundKingdoms=true）；读档由存档恢复王国，不重立（根因二）。
+        if (foundKingdoms)
+            KingdomFoundry.FoundFirstGeneration(rng, map, difficulty);               // 2_16 步骤5
 
         // HH.10：新地图/读档 → 清空全资源刷新重生记录（禁跨图残留幽灵坐标）
         if (ResourceRespawnSystem.HasInstance) ResourceRespawnSystem.Instance.ResetRespawns();
@@ -315,7 +330,11 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         Difficulty = difficulty;
 
         // 用 seed 重新生成世界（确定性 → 网格复现）
-        GenerateWorld(worldSeed, worldSize, difficulty);
+        // 版本门控（读档建筑双份修复）：v2 新档走新路径——跳过 A 的建筑实例化，由 B(SpawnFromSave)
+        // 全权重建（带正确 kingdomId/血量/等级，旧存档 GUID）；v1 旧档走 legacy = A+B 双份现状（已知可容忍）。
+        bool instantiateBuildings = SaveManager.Instance == null || SaveManager.Instance.LastLoadedSaveVersion < 2;
+        // 根因二：读档不重立第一代 AI 王国（王国由 KingdomRegistry.LoadState 从存档恢复，重立会叠格双份）。
+        GenerateWorld(worldSeed, worldSize, difficulty, instantiateBuildings, foundKingdoms: false);
 
         if (data.activeMapId >= 0 && _world.maps.Any(m => m.mapId == data.activeMapId))
             _world.activeMapId = data.activeMapId;

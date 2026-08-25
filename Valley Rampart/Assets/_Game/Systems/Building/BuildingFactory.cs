@@ -342,6 +342,22 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         if (def.sourceType == BuildingType.CastleCore && state == BuildingState.Abandoned)
             state = BuildingState.Active;   // 主城修复后读档不应回到废墟（castoeLevel≥1）
 
+        // 响亮断言（读档建筑双份修复，替代"网格已有 occupant 则保留"方案）：
+        // 若目标格已有 Building 占用，说明 A(InstantiateFromMap) 与 B(SpawnFromSave) 双路径在此双份——
+        // 且该格上通常是 A 的新随机 GUID + 默认 kingdomId，保留它会静默数据腐坏（归属错 + 传送门排除集污染）。
+        // 此处不跳过、不吞，仅响亮报错把"存→读→再存→再读"的复合腐坏链暴露出来。
+        // 范围只查 Building，Portal/Chest 同为 IGridOccupant 但不在此列（防误报）。
+        if (GridSystem.Instance != null)
+        {
+            var occupied = GridSystem.Instance.GetOccupant(coord) as Building;
+            if (occupied != null)
+            {
+                Debug.LogError($"[BuildingFactory] SpawnFromSave 冲突：coord=({coord.x},{coord.y}) 已有 Building " +
+                               $"saveId={occupied.SaveId}（疑似路径 A 新随机 GUID+默认 kingdomId），" +
+                               $"存档侧 saveId={entry.saveId}，defId={data.defId}。双路径双份/复合腐坏风险——请核查读档建筑重建路径。");
+            }
+        }
+
         bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, fp, worldPos,
                                          isPlayerBuilt: true, (ResourceGrade)data.grade, false, state,
                                          kingdomId: ReadArchiveKingdomId((BuildingType)data.sourceType, data.kingdomId));

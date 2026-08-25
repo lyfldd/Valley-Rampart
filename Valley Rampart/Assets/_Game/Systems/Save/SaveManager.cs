@@ -10,7 +10,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-90)]
 public class SaveManager : Singleton<SaveManager>
 {
-    private const int CurrentSaveVersion = 1;
+    private const int CurrentSaveVersion = 2;
     private const string SaveFolderName = "Saves";
     private const string SaveFileExtension = ".json";
 
@@ -24,6 +24,9 @@ public class SaveManager : Singleton<SaveManager>
 
     /// <summary>当前活跃槽位（NewGame 时设为 selectedSlotId，ContinueGame 时设为 LoadSlotId）。</summary>
     public string CurrentSlotId { get; private set; }
+
+    /// <summary>最后一次加载的存档 saveVersion。读档路径用于版本门控（v2 起读档跳过建筑 A 实例化，改由 B 全权重建）。</summary>
+    public int LastLoadedSaveVersion { get; private set; }
 
     public bool AutoSaveEnabled { get; set; } = true;
     public int AutoSaveIntervalDays { get; set; } = 1;   // 3.5 P0-7：每日自动存档
@@ -316,6 +319,9 @@ public class SaveManager : Singleton<SaveManager>
             // 修复点：旧逻辑先设 CurrentSlotId 再校验，读档失败进 GameOver 时 MarkCurrentSaveFinished
             // 会把高版本存档永久打死档（换新版本也读不了）。改为校验通过后再设，拒绝的存档不被标记结束。
             CurrentSlotId = slotId;
+
+            // 版本门控依据：在 Global 分发（WorldManager.LoadState 重建世界）前记录本次存档版本
+            LastLoadedSaveVersion = root.saveVersion;
 
             // 阶段 1: 全局模块恢复
             DistributePayloads(root.modules, SaveLoadPhase.Global);
