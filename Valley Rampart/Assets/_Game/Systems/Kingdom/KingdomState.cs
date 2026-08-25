@@ -47,4 +47,63 @@ public class KingdomState
         if (personality == null || axis < 0 || axis >= personality.Length) return 0.5f;
         return personality[axis];
     }
+
+    // ===== 国库真源读 API（2_17 步骤 2a：KingdomState.resources 转正为 AI 国库台账）
+    // 2_17 §〇 追记② 裁 B：AI 经济=台账制（与 P0 人口台账同哲学），独立于 RulerController/WarehouseRegistry/
+    // TreasureVault（玩家物流专用）。语义镜像 PlayerRuler.CanAfford/Spend/Refund（弹药不参与造价，仅五经济资源）。
+    // 2_17 前 AI 无脑不消费，本 API 由王国脑（步骤 8+）消费；确定性、无事件发布（台账制）。
+
+    /// <summary>是否负担得起该资源包（五经济资源全部满足，原子校验）。弹药不参与。AI/动态王国国库查询。</summary>
+    public bool CanAfford(ResourcePack cost)
+    {
+        return resources.gold >= cost.gold
+            && resources.stone >= cost.stone
+            && resources.wood >= cost.wood
+            && resources.food >= cost.food
+            && resources.metal >= cost.metal;
+    }
+
+    /// <summary>按类型读取国库某资源（军工/需求强度缺口函数消费）。</summary>
+    public int GetResourceValue(ResourceType type)
+    {
+        switch (type)
+        {
+            case ResourceType.Gold: return resources.gold;
+            case ResourceType.Stone: return resources.stone;
+            case ResourceType.Wood: return resources.wood;
+            case ResourceType.Food: return resources.food;
+            case ResourceType.Metal: return resources.metal;
+            default: return 0;
+        }
+    }
+
+    /// <summary>扣除资源包（调用前需先 CanAfford；台账制直接减字段，不进玩家事件链）。</summary>
+    public void Spend(ResourcePack cost)
+    {
+        resources.gold -= cost.gold;
+        resources.stone -= cost.stone;
+        resources.wood -= cost.wood;
+        resources.food -= cost.food;
+        resources.metal -= cost.metal;
+    }
+
+    /// <summary>按比例退还资源包（拆除退款 ratio=0.5 等；metal 随比退还，不静默丢铁）。</summary>
+    public void Refund(ResourcePack cost, float ratio = 1.0f)
+    {
+        resources.gold += Mathf.RoundToInt(cost.gold * ratio);
+        resources.stone += Mathf.RoundToInt(cost.stone * ratio);
+        resources.wood += Mathf.RoundToInt(cost.wood * ratio);
+        resources.food += Mathf.RoundToInt(cost.food * ratio);
+        resources.metal += Mathf.RoundToInt(cost.metal * ratio);
+    }
+
+    /// <summary>国库入账（产出/采集入台账；加总）。</summary>
+    public void AddResources(ResourcePack gain)
+    {
+        resources.gold += gain.gold;
+        resources.stone += gain.stone;
+        resources.wood += gain.wood;
+        resources.food += gain.food;
+        resources.metal += gain.metal;
+    }
 }
