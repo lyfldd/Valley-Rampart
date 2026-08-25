@@ -10,16 +10,29 @@ using UnityEngine;
 /// 营地↔流浪汉为半径关联（campVagrantRadiusCells），不持久化映射。
 /// 抵达入册为自愈式扫描（IsVagrantRecruited 且未入册 + 抵达锚点半径），读档后自动重建，无需 pending 列表。
 /// </summary>
-public class VagrantCampSystem : Singleton<VagrantCampSystem>
+public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
 {
     private const string CAMP_DEF_ID = "VagrantCamp";
     private const float ARRIVE_SCAN_INTERVAL = 0.5f;   // 抵达扫描节流（秒）
     private const float RECRUIT_TASK_EXPIRY = 120f;    // 走回任务刺激有效期（秒）
     private const float RECRUIT_TASK_INTENSITY = 3f;   // 任务刺激强度
+    private const float CAMP_SCAN_INTERVAL = 3f;       // 营地结营/散营扫描节流（秒，2_16 步骤9）
+
+    /// <summary>结营阈值：营地半径内 ≥3 未招募流浪汉 → 结营（D301 占位；步骤11 统一落 FoundingConfig）。</summary>
+    private const int CAMP_ESTABLISH_THRESHOLD = 3;
+    /// <summary>散营人数下限：存续成员 &lt;2 → 散营（D387 修订，滞回带 [2,3) 防抖动；杀散才是真正阻止）。</summary>
+    private const int CAMP_DISPERSAL_THRESHOLD = 2;
 
     private KingdomConfig _config;
     private float _arriveScanTimer;
+    private float _campScanTimer;
     private bool _mapReady;
+
+    /// <summary>当前活跃营地聚落记录（2_16 步骤9）。</summary>
+    private readonly List<Camp> _camps = new List<Camp>();
+
+    /// <summary>读档还原的营地种子（centerCell/persistenceDays），ScanCamps 自愈重建关联（成员/建筑标识不入档）。</summary>
+    private List<Camp> _restoredCampSeeds;
 
     /// <summary>运行期随机源（每日补员等非世界生成的玩法随机，R4 确定性纪律：世界生成走 System.Random(seed) 派生，本字段仅供 gameplay 随机）。</summary>
     private readonly System.Random _runRng = new System.Random();
@@ -28,6 +41,8 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
     {
         base.Awake();
         _config = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        if (_instance != this) return;
+        SaveManager.Instance?.RegisterSaveable(this);   // 2_16 步骤9：营地存续计数入档（对齐 Building.Awake 注册惯例）
     }
 
     KingdomConfig GetCfg()
@@ -96,6 +111,8 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         }
         if (spawned > 0)
             Debug.Log($"[VagrantCampSystem] 每日补员: +{spawned} 流浪汉");
+
+        TickCampPersistence();   // 2_16 步骤9 D313：营地存续日 +1（驱散/屠杀不清零，干预=拖延）
     }
 
     /// <summary>当前是否招募得起（粮 ≥ recruitFoodCost）。点击交互 CanTrigger 用（3.5.1 §6.3：无粮回落对话）。</summary>
@@ -150,8 +167,23 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
     {
         if (!_mapReady) return;
         _arriveScanTimer += Time.deltaTime;
-        if (_arriveScanTimer < ARRIVE_SCAN_INTERVAL) return;
-        _arriveScanTimer = 0f;
+        if (_arriveScanTimer >= ARRIVE_SCAN_INTERVAL)
+        {
+            _arriveScanTimer = 0f;
+            ScanArrive();
+        }
+
+        // 2_16 步骤9：营地结营/散营扫描（独立节流；成员表自愈刷新，读档后靠此重建关联）
+        _campScanTimer += Time.deltaTime;
+        if (_campScanTimer >= CAMP_SCAN_INTERVAL)
+        {
+            _campScanTimer = 0f;
+            ScanCamps();
+        }
+    }
+
+    void ScanArrive()
+    {
 
         var cfg = GetCfg();
         var pop = PopulationSystem.Instance;
@@ -280,4 +312,181 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>
         float cs = 2.26f;
         return new Vector2(cell.x * cs, cell.y * cs);
     }
+
+    // ===== 2_16 步骤9：营地聚落运行时数据（D301 结营 / D313 存续不清零 / D387 散营滞回带）=====
+
+    /// <summary>日 tick：活跃营地存续日 +1（D313：驱散不清零，只增不重置）。</summary>
+    void TickCampPersistence()
+    {
+        if (_camps.Count == 0) return;
+        for (int i = 0; i < _camps.Count; i++) _camps[i].persistenceDays++;
+    }
+
+    /// <summary>
+    /// 营地扫描：①未结营建筑半径 ≥3 → 结营建记录；②已结营建筑刷新成员，存续成员 &lt;2 → 散营移除记录（建筑保留）；
+    /// ③读档种子经 centerCell 匹配建筑自愈重建（成员/建筑标识不入档，先扫先建、无建筑则弃=散营）。
+    /// </summary>
+    void ScanCamps()
+    {
+        var cfg = GetCfg();
+        var grid = GridSystem.Instance;
+        if (cfg == null || grid == null || grid.Config == null || BuildingRegistry.Instance == null) return;
+
+        var camps = FindCamps();
+        foreach (var b in camps)
+        {
+            if (b == null) continue;
+            var cell = grid.WorldToCoord(b.GetPosition());
+            if (cell == null) continue;
+            int idx = _camps.FindIndex(c => c.centerCell.x == cell.Value.x && c.centerCell.y == cell.Value.y);
+            bool established = idx >= 0;
+            int count = CountVagrantsNear(b.GetPosition(), cfg.campVagrantRadiusCells);
+
+            if (!established)
+            {
+                if (count >= CAMP_ESTABLISH_THRESHOLD)
+                {
+                    var camp = new Camp(cell.Value, b.GetInstanceID())
+                    {
+                        memberIds = CollectMembers(b.GetPosition(), cfg)
+                    };
+                    _camps.Add(camp);
+                    Debug.Log($"[VagrantCampSystem] 结营 @ ({cell.Value.x},{cell.Value.y})：{count} 名流浪汉，存续从 0 起");
+                }
+            }
+            else
+            {
+                var c = _camps[idx];
+                c.memberIds = CollectMembers(b.GetPosition(), cfg);   // 成员表自愈刷新
+                if (c.memberIds.Count < CAMP_DISPERSAL_THRESHOLD)
+                {
+                    _camps.RemoveAt(idx);
+                    Debug.Log($"[VagrantCampSystem] 散营 @ ({cell.Value.x},{cell.Value.y})：存续成员 {c.memberIds.Count} &lt; {CAMP_DISPERSAL_THRESHOLD}，营地建筑保留");
+                }
+            }
+        }
+
+        // 读档种子重建（centerCell 匹配；无匹配建筑 → 丢弃）
+        if (_restoredCampSeeds != null && _restoredCampSeeds.Count > 0)
+        {
+            int n = _restoredCampSeeds.Count;
+            for (int i = n - 1; i >= 0; i--)
+            {
+                var seed = _restoredCampSeeds[i];
+                bool matched = false;
+                foreach (var b in camps)
+                {
+                    if (b == null) continue;
+                    var cell = grid.WorldToCoord(b.GetPosition());
+                    if (cell == null) continue;
+                    if (cell.Value.x == seed.centerCell.x && cell.Value.y == seed.centerCell.y)
+                    {
+                        if (!_camps.Exists(c => c.centerCell.x == cell.Value.x && c.centerCell.y == cell.Value.y))
+                        {
+                            _camps.Add(new Camp(seed.centerCell, b.GetInstanceID())
+                            {
+                                persistenceDays = seed.persistenceDays,
+                                memberIds = CollectMembers(b.GetPosition(), cfg)
+                            });
+                            Debug.Log($"[VagrantCampSystem] 读档重建营地 @ ({seed.centerCell.x},{seed.centerCell.y})：存续 {seed.persistenceDays} 日");
+                        }
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched)
+                    Debug.Log($"[VagrantCampSystem] 读档丢弃营地种子 @ ({seed.centerCell.x},{seed.centerCell.y})：无匹配建筑（散营）");
+                _restoredCampSeeds.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>收集营地半径内未招募流浪汉 npcId（成员表，每 tick 扫描刷新，幂等自愈）。</summary>
+    List<int> CollectMembers(Vector2 center, KingdomConfig cfg)
+    {
+        var members = new List<int>();
+        var grid = GridSystem.Instance;
+        if (grid == null || grid.Config == null || UnitRegistry.Instance == null) return members;
+        float rw = cfg.campVagrantRadiusCells * grid.Config.cellSize.x;
+        foreach (var uc in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (uc == null || !uc.IsAlive || uc.EffectiveOccupation != Occupation.Vagrant || uc.IsVagrantRecruited) continue;
+            if (Vector2.Distance((Vector2)uc.transform.position, center) <= rw) members.Add(uc.npcId);
+        }
+        return members;
+    }
+
+    /// <summary>当前营地聚落记录数（调试/冒烟查询）。</summary>
+    public int CampCount => _camps.Count;
+
+    /// <summary>强制立即营地扫描（冒烟验收钩子，确定性地驱动结营/散营，避免依赖 Update 节流时序）。</summary>
+    public void ForceCampScan() => ScanCamps();
+
+    /// <summary>营地聚落调试摘要（中心格/存续日/成员数），供冒烟验收取证。</summary>
+    public string DumpCamps()
+    {
+        if (_camps.Count == 0) return "[0 营地]";
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in _camps)
+            sb.Append($"({c.centerCell.x},{c.centerCell.y})pd={c.persistenceDays}mem={c.memberIds.Count} ");
+        return $"[{_camps.Count} 营地] {sb.ToString().TrimEnd()}";
+    }
+
+    // ===== 2_16 步骤9 ISaveable：只有 persistenceDays/centerCell 入档（设计 §1.1"Camp 存续计数"）=====
+
+    public string SaveId => "VagrantCampSystem";
+    /// <summary>Scene：营地建筑按存档在场景恢复后，由 ScanCamps 自愈重建关联。</summary>
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Scene;
+
+    public SavePayload SaveState()
+    {
+        var data = new CampListSaveData { camps = new List<CampEntrySaveData>(_camps.Count) };
+        for (int i = 0; i < _camps.Count; i++)
+        {
+            var c = _camps[i];
+            data.camps.Add(new CampEntrySaveData
+            {
+                cellX = c.centerCell.x,
+                cellY = c.centerCell.y,
+                persistenceDays = c.persistenceDays
+            });
+        }
+        return new SavePayload
+        {
+            typeName = typeof(CampListSaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(CampListSaveData).AssemblyQualifiedName) return;
+        var data = JsonUtility.FromJson<CampListSaveData>(payload.json);
+        _restoredCampSeeds = new List<Camp>();
+        if (data.camps != null)
+        {
+            foreach (var e in data.camps)
+                _restoredCampSeeds.Add(new Camp(new GridCoord(e.cellX, e.cellY), -1) { persistenceDays = e.persistenceDays });
+        }
+        // 读档即世界已就绪：恢复营地扫描/补员（对齐 OnNewGameMapReady 置位）
+        _mapReady = true;
+        Debug.Log($"[VagrantCampSystem] 读档准备恢复营地 {_restoredCampSeeds.Count} 条（ScanCamps 自愈重建关联）");
+    }
+}
+
+/// <summary>营地存续列表存档（2_16 步骤9；只持久化存续计数与中心格，成员表读档后扫描重建）。</summary>
+[System.Serializable]
+public struct CampListSaveData
+{
+    public List<CampEntrySaveData> camps;
+}
+
+/// <summary>单营地存档条目。</summary>
+[System.Serializable]
+public struct CampEntrySaveData
+{
+    public int cellX;
+    public int cellY;
+    public int persistenceDays;
 }
