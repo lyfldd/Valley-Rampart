@@ -71,6 +71,7 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.Data.faction != Faction.Human_Player) continue;
+            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不吃玩家国库粮/不拉低均饱食(步骤10 退役)
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             sum += unit.Satiety;
             count++;
@@ -91,6 +92,7 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.Data.faction != Faction.Human_Player) continue;
+            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不参与玩家每日饱食结算/国库进食(步骤10 退役)
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             if (!unit.IsAlive) continue;
 
