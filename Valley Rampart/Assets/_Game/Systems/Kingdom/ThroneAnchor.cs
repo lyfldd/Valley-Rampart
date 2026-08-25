@@ -38,6 +38,7 @@ public class ThroneAnchor : MonoBehaviour
         foreach (var u in UnitRegistry.Instance.GetAllUnits())
         {
             if (u == null || !u.IsAlive) continue;
+            if (u.kingdomId != 0) continue;   // 2_17 步骤4：玩家 GameOver 只统计玩家(桶0)实体——防 AI 工人虚增保命
             var occ = u.EffectiveOccupation;
             if (occ == Occupation.Worker || occ == Occupation.Civilian)
                 return true;
@@ -45,7 +46,7 @@ public class ThroneAnchor : MonoBehaviour
         return false;
     }
 
-    /// <summary>存活工人数（调试/UI 用）。</summary>
+    /// <summary>存活工人数（调试/UI 用；仅玩家桶0）。</summary>
     public int AliveWorkerCount()
     {
         if (UnitRegistry.Instance == null) return 0;
@@ -53,6 +54,7 @@ public class ThroneAnchor : MonoBehaviour
         foreach (var u in UnitRegistry.Instance.GetAllUnits())
         {
             if (u == null || !u.IsAlive) continue;
+            if (u.kingdomId != 0) continue;   // 2_17 步骤4：仅玩家桶0，防 AI 工人计入玩家存活工人
             var occ = u.EffectiveOccupation;
             if (occ == Occupation.Worker || occ == Occupation.Civilian) count++;
         }

@@ -5,13 +5,13 @@ using UnityEngine;
 //  王国立国/出生服务（2_16 步骤5，D284/D290/D293/D304/D309/D310/D315）
 //  FoundFirstGeneration：第一代立国核心——
 //    消费 map.kingdomTemplates[1..N]（步骤3 已放置出生点并抽模板，放置/立国同模板保确定性）
-//    → 按错峰档预置建筑 + 人口台账 + 起始国库账本 → Registry 注册 → 播报事件（步骤7 汇总一条）。
+//    → 按错峰档预置建筑 + 直出实体工人 + 起始国库账本 → Registry 注册 → 播报事件（步骤7 汇总一条）。
 //  挂载点：WorldManager.GenerateMap 末尾（步骤3 同 rng 派生链，确定性）。
 //
-//  已知偏差（执行端判断，§二 跨片登记）：
-//    - 人口以 KingdomState 台账计数落 workerCount/warriorCount，不实例化单位实体——
-//      Faction 枚举无 AI 王国专属阵营（仅 None/Human_Player/Undead），实例化 Human_Player 单位
-//      会被 PopulationSystem/HappinessSystem 计入玩家人口污染玩家指标；2_17 引入 AI 阵营后补实体。
+//  人口口径（2_17 步骤3/4）：
+//    - 步骤3 实体化：直出首代实体工人（Faction.Human_Player + kingdomId>0 冒充态，靠 kingdomId 守卫隔离）。
+//    - 步骤4 台账转派生：workerCount/warriorCount 由 KingdomState 对实体按 kingdomId 派生（实体=唯一真源），
+//      Foundry 不再手写台账——此处档位 workerCount 仅作生成指令数。AI 工人不入玩家人口（双条件守卫）。
 //    - AI 王座只放 castle 建筑（带 kingdomId），不挂 ThroneAnchor 组件——ThroneAnchor 是全局单例，
 //      多王国同挂会覆写玩家王座锚；AI 灭亡判定归 2_19（届时 ThroneAnchor 改 per-kingdom）。
 //    - 围墙环（困难档 D304）：最小矩形环 + 1 城门缺口；遇阻挡格跳段自然缺口（不强制填平）。
@@ -54,13 +54,12 @@ public static class KingdomFoundry
             state.personality = Perturb(rng, tpl.GetPersonalityArray(),
                 cfg.firstGenPerturbation, cfg.personalityClampMin, cfg.personalityClampMax);
 
-            // 人口台账（步骤4 人口系统 per-kingdom 时台账转派生统计、实体=唯一真源；此处为过渡态双写）
-            state.workerCount = Mathf.Max(0, tier.workerCount);
-            state.warriorCount = Mathf.Max(0, tier.warriorCount);
-
-            // 2_17 步骤3 实体化（裁①）：台账+实体双写——直出首代实体工人（收入侧前提，AI 真产出）。
+            // 2_17 步骤3 实体化（裁①）+ 步骤4 台账转派生（①真源演进）：
+            // 工人/战士直出实体，workerCount/warriorCount 不再手写台账——由 KingdomState 属性对实体按 kingdomId 派生
+            // （实体=唯一真源）。此处 spawnWorkerCount 仅作档位生成指令，不写入台账。
             // 守卫已就位：选中/人口台账均 kingdomId 过滤、任务路由池隔离、怪物仅袭玩家建筑（kingdomId==0）→ AI 工人安全出场。
-            SpawnAiWorkers(map, map.kingdomSpawns[i], state.workerCount, state.id);
+            int spawnWorkerCount = Mathf.Max(0, tier.workerCount);
+            SpawnAiWorkers(map, map.kingdomSpawns[i], spawnWorkerCount, state.id);
 
             // 起始国库过渡账本（AI 2_17 前无脑不消费，零风险；ResourcePack 为 struct 无需判空）
             state.resources = tier.stockpile;
@@ -321,8 +320,7 @@ public static class KingdomFoundry
 
         // 转化：流民→工人（人口守恒 D306 出口A，实体还是那批人）
         int converted = ConvertVagrantsToWorkers(camp.memberIds, state.id);
-        state.workerCount = Mathf.Max(0, converted);
-        state.warriorCount = 0;
+        // 2_17 步骤4 台账转派生：转化即实体改职业，workerCount 由 KingdomState 属性对王国实体派生，不再手写台账。
 
         // 营地中心插旗（castle 建筑带 kingdomId；ThroneAnchor 全局单例约束见上方注释）
         PlaceCampCastle(camp, state.id);

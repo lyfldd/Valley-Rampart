@@ -121,6 +121,10 @@ public class MonsterController : UnitController
                     var uc = unit as UnitController;
                     if (uc == null || uc == this || !uc.IsAlive || uc.CurrentHp <= 0) continue;
                     if (uc.GetFaction() != Faction.Human_Player) continue;
+                    // 2_17 步骤4 patch C（③）：单位级盲区守卫——步骤3 实体化的 AI 工人是 Human_Player+kingdomId>0 冒充态，
+                    // 会被怪感知为玩家目标；这里补 kingdomId==0（与建筑 L192 同模式同语义），P0 只袭玩家。
+                    // 步骤10 Faction 收编时随迁移退役（与既有守卫同生命周期）。
+                    if (uc.kingdomId != 0) continue;
                     float d = Vector2.Distance(_rb.position, uc.transform.position);
                     if (d < nearestDist) { nearestDist = d; nearest = uc; }
                 }

@@ -175,9 +175,9 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
                     personality = (e.personality != null && e.personality.Length == 5)
                         ? e.personality : new float[5],
                     templateSourceId = e.templateSourceId,
-                    resources = e.resources,
-                    workerCount = e.workerCount,
-                    warriorCount = e.warriorCount
+                    resources = e.resources
+                    // 2_17 步骤4 台账转派生：workerCount/warriorCount 为实体派生只读属性，不再从存档恢复
+                    // （读档单位 SpawnFromSave 回笼，王国派生统计自动重建）
                 };
                 if (state.IsPlayer) _playerRegistered = true;
                 _kingdoms.Add(state);

@@ -36,10 +36,15 @@ public class KingdomState
     /// <summary>起始国库过渡账本（baseStockpile D300；由 Foundry 步骤5 写入。2_17 步骤2 WarehouseRegistry per-kingdom 迁移吸收前，AI 无脑不消费，零风险）。</summary>
     public ResourcePack resources;
 
-    /// <summary>人口台账（AI 王国无专属 Faction，P0 以台账计数落 worker/warrior 数，不实例化单位，避免污染玩家人口/单位系统；2_17 引入 AI 阵营后补单位实体）。</summary>
-    public int workerCount;
-    /// <summary>人口台账·战士数。</summary>
-    public int warriorCount;
+    // ===== 人口（2_17 步骤4 台账转派生，实体=唯一真源）=====
+    // ①真源演进规则（§〇 追记裁决①）：步骤3 实体化后工人/战士已为实体，步骤4 起由本属性对存活实体
+    // 按 kingdomId 派生，不再由 Foundry 手写台账——防台账与实体双真源漂移（读档双份卡同族教训）。
+    // 玩家=桶0，AI=各自桶；流浪汉领域外不计。原 public int workerCount/warriorCount 字段退役为只读派生。
+
+    /// <summary>人口·工人数（按本王国存活 Worker/Porter/Civilian 实体派生）。</summary>
+    public int workerCount => PopulationSystem.AliveWorkerCount(id);
+    /// <summary>人口·战士数（按本王国存活军事职业实体派生）。</summary>
+    public int warriorCount => PopulationSystem.AliveWarriorCount(id);
 
     /// <summary>读取某轴性格（越界返回 0.5 中性闭合，全无来源基线，D295 占位）。</summary>
     public float GetPersonality(int axis)

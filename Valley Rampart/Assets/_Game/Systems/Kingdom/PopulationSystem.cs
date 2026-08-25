@@ -89,6 +89,46 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         }
     }
 
+    // ===== 2_17 步骤4：per-kingdom 派生统计（台账转派生，实体=唯一真源）=====
+    // ①真源演进规则（§〇 追记裁决①）：Foundry 不再手写 workerCount/warriorCount 台账，
+    // KingdomState.workerCount/warriorCount 改由本系统对实体按 kingdomId 派生——防双真源漂移。
+    // 玩家=桶 0，AI=各自桶；流浪汉（领域外，kingdomId 归属营地并非王国）双条件过滤不误计。
+    // ③附注：步骤3 的 IsPopulationEntity 守卫（kingdomId>0 排除）仍保障玩家 _entities 桶0 不被 AI 实体污染；
+    // 此处派生统计按 kingdomId 明确分桶计数，不与之重复写过滤（派生=读现有注册表/单位，不新增注册）。
+
+    /// <summary>按国派生存活实体计数（排除流浪汉；occs 为空则不限职业）。2_17 步骤4 派生统计核。</summary>
+    public static int CountAliveByKingdom(int kingdomId, params Occupation[] occs)
+    {
+        if (UnitRegistry.Instance == null) return 0;
+        int n = 0;
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (u == null || !u.IsAlive) continue;
+            if (u.kingdomId != kingdomId) continue;
+            var occ = u.EffectiveOccupation;
+            if (occ == Occupation.Vagrant) continue;                 // 流浪汉双条件过滤不误计
+            if (occs != null && occs.Length > 0 && !MatchAny(occs, occ)) continue;
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>按国存活工人数（工人口径=Worker/Porter/Civilian，对齐 ThroneAnchor）。</summary>
+    public static int AliveWorkerCount(int kingdomId) =>
+        CountAliveByKingdom(kingdomId, Occupation.Worker, Occupation.Porter, Occupation.Civilian);
+
+    /// <summary>按国存活战士数（军事职业）。</summary>
+    public static int AliveWarriorCount(int kingdomId) =>
+        CountAliveByKingdom(kingdomId, Occupation.Warrior, Occupation.Archer, Occupation.Mage,
+            Occupation.General, Occupation.Crossbowman, Occupation.HeavyWarrior, Occupation.Bishop,
+            Occupation.ShieldGuard, Occupation.Archmage, Occupation.Cavalry, Occupation.Healer);
+
+    private static bool MatchAny(Occupation[] arr, Occupation o)
+    {
+        for (int i = 0; i < arr.Length; i++) if (arr[i] == o) return true;
+        return false;
+    }
+
     /// <summary>单位是否合格入册（我方 + 存活 + 人口职业）。</summary>
     public static bool IsPopulationEntity(UnitController unit)
     {
