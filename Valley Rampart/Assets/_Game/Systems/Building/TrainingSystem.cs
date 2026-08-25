@@ -34,6 +34,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         public TrainingDef def;
         public int startDay;      // 开始训练的游戏天数（仅训练中条目有效）
         public bool inTraining;   // true=占用槽位训练中；false=排队等待空槽
+        public int kingdomId;     // 2_17 步骤5：所属王国（0=玩家，>0=AI）——队列 per-kingdom 记账（D345 招募入口）
     }
 
     private void Update()
@@ -156,44 +157,40 @@ public class TrainingSystem : Singleton<TrainingSystem>
         return TryTrain(unit, def, FindTrainingBuilding(def.buildingId));
     }
 
-    /// <summary>带训练建筑实例的入队版本（TrainingPanel 传其所属设施，用于槽位管理）。</summary>
-    public bool TryTrain(UnitController unit, TrainingDef def, Building building)
+    /// <summary>
+    /// 带训练建筑实例的入队版本（TrainingPanel 传其所属设施，用于槽位管理）。
+    /// 2_17 步骤5：加 kingdomId（默认 0）——训练队列 per-kingdom，国库扣费/队列记账按王国分桶；
+    /// AI 从自身 KingdomState 国库扣（五经济资源，魔法耗水晶 AI 无库存→不可行），玩家仍走 RulerController。
+    /// </summary>
+    public bool TryTrain(UnitController unit, TrainingDef def, Building building, int kingdomId = 0)
     {
-        if (unit == null || unit.Data == null) return false;
+        if (unit == null || unit.Data == null || building == null) return false;
+        // 梯队队列按建筑实例挂桶；建筑领地决定王国归属，招募侧 kingdomId 与之一致（防跨国训练）
+        int effKingdom = building.kingdomId;
+        if (kingdomId != 0 && kingdomId != effKingdom)
+        {
+            Debug.Log($"[TrainingSystem] 转职失败：招募国 {kingdomId} ≠ 建筑国 {effKingdom}，跨国训练禁止");
+            return false;
+        }
+        if (unit.kingdomId != effKingdom)
+        {
+            Debug.Log($"[TrainingSystem] 转职失败：单位国 {unit.kingdomId} ≠ 建筑国 {effKingdom}，仅训练本国单位");
+            return false;
+        }
         Occupation cur = unit.EffectiveOccupation;
         if (cur != def.fromOccupation)
         {
             Debug.Log($"[TrainingSystem] 转职失败：{cur} ≠ 起始职业 {def.fromOccupation}");
             return false;
         }
-        if (RulerController.Instance == null || RulerController.Instance.Gold < def.costGold)
-        {
-            Debug.Log("[TrainingSystem] 转职失败：金币不足");
-            return false;
-        }
-        // P1：魔法训练额外耗水晶（§10 法师/治疗师 水晶1）
-        if (def.costCrystal > 0 && RulerController.Instance.GetResource(ResourceType.Crystal) < def.costCrystal)
-        {
-            Debug.Log("[TrainingSystem] 转职失败：水晶不足");
-            return false;
-        }
-        // 2_12 步骤8 D132：兵种强化耗铁（重装战士/盾卫/骑兵 costMetal）
-        if (def.costMetal > 0 && RulerController.Instance.GetResource(ResourceType.Metal) < def.costMetal)
-        {
-            Debug.Log("[TrainingSystem] 转职失败：铁不足");
-            return false;
-        }
+        if (!CanPayRecruit(effKingdom, def)) return false;
 
         // P2：将军训练限量（KingdomConfig.generalLimit，§10 将军限量 2 可配置）
         if (def.toOccupation == Occupation.General && !CanTrainGeneral())
             return false;
 
-        // 扣费（训练中断不退还，故入队即扣）
-        RulerController.Instance.ModifyResource(ResourceType.Gold, false, def.costGold);
-        if (def.costCrystal > 0)
-            RulerController.Instance.ModifyResource(ResourceType.Crystal, false, def.costCrystal);
-        if (def.costMetal > 0)
-            RulerController.Instance.ModifyResource(ResourceType.Metal, false, def.costMetal);
+        // 扣费（训练中断不退还，故入队即扣；按王国国库抽象扣）
+        PayRecruit(effKingdom, def);
 
         // 入队列（P1-10）：有空槽立即开始训练，否则排队
         if (!_queues.TryGetValue(building, out var q))
@@ -201,7 +198,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
             q = new TrainingQueue();
             _queues[building] = q;
         }
-        var entry = new TrainingQueueEntry { unit = unit, def = def, inTraining = false };
+        var entry = new TrainingQueueEntry { unit = unit, def = def, inTraining = false, kingdomId = effKingdom };
         q.Entries.Add(entry);
         if (q.ActiveCount < SlotCount(building))
         {
@@ -215,6 +212,54 @@ public class TrainingSystem : Singleton<TrainingSystem>
             Debug.Log($"[TrainingSystem] 训练排队：{def.fromOccupation} → {def.toOccupation}（{def.buildingId}，空槽不足，排队 #{q.Entries.Count}）");
         }
         return true;
+    }
+
+    /// <summary>招募国库抽象校验（2_17 步骤5 per-kingdom）：玩家(0)走 RulerController；AI 走自身 KingdomState 五经济资源。</summary>
+    private bool CanPayRecruit(int kingdomId, TrainingDef def)
+    {
+        if (kingdomId <= 0)
+        {
+            if (RulerController.Instance == null) return false;
+            if (RulerController.Instance.Gold < def.costGold) { Debug.Log("[TrainingSystem] 转职失败：金币不足"); return false; }
+            if (def.costCrystal > 0 && RulerController.Instance.GetResource(ResourceType.Crystal) < def.costCrystal) { Debug.Log("[TrainingSystem] 转职失败：水晶不足"); return false; }
+            if (def.costMetal > 0 && RulerController.Instance.GetResource(ResourceType.Metal) < def.costMetal) { Debug.Log("[TrainingSystem] 转职失败：铁不足"); return false; }
+            return true;
+        }
+        var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        if (ks == null) return false;
+        if (ks.resources.gold < def.costGold) return false;
+        if (def.costMetal > 0 && ks.resources.metal < def.costMetal) return false;
+        if (def.costCrystal > 0) { Debug.Log("[TrainingSystem] AI 国库仅五经济资源无水晶，魔法训练不可行"); return false; }
+        return true;
+    }
+
+    /// <summary>招募扣费（2_17 步骤5 per-kingdom）：玩家走 RulerController；AI 走 KingdomState.Spend（台账制，无事件）。</summary>
+    private void PayRecruit(int kingdomId, TrainingDef def)
+    {
+        if (kingdomId <= 0)
+        {
+            RulerController.Instance.ModifyResource(ResourceType.Gold, false, def.costGold);
+            if (def.costCrystal > 0) RulerController.Instance.ModifyResource(ResourceType.Crystal, false, def.costCrystal);
+            if (def.costMetal > 0) RulerController.Instance.ModifyResource(ResourceType.Metal, false, def.costMetal);
+        }
+        else
+        {
+            var ks = KingdomRegistry.Instance.Get(kingdomId);
+            ks.Spend(new ResourcePack { gold = def.costGold, metal = def.costMetal });
+        }
+    }
+
+    /// <summary>按国在训+排队的条目总数（2_17 步骤5 队列 per-kingdom；D345 招募入口队列视图）。</summary>
+    public int GetKingdomQueueCount(int kingdomId)
+    {
+        int count = 0;
+        foreach (var kv in _queues)
+        {
+            var b = kv.Key;
+            if (b == null || b.kingdomId != kingdomId) continue;
+            count += kv.Value != null ? kv.Value.Entries.Count : 0;
+        }
+        return count;
     }
 
     /// <summary>
