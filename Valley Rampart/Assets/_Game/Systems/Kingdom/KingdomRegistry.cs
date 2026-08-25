@@ -21,8 +21,18 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
     /// <summary>是否已注册玩家（幂等守卫：新建只注册一次，读档走 LoadState 恢复不重复注册）。</summary>
     private bool _playerRegistered;
 
+    /// <summary>全局立国冷却时间戳（2_16 步骤11 D312）：只由动态立国更新。初始值守卫 int.MinValue=未立国过 → 不阻首个动态立国（冷却期不插旗、营地继续生长，到期即立）。入档。</summary>
+    public int lastFoundingDay = int.MinValue;
+
     /// <summary>王国总数（含玩家 id=0）。</summary>
     public int Count => _kingdoms.Count;
+
+    /// <summary>冷却期判定（D312）：lastFoundingDay 未置(初值) 或 距上次立国 ≥ cooldownDays 才允许动态立国。</summary>
+    public bool CanFoundNow(int currentDay, int cooldownDays) =>
+        lastFoundingDay == int.MinValue || (currentDay - lastFoundingDay) >= Mathf.Max(0, cooldownDays);
+
+    /// <summary>标记本次动态立国（更新冷却时间戳，D312：只由动态立国更新）。</summary>
+    public void MarkFounding(int day) => lastFoundingDay = day;
 
     // ===== ISaveable（2_16 步骤8）=====
     public string SaveId => "KingdomRegistry";
@@ -99,6 +109,7 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
         _kingdoms.Clear();
         _playerRegistered = false;
         _nextId = 1;
+        lastFoundingDay = int.MinValue;   // 2_16 步骤11 冷却时间戳随重置清零
     }
 
     // ===== ISaveable：存档 =====
@@ -108,6 +119,7 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
         var data = new KingdomRegistrySaveData
         {
             nextId = _nextId,   // D385：显式入档
+            lastFoundingDay = lastFoundingDay,   // 2_16 步骤11 D312：冷却时间戳入档（与 Camp 存续计数同段）
             kingdoms = new List<KingdomEntryData>(_kingdoms.Count)
         };
         for (int i = 0; i < _kingdoms.Count; i++)
@@ -144,6 +156,11 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
         // D385：nextId 显式恢复（不从存量 max 推导——王国移除后复用已删 id 违反 id 不复用铁律）
         _nextId = data.nextId > 0 ? data.nextId : 1;
 
+        // 2_16 步骤11 D312：冷却时间戳恢复（旧档无此字段 → int 默认 0 → 视为已立国过、距 0 天 ≥冷却；但首个动态立国判定走 CanFoundNow 时仅当 lastFoundingDay==int.MinValue 才放行。
+        // 为兼容旧档让首个动态立国不被旧档冷却误阻，0 视为初值并重置为 int.MinValue——否则新开档首日即立呈现异常。设计 §1.1"立国冷却时间戳"从新档起记。）
+        lastFoundingDay = data.lastFoundingDay;
+        if (lastFoundingDay <= 0) lastFoundingDay = int.MinValue;
+
         if (data.kingdoms != null)
         {
             for (int i = 0; i < data.kingdoms.Count; i++)
@@ -177,6 +194,8 @@ public struct KingdomRegistrySaveData
 {
     /// <summary>下一个待分配 id（D385：跨存档不复用，必须显式入档，严禁从存量 max 推导）。</summary>
     public int nextId;
+    /// <summary>全局立国冷却时间戳（2_16 步骤11 D312；≤0 视为未立国过 → 读档重置 int.MinValue 不阻首个动态立国）。</summary>
+    public int lastFoundingDay;
     /// <summary>王国条目列表（含玩家 id=0）。</summary>
     public List<KingdomEntryData> kingdoms;
 }

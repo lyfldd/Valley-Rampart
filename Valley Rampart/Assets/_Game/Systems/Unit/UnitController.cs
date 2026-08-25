@@ -44,6 +44,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>王国归属 id（0=玩家；AI/动态王国=KingdomRegistry 分配的 id）。2_16 步骤2，随 UnitSaveData 存档恢复。</summary>
     public int kingdomId;
 
+    // ===== 2_16 步骤11 D295/D308：流民来源王国（动态立国性格混合 D295 / 2_19 灭亡流民带原国 id）=====
+    /// <summary>来源王国 id（默认 -1=无来源：预置者/玩家招募者皆此；2_19 灭亡流民带原国 id，供动态立国性格混合）。不入 UnitSaveData（2_19 供给侧落地前占位）。</summary>
+    public int originKingdomId = -1;
+
     // ===== 3.5 P0 步骤4：运行时职业覆盖（转职用，不污染共享 UnitData SO）=====
     private int _runtimeOccupation = -1;   // -1 = 未设置，回退 Data.occupation
     /// <summary>有效职业（优先运行时覆盖，否则 Data.occupation）。</summary>

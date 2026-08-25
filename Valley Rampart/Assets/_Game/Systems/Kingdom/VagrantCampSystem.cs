@@ -419,6 +419,12 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
     /// <summary>当前营地聚落记录数（调试/冒烟查询）。</summary>
     public int CampCount => _camps.Count;
 
+    /// <summary>当前营地聚落记录（只读，2_16 步骤11 CampUpgrader 遍历用）。</summary>
+    public IReadOnlyList<Camp> Camps => _camps;
+
+    /// <summary>移除一条营地记录（2_16 步骤11：动态立国/吞并出口B 后移除，营地建筑保留可再结营）。</summary>
+    public void RemoveCamp(Camp camp) => _camps.Remove(camp);
+
     /// <summary>强制立即营地扫描（冒烟验收钩子，确定性地驱动结营/散营，避免依赖 Update 节流时序）。</summary>
     public void ForceCampScan() => ScanCamps();
 

@@ -236,4 +236,145 @@ public static class KingdomFoundry
         }
         return result;
     }
+
+    // ===== 2_16 步骤11：动态立国（FoundFromCamp + ConvertVagrantsToWorkers + 性格混合 D295）=====
+
+    /// <summary>
+    /// 动态立国（D294/D311/D313/D314/D385）：把已达标营地（CampUpgrader 五条件已通过）转成正国。
+    /// 流程：Registry 注册（id 续号 D385）→ 性格混合（D295）→ 转化流民为工人（统一管线 D306 出口A）→
+    /// 营地中心插旗（castle 建筑带 kingdomId；不生成 ThroneAnchor——P0 全局单例会覆写玩家王座锚，per-kingdom 锚归 2_19）
+    /// 冷却时间戳 MarkFounding（D312）→ 播报"流民在 X 建立新国家"（中性措辞）→ 移除营地记录（建筑保留可再聚）。
+    /// </summary>
+    public static void FoundFromCamp(Camp camp, System.Random rng)
+    {
+        var cfg = Resources.Load<KingdomFoundingConfig>("Config/Kingdoms/KingdomFoundingConfig");
+        var registry = KingdomRegistry.Instance;
+        if (camp == null || registry == null) return;
+        int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
+
+        // 来源国统计（D295/D308：流民 originKingdomId；全无来源 → 中性基线）
+        var source = CollectSourceKingdom(camp, registry);
+
+        string name = source.Item1 != null
+            ? source.Item1.name + "·拓荒新域（D296占位）"
+            : "无主拓荒之地";
+        Color banner = source.Item1 != null ? source.Item1.bannerColor : default;
+
+        var state = registry.RegisterNewKingdom(name, banner, currentDay,
+            templateSourceId: source.Item1 != null ? source.Item1.id : -1);
+
+        // 性格：来源国加权混合 + ±10% 扰动 → clamp（D295；全无来源基线=五轴 0.5 中性）
+        float perturbation = cfg != null ? cfg.dynamicPerturbation : 0.10f;
+        state.personality = BlendPersonality(camp.memberIds, registry, perturbation,
+            cfg != null ? cfg.personalityClampMin : 0.05f, cfg != null ? cfg.personalityClampMax : 0.95f, rng);
+
+        // 转化：流民→工人（人口守恒 D306 出口A，实体还是那批人）
+        int converted = ConvertVagrantsToWorkers(camp.memberIds, state.id);
+        state.workerCount = Mathf.Max(0, converted);
+        state.warriorCount = 0;
+
+        // 营地中心插旗（castle 建筑带 kingdomId；ThroneAnchor 全局单例约束见上方注释）
+        PlaceCampCastle(camp, state.id);
+
+        registry.MarkFounding(currentDay);   // D312 冷却时间戳（只由动态立国更新）
+
+        // 保证 _camps 同步（VagrantCampSystem 持记录，此处告知移除）
+        if (VagrantCampSystem.Instance != null)
+            VagrantCampSystem.Instance.RemoveCamp(camp);
+        camp.foundedFlag = true;
+
+        Debug.Log($"[KingdomFoundry] 动态立国: 「{name}」(id={state.id}) 于营地 ({camp.centerCell.x},{camp.centerCell.y})，" +
+                  $"转化流民 {converted} → 工人, Registry.Count={registry.Count}（含玩家）, 冷却时间戳={currentDay}");
+        if (ToastManager.Instance != null)
+            ToastManager.Instance.Show($"流民在 ({camp.centerCell.x},{camp.centerCell.y}) 建立新国家「{name}」");
+    }
+
+    /// <summary>把营地流民统一转为某王国工人（D306 两出口共用：动态立国出口A / 吞并出口B）。
+    /// SetOccupation(Worker) + kingdomId 标注 + 清流浪态（TaskScheduler 刺激清理 / IsVagrantRecruited/BirthCampPos 复位）；人口守恒（实体还是那批人）。</summary>
+    public static int ConvertVagrantsToWorkers(List<int> memberIds, int kingdomId)
+    {
+        if (memberIds == null || memberIds.Count == 0 || UnitRegistry.Instance == null) return 0;
+        var idSet = new HashSet<int>(memberIds);
+        int converted = 0;
+        foreach (var uc in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (uc == null || !uc.IsAlive || !idSet.Contains(uc.npcId)) continue;
+            if (uc.EffectiveOccupation != Occupation.Vagrant) continue;
+            if (uc.IsVagrantRecruited) continue;
+            uc.SetOccupation(Occupation.Worker);
+            uc.kingdomId = kingdomId;
+            uc.IsVagrantRecruited = true;            // 复位流浪态：不再计入营地/招募扫描
+            uc.BirthCampPos = Vector2.zero;
+            if (TaskScheduler.HasInstance && uc.npcId != 0)
+                TaskScheduler.Instance.AbandonTask(uc.npcId);
+            converted++;
+        }
+        return converted;
+    }
+
+    /// <summary>收集营地成员主导来源王国（出现次数最多的非 -1 originKingdomId；全 -1 返回 null）。</summary>
+    static (KingdomState, int) CollectSourceKingdom(Camp camp, KingdomRegistry registry)
+    {
+        if (camp.memberIds == null || UnitRegistry.Instance == null) return (null, 0);
+        var counts = new Dictionary<int, int>();
+        foreach (var uc in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (uc == null || !camp.memberIds.Contains(uc.npcId) || uc.originKingdomId < 0) continue;
+            counts[uc.originKingdomId] = counts.TryGetValue(uc.originKingdomId, out var c) ? c + 1 : 1;
+        }
+        int bestId = -1, bestN = 0;
+        foreach (var kv in counts) if (kv.Value > bestN) { bestN = kv.Value; bestId = kv.Key; }
+        var st = bestId >= 0 ? registry.Get(bestId) : null;
+        return (st, bestN);
+    }
+
+    /// <summary>性格混合（D295）：来源国加权混合（有来源流民占比）+ 无来源流民按 0.5 中性计入 + ±扰动 → clamp。</summary>
+    static float[] BlendPersonality(List<int> memberIds, KingdomRegistry registry, float perturbation,
+        float clampMin, float clampMax, System.Random rng)
+    {
+        var result = new float[5];
+        if (memberIds == null || memberIds.Count == 0 || UnitRegistry.Instance == null)
+        {
+            for (int i = 0; i < 5; i++) result[i] = 0.5f;   // 空营地基线
+            return result;
+        }
+        var sums = new float[5];
+        int weight = 0;
+        foreach (var uc in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (uc == null || !memberIds.Contains(uc.npcId)) continue;
+            var src = uc.originKingdomId >= 0 ? registry.Get(uc.originKingdomId) : null;
+            for (int i = 0; i < 5; i++)
+                sums[i] += src != null ? src.GetPersonality(i) : 0.5f;   // 无来源按中性计入
+            weight++;
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            float avg = weight > 0 ? sums[i] / weight : 0.5f;
+            float n = avg + (float)((rng.NextDouble() * 2.0 - 1.0) * perturbation);
+            result[i] = Mathf.Clamp(n, clampMin, clampMax);
+        }
+        return result;
+    }
+
+    /// <summary>营地中心插旗：生成 castle 建筑（带新王国 kingdomId）。ThroneAnchor 全局单例约束下不再额外生成锚实体（per-kingdom 锚归 2_19）。</summary>
+    static void PlaceCampCastle(Camp camp, int kingdomId)
+    {
+        if (camp == null || BuildingFactory.Instance == null) return;
+        var def = BuildingFactory.FindDefById("castle");
+        if (def == null) { Debug.LogWarning("[KingdomFoundry] castle def 未找到，跳过营地铁旗建筑。"); return; }
+        var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1,
+                               def.footprint.y > 0 ? def.footprint.y : 1);
+        var coord = camp.centerCell;
+        var grid = GridSystem.Instance;
+        Vector3 world = grid != null && grid.Config != null
+            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
+                                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
+            : new Vector3(coord.x, coord.y, 0f);
+        BuildingFactory.Instance.CreateBuildingInstance(
+            def, def.sourceType, coord, fp, world,
+            isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
+            initialState: BuildingState.Active, kingdomId: kingdomId);
+        Debug.Log($"[KingdomFoundry] 营地 ({coord.x},{coord.y}) 插铁旗 castle 建筑（动态王国 id={kingdomId}）。");
+    }
 }

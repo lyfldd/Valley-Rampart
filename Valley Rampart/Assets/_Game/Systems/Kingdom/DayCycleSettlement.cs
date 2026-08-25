@@ -59,6 +59,9 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         if (VagrantCampSystem.Instance != null)
             VagrantCampSystem.Instance.OnNewDay();
 
+        // 2_16 步骤11：营地晋升调度（五条件动态立国/吞并出口B；必须在营地补员+存续 tick 之后）
+        CampUpgrader.TickAll();
+
         // P1 占位：研究 / 装备 在此追加
 
         // 结算全部完成后发 DaySettledEvent（QQQ.3 B8-2 / LC-G5 / D10）
