@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c77b85ec61b1d64997ff0258ed360ad, type: 3}
+  m_Name: UtilityActionConfig
+  m_EditorClassIdentifier: 
+  actions:
+  - id: 1
+    name: "\u5EFA\u4F4F\u5B85"
+    minStage: 0
+    axis: 1
+    axisWeight: 1
+    need: 0
+    needA: 10
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 2
+    name: "\u5EFA\u4ED3\u5E93"
+    minStage: 0
+    axis: 1
+    axisWeight: 1
+    need: 1
+    needA: 250
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 3
+    name: "\u5EFA\u4EA7\u80FD"
+    minStage: 0
+    axis: 0
+    axisWeight: 1
+    need: 2
+    needA: 8
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 4
+    name: "\u5F3A\u5316\u91C7\u96C6"
+    minStage: 0
+    axis: 1
+    axisWeight: 1
+    need: 3
+    needA: 0
+    needB: 3
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 5
+    name: "\u5C6F\u7CAE"
+    minStage: 1
+    axis: 1
+    axisWeight: 1
+    need: 4
+    needA: 2
+    needB: 1
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 6
+    name: "\u62DB\u5DE5\u4EBA"
+    minStage: 0
+    axis: 3
+    axisWeight: 1
+    need: 5
+    needA: 10
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 13
+    name: "\u91CD\u5EFA"
+    minStage: 0
+    axis: 2
+    axisWeight: 1
+    need: 6
+    needA: 0
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+  - id: 14
+    name: "\u9632\u5FA1\u59FF\u6001"
+    minStage: 0
+    axis: 2
+    axisWeight: 1
+    need: 7
+    needA: 0
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1

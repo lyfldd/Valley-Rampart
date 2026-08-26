@@ -50,12 +50,14 @@ public class KingdomBrain
             return;   // 抽象粒度不在细模拟 tick（P1 步骤14 交给 AbstractEconomySettler）
 
         var cfg = KingdomBrain.LoadConfig();
+        var ucfg = UtilityActionConfig.LoadConfig();
         kingdom.simMode = SimMode.Fine;
 
         var ctx = BuildContext(kingdom, cfg);
         bool upgraded = StageMachine.Tick(ctx, cfg);
         kingdom.scriptPhase = StageMachine.Stage;   // 双向：升级同步 + 保持同步
-        Focus.Update(kingdom, cfg, day);
+        Focus.Update(kingdom, cfg, ucfg, day);      // D322 焦点模型（底线→评分→防抖切换）→ kingdom.focus=行动id
+        ExecuteFocus(kingdom);                      // 焦点下发执行（P0 起步骨架）
 
         if (upgraded)
             Debug.Log($"[KingdomBrain] k{kingdomId} 剧本阶段 → {ScriptStageMachine.Name(StageMachine.Stage)} (Day {day})");
@@ -101,5 +103,34 @@ public class KingdomBrain
     {
         var cfg = Resources.Load<KingdomBrainConfig>("Config/Kingdoms/KingdomBrainConfig");
         return cfg != null ? cfg : ScriptableObject.CreateInstance<KingdomBrainConfig>();
+    }
+
+    /// <summary>
+    /// 焦点下发执行（2_17 步骤9，D345 指令通道执行骨架构图；P0 完整局批次补齐真实派遣——建造选址/招募实体化）。
+    /// 本步先落实焦点契约（kingdom.focus=行动 id 已有），实体派遣留执行口，保证冒烟#19"⑥存活期可执行"在焦点层可测。
+    /// </summary>
+    private void ExecuteFocus(KingdomState kingdom)
+    {
+        switch ((UtilityAction)kingdom.focus)
+        {
+            case UtilityAction.RecruitWorker:
+                // ⑥招工人：存活期防卡死关键路径。P0 批次经 D345 招募通道（王国无业池→居民转工人）。
+                if (kingdom.resources.gold > 0f)
+                    Debug.Log($"[KingdomBrain] k{kingdomId} 焦点=⑥招工人 下发（执行骨架，P0 批次接招募通道）");
+                break;
+            case UtilityAction.BuildHouse:
+            case UtilityAction.BuildWarehouse:
+            case UtilityAction.BuildCapacity:
+            case UtilityAction.BoostHarvest:
+            case UtilityAction.Grain:
+                // 建造/采集类：P0 批次补选址 + BuildController.TryBuild(def, sub, orient, kingdomId)。
+                Debug.Log($"[KingdomBrain] k{kingdomId} 焦点={(UtilityAction)kingdom.focus} 下发（建造骨架，P0 批次接选址）");
+                break;
+            case UtilityAction.Rebuild:
+            case UtilityAction.Defense:
+            case UtilityAction.None:
+            default:
+                break;   // 姿态/占位无实体指令
+        }
     }
 }

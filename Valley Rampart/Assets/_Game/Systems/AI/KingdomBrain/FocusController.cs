@@ -1,31 +1,40 @@
 using UnityEngine;
 
 // ============================================================================
-//  国策焦点 + 常设底线 + 被攻击打断（2_17 步骤8，D322/D340 框架落点）
-//  焦点模型（D322）：每日 1 个国策焦点（无固定时长，被替换才结束）；
-//  **常设底线不被评分**、优先级最高、即时强制（粮<2日→屯粮；被攻击→防御），
-//  无视效用排序、不参与评分。切换有 ≥3 日防抖（focusMinDurationDays）；
-//  事件打断框架（D340）预留：宣战/灾害/主城被围 → 立即重规划（源未落地接口占位，
-//  2_18/2_14 接入；本步只订阅 KingdomAttackedEvent 写被打标记）。
+//  国策焦点（2_17 步骤9，D322 完整焦点模型；步骤8 为骨架版）
+//  每日 1 个国策焦点 = 行动 id（KingdomState.focus，正 int；0=无国策）。
+//  常设底线焦点（⑤屯粮/⑭防御）也是正行动 id，避免负值魔术。
 //
-//  焦点值用 int：<0 = 常设底线焦点（FocusGranary/FocusDefense）；0 = 无国策；
-//  >0 = 步骤9 UtilityAction id（P0 评分器未落地，正 id 暂不产生）。
+//  焦点模型（D322）：
+//    1. 常设底线（触发式不评分、优先级最高、即时强制、跳过防抖）：
+//       粮储<2日消耗→⑤屯粮(FocusGranary)；本土被攻击→⑭防御姿态(FocusDefense)
+//    2. 效用评分：UtilityScorer 对可见候选打分 → LastTop（阶段门控过滤）
+//    3. 焦点切换：最高分≠当前 && 当前已持续≥3日(防抖) → 切换；否则维持
+//    4. 事件打断（D340）：宣战/灾害/主城被围 → 重规划（源未落地，P1 占位）
+//  焦点值全为行动 id：冒烟/诊断统一看 kingdom.focus 与 LastTop。
 // ============================================================================
 
 public class FocusController
 {
-    /// <summary>国策焦点：屯粮（粮储常设底线强制，D322）。</summary>
-    public const int FocusGranary = -1;
-    /// <summary>国策焦点：防御姿态（被攻击常设底线强制，D322/D318 姿态落点）。</summary>
-    public const int FocusDefense = -2;
+    /// <summary>常设底线焦点：屯粮（= 效用行动⑤ Grain）。</summary>
+    public const int FocusGranary = (int)UtilityAction.Grain;     // 5
+
+    /// <summary>常设底线焦点：防御姿态（= 效用行动⑭ Defense）。</summary>
+    public const int FocusDefense = (int)UtilityAction.Defense;   // 14
 
     private readonly int _kingdomId;
 
     /// <summary>本王国被攻击标记（KingdomAttackedEvent 命中置位，Update 消费）。</summary>
     private bool _attackedFlag;
 
-    /// <summary>防御姿态持续到某日（被攻击后强制防御窗口，防抖日数）。</summary>
+    /// <summary>防御姿态持续到某日（被攻击后强制防御窗口 = focusMinDurationDays）。</summary>
     private int _defenseEndDay;
+
+    /// <summary>当前焦点设定日（防抖基准：切换需距上次 ≥ focusMinDurationDays）。</summary>
+    private int _focusSinceDay = int.MinValue / 2;
+
+    /// <summary>本次评分顶行动（调试/冒烟断言：对比常设底线是否覆盖评分排序，冒烟#4）。</summary>
+    public UtilityAction LastTop { get; private set; } = UtilityAction.None;
 
     public FocusController(int kingdomId)
     {
@@ -43,33 +52,48 @@ public class FocusController
         if (evt.KingdomId == _kingdomId) _attackedFlag = true;
     }
 
+    /// <summary>兼容重载（步骤8 冒烟沿用 3 参签名；内部自动载入效用配置）。</summary>
+    public void Update(KingdomState kingdom, KingdomBrainConfig brainCfg, int day)
+        => Update(kingdom, brainCfg, UtilityActionConfig.LoadConfig(), day);
+
     /// <summary>
-    /// 每日刷新王国国策焦点（全阶段通用）：
-    /// 1) 常设底线即时强制（粮<2日→屯粮；被攻击→防御，跳过防抖）；
-    /// 2) 其余时段维持当前焦点 / P0 无评分器故无常规切换（步骤9 UtilityScorer 接入后经此闸输出）。
-    /// 直接写 kingdom.focus（台账制，不发布事件）。
+    /// 每日刷新国策焦点（王国脑日 tick 内，入账前口径）。
+    /// 优先级：常设底线强制(⑤/⑭) &gt; 效用评分 &gt; 防抖切换。直接写 kingdom.focus。
     /// </summary>
-    public void Update(KingdomState kingdom, KingdomBrainConfig cfg, int day)
+    public void Update(KingdomState kingdom, KingdomBrainConfig brainCfg, UtilityActionConfig utilCfg, int day)
     {
         int population = kingdom.workerCount + kingdom.warriorCount;
 
-        // 被攻击置位 → 防御姿态持续到防抖日数末（姿态稳定窗口）
+        // 被攻击置位 → 防御窗口延到防抖日数末（姿态稳定窗口）
         if (_attackedFlag)
         {
-            _defenseEndDay = Mathf.Max(_defenseEndDay, day + Mathf.Max(0, cfg.focusMinDurationDays));
+            _defenseEndDay = Mathf.Max(_defenseEndDay, day + Mathf.Max(0, brainCfg.focusMinDurationDays));
             _attackedFlag = false;
         }
 
-        // 常设底线：粮储 < 粮储日底线 × 人口 × 每人口消耗 → 强制屯粮
+        // ---- 常设底线（D322 优先级最高、不评分、即时强制，跳过防抖）----
         bool grainAlarm = population > 0
             && kingdom.GetResourceValue(ResourceType.Food)
-               < cfg.grainReserveDaysFloor * population * cfg.grainConsumptionPerPop;
+               < brainCfg.grainReserveDaysFloor * population * brainCfg.grainConsumptionPerPop;
+        if (grainAlarm) { SetFocus(kingdom, FocusGranary, day); return; }
+        if (day < _defenseEndDay) { SetFocus(kingdom, FocusDefense, day); return; }
 
-        if (grainAlarm)
-            kingdom.focus = FocusGranary;
-        else if (day < _defenseEndDay)
-            kingdom.focus = FocusDefense;
-        else if (kingdom.focus == FocusGranary || kingdom.focus == FocusDefense)
-            kingdom.focus = 0;   // 底线解除 → 回无国策（P0 无评分器常规焦点待步骤9 输出）
+        // ---- 效用评分（D322 step2；阶段门控过滤 + 四因子打分）----
+        ScriptStage stage = kingdom.scriptPhase ?? ScriptStage.Survive;
+        UtilityAction top = UtilityScorer.ScoreTop(kingdom, utilCfg, stage);
+        LastTop = top;
+        if (top == UtilityAction.None) return;   // 无可执行候选 → 维持现状焦点
+
+        // ---- 焦点切换防抖（D322 step3：最高分≠当前 且 当前已持续≥3日才切，否则维持）----
+        if (kingdom.focus != (int)top
+            && day >= _focusSinceDay + Mathf.Max(1, brainCfg.focusMinDurationDays))
+            SetFocus(kingdom, (int)top, day);
+        // 否则维持（"已是最优" 或 "防抖中" 均不改）
+    }
+
+    private void SetFocus(KingdomState kingdom, int id, int day)
+    {
+        kingdom.focus = id;
+        _focusSinceDay = day;
     }
 }
