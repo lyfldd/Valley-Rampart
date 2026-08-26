@@ -205,7 +205,8 @@ public class CameraRig : Singleton<CameraRig>
             Pan(kbd.normalized * config.panSpeed * Time.deltaTime);
 
         // 边缘滚屏（鼠标贴边；键盘平移进行时不叠加边缘，避免跳动）
-        if (kbd == Vector2.zero)
+        // 由 config.enableEdgeScroll 开关（默认关）。将来源设置页勾选后开启，避免"跟随鼠标"错觉。
+        if (config.enableEdgeScroll && kbd == Vector2.zero)
         {
             var mouse = Input.mousePosition;
             float w = Screen.width, h = Screen.height;

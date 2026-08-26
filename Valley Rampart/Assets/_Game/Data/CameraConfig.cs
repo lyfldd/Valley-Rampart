@@ -34,6 +34,9 @@ public class CameraConfig : ScriptableObject
     [Tooltip("键盘/中键拖拽平移速度（世界单位/秒，1× 档基准）")]
     public float panSpeed = 20f;
 
+    [Tooltip("边缘滚屏总开关。默认关闭（体验上易形成\"跟随鼠标\"错觉）；将来在设置页勾选开启")]
+    public bool enableEdgeScroll = false;
+
     [Tooltip("边缘滚屏区宽度（屏幕像素）")]
     public float edgeScrollWidth = 16f;
 
