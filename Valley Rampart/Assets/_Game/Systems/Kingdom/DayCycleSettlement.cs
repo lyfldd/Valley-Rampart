@@ -31,40 +31,50 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
 
     private void OnDayChanged(TimeDayChangedEvent evt)
     {
-        // 1. 饱食结算（先更新个体饱食/幸福，供幸福系统消费）
+        // ==== 2_17 步骤8：D347 五步权威日 tick 顺序（HH.24 裁决① A 准：Brain 植入②、日结入账前花昨日结存）====
+
+        // 步骤1：SimMode 判定（P0 恒 Fine 占位；SimModeManager.GetMode 恒 Fine，真实判定/休眠唤醒归步骤13）
+        // 步骤2：王国脑日 tick（D347 步②，日结入账之前 → 脑看到昨日结存；只循环非玩家王国，玩家无脑 D338）
+        TickKingdomBrains();
+
+        // 步骤3：领土变更（P0 占位空跑——AI 推边界/玩家建造纳土归步骤12；此处预留 TerritoryChangedEvent 领土写入口）
+        // 步骤4：营地晋升调度（2_16 已有；顺序归位到③之后 = D347 五步第 4 步）
+        CampUpgrader.TickAll();
+
+        // ==== 步骤5：其余日结算 = 现行 1~9 尾巴逐项次序保持不变（增补1：行为保持重构，只做包结构不重排路线）====
+        // 饱食→幸福→税收→人口→贸易冷却→AI段日结转账→牧场→营地补员；CampUpgrader 已移步骤4（设计重排非尾巴）。
+
+        // - 饱食结算（先更新个体饱食/幸福，供幸福系统消费）
         if (SatietySystem.Instance != null)
             SatietySystem.Instance.OnNewDay();
 
-        // 2. 幸福结算（多因素加权，替换 P0 占位常量；用昨日税负 + 今日饱食）
+        // - 幸福结算（多因素加权，替换 P0 占位常量；用昨日税负 + 今日饱食）
         if (HappinessSystem.Instance != null)
             HappinessSystem.Instance.OnNewDay();
 
-        // 3. 税收结算（人头税 + 建筑税，幸福系数缩放；写入今日税负供明日幸福）
+        // - 税收结算（人头税 + 建筑税，幸福系数缩放；写入今日税负供明日幸福）
         if (TaxSystem.Instance != null)
             TaxSystem.Instance.OnNewDay();
 
-        // 4. 人口生育（数据层先行；AvgHappiness 接真实值）
+        // - 人口生育（数据层先行；AvgHappiness 接真实值）
         if (PopulationSystem.Instance != null)
             PopulationSystem.Instance.OnNewDay();
 
-        // 5. 贸易额度冷却（商人档位刷新）
+        // - 贸易额度冷却（商人档位刷新）
         if (KingdomManager.Instance != null)
             KingdomManager.Instance.TickTradeCooldowns();
 
-        // 6. AI 段 日结转账（2_17 步骤2b 收入侧路由）：把 AI 建筑 Storage 累计产出 → AddResources 入
-        //    KingdomState.resources → 清零。只处理 kingdomId>0，玩家(id=0)零回归。
+        // - AI 段 日结转账（2_17 步骤2b 收入侧路由）：把 AI 建筑 Storage 累计产出 → AddResources 入
+        //   KingdomState.resources → 清零。只处理 kingdomId>0，玩家(id=0)零回归。
         AIEconomySettlement.Tick();
 
-        // 牧场养殖每日结算（喂粮/生长）
+        // - 牧场养殖每日结算（喂粮/生长）
         if (RanchSystem.Instance != null)
             RanchSystem.Instance.OnNewDay();
 
-        // 流浪汉营地每日补员（3.5.1 §4.1 E-S7：不满补员，刷满停）
+        // - 流浪汉营地每日补员（不满补员，刷满停）
         if (VagrantCampSystem.Instance != null)
             VagrantCampSystem.Instance.OnNewDay();
-
-        // 2_16 步骤11：营地晋升调度（五条件动态立国/吞并出口B；必须在营地补员+存续 tick 之后）
-        CampUpgrader.TickAll();
 
         // P1 占位：研究 / 装备 在此追加
 
@@ -72,5 +82,26 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         // SaveManager 自动存档改订阅本事件 ⇒ "结算先、存档后"顺序显式化，不依赖订阅先后。
         if (TimeManager.Instance != null)
             EventBus.Publish(new DaySettledEvent(TimeManager.Instance.CurrentDay));
+    }
+
+    /// <summary>
+    /// D347 五步②：王国脑日 tick。循环所有非玩家王国（日记入账之前 → 脑花昨日结存，HH.24 裁决① A）。
+    /// 只对已建脑的王国驱动（Foundry 创建钩子保证有脑；读档/测试容错跳过无脑王国）。玩家(id=0)无脑跳过（D338）。
+    /// </summary>
+    private void TickKingdomBrains()
+    {
+        var reg = KingdomRegistry.Instance;
+        var brains = KingdomBrainRegistry.Instance;
+        if (reg == null || brains == null) return;
+
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
+        var all = reg.GetAll();
+        for (int i = 0; i < all.Count; i++)
+        {
+            var k = all[i];
+            if (k.IsPlayer) continue;   // 玩家无脑（D338）
+            var brain = brains.Get(k.id);
+            if (brain != null) brain.Tick(day);
+        }
     }
 }

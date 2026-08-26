@@ -67,6 +67,9 @@ public static class KingdomFoundry
             // 建筑预置（王座 castle + 错峰前 buildingCount-1 个产能）+ 困难档围墙环
             PlaceBuildings(rng, map, map.kingdomSpawns[i], tpl, tier, state.id, cfg, difficulty, foundedDay);
 
+            // 2_17 步骤8 创建钩子①（D337）：第一代 AI 王国建王国脑
+            KingdomBrainFactory.Create(state.id);
+
             aiFounded++;
         }
 
@@ -324,6 +327,9 @@ public static class KingdomFoundry
 
         // 营地中心插旗（castle 建筑带 kingdomId；ThroneAnchor 全局单例约束见上方注释）
         PlaceCampCastle(camp, state.id);
+
+        // 2_17 步骤8 创建钩子②（D337）：动态立国新王国建王国脑
+        KingdomBrainFactory.Create(state.id);
 
         registry.MarkFounding(currentDay);   // D312 冷却时间戳（只由动态立国更新）
 

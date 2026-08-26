@@ -584,3 +584,22 @@ public readonly struct KingdomFoundedEvent
     public readonly KingdomState Kingdom;
     public KingdomFoundedEvent(KingdomState kingdom) { Kingdom = kingdom; }
 }
+
+// ===== 2_17 步骤8 王国脑事件 =====
+// 王国脑已创建（D337/D338）。由 KingdomBrainFactory.Create 发布，只发 AI 王国（kingdomId>0，玩家无脑）。
+// 消费方：2_16/调试面板观测脑生命周期；无订阅者时不发布（EventBus 守卫，对齐 KingdomFoundedEvent）。
+public readonly struct KingdomBrainCreatedEvent
+{
+    public readonly int KingdomId;
+    public KingdomBrainCreatedEvent(int kingdomId) { KingdomId = kingdomId; }
+}
+
+// 王国本土被攻击事件（HH.24 增补2：只在伤害管线命中层对 AI 王国发布，kingdomId>0）。
+// 由 DamageSystem.PublishDamagedEvent 在"该王国实体确实受击"时发布（增补2 职责界定：受击事实≠选目标意图）。
+// 消费方：KingdomBrain.FocusController 订阅→次日该王国强制防御姿态（D322 常设底线）。
+// 明确不挂 MonsterAI/WaveDirector 目标选择层（那是意图非事实）；玩家(id=0)被袭事件面归 2_13/2_18。
+public readonly struct KingdomAttackedEvent
+{
+    public readonly int KingdomId;
+    public KingdomAttackedEvent(int kingdomId) { KingdomId = kingdomId; }
+}

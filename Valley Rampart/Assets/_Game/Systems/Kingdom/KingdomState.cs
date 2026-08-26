@@ -38,6 +38,19 @@ public class KingdomState
     /// <summary>起始国库过渡账本（baseStockpile D300；由 Foundry 步骤5 写入。2_17 步骤2 WarehouseRegistry per-kingdom 迁移吸收前，AI 无脑不消费，零风险）。</summary>
     public ResourcePack resources;
 
+    // ===== 王国脑运行时态（2_17 步骤8，D317~D320/D322/D337/D338）=====
+    // 由 KingdomBrainRegistry/KingdomBrain 于日 tick 写入，不入档（读档时王国脑由 Foundry 创建钩子重建）。
+    // AI(id>0) 非空；玩家(id=0) 无脑 → scriptPhase=null（D338，情报面板不展示玩家剧本阶段）。
+
+    /// <summary>剧本阶段（存活→发育→扩张→军事，单向 D318；玩家=null）。王国脑日 tick 同步。</summary>
+    public ScriptStage? scriptPhase;
+
+    /// <summary>国策焦点（0=无国策；&lt;0=常设底线焦点 FocusGranary/FocusDefense；&gt;0=步骤9 UtilityAction id）。</summary>
+    public int focus;
+
+    /// <summary>演算粒度（SimModeManager 判定；P0 恒 Fine，D333）。</summary>
+    public SimMode simMode;
+
     // ===== 人口（2_17 步骤4 台账转派生，实体=唯一真源）=====
     // ①真源演进规则（§〇 追记裁决①）：步骤3 实体化后工人/战士已为实体，步骤4 起由本属性对存活实体
     // 按 kingdomId 派生，不再由 Foundry 手写台账——防台账与实体双真源漂移（读档双份卡同族教训）。

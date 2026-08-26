@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04b585446216e4341ab508486c0fc274, type: 3}
+  m_Name: KingdomBrainConfig
+  m_EditorClassIdentifier: 
+  surviveMinDays: 2
+  developMinDays: 3
+  expandMinDays: 3
+  surviveToDevelop_housedAll: 1
+  surviveToDevelop_grainDays: 3
+  surviveToDevelop_unemployedMax: 0
+  surviveToDevelop_streakDays: 2
+  developToExpand_workersMin: 8
+  developToExpand_capacityMin: 3
+  developToExpand_netInflowStreak: 3
+  expandToMilitary_warriorsMin: 4
+  expandToMilitary_populationMin: 12
+  expandToMilitary_expansionChunks: 2
+  maxStageUpPerDay: 1
+  focusMinDurationDays: 3
+  grainReserveDaysFloor: 2
+  grainConsumptionPerPop: 1

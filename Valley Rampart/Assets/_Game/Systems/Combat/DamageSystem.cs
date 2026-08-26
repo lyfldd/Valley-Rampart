@@ -386,8 +386,24 @@ public class DamageSystem : Singleton<DamageSystem>
         }
         _lastEventTime[victim] = Time.time;
         EventBus.Publish(new UnitDamagedEvent(victim, source, damage, victim.GetPosition()));
+
+        // 2_17 步骤8（HH.24 增补2）：被攻击信号挂伤害管线命中层——只对 AI 王国(kingdomId>0)发。
+        // 职责界定：只有"该王国实体确实受击"（伤害真实落地）才算被攻击，非选目标意图（故不挂怪物/波次选目标层）。
+        // 消费方：KingdomBrain.FocusController 订阅→次日强制防御姿态（D322 常设底线）。
+        int victimKingdom = VictimKingdomId(victim);
+        if (victimKingdom > 0 && EventBus.HasSubscribers<KingdomAttackedEvent>())
+            EventBus.Publish(new KingdomAttackedEvent(victimKingdom));
+
         // [取证/②守卫交锋] 完成段证据：节流点后打入，避免高频刷屏
         Debug.Log($"[ChainFox] 守卫交锋: {victim} 受击 {damage} @ {victim.GetPosition()} <- {source}");
+    }
+
+    /// <summary>取受击实体所属王国 id（只认建筑/单位；自然实体/无归属返回 -1）。</summary>
+    private static int VictimKingdomId(IDamageable victim)
+    {
+        if (victim is Building b) return b.kingdomId;
+        if (victim is UnitController uc) return uc.kingdomId;
+        return -1;
     }
 
     // ===== 死亡清理（决策 24，订阅 UnitDiedEvent 自清三表）=====
