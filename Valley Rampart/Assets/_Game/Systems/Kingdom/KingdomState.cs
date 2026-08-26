@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -45,6 +47,12 @@ public class KingdomState
     public int workerCount => PopulationSystem.AliveWorkerCount(id);
     /// <summary>人口·战士数（按本王国存活军事职业实体派生）。</summary>
     public int warriorCount => PopulationSystem.AliveWarriorCount(id);
+
+    // ===== 领土句柄（2_17 步骤6，D342 唯一真源=TerritorySystem）=====
+    // 只读视图、不缓存数据——每次实时问 TerritorySystem，防双真源漂移。
+    /// <summary>本王国领土中区块集合（无则空；真源在 TerritorySystem）。</summary>
+    public IReadOnlyCollection<Vector2Int> Territory =>
+        TerritorySystem.Instance != null ? TerritorySystem.Instance.GetKingdomTerritory(id) : Array.Empty<Vector2Int>();
 
     /// <summary>读取某轴性格（越界返回 0.5 中性闭合，全无来源基线，D295 占位）。</summary>
     public float GetPersonality(int axis)

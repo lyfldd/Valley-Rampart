@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // ===== 玩家输入事件 =====
@@ -557,6 +558,21 @@ public readonly struct EnemyEnteredChunkEvent
     {
         ChunkCoord = chunkCoord;
         Enemy = enemy;
+    }
+}
+
+// ===== 2_17 步骤6 领土事件 =====
+// 领土变更（D328 事件驱动增量染色）：王国圈入初始领土 /（P1 步骤12）AI 推边界 / 玩家建造纳土。
+// 消费方：2_10 染色 overlay（渲染归 2_10，本步只出数据）、2_16 CampUpgrader 吞并、2_11 存档、情报面板。
+// 初始圈入按 kingdomId 升序 + 中区块排序广播（同 seed 确定性）。
+public readonly struct TerritoryChangedEvent
+{
+    public readonly int KingdomId;
+    public readonly IReadOnlyList<UnityEngine.Vector2Int> Added;
+    public TerritoryChangedEvent(int kingdomId, IReadOnlyList<UnityEngine.Vector2Int> added)
+    {
+        KingdomId = kingdomId;
+        Added = added;
     }
 }
 
