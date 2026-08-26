@@ -43,8 +43,12 @@ public static class PlacementValidator
         }
     }
 
-    /// <summary>微格吸附后校验（含桥的水域特例/接岸校验 + 城门拐角）。subOrigin 为吸附后的微格坐标。</summary>
-    public static PlacementResult ValidatePlacement(BuildingDef def, GridCoord subOrigin, GateOrientation orient)
+    /// <summary>
+    /// 微格吸附后校验（含桥的水域特例/接岸校验 + 城门拐角）。subOrigin 为吸附后的微格坐标。
+    /// 2_17 步骤7：加 kingdomId（门面，默认 0）——资源门玩家走 RulerController、AI 走自身 KingdomState 国库；
+    /// 领内/前置/地形/占用等其余规则同一套（D331/D345 镜像原则：AI 与玩家同入口同校验）。
+    /// </summary>
+    public static PlacementResult ValidatePlacement(BuildingDef def, GridCoord subOrigin, GateOrientation orient, int kingdomId = 0)
     {
         var result = new PlacementResult { ok = false, reason = PlacementFailReason.Blocked };
         var grid = GridSystem.Instance;
@@ -132,9 +136,18 @@ public static class PlacementValidator
             if (BridgeChainLength(origin, w, h) + 1 > MaxBridgeSegments) { result.reason = PlacementFailReason.Blocked; return result; }
         }
 
-        // 资源足够
-        if (RulerController.Instance != null && !RulerController.Instance.CanAfford(def.cost))
-        { result.reason = PlacementFailReason.Resource; return result; }
+        // 资源足够（2_17 步骤7：门面——玩家走 RulerController，AI 走自身 KingdomState 五经济国库）
+        if (kingdomId <= 0)
+        {
+            if (RulerController.Instance != null && !RulerController.Instance.CanAfford(def.cost))
+            { result.reason = PlacementFailReason.Resource; return result; }
+        }
+        else
+        {
+            var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+            if (ks == null || !ks.CanAfford(def.cost))
+            { result.reason = PlacementFailReason.Resource; return result; }
+        }
 
         result.ok = true;
         result.reason = PlacementFailReason.None;

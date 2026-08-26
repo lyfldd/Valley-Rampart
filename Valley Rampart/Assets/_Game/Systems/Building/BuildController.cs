@@ -191,46 +191,69 @@ public class BuildController : Singleton<BuildController>
         GridCoord sub = subOpt.Value;
 
         GateOrientation orient = EffectiveOrientation(sub);
-        var check = PlacementValidator.ValidatePlacement(_selectedDef, sub, orient);
+        // 玩家手工建造 = 指令通道建造门面 kingdomId=0（2_17 步骤7）：
+        // AI 后续经同一运程成门面 TryBuild 下指令，校验/扣费/落成规则与玩家完全一致（D331/D345）。
+        if (!TryBuild(_selectedDef, sub, orient, 0)) return;
+
+        // Shift 连放，否则退出（走栈 Pop，触发 BuildModeEntry.Close -> ExitBuildMode + 回菜单）
+        if (!Input.GetKey(KeyCode.LeftShift))
+        {
+            if (UIManager.Instance != null) UIManager.Instance.Pop();
+            else ExitBuildMode(); // 兜底
+        }
+    }
+
+    /// <summary>
+    /// 指令通道建造门面（2_17 步骤7 / D331/D345）：玩家(AI 统一)与 AI 共用同入口。
+    /// kingdomId=0=玩家（走 WarehouseHelper 王国仓库多仓凑单/金直通国库）；&gt;0=AI（走自身 KingdomState 五经济国库台账）。
+    /// 选址合法性（领内/前置/资源）走 PlacementValidator 同一套 = 镜像原则。
+    /// </summary>
+    public bool TryBuild(BuildingDef def, GridCoord sub, GateOrientation orient, int kingdomId = 0)
+    {
+        if (def == null || GridSystem.Instance == null) return false;
+        var grid = GridSystem.Instance;
+
+        var check = PlacementValidator.ValidatePlacement(def, sub, orient, kingdomId);
         if (!check.ok)
         {
             Debug.Log($"[BuildController] 放置校验失败: {check.reason}");
-            return;
+            return false;
         }
         GridCoord coord = check.snappedOrigin;
-        var fp = OrientedFootprint(orient);
 
-        // 扣资源（2_12 步骤3：建造点击=结算时点，走王国仓库多仓凑单，金直通国库）
-        if (!WarehouseHelper.CanAfford(_selectedDef.cost)) return;
-        if (!WarehouseHelper.TrySettle(_selectedDef.cost)) return;
+        // 扣资源（门面：玩家→王国仓库凑单；AI→KingdomState.Spend 台账制，无事件）
+        if (!CanPayBuild(kingdomId, def.cost)) return false;
+        if (!PayBuild(kingdomId, def.cost)) return false;
 
         // 放置即改造：工具建筑（采石场/农场）建在资源格上，覆盖原资源节点
         // A+（HH.2）：树/矿不再建 Building 实体；改为数据覆盖该格 feature（Tree/Mine→Plain）+ 刷新渲染
-        if (ResourceNodeMapping.RequiresResourceNode(_selectedDef.id)
+        if (ResourceNodeMapping.RequiresResourceNode(def.id)
             && WorldManager.Instance != null)
         {
             WorldManager.Instance.TryConsumeResourceNode(coord);
         }
 
         // 实例化 Building（世界坐标 = footprint 中心）
-        Vector3 worldPos = GhostWorldPos(sub, orient);
+        Vector3 worldPos = BuildingWorldPos(grid, sub, def, orient);
         GameObject go;
-        if (_selectedDef.prefab != null)
+        if (def.prefab != null)
         {
-            go = Instantiate(_selectedDef.prefab, worldPos, Quaternion.identity);
+            go = Instantiate(def.prefab, worldPos, Quaternion.identity);
         }
         else
         {
             // 无 prefab 时创建空壳 + 占位视觉（3.3.4 问题12）
-            go = new GameObject($"Building_{_selectedDef.id}_{coord.x}_{coord.y}");
+            go = new GameObject($"Building_{def.id}_{coord.x}_{coord.y}");
             go.transform.position = worldPos;
-            BuildingVisual.ApplyPlaceholder(go, BuildingType.None, _selectedDef.role);
+            BuildingVisual.ApplyPlaceholder(go, BuildingType.None, def.role);
         }
 
         var b = go.GetComponent<Building>();
         if (b == null) b = go.AddComponent<Building>();
-        b.Init(_selectedDef, coord, true, fp);
-        b.StartConstructing();  // 玩家建造走 Constructing 进度（3.3.4 批次3）
+        var fp = OrientedFootprint(def, orient);
+        b.Init(def, coord, true, fp);
+        b.kingdomId = kingdomId;   // 2_17 步骤7：建造门面——AI 建造归属该国（玩家 0）
+        b.StartConstructing();     // 建造走 Constructing 进度（玩家手工与 AI 同一条链）
 
         // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）
         if (go.GetComponent<Collider2D>() == null)
@@ -239,32 +262,65 @@ public class BuildController : Singleton<BuildController>
             col.size = Vector2.one;
         }
 
-        GridSystem.Instance.MarkOccupiedFootprint(coord, fp.x, fp.y, b);
+        grid.MarkOccupiedFootprint(coord, fp.x, fp.y, b);
 
         // 桥：置 Bridge 位（水面可走）+ 接链 bridgeId（2_2 §3.5）
-        if (_selectedDef.isBridge)
+        if (def.isBridge)
         {
-            GridSystem.Instance.SetBridge(coord, fp.x, fp.y, true);
+            grid.SetBridge(coord, fp.x, fp.y, true);
             b.bridgeId = FindAdjacentBridgeId(coord, fp) ?? System.Guid.NewGuid().ToString("N");
         }
 
         BuildingRegistry.Instance?.Register(b);
-        BuildingFactory.Instance.AttachComponents(b, _selectedDef);  // 玩家建造也挂组件（3.3.4 批次5）
+        BuildingFactory.Instance.AttachComponents(b, def);  // 建造也挂组件（3.3.4 批次5）
 
         // 城门：挂 GateController（开关切换 footprint 阻挡，2_2 §3.4）
-        if (_selectedDef.isGate && go.GetComponent<GateController>() == null)
+        if (def.isGate && go.GetComponent<GateController>() == null)
             go.AddComponent<GateController>();
 
         EventBus.Publish(new BuildingPlacedEvent(b));
 
-        Debug.Log($"[BuildController] 放置 {_selectedDef.id} at cell ({coord.x},{coord.y}) fp {fp.x}x{fp.y}");
+        Debug.Log($"[BuildController] 建造{(kingdomId > 0 ? $"AI国{kingdomId}" : "玩家")} {def.id} at cell ({coord.x},{coord.y}) fp {fp.x}x{fp.y}");
 
-        // Shift 连放，否则退出（走栈 Pop，触发 BuildModeEntry.Close -> ExitBuildMode + 回菜单）
-        if (!Input.GetKey(KeyCode.LeftShift))
-        {
-            if (UIManager.Instance != null) UIManager.Instance.Pop();
-            else ExitBuildMode(); // 兜底
-        }
+        return true;
+    }
+
+    /// <summary>建造国库抽象（2_17 步骤7）：玩家(0)→WarehouseHelper.CanAfford；AI→KingdomState.CanAfford 五经济资源。</summary>
+    private static bool CanPayBuild(int kingdomId, ResourcePack cost)
+    {
+        if (kingdomId <= 0) return WarehouseHelper.CanAfford(cost);
+        var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        return ks != null && ks.CanAfford(cost);
+    }
+
+    /// <summary>建造扣费（2_17 步骤7）：玩家(0)→WarehouseHelper.TrySettle；AI→KingdomState.Spend（台账制，无事件）。</summary>
+    private static bool PayBuild(int kingdomId, ResourcePack cost)
+    {
+        if (kingdomId <= 0) return WarehouseHelper.TrySettle(cost);
+        var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        if (ks == null) return false;
+        ks.Spend(cost);
+        return true;
+    }
+
+    /// <summary>给定 def/朝向下的占地 w×h（门面：不依赖当前选中态 _selectedDef/_footprint）。</summary>
+    static Vector2Int OrientedFootprint(BuildingDef def, GateOrientation orient)
+    {
+        int w = def.footprint.x > 0 ? def.footprint.x : 1;
+        int h = def.footprint.y > 0 ? def.footprint.y : 1;
+        if (def.rotatable && orient == GateOrientation.Vertical) return new Vector2Int(h, w);
+        return new Vector2Int(w, h);
+    }
+
+    /// <summary>建筑落点世界坐标（footprint 中心；门面用，不依赖 _selectedDef/_footprint）。</summary>
+    static Vector3 BuildingWorldPos(GridSystem grid, GridCoord sub, BuildingDef def, GateOrientation orient)
+    {
+        var origin = grid.SubToCell(sub);
+        var fp = OrientedFootprint(def, orient);
+        Vector2 originWorld = grid.CoordToWorld(origin);
+        float cellW = grid.Config != null ? grid.Config.cellSize.x : 1.28f;
+        float cellH = grid.Config != null ? grid.Config.cellSize.y : 0.64f;
+        return originWorld + new Vector2((fp.x - 1) * 0.5f * cellW, (fp.y - 1) * 0.5f * cellH);
     }
 
     /// <summary>找邻接桥段的 bridgeId（无邻接桥返回 null，开新链）。</summary>
