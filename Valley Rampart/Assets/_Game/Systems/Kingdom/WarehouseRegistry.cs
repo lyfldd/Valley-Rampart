@@ -32,36 +32,38 @@ public static class WarehouseRegistry
     }
 
     /// <summary>
-    /// 收集当前"参与凑单"的王国仓库（存量>0 的 StorageComponent）。
+    /// 收集当前"参与凑单"的王国仓库（存量>0 的 StorageComponent），仅同国仓储计入。
     /// 与旧 GatherWarehouses 行为等价（仅定位方式不同）；结算时点调用。
+    /// 2_17 修复卡γ：过滤改"同王国匹配"——玩家(0)结算只凑玩家仓，AI 王国结算只凑 AI 仓，
+    /// 保"玩家资源绝不流入 AI 库"原始意图，同时 AI 凑单/物流可通（非补丁D的玩家专属硬过滤）。
     /// </summary>
-    public static List<IWarehouse> GatherActive()
+    public static List<IWarehouse> GatherActive(int kingdomId)
     {
         var result = new List<IWarehouse>(_storages.Count);
         for (int i = 0; i < _storages.Count; i++)
         {
             var s = _storages[i];
-            // 2_16 步骤7 补丁D：仅玩家王国(kingdomId==0)仓储参与凑单，AI 仓储不计入玩家资源结算
-            if (s == null || KingdomOf(s) != 0) continue;
+            if (s == null || KingdomOf(s) != kingdomId) continue;
             if (s.storedAmount > 0) result.Add(s);
         }
         return result;
     }
 
     /// <summary>
-    /// 找距 worldPos 最近的"同 resourceType 且还有余量"的 StorageComponent（搬运第二段卸货落点）。
+    /// 找距 worldPos 最近的"同王国、同 resourceType 且还有余量"的 StorageComponent（搬运第二段卸货落点）。
     /// 步骤11 切替 TaskScheduler.UnloadInventory 的 FindObjectsOfType 全场景扫描（D51 就近卸货）。
+    /// 2_17 修复卡γ：过滤改"同王国匹配"（第 3 参 kingdomId=工人归属国）——玩家工人只卸玩家库（绝不流入
+    /// AI 库的原始意图保住），AI 工人也能卸回自己的 AI 仓库（修复缺陷γ AI 物流链断）。
     /// 返回 null=无可用仓库（调用方兜底国库）。
     /// </summary>
-    public static StorageComponent FindNearestAvailable(ResourceType type, UnityEngine.Vector3 worldPos)
+    public static StorageComponent FindNearestAvailable(ResourceType type, UnityEngine.Vector3 worldPos, int kingdomId)
     {
         StorageComponent best = null;
         float bestDist = float.MaxValue;
         for (int i = 0; i < _storages.Count; i++)
         {
             var s = _storages[i];
-            // 2_16 步骤7 补丁D：卸货目标仅玩家王国(kingdomId==0)仓储，AI/自然仓储不被选为玩家卸货落点（防玩家资源流入他国库）
-            if (s == null || KingdomOf(s) != 0) continue;
+            if (s == null || KingdomOf(s) != kingdomId) continue;
             if (s.resourceType != type || s.capacity <= s.storedAmount) continue;
             float d = (s.transform.position - worldPos).sqrMagnitude;
             if (d < bestDist) { bestDist = d; best = s; }

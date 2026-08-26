@@ -895,9 +895,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public bool TryAdvertiseTask(out KingdomTask task)
     {
         task = null;
-        // 2_16 步骤7 补丁D：AI 王国建筑（kingdomId>0）不发布任何派工/搬运/挑水任务——
-        // 防玩家 worker 到 AI 建筑作业（AI 产出静默流入玩家国库）。玩家(0)/自然建筑(-1)放行。
-        if (kingdomId > 0) return false;
+        // 2_17 修复卡β：删除补丁D广告守卫(L900)。AI 王国建筑(kingdomId>0)照常发布任务；
+        // 防"AI 任务流向玩家 worker"的补丁D意图已由 TaskScheduler.Tick 池隔离路由结构性达成——
+        // 任务源归属国 tKingdom 只派给同国 idleKingdom 工人，广告侧守卫成永久双轨，此处清理收编。
+        // 无主自然建筑(-1)仍按原流程发布（采集），路由时降级先到先得池（见 TaskScheduler）。
         var producer = GetComponent<ProducerComponent>();
         var storage = GetComponent<StorageComponent>();
         var sched = TaskScheduler.Instance;
@@ -963,9 +964,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// <summary>建筑转 Active 时注册到任务调度器（IsValid 才注册）。</summary>
     private void RegisterWithTaskScheduler()
     {
-        // 2_16 步骤7 补丁D：AI 王国建筑（kingdomId>0）不注册任务源——防玩家 worker 赴 AI 建筑派工/搬运。
-        // 玩家(0)/自然建筑(-1)保留注册（自然资源点玩家可确认采集）。TryAdvertiseTask 另有双保险守卫。
-        if (TaskScheduler.HasInstance && state == BuildingState.Active && kingdomId <= 0)
+        // 2_17 修复卡β：删除补丁D注册侧守卫(L968)。AI 王国建筑(kingdomId>0)也登记为任务源——
+        // 补丁D"AI 任务不流向玩家"意图由路由层结构性达成，注册侧守卫与广告侧 L900 同为待清的永久双轨。
+        // 玩家(0)/自然(-1)/AI(>0) 一律注册，派工归属由 TaskScheduler.Tick 池隔离路由决定。
+        if (TaskScheduler.HasInstance && state == BuildingState.Active)
             TaskScheduler.Instance.Register(this);
     }
 }

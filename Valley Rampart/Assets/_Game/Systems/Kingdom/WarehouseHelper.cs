@@ -67,7 +67,9 @@ public static class WarehouseHelper
     // 调用频率红线：只许结算时点调用，禁入 Update/每帧路径（过渡实现安全边界）。
     private static List<IWarehouse> GatherWarehouses()
     {
-        return WarehouseRegistry.GatherActive();
+        // 2_17 修复卡γ：王国凑单按"玩家王国(0)"匹配——玩家结算只凑玩家仓，绝不流入 AI 库。
+        // （AI 王国结算由 2_17 步骤2b 日结转账路径以各自 kingdomId 调 GatherActive。）
+        return WarehouseRegistry.GatherActive(0);
     }
 
     /// <summary>校验所有仓库对该资源累计可取量是否达标。</summary>

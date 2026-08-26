@@ -270,7 +270,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 for (int i = 0; i < idle.Count; i++)
                 {
                     if (used[i]) continue;
-                    if (idleKingdom[i] != tKingdom) continue;   // 池隔离：跨归属国不派
+                    // 池隔离：跨归属国不派。例外：无主源(-1，自然建筑/野采) = 先到先得池(D283)，
+                    // 任何国空闲工人皆可匹配——玩家回流采集 + AI 野采一并救活（缺陷α）。
+                    if (tKingdom >= 0 && idleKingdom[i] != tKingdom) continue;
                     float d = GridMath.DistCells(idle[i].transform.position, task.SourcePos);
                     if (d < bestDist) { bestDist = d; best = i; }
                 }
@@ -642,7 +644,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         int amount = inv.UnloadAll();
 
         // 步骤11：切注册表（WarehouseRegistry.FindNearestAvailable 替 FindObjectsOfType 全场景扫描，D51 就近卸货）
-        StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position);
+        // 2_17 修复卡γ：第 3 参带工人归属国——玩家工人卸玩家库(0)、AI 工人卸 AI 库，跨王国绝不互卸。
+        var wkingdom = brain.GetComponent<UnitController>() != null ? brain.GetComponent<UnitController>().kingdomId : 0;
+        StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position, wkingdom);
         if (best != null)
         {
             int added = best.Add(amount);
@@ -858,7 +862,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return _priorityConfig != null ? _priorityConfig.Get(type) : TaskPriority.B;
     }
 
-    /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0）。</summary>
+    /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0；
+    /// 无主源 -1（自然建筑）在路由时降级为先到先得池，任何国可匹配）。</summary>
     private int SourceKingdom(KingdomTask task)
     {
         return task != null && task.source is Building b ? b.kingdomId : 0;
