@@ -51,6 +51,10 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         if (KingdomManager.Instance != null)
             KingdomManager.Instance.TickTradeCooldowns();
 
+        // 6. AI 段 日结转账（2_17 步骤2b 收入侧路由）：把 AI 建筑 Storage 累计产出 → AddResources 入
+        //    KingdomState.resources → 清零。只处理 kingdomId>0，玩家(id=0)零回归。
+        AIEconomySettlement.Tick();
+
         // 牧场养殖每日结算（喂粮/生长）
         if (RanchSystem.Instance != null)
             RanchSystem.Instance.OnNewDay();
