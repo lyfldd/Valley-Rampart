@@ -149,8 +149,14 @@ public static class Valley2_17_Smoke_P0
         // 对齐"回主菜单→新开一局"的真实复位语义（必须在 InitializeNewGame 之前，
         // 否则新局注册 foundedDay 读到的是上一轮累积 CurrentDay）：
         //   KingdomRegistry 玩家占位/nextId 复位；TimeManager 回 day1；WorldManager 清地图种子。
+        // 策划 GO 修复①：复位链头部 SetState(MainMenu) 关闭窗口——ThroneAnchor 只在 Playing/Paused
+        // 轮询，状态脱离即窗口关闭（防 r1 贴实时会话时旧锚 GameOver 污染 post-Init）。
+        if (GameStateManager.Instance != null) GameStateManager.Instance.SetState(GameState.MainMenu);
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
         if (TimeManager.Instance != null) TimeManager.Instance.ResetState();
+        // 策划 GO 修复③：ResetState 只回 day1 不清 _dayTimer（实时会话 Playing 下 Update 会累加真实秒）——
+        // 强制归零，防 r1 快照前被残量白嫖推进（stageSeq 首字符 R1=D 的独立解释源一并排掉）。
+        ResetTimeDayTimer();
         if (WorldManager.Instance != null) WorldManager.Instance.ResetState();
         // 裁决2-① 残留实锤修复：UnitRegistry 跨轮残留（u=18/36/54）+18 递增坐实；
         // BuildingRegistry b=2684 异常大但三抽一致——统一 Clear 归零，暴露新局真实基准。
@@ -165,6 +171,9 @@ public static class Valley2_17_Smoke_P0
         // HH.27 ②升级版 ·post-reset（复位链效果）：看清复位链清掉/漏了什么（仅首纯轮 r1）
         bool baselineHere = !withRoundtrip && !s_baselineDumped;
         if (baselineHere) Debug.Log("[P0完整局] 基线" + BaselineDump("post-reset"));
+        // 策划 GO 修复②：DisarmDisasters 提前到 InitializeNewGame 之前——旧实时会话的
+        // ThroneAnchor/灾变组件先失能，关闭 widow window；保留后置一次防新局再产未失能锚。
+        DisarmDisasters();
 
         lm.InitializeNewGame(new NewGameConfig
         {
@@ -177,7 +186,7 @@ public static class Valley2_17_Smoke_P0
         // 反查 r1 vs r2 预置建筑数（若 r1=4/r2=1 → 定性 PlaceBuildings 只落了王座，rng/模板抽取静态残留嫌疑，
         // GameOver 仅为伴生症状；GameOver 残留 = 必须给出 残留→phase1/build4/wood52 因果链才算结案）。
         var gsmPi = GameStateManager.Instance;
-        Debug.Log($"[P0完整局] 基线@post-Init(轮{(withRoundtrip ? "R" : "纯")}) State={(gsmPi != null ? gsmPi.CurrentState.ToString() : "null")} " + KingdomBuildBreakdown());
+        Debug.Log($"[P0完整局] 基线@post-Init(轮{(withRoundtrip ? "R" : "纯")}) State={(gsmPi != null ? gsmPi.CurrentState.ToString() : "null")} timer={ReadDayTimer():F2} " + KingdomBuildBreakdown());
         if (baselineHere) s_baselineDumped = true;
         Debug.Log($"[P0完整局] 开局: RT={withRoundtrip} Day={tm?.CurrentDay} KCount={(KingdomRegistry.Instance?.GetAll()?.Count ?? -1)}");
         // 裁决3 B1 前置：map ready 初始流民预置（D308）——真实路径由 GameBootstrap 地图 ready 调，
@@ -263,6 +272,26 @@ public static class Valley2_17_Smoke_P0
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         if (m != null) m.Invoke(tm, new object[] { TEST_SPD });
         else Debug.LogError("[P0完整局] 反射 AdvanceTime 失败（签名变更需修 harness）");
+    }
+
+    /// <summary>策划 GO 修复③：反射强制 _dayTimer=0（ResetState 只回 day1 不清 timer，防实时残量白嫖推进）。</summary>
+    private static void ResetTimeDayTimer()
+    {
+        var tm = TimeManager.Instance;
+        if (tm == null) return;
+        var f = typeof(TimeManager).GetField("_dayTimer",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (f != null) f.SetValue(tm, 0f);
+    }
+
+    /// <summary>事件步：反射读 TimeManager._dayTimer（探针，辨 r1 是否被残量推进到快照前）。</summary>
+    private static float ReadDayTimer()
+    {
+        var tm = TimeManager.Instance;
+        if (tm == null) return -1f;
+        var f = typeof(TimeManager).GetField("_dayTimer",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return f != null ? (float)f.GetValue(tm) : -1f;
     }
 
     /// <summary>状态快照链锚（HH.27 ③：含 scriptPhase/focus/simMode=脑态 + 国库 + 人口 + 建筑 + 派遣）。</summary>
