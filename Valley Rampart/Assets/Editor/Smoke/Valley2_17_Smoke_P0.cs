@@ -195,11 +195,11 @@ public static class Valley2_17_Smoke_P0
 
             if (withRoundtrip && simDay == SAVE_DAY)
             {
-                string pre = BuildEtch(tm);
+                string pre = BuildEtch(tm, simDay);
                 bool saved = sm.Save(SLOT_RT);
                 yield return null;
                 bool loaded = saved && sm.Load(SLOT_RT);
-                string post = BuildEtch(tm);
+                string post = BuildEtch(tm, simDay);
                 r.roundtripOk = loaded && pre == post;
                 // 裁决2-② v2 门控日志：读档走 v2 路径则建筑由 B 全权重建（无 A/B 双份）
                 r.lastLoadVersion = SaveManager.Instance != null ? SaveManager.Instance.LastLoadedSaveVersion : -1;
@@ -215,7 +215,7 @@ public static class Valley2_17_Smoke_P0
             //——pump 无帧断链，抽象结算给 AI 供养，否则 Feasible/gold 拦腰→招工人/建造缺粮卡死
             ApplyAbstractSettlement();
 
-            sb.Append(BuildEtch(tm)).Append('\n');
+            sb.Append(BuildEtch(tm, simDay)).Append('\n');
 
             var k1 = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(1) : null;
             if (k1 != null)
@@ -247,10 +247,10 @@ public static class Valley2_17_Smoke_P0
     }
 
     /// <summary>状态快照链锚（HH.27 ③：含 scriptPhase/focus/simMode=脑态 + 国库 + 人口 + 建筑 + 派遣）。</summary>
-    private static string BuildEtch(TimeManager tm)
+    private static string BuildEtch(TimeManager tm, int simDay)
     {
         var sb = new StringBuilder();
-        sb.Append((tm != null ? tm.CurrentDay : 0)).Append(':');
+        sb.Append(simDay).Append(':');   // 统一 simDay 轴：两轮同 simDay 对齐，消除 tm.CurrentDay 跨轮残留错位
         var all = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.GetAll() : null;
         if (all != null)
         {
