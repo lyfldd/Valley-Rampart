@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // ============================================================================
@@ -10,6 +11,11 @@ using UnityEngine;
 //  （单向+最小停留+每日最多升荤级）→ 同步 KingdomState.scriptPhase → FocusController 刷新国策焦点。
 //  国库口径 = 【昨日结存】（HH.24 裁决① A 准：植入五步②、日结入账之前，花昨日余额，
 //  契合 15_账本「一·补二」1 日滞后登记；不含在途储仓产出）。
+//
+//  2_17 完整局批次（HH.26 裁决② 拆双证）：ExecuteFocus 接真实指令通道——
+//    ⑥招工人 → 流浪汉招募（花 aiRecruitFoodCost 粮 → KingdomFoundry.ConvertVagrantsToWorkers 直转工人）；
+//    建造类 ①②③④⑤ → BuildController.TryBuild 门面（镜像玩家同入口，AI 台账扣费；主城螺旋选址）。
+//  派遣落地计数 DispatchStats per-kingdom（trainOk/buildOk/try 面），供 P0 完整局 harness 断言。
 // ============================================================================
 
 public class KingdomBrain
@@ -26,6 +32,27 @@ public class KingdomBrain
     /// <summary>当前剧本阶段（快捷映射 StageMachine.Stage）。</summary>
     public ScriptStage Stage => StageMachine.Stage;
 
+    // ===== 派遣落地计数（完整局批次执行面观测；运行时态不入档——读档后归零属已知边界）=====
+    private struct DispatchStat { public int trainOk, buildOk, trainTry, buildTry; }
+    private static readonly Dictionary<int, DispatchStat> s_dispatch = new Dictionary<int, DispatchStat>();
+
+    /// <summary>某王国的派遣落地数（trainOk=⑥实体化数；buildOk=建造类落成受理数）。</summary>
+    public static (int trainOk, int buildOk, int trainTry, int buildTry) GetDispatch(int kingdomId)
+    {
+        return s_dispatch.TryGetValue(kingdomId, out var s) ? (s.trainOk, s.buildOk, s.trainTry, s.buildTry) : (0, 0, 0, 0);
+    }
+
+    /// <summary>清空全部派遣计数（harness 两轮间/新开局归零用）。</summary>
+    public static void ResetDispatchStats() => s_dispatch.Clear();
+
+    private static void Bump(int kingdomId, bool train, bool ok)
+    {
+        if (!s_dispatch.TryGetValue(kingdomId, out var s)) s = default;
+        if (train) { s.trainTry++; if (ok) s.trainOk++; }
+        else { s.buildTry++; if (ok) s.buildOk++; }
+        s_dispatch[kingdomId] = s;
+    }
+
     public KingdomBrain(int kingdomId)
     {
         this.kingdomId = kingdomId;
@@ -39,7 +66,7 @@ public class KingdomBrain
     public void Unsubscribe() => Focus.Unsubscribe();
 
     /// <summary>
-    /// 每日王国脑 tick（D347 五步②）。SimMode 挂细模拟→采快照→剧本推进→同步阶段→刷新焦点。
+    /// 每日王国脑 tick（D347 五步②）。SimMode 挂细模拟→采快照→剧本推进→同步阶段→刷新焦点→焦点下发执行。
     /// 玩家/空王国短路；灭国后王国已从 Registry 移除故 Get 为空直接返回。
     /// </summary>
     public void Tick(int day)
@@ -57,7 +84,7 @@ public class KingdomBrain
         bool upgraded = StageMachine.Tick(ctx, cfg);
         kingdom.scriptPhase = StageMachine.Stage;   // 双向：升级同步 + 保持同步
         Focus.Update(kingdom, cfg, ucfg, day);      // D322 焦点模型（底线→评分→防抖切换）→ kingdom.focus=行动id
-        ExecuteFocus(kingdom);                      // 焦点下发执行（P0 起步骨架）
+        ExecuteFocus(kingdom, cfg);                 // 焦点下发真实执行（完整局批次接通）
 
         if (upgraded)
             Debug.Log($"[KingdomBrain] k{kingdomId} 剧本阶段 → {ScriptStageMachine.Name(StageMachine.Stage)} (Day {day})");
@@ -105,26 +132,27 @@ public class KingdomBrain
         return cfg != null ? cfg : ScriptableObject.CreateInstance<KingdomBrainConfig>();
     }
 
+    // ===== 焦点下发真实执行（2_17 完整局批次，HH.26 裁决② B-步骤9 双证之「评分→真实派遣」）=====
+
     /// <summary>
-    /// 焦点下发执行（2_17 步骤9，D345 指令通道执行骨架构图；P0 完整局批次补齐真实派遣——建造选址/招募实体化）。
-    /// 本步先落实焦点契约（kingdom.focus=行动 id 已有），实体派遣留执行口，保证冒烟#19"⑥存活期可执行"在焦点层可测。
+    /// 焦点下发执行：接 D345 指令通道真面。
+    /// ⑥招工人 → 找未招募流浪汉 → 花 aiRecruitFoodCost 粮 → ConvertVagrantsToWorkers 直转本国工人；
+    /// 建造类（①House②Warehouse③quarry④farm⑤Granary）→ BuildController.TryBuild 门面（同入口同规则，
+    /// AI 台账扣费）；⑬⑭/None 维持姿态无实体指令。
     /// </summary>
-    private void ExecuteFocus(KingdomState kingdom)
+    private void ExecuteFocus(KingdomState kingdom, KingdomBrainConfig cfg)
     {
         switch ((UtilityAction)kingdom.focus)
         {
             case UtilityAction.RecruitWorker:
-                // ⑥招工人：存活期防卡死关键路径。P0 批次经 D345 招募通道（王国无业池→居民转工人）。
-                if (kingdom.resources.gold > 0f)
-                    Debug.Log($"[KingdomBrain] k{kingdomId} 焦点=⑥招工人 下发（执行骨架，P0 批次接招募通道）");
+                ExecuteRecruitWorker(kingdom, cfg);
                 break;
             case UtilityAction.BuildHouse:
             case UtilityAction.BuildWarehouse:
             case UtilityAction.BuildCapacity:
             case UtilityAction.BoostHarvest:
             case UtilityAction.Grain:
-                // 建造/采集类：P0 批次补选址 + BuildController.TryBuild(def, sub, orient, kingdomId)。
-                Debug.Log($"[KingdomBrain] k{kingdomId} 焦点={(UtilityAction)kingdom.focus} 下发（建造骨架，P0 批次接选址）");
+                ExecuteBuildFocus(kingdom, cfg);
                 break;
             case UtilityAction.Rebuild:
             case UtilityAction.Defense:
@@ -132,5 +160,119 @@ public class KingdomBrain
             default:
                 break;   // 姿态/占位无实体指令
         }
+    }
+
+    /// <summary>⑥招工人真实通道：流浪汉 → 本国工人（D345 人口增长唯一途径，防卡死关键路径）。</summary>
+    private void ExecuteRecruitWorker(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        int cost = Mathf.Max(1, cfg.aiRecruitFoodCost);
+        UnitController vagrant = FindRecruitableVagrant();
+        if (vagrant == null)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;   // 无候选（营地无流浪汉）：派遣尝试失败，明日再试（不空转硬造人口）
+        }
+        if (kingdom.GetResourceValue(ResourceType.Food) < cost)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招粮不足（需{cost}）");
+            return;
+        }
+
+        kingdom.Spend(new ResourcePack { food = cost });   // AI 台账扣费（镜像玩家 recruitFoodCost 语义）
+        int converted = KingdomFoundry.ConvertVagrantsToWorkers(
+            new List<int> { vagrant.npcId }, kingdomId);
+        bool ok = converted > 0;
+        Bump(kingdomId, train: true, ok: ok);
+        if (ok)
+            Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招工人落地：流浪汉#{vagrant.npcId} → Worker（粮-{cost}）");
+    }
+
+    /// <summary>找一个可招募流浪汉（活体、Vagrant、未被招募、未入籍 kingdomId&lt;0）。固定遍历序=确定性。</summary>
+    private static UnitController FindRecruitableVagrant()
+    {
+        if (UnitRegistry.Instance == null || UnitRegistry.Instance.GetAllUnits() == null) return null;
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (u == null || !u.IsAlive) continue;
+            if (u.kingdomId >= 0) continue;                       // 已入籍者不重复招
+            if (u.EffectiveOccupation != Occupation.Vagrant) continue;
+            if (u.IsVagrantRecruited) continue;
+            return u;
+        }
+        return null;
+    }
+
+    /// <summary>建造类焦点真实通道：SO buildingId → 主城螺旋选址 → BuildController.TryBuild（门面校验/扣费一体）。</summary>
+    private void ExecuteBuildFocus(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        var def0 = UtilityActionConfig.LoadConfig().Find((UtilityAction)kingdom.focus);
+        if (def0 == null || string.IsNullOrEmpty(def0.Value.buildingId))
+        {
+            Bump(kingdomId, train: false, ok: false);
+            return;
+        }
+        var bdef = BuildingFactory.FindDefById(def0.Value.buildingId);
+        if (bdef == null)
+        {
+            Bump(kingdomId, train: false, ok: false);
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 行动 {(UtilityAction)kingdom.focus} 的 buildingId={def0.Value.buildingId} 未找到 def");
+            return;
+        }
+
+        var spot = FindAIBuildSpot(kingdom.id, bdef, cfg.aiBuildRadius);
+        if (!spot.HasValue)
+        {
+            Bump(kingdomId, train: false, ok: false);
+            return;   // 半径内无合法落位：明日再试
+        }
+
+        var bc = BuildController.Instance;
+        if (bc == null) { Bump(kingdomId, train: false, ok: false); return; }
+        bool ok = bc.TryBuild(bdef, spot.Value, GateOrientation.Horizontal, kingdomId);
+        Bump(kingdomId, train: false, ok: ok);
+        if (ok)
+            Debug.Log($"[KingdomBrain] k{kingdomId} 建造焦点落地：{def0.Value.buildingId} @ ({spot.Value.x},{spot.Value.y})");
+    }
+
+    /// <summary>
+    /// AI 选址器：以本国主城为锚的切比雪夫环带扫描（r=0..maxR 固定序=确定性），取首个放置合法微格。
+    /// 合法性由 PlacementValidator 全量校验（占用/地形/水域/资源节点需求/AI 国库资源门——与玩家同套规则）。
+    /// </summary>
+    private static GridCoord? FindAIBuildSpot(int kingdomId, BuildingDef def, int maxRadius)
+    {
+        var grid = GridSystem.Instance;
+        var anchorCell = FindCastleCell(kingdomId);
+        if (grid == null || anchorCell == null) return null;
+        var anchor = anchorCell.Value;
+
+        for (int r = 0; r <= Mathf.Max(1, maxRadius); r++)
+        {
+            for (int dy = -r; dy <= r; dy++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue;   // 只扫当前环
+                var cell = new GridCoord(anchor.x + dx, anchor.y + dy);
+                if (!grid.IsInBounds(cell)) continue;
+                var sub = grid.CellToSub(cell, 0, 0);
+                if (PlacementValidator.ValidatePlacement(def, sub, GateOrientation.Horizontal, kingdomId).ok)
+                    return sub;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>找某国主城（castle 建筑坐标；固定遍历序）。无主城 → null。</summary>
+    private static GridCoord? FindCastleCell(int kingdomId)
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || reg.All == null) return null;
+        for (int i = 0; i < reg.All.Count; i++)
+        {
+            var b = reg.All[i];
+            if (b != null && b.kingdomId == kingdomId && b.def != null && b.def.id == "castle" && b.IsActive)
+                return b.coord;
+        }
+        return null;
     }
 }

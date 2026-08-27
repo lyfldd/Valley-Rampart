@@ -117,21 +117,32 @@ public static class UtilityScorer
         }
     }
 
-    /// <summary>二值可行性门控（D346）。不看需求连续量，硬条件不过 → 0 出局。</summary>
+    /// <summary>二值可行性门控（D346）。不看需求连续量，硬条件不过 → 0 出局。
+    /// 完整局批次口径修正：按 UtilityActionDef 成本镜像判资源（与门面执行同口径双保险）；
+    /// ⑥招工人=粮付得起 aiRecruitFoodCost 且未达工人目标（AI 人口增长唯一通道）。</summary>
     private static bool Feasible(KingdomState k, UtilityActionDef d)
     {
         switch (d.id)
         {
             case UtilityAction.RecruitWorker:
-                // 招工人：国库有金 + 未达工人目标（P0 可行性硬门）
-                return k.resources.gold > 0f && k.workerCount < d.needA;
+            {
+                // 招工人：粮 ≥ 招募成本（SO：aiRecruitFoodCost）且未达工人目标
+                var bcfg = KingdomBrain.LoadConfig();
+                return k.GetResourceValue(ResourceType.Food) >= Mathf.Max(1, bcfg.aiRecruitFoodCost)
+                       && k.workerCount < d.needA;
+            }
             case UtilityAction.BuildHouse:
             case UtilityAction.BuildWarehouse:
             case UtilityAction.BuildCapacity:
             case UtilityAction.BoostHarvest:
             case UtilityAction.Grain:
-                // 建造/采集：国库有金即可（选址/冷却等 P0 简化放行，D346 资源门为主）
-                return k.resources.gold > 0f;
+            {
+                // 建造类：按 def 成本镜像逐项判国库（选址/前置等硬规则归执行门面二次校验）
+                return k.GetResourceValue(ResourceType.Gold) >= d.costGold
+                    && k.GetResourceValue(ResourceType.Stone) >= d.costStone
+                    && k.GetResourceValue(ResourceType.Wood) >= d.costWood
+                    && k.GetResourceValue(ResourceType.Food) >= d.costFood;
+            }
             case UtilityAction.Rebuild:
             case UtilityAction.Defense:
                 // 姿态项全阶段可见、无硬门槛（D318）

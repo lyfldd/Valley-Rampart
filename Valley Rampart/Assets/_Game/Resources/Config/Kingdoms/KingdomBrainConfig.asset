@@ -29,3 +29,5 @@ MonoBehaviour:
   focusMinDurationDays: 3
   grainReserveDaysFloor: 2
   grainConsumptionPerPop: 1
+  aiRecruitFoodCost: 2
+  aiBuildRadius: 8

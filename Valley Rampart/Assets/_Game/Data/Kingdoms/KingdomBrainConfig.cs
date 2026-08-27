@@ -63,4 +63,10 @@ public class KingdomBrainConfig : ScriptableObject
     public int grainReserveDaysFloor = 2;
     [Tooltip("每人口每日本人消耗粮估算（占位分母；对人口×日为防线阈值）")]
     public int grainConsumptionPerPop = 1;
+
+    [Header("执行派遣（2_17 完整局批次，D345 执行面）")]
+    [Tooltip("AI 招募流浪汉成本（粮/人；⑥招工人通道，镜像玩家 recruitFoodCost 语义）")]
+    public int aiRecruitFoodCost = 2;
+    [Tooltip("AI 建造选址半径（以本国主城为中心的切比雪夫格半径上限）")]
+    public int aiBuildRadius = 8;
 }
