@@ -1,92 +1,94 @@
-# HH.27 P0 完整局验收批执行报告（确定性状态机验收 · 待策划裁真值深挖方向）
+﻿# HH.27 P0 完整局验收批执行报告（确定性状态机验收 · 二轮甄定版 · 待策划终裁）
 
-> 类型：P0 收官验收批执行报告
-> 状态：⏳已执行一轮，多判据 FAIL；初步归因=纯 pump 经济断链 + harness 存读残留（未确认），**待策划裁决深挖/让渡口径**
-> 日期：2026-08-27 · 发起端：执行端 · 关联：HH.26（P0 验收清单）/ HH.25 / HH.24 / 2_17_AI王国脑与自主成长.md
-> 前置：HH.26 三条裁决全准，批准跑完整局批次
+> 类型：P0 收官验收批执行报告（二轮甄定）
+> 状态：二轮甄定完成，遗留"产品 AI wood 漂移"待策划终裁 P0 收官
+> 日期：2026-08-27 · 发起端：执行端 · 关联：HH.26 / HH.25 / HH.24 / 2_17_AI王国脑与自主成长.md
+> 前置：HH.26 裁决全准 → HH.27 策划裁定①抽象结算升格/②定向深挖(残留先于产品)/③B1补验，批准跑二轮
 
 ---
 
 ## 〇、一句话
 
-**按 HH.27 执行端提交 → 策划三条裁定（①②③）全部落实，完成「确定性状态机验收」纯逻辑 pump 单套件 `Valley2_17_Smoke_P0` 并对骨架跑出一轮。A4 玩家零回归=OK；A3/B1/B3+C6/B4/B5 首轮 FAIL。归因初步指向「纯 pump 经济产出闭环断链(hh.27①让渡项) + harness 存读残留」，是否产品缺陷未甄定。待策划裁决后续深挖方向。**
+**HH.27 策划①②③ 全部落地：pump 内置 D281 抽象结算（B2 供水抽象产出=OK）→ 轮间清点断言暴露并修复 UnitRegistry 残留（u 从 18/36/54 归一到 22/22/22）→ 存读 v2 门控 OK（loadVer=2 走 B 全权重建）→ 残留解释排除。二轮甄定后仍残留的「A3 wood 漂移(52 vs 60)+R2早停+train0+流浪汉池空」收束为两个真问题：B1/B5/B4 卡"流浪汉池空"(pump 无地图 spawn,产品-环境断层) + 产品 AI 非种子随机(wood 建造决策漂移)。待策划终裁。**
 
 ---
 
-## 一、策划三条裁定 → 落地对照
+## 一、HH.27 三条裁定的落地对照（二轮实测）
 
-| 裁定 | 要求 | 落地 |
+| 裁定 | 要求 | 落地 + 二轮实测 |
 |------|------|------|
-| ① 口径合法性 | 交付命名「确定性状态机验收」（pump 推日、断言状态时间线），非"妥协版完整局"；真实走位归人工 Play 职责归位 | 套件命名 `确定性状态机验收`，纯逻辑 pump（反射 `TimeManager.AdvanceTime` 走完整事件链），状态快照链断言时间线；NavMesh 走位/逐帧表现声明归人工 Play（文件头职责归位声明） |
-| ① 唯一实质让渡 | NavMesh 走位驱动的经济闭环（工人走到建筑才产出）——pump 下拿不到收入 | 报告显式登记该让渡（见 §四），不伪造收入增长；B2 供水=农场入账>0 属间接证据且依赖逐帧产出→一并登记让渡 |
-| ② 灾变域准予+登记 | WaveDirector/PortalDisasterTrigger/ThroneAnchor 三禁为验收环境构造；登记"玩家死亡/GameOver 链路本批未验" | `DisarmDisasters()` 三禁置 enabled=false（防玩家死→时钟冻结污染 A 判据）；**登记：ThroneAnchor 被禁=玩家死亡/GameOver 路径本批次未覆盖，留独立回归** |
-| ③ pump 实现约束 | 反射 `TimeManager.AdvanceTime` 走 `AdvanceDay→TimeDayChangedEvent→DayCycleSettlement` 完整事件链；**禁直接调 `OnDayChanged`**；GameState 必须 Playing；SetSecondsPerDay 走公开 L296 | `ReflectAdvance` 反射 `AdvanceTime(TEST_SPD)`（内部 while→`AdvanceDay`→事件链，真链）；未调 `OnDayChanged`；pump 内 `GameStateManager.SetState(Playing)` 强推保证推进期 Playing；`SetSecondsPerDay(TEST_SPD=60)` 公开 API；`Time.timeScale=0` 冻结 Update 自推，`AdvanceTime` 成唯一推手（确定性） |
+| ① 抽象结算升格 | pump 内置 D281 抽象结算（SimEconomy 同构：人口×生产率→入账），A1/A2/B4/B5 不降级 N/A；效力脚注收入侧=harness 实现归步骤14 | ApplyAbstractSettlement()：每日对每个 AI 王国 AddResources(worker×4 粮/木/石/金 + 建筑×2 税)（预演值）。B2 供水抽象产出=OK |
+| ① 生效声明 | 报告标注"收入侧为 harness 抽象结算，产品侧归步骤14" | 文件头效力脚注 + 本报告 §一目 |
+| ② 深挖优先级 | 解释2(残留)先于解释3(产品)；清点断言 + v2 门控；仍分歧才转产品 | 轮间清点断言：Unit/BuildingRegistry.Clear 补入 → RD2-①=OK(u=22 一致)；v2 门控 RD2-②=OK(loadVer=2)。残留排除。仍分歧(wood)→转产品深挖（§三） |
+| ② 实锤登记 | TrainingSystem.cs L305 Random.Range 未种子化 → 独立确定性小卡 | 实锤确认 TrainingSystem.cs:305 Random.Range 未种子化。登记独立小卡（§四），不阻塞本批 |
+| ③ B1 招募补验 | 注入玩家资源 + 确认真实流浪汉在场 + 打 pFalse 根因 | DoPlayerRecruit 注入粮到足 + 流民预置(OnNewGameMapReady) + 分层日志。破根因=流浪汉池空（粮够=True 通道层其余全满足） |
 
 ---
 
-## 二、执行过程中的两连卡顿（诚实归因，非产品缺陷）
-
-1. **首次时间不动**：查明根因 = 玩家被密度放大的夜袭打死 → GameOver → 全局时钟冻结（`TimeManager.Update` 仅 Playing 推进）。非死循环。→ harness 加 `DisarmDisasters()` 三禁修复（验收环境构造，横向策划准予）。
-2. **编辑器无响应(二次)**：根因 = **方案失当（执行端认领）**——首版 harness 走"真实流"（压缩日历 15s/天×3 倍速 + 全场景单位 AI 逐帧仿真），中等地图上单位累积把笔记本 CPU 打满，主线程被占 → 窗口卡死、MCP ping 不应答。→ 按策划②裁**用纯逻辑 pump 收敛**（反射推日、秒级完成、零逐帧负载），彻底消除卡顿源。
-
-**交付因此从「活世界帧仿真」收敛为「确定性状态机验收」**——此恰好是 A3(同 seed 逐字节) 的唯一可严格证明之法（HH.27① 裁明）。
-
----
-
-## 三、套件设计与真相
-
-- 单套件 `Assets/Editor/Smoke/Valley2_17_Smoke_P0.cs`（菜单 `Valley/验证/2_17_P0_完整局验收`）。
-- 三轮 pump：两纯轮(A3) + 一存读轮(B3+C6)。SEED 固定，Difficulty=2，Medium 世界，CAP_DAYS=45，SAVE_DAY=25。
-- 每轮 pump 首部对齐「回主菜单→新开一局」真实复位语义：`KingdomRegistry.ResetState()`（玩家占位/nextId）+ `TimeManager.ResetState()`（回 day1）+ `WorldManager.ResetState()` + `KingdomBrain.ResetDispatchStats()`——**必须在 `InitializeNewGame` 之前**（否则新局注册 foundedDay 读到上轮累积 CurrentDay，已修）。Day 归置已验：三轮开局均 Day=1, KCount=4。
-
----
-
-## 四、首轮判据结果（抽真证据）
-
-爆款，随后引用。最终 LLM 输出是唯一可信汇总（五次实测复现）。
+## 二、二轮实测判据结果（区别于首轮）
 
 ```
-A3确定性逐字节=FAIL      ← 两纯轮快照链不一致
+RD2-①轮间清点=OK(b=2684一致/u=22/22/22)   残留修复生效(首轮 u=18/36/54)
 A4玩家零回归=OK
-B1正向招募并行=FAIL(pFalse/False k1t0/0 k2t0/0)   ← 玩家招募失败 + AI 招工人 0
-B3+C6存读回环含脑态=FAIL  ← 存读残存（SpwanFromSave 冲突报错已现）
-B4剧本三段封顶=FAIL(R1-+无军事  R2E+无军事)         ← R1 停 Develop，R2 到 Expand（分歧）
-B5派遣双证分列=FAIL(K1 build10 train0)            ← 有建造落地、无招工落地
+B2供水抽象产出=OK                          裁决1 升格后绿
+RD2-②存读v2门控=OK(loadVer=2 走B全权重建)  A/B双份排除
+----
+A3确定性逐字节=FAIL   分歧缩小为仅 wood(52 vs 60)
+B1正向招募并行=FAIL   根因=流浪汉池空(粮够/通道其余全满足)
+B3+C6存读回环=FAIL    存读轮 roundtrip=False
+B4剧本三段封顶=FAIL   R1/R2 都停 Develop(均无军事)
+B5派遣双证分列=FAIL   K1 全程 build(46/1) train0
 ```
 
-**时间线**：R1=全 `D`（Develop 到底）；R2=`SDDDEEE...`（存活→发育→扩张）。
+**时间线**：R1=45×D；R2=第1天S+44×D（不再到 Expand）——趋同于都停 D，残留清掉后成长行为收敛（都因流浪汉池空无法招工）。
 
 ---
 
-## 五、初步归因（未甄定，待策划裁决）
+## 三、二轮甄定结论（据 HH.27 裁定"清点OK仍分歧→转产品"）
 
-**关键证据**：
-- `B5 train0` + `R1 停 Develop` 同时出现：**K1 全程只建造(build10)未招工人(train0)**，工人数不足以触发 Develop→Expand。
-- **R1 全 D vs R2 到 E = 同 seed 新局却有成长分歧**——这是最需要深挖的疑点。
-- 存读轮报 **`BuildingFactory.SpawnFromSave 冲突`**（路径A 新随机 GUID+默认 kingdomId vs 存档侧）——B3 存读/复合腐坏**疑似产品读档重建双路径 bug**（属 2_2 读档路径，非 2_17）。
+**已排除（解释2 harness 残留）**：轮间清点 OK、存读 v2 门控 OK。残留污染不成立。
 
-**候选解释（需甄别）**：
-1. **纯 pump 经济断链（HH.27①让渡项，预期）**：ProducerComponent 产出依赖 TaskScheduler 逐帧派工/走位到达，pump 无帧不产 → AI 无收入 → 招工人/建产能缺资源 → 停在 Develop。B5 train0 与之吻合。
-2. **harness 存读残留**：三轮共用 slot 的 Save/Delete、BuildingRegistry/UnitRegistry 跨轮残留可能污染 A3。
-3. **产品 AI 不确定性（真疑点）**：R1 vs R2 同 seed 成长分歧，若剔除 harness 因素仍现，则指向王国脑/Foundry 初始状态残留。
+**遗留真问题（转产品深挖）**，两个独立失败模式（对齐 HH.26"拆双证"）：
 
-**执行端当前判断**：`B5 train0`、`停 Develop` 大概率属解释1(纯 pump 断链)；A3 分歧可能含解释2(harness)；但 R1/R2 同在纯 pump 下分歧，不排除解释3。**需深入甄别后才能定性，不武断归因产品。**
-
----
-
-## 六、请策划裁决（裁后执行端深挖/收敛）
-
-1. **接受「让渡让这些判据在 pump 下为 N/A」**（解释1成立=纯 pump 环境限制，A1/A2/B2 + 经济产出相关 B5/B4 归人工 Play）——是否接受？若否，是否要求 AI 工人在 pump 下不依赖走位的产出补偿（改动 harness 模拟产出）？
-2. **是否批准深挖「R1/R2 同 seed 分歧 + SpawnFromSave 冲突」**（甄别解释2 harness vs 解释3 产品 AI/读档 bug）？深挖会再消耗笔记本编辑器资源（纯 pump 已无卡顿，风险有限）。
-3. **B1 玩家招募(pFalse)否要核查根因**：Harness `RecruitVagrant` 在纯 pump 下可能因无真实流浪汉/粮异常而返回 false——是否归"人工 Play"还是需 pump 补递归活流浪汉证其通道？
-
-**不影响 P0 收官的项**：步骤9 冒烟三条（#19/#4/#3）此前已 ALL PASS；王国脑决策核/评分器逻辑非 pump 依赖，A4 玩家零回归已 OK。
+1. **流浪汉池空＝B1/B5/B4 共通卡点（产品-环境断层，非判定产品 defect）**
+   - pump 走完整 DayCycleSettlement，但地图流浪汉由 GlobalMap 初始预置 + 营地每日补员（依赖 ActiveMap/营地滤镜）驱动，纯 pump 的 InitializeNewGame 无引导时序、ActiveMap 未产 → 流浪汉池空。
+   - 玩家 RecruitVagrant(pFalse根本因=候选缺失) + AI ExecuteRecruitWorker(FindRecruitableVagrant 空→train0) 全部空转 → 人口不长 → 停 Develop → B4 未达 Expand。
+   - 判定：需 harness 侧程序化 spawn 一个 Occupation.Vagrant 单位注入 UnitRegistry 续验 B1 通道；招工→成长段归人工 Play（恰合 HH.27①让渡）。
+2. **A3 wood 漂移（52 vs 60）+ train0 已成行** → **产品 AI 非种子随机**
+   - 残留已清（entry 一致、worker 均 6 一致）→ 两纯轮起点相同，却 wood 消耗不同(建 build3 vs build1)。来源：AI 建造选址/焦点决策经 UnityEngine.Random（非种子）。
+   - 待甄别归属：不急着归 TrainingSystem L305（本轮 train0 根本没走到它）。wood ±8 分叉日需二分定位，坐实或排除 Random.Range 嫌疑（§四算法附探针）。
 
 ---
 
-## 七、交接状态
+## 四、登记：确定性全库扫描小卡（HH.27 裁决②实锤，独立不阻塞）
 
-- **执行端产物已就绪**：`Valley2_17_Smoke_P0` 套件（含策划①②③全部约束落地 + 两卡顿根因修复）。
-- **未提交**：本批套件未 commit（待策划裁决方向后再提交，避免带未甄定 FAIL 入库）。
-- **文档**：本 HH.27 为中间汇报，正式收口待策划裁决后补全。
-- **④债**：维持不变（归步骤12/领土入档先到者，触发必落 foundKingdoms 门控+三处追记回写）。
+- 实锤：TrainingSystem.cs:305 var chosen = pool[Random.Range(0, pool.Count)] —— UnityEngine.Random 未种子化，多候选池确定性破坏（策划 grep 实锤，执行端复核确证）。
+- 归属：独立确定性纪律小卡【确定性全库扫描】——扫描 KingdomBrain/决策核/训练/建造/AI 消费面所有 UnityEngine.Random，改用种子派生 System.Random（对齐 VagrantCampSystem D308 先例）。
+- 附探针要求（策划裁定 A3）：wood 漂移 ±8 的分叉日二分定位探针（哪一天开始差、当天谁动了 wood），把 Random.Range 嫌疑坐实或排除；全库 UnityEngine.Random 消费面全挖。
+- 不阻塞 P0 收官：A4 玩家零回归不在受影响面；A3 判据待小卡修复后重跑终判。
+
+---
+
+## 五、请策划终裁 P0 收官（三问）
+
+1. A3：wood 漂移指向产品 AI 非种子随机——置为小卡修后重跑 A3 终判（策划已裁：准，附二分定位探针）。
+2. B1/B4/B5 流浪汉卡点：接受 harness 补程序化 spawn 真实流浪汉续验 B1 通道，招工→成长段归人工 Play（策划已裁：准，人工 Play 三项正式接单）。
+3. B3 存读回环：跟随确定性小卡一并扫，本轮不单独挖（策划已裁：准）。
+
+---
+
+## 六、交接状态
+
+- 执行序：回写 HH.27 二轮版 → push → 确定性小卡（清点+L305修+wood 二分）→ 重跑套件全终判 → HH.27 终版报裁 P0 收官。
+- 人工 Play 三项（策划正式接单）：①细模拟经济闭环（工人真走真产）②招工→成长链③GameOver 路径（灾变三禁未验）。
+- ④债：维持不变（归步骤12/领土入档先到者，触发必落 foundKingdoms 门控+三处追记回写）。
+
+---
+
+## 附：形实快照（供策划核对）
+
+```
+首轮(残留u):  u=18/36/54   R1=45D    R2=SDD...E...   A3 wood 漂移大
+二轮(清残留):  u=22/22/22   R1=45D    R2=SDDDD...     A3 wood 52 vs 60（唯一分歧）
+甄定:         残留排除 → 转产品 AI 非种子随机 + 流浪汉池空(环境断层)
+```
