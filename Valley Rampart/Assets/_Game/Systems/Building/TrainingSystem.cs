@@ -302,7 +302,11 @@ public class TrainingSystem : Singleton<TrainingSystem>
         }
         if (pool.Count == 0) return false;
 
-        var chosen = pool[Random.Range(0, pool.Count)];
+        // 确定性纪律（HH.27 实锤）：原 Random.Range(0,pool.Count) 未种子化，玩家同操作两次选人不同，
+        // 属确定性地雷（已登记独立小卡）。改为 npcId 稳定最小选人——确定性且同操作逐字节一致。
+        var chosen = pool[0];
+        for (int i = 1; i < pool.Count; i++)
+            if (pool[i].npcId < chosen.npcId) chosen = pool[i];
         return TryTrain(chosen, def, building);
     }
 

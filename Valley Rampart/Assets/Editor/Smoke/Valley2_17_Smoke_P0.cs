@@ -118,10 +118,13 @@ public static class Valley2_17_Smoke_P0
         // A3 首次逐行差异定位
         string[] a1 = r1.seq.Replace("\r", "").Split('\n');
         string[] a2 = r2.seq.Replace("\r", "").Split('\n');
+        int firstDiff = -1;
         for (int i = 0; i < System.Math.Min(a1.Length, a2.Length); i++)
         {
-            if (a1[i] != a2[i]) { Debug.Log($"[P0完整局] A3首差@行{i}: R1[{a1[i]}]  R2[{a2[i]}]"); break; }
+            if (a1[i] != a2[i]) { firstDiff = i; Debug.Log($"[P0完整局] A3首差@行{i}: R1[{a1[i]}]  R2[{a2[i]}]"); break; }
         }
+        // 裁决 A3 wood 二分定位：找 wood 首次不等的那一天 + 那天两轮 focus/train/build 差异（"谁动 wood"）
+        woodForkLog(a1, a2);
         Debug.Log($"[P0完整局] ===== {(corePass ? "ALL PASS(状态面)" : "HAS FAIL")} =====");
         Debug.Log("[P0完整局] A1/A2/B2 经济产出闭环属走位驱动，pump 无帧不产→时间线证据已收，正式判定按 HH.27 让渡归人工 Play");
         Debug.Log("[P0完整局] 玩家死亡/GameOver 链路（ThroneAnchor 被禁）本批次未验，留独立回归（HH.27 ②登记）");
@@ -328,6 +331,21 @@ public static class Valley2_17_Smoke_P0
             }
         bool anyVagrant = vagrant != null;
 
+        // 裁决 A3 B1 补验：「流浪汉池空」是纯 pump 无地图 spawn 的环境结果，非通道缺陷。
+        // harness 程序化 spawn 一个真实流浪汉注入 UnitRegistry，续验 RecruitVagrant 通道行为级
+        // （确定性位置，不依赖 ActiveMap；招工→入册走 Update 归人工 Play）。
+        if (!anyVagrant && UnitFactory.Instance != null)
+        {
+            var go = UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Vagrant, Vector3.zero);
+            if (go != null)
+            {
+                var uc = go.GetComponent<UnitController>();
+                vagrant = uc;
+                anyVagrant = uc != null;
+                Debug.Log($"[P0完整局] B1 harness spawn 流浪汉{(uc != null ? " 成功" : " null")}（补验通道，pump 无地图 spawn 兜底）");
+            }
+        }
+
         // 注入玩家粮食到充足（保守 200，远大于各类 recruitFoodCost；内部按 cfg 实扣）
         if (ruler.Food < 200)
             ruler.ModifyResource(ResourceType.Food, true, 200 - ruler.Food);
@@ -380,6 +398,58 @@ public static class Valley2_17_Smoke_P0
         bool noBrain = KingdomBrainRegistry.Instance == null || KingdomBrainRegistry.Instance.Get(0) == null;
         bool playerPresent = KingdomRegistry.Instance != null && KingdomRegistry.Instance.Get(0) != null;
         return noBrain && playerPresent;
+    }
+
+    /// <summary>
+    /// 裁决 A3 wood 二分定位探针：逐行比较两纯轮快照，提取 K1 wood 首次不等的那一天
+    /// （day 前缀 + focus/train/build），打印当天两轮完整态辨"谁动 wood"。
+    /// 行格式：`<day>:k..|K1g<g>/f<f>/w<w>/s<s>|wk<wk>wa<wa>b<b>|t<train>B<build>`
+    /// </summary>
+    private static void woodForkLog(string[] a1, string[] a2)
+    {
+        int n = System.Math.Min(a1.Length, a2.Length);
+        int lastSameWood = -1, firstDiffWood = -1;
+        for (int i = 0; i < n; i++)
+        {
+            int w1 = ExtractWood(a1[i]), w2 = ExtractWood(a2[i]);
+            if (w1 < 0 || w2 < 0) continue;              // 行不含 K1 wood（读档边界等）
+            if (w1 != w2) { firstDiffWood = i; break; }
+            lastSameWood = i;
+        }
+        Debug.Log($"[P0完整局] A3wood二分: 末一致日=行{lastSameWood} 首差日=行{firstDiffWood}");
+        if (firstDiffWood >= 0 && firstDiffWood < n)
+        {
+            Debug.Log($"[P0完整局]   R1@首差日[{a1[firstDiffWood]}]");
+            Debug.Log($"[P0完整局]   R2@首差日[{a2[firstDiffWood]}]");
+            // 前一日对比（分叉前 incl R1 一旦不同则定位）
+            if (firstDiffWood >= 1)
+            {
+                Debug.Log($"[P0完整局]   前日R1[{a1[firstDiffWood - 1]}]");
+                Debug.Log($"[P0完整局]   前日R2[{a2[firstDiffWood - 1]}]");
+            }
+        }
+    }
+
+    /// <summary>从快照行提取 K1 wood（`w<num>`，无则 -1）。</summary>
+    private static int ExtractWood(string line)
+    {
+        if (line == null) return -1;
+        int wIdx = line.IndexOf('w');
+        while (wIdx >= 0)
+        {
+            // 匹配 /w 前缀 + 数字（避开 wk/w a 单位字段）
+            int end = wIdx + 1;
+            bool digit = false;
+            while (end < line.Length && char.IsDigit(line[end])) { digit = true; end++; }
+            if (digit)
+            {
+                // 要求前缀是 '/' 或 前一位非 'k'
+                if (wIdx > 0 && line[wIdx - 1] == '/')
+                    return int.Parse(line.Substring(wIdx + 1, end - wIdx - 1));
+            }
+            wIdx = line.IndexOf('w', wIdx + 1);
+        }
+        return -1;
     }
 
     private class RoundData
