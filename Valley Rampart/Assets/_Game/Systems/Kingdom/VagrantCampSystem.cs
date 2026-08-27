@@ -34,8 +34,17 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
     /// <summary>读档还原的营地种子（centerCell/persistenceDays），ScanCamps 自愈重建关联（成员/建筑标识不入档）。</summary>
     private List<Camp> _restoredCampSeeds;
 
-    /// <summary>运行期随机源（每日补员等非世界生成的玩法随机，R4 确定性纪律：世界生成走 System.Random(seed) 派生，本字段仅供 gameplay 随机）。</summary>
-    private readonly System.Random _runRng = new System.Random();
+    /// <summary>每日补员确定性随机源由世界种子^当日派生（R4，对齐 OnNewGameMapReady 纪律）——
+    /// 修复 HH.27 A3 非种子随机漂移根因（原未播种 System.Random 逐轮随当前时间变化 → 同 seed 两轮分叉）。</summary>
+    private System.Random NewDayRng()
+    {
+        var wm = WorldManager.Instance;
+        var map = wm != null ? wm.ActiveMap : null;
+        int seed = map != null && map.seed != 0 ? map.seed
+                 : wm != null ? wm.MapSeed : 1;
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
+        return new System.Random(seed ^ (day * 7919));   // 每日不同确定性流；同 (seed, day) 恒复现
+    }
 
     protected override void Awake()
     {
@@ -101,13 +110,14 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
 
         var camps = FindCamps();
         int spawned = 0;
+        var rng = NewDayRng();
         for (int i = 0; i < camps.Count; i++)
         {
             int count = CountVagrantsNear(camps[i].GetPosition(), cfg.campVagrantRadiusCells);
             if (count >= cfg.campMaxVagrants) continue;
             int refill = Mathf.Min(cfg.campMaxVagrants - count, cfg.campDailyRefill);
             for (int v = 0; v < refill; v++)
-                if (SpawnVagrantNear(camps[i], _runRng)) spawned++;
+                if (SpawnVagrantNear(camps[i], rng)) spawned++;
         }
         if (spawned > 0)
             Debug.Log($"[VagrantCampSystem] 每日补员: +{spawned} 流浪汉");
