@@ -55,11 +55,15 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>设置运行时职业（TrainingSystem 转职用；随 UnitSaveData.occupation 持久化）。</summary>
     public void SetOccupation(Occupation occ) { _runtimeOccupation = (int)occ; }
 
-    // ===== 2_17 步骤10 Faction 收编：运行时阵营覆写（AI 王国单位，不污染共享 UnitData SO）=====
-    private int _runtimeFaction = -1;   // -1 = 未设置，回退 Data.faction
-    /// <summary>有效阵营（优先运行时覆写；2_17 步骤10 收编后 AI 王国单位覆写为 AiKingdom）。</summary>
-    public Faction EffectiveFaction => _runtimeFaction >= 0 ? (Faction)_runtimeFaction : (Data != null ? Data.faction : Faction.None);
-    /// <summary>设置运行时阵营（AI 王国单位生成后覆写为 AiKingdom；读档复用 data 默认值，旧档过渡态不覆写）。</summary>
+    // ===== 2_17 步骤10 Faction 收编：AI 王国单位贯彻 AiKingdom（不污染共享 UnitData SO）=====
+    private int _runtimeFaction = -1;   // -1 = 未设置，走派生判定；AI 王国单位走 _runtimeFaction≥0 显式覆写或派生兜底
+    /// <summary>有效阵营（优先运行时显式覆写；否则 Data.faction==Human_Player 且 kingdomId>0 的 AI 王国单位派生为 AiKingdom）。
+    /// 收编后 kingdomId>0 的 AI 单位无论走生成门面(SetFaction)还是读档路径(无 runtime 覆写)均稳定=AiKingdom，
+    /// 消除存读回环里读档后回落 Human_Player 的阵营漂移（2_17 步骤10 收编目标一致性）。</summary>
+    public Faction EffectiveFaction => _runtimeFaction >= 0 ? (Faction)_runtimeFaction
+        : (Data != null && Data.faction == Faction.Human_Player && kingdomId > 0 ? Faction.AiKingdom
+        : (Data != null ? Data.faction : Faction.None));
+    /// <summary>设置运行时阵营（AI 王国单位生成后显式覆写为 AiKingdom；读档走派生兜底，无需逐单位覆写）。</summary>
     public void SetFaction(Faction faction) { _runtimeFaction = (int)faction; }
 
     // ===== 3.5 P1 生活状态：饱食 / 幸福 / 装备（随 UnitSaveData v2 持久化）=====
