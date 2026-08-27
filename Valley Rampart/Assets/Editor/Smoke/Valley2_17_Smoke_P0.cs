@@ -43,6 +43,7 @@ public static class Valley2_17_Smoke_P0
     private const int PLAYER_RECRUIT_DAY = 13;
     private const float TEST_SPD = 60f;
     private static float s_farmAbstractOut = 0f;   // 裁决1 B2：抽象结算农场累积产出（harness 预演口径）
+    private static bool s_baselineDumped = false;  // HH.27 ②升级版：三点基线 dump 只对首纯轮 r1 做一次
 
     [UnityEditor.MenuItem("Valley/验证/2_17_P0_完整局验收")]
     public static void RunFromMenu()
@@ -57,6 +58,11 @@ public static class Valley2_17_Smoke_P0
         var lm = LoadManager.Instance;
         var sm = SaveManager.Instance;
         if (tm == null || lm == null || sm == null) { Debug.LogError("[P0完整局] 单例缺失。"); yield break; }
+
+        // HH.27 ②升级版 三点基线 dump ·pre-reset（r1 复位链之前，捕捉触发时的实时世界态）：
+        // 判读表——CurrentDay>1 / K>0 / ActiveMap 在 → 实时会话污染坐实 → 转①强制 teardown。
+        Debug.Log("[P0完整局] 基线" + BaselineDump("pre-reset"));
+        s_baselineDumped = false;
 
         RoundData r1 = null, r2 = null, r3 = null;
         float savedSpd = tm.SecondsPerDay;             // 存真实初值（pump 前）
@@ -156,6 +162,10 @@ public static class Valley2_17_Smoke_P0
         KingdomBrain.ResetDispatchStats();
         s_farmAbstractOut = 0f;   // 裁决1 B2：每轮独立累计（防跨轮污染）
 
+        // HH.27 ②升级版 ·post-reset（复位链效果）：看清复位链清掉/漏了什么（仅首纯轮 r1）
+        bool baselineHere = !withRoundtrip && !s_baselineDumped;
+        if (baselineHere) Debug.Log("[P0完整局] 基线" + BaselineDump("post-reset"));
+
         lm.InitializeNewGame(new NewGameConfig
         {
             mapSeed = SEED, worldSeed = SEED, difficulty = 2,
@@ -163,6 +173,12 @@ public static class Valley2_17_Smoke_P0
             selectedSlotId = withRoundtrip ? "smoke_p0_b_rt" : "smoke_p0_b"
         });
         yield return null;
+        // 策划额批②①作废转 GameOver 残留线：post-Init 改为每轮记录（GameState + 各国建筑数）——
+        // 反查 r1 vs r2 预置建筑数（若 r1=4/r2=1 → 定性 PlaceBuildings 只落了王座，rng/模板抽取静态残留嫌疑，
+        // GameOver 仅为伴生症状；GameOver 残留 = 必须给出 残留→phase1/build4/wood52 因果链才算结案）。
+        var gsmPi = GameStateManager.Instance;
+        Debug.Log($"[P0完整局] 基线@post-Init(轮{(withRoundtrip ? "R" : "纯")}) State={(gsmPi != null ? gsmPi.CurrentState.ToString() : "null")} " + KingdomBuildBreakdown());
+        if (baselineHere) s_baselineDumped = true;
         Debug.Log($"[P0完整局] 开局: RT={withRoundtrip} Day={tm?.CurrentDay} KCount={(KingdomRegistry.Instance?.GetAll()?.Count ?? -1)}");
         // 裁决3 B1 前置：map ready 初始流民预置（D308）——真实路径由 GameBootstrap 地图 ready 调，
         // pump 无引导时序，这里手动补一次对齐，否则流浪汉池空（B1 pFalse 根因=候选缺失）。
@@ -401,6 +417,66 @@ public static class Valley2_17_Smoke_P0
         bool noBrain = KingdomBrainRegistry.Instance == null || KingdomBrainRegistry.Instance.Get(0) == null;
         bool playerPresent = KingdomRegistry.Instance != null && KingdomRegistry.Instance.Get(0) != null;
         return noBrain && playerPresent;
+    }
+
+    /// <summary>
+    /// HH.27 ②升级版 三点基线 dump：r1 前捕捉 pre-reset/post-reset/post-Init 世界态，
+    /// 判读是否被实时会话污染（CurrentDay>1 / K>0 / ActiveMap 在 = 污染坐实 → 转① force teardown）。
+    /// </summary>
+    private static string BaselineDump(string tag)
+    {
+        var sb = new StringBuilder();
+        sb.Append('@').Append(tag).Append(':');
+        var gsm = GameStateManager.Instance;
+        sb.Append("State=").Append(gsm != null ? gsm.CurrentState.ToString() : "null").Append(' ');
+        var wm = WorldManager.Instance;
+        var map = wm != null ? wm.ActiveMap : null;
+        sb.Append("ActiveMap=").Append(map != null ? ("Y(kSpawns" + (map.kingdomSpawns != null ? map.kingdomSpawns.Count : 0) + ")") : "N").Append(' ');
+        sb.Append("MapSeed=").Append(wm != null ? wm.MapSeed : 0).Append(' ');
+        sb.Append("Day=").Append(TimeManager.Instance != null ? TimeManager.Instance.CurrentDay.ToString() : "null").Append(' ');
+        var kr = KingdomRegistry.Instance;
+        if (kr != null)
+        {
+            var all = kr.GetAll();
+            int cnt = all != null ? all.Count : 0;
+            sb.Append("K=").Append(cnt).Append('[');
+            if (all != null)
+            {
+                int i = 0;
+                foreach (var k in all)
+                {
+                    if (i++ > 0) sb.Append(',');
+                    sb.Append(k.id).Append(':').Append(k.scriptPhase).Append('/').Append(k.foundedDay);
+                }
+            }
+            sb.Append("] ");
+        }
+        else sb.Append("K=null ");
+        sb.Append("Building=").Append(BuildingRegistry.Instance != null ? BuildingRegistry.Instance.Count.ToString() : "null").Append(' ')
+          .Append("Unit=").Append(UnitRegistry.Instance != null ? UnitRegistry.Instance.Count.ToString() : "null");
+        return sb.ToString();
+    }
+
+    /// <summary>逐国建筑数（post-Init 预置核实）：反查 r1/r2 各 AI 国 PlaceBuildings 落了哪些（r1=4/r2=1 → 残缺定性）。</summary>
+    private static string KingdomBuildBreakdown()
+    {
+        var reg = BuildingRegistry.Instance;
+        var kreg = KingdomRegistry.Instance;
+        var ks = kreg != null ? kreg.GetAll() : null;
+        var sb = new StringBuilder("bByK{");
+        if (ks != null && reg != null)
+        {
+            int first = 0;
+            foreach (var k in ks)
+            {
+                int c = 0;
+                foreach (var b in reg.All) if (b != null && b.kingdomId == k.id) c++;
+                if (first++ > 0) sb.Append(',');
+                sb.Append(k.id).Append(':').Append(c);
+            }
+        }
+        sb.Append("} b=").Append(reg != null ? reg.Count : -1);
+        return sb.ToString();
     }
 
     /// <summary>
