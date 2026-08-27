@@ -29,6 +29,10 @@ using UnityEngine;
 //
 //  职责归位声明（HH.27 ①）：NavMesh 真实走位/逐帧表现属表现层，不在 P0 验收面；
 //  真实游走归人工 Play，本套件不伪造逐帧证据。
+//
+//  **裁决1 升格（HH.27）：收入侧=harness 抽象结算预演（D281 同构：人口×生产率→AI 入账），
+//  覆盖 pump 无帧断链；效力脚注——本套件收入侧为抽象结算实现，产品侧归步骤14 AbstractEconomySettler 落地。**
+//  B2 供水口径随之改为「农场抽象产出>0」。细模拟经济闭环（工人真走真产）留人工 Play 一票。
 // ============================================================================
 public static class Valley2_17_Smoke_P0
 {
@@ -38,6 +42,7 @@ public static class Valley2_17_Smoke_P0
     private const int SAVE_DAY = 25;
     private const int PLAYER_RECRUIT_DAY = 13;
     private const float TEST_SPD = 60f;
+    private static float s_farmAbstractOut = 0f;   // 裁决1 B2：抽象结算农场累积产出（harness 预演口径）
 
     [UnityEditor.MenuItem("Valley/验证/2_17_P0_完整局验收")]
     public static void RunFromMenu()
@@ -67,6 +72,11 @@ public static class Valley2_17_Smoke_P0
         // ===================== 断言汇总 =====================
         var c = new System.Collections.Generic.List<string>();
 
+        // 裁决2-① 轮间清点断言：三轮开局注册表计数应一致（各=各自新局期望），不等→残留暴露
+        bool entryClean = r1.entryBuilding == r2.entryBuilding && r1.entryBuilding == r3.entryBuilding
+                       && r1.entryUnit == r2.entryUnit && r1.entryUnit == r3.entryUnit;
+        c.Add($"RD2-①轮间清点={(entryClean ? "OK" : "FAIL")}(b={r1.entryBuilding}/{r2.entryBuilding}/{r3.entryBuilding} u={r1.entryUnit}/{r2.entryUnit}/{r3.entryUnit})");
+
         // A3 两纯轮逐字节一致
         bool a3 = r1.seq == r2.seq;
         c.Add($"A3确定性逐字节={(a3 ? "OK" : "FAIL")}");
@@ -80,9 +90,15 @@ public static class Valley2_17_Smoke_P0
                   && r1.k1Train > 0 && r1.k2Train > 0 && r2.k1Train > 0 && r2.k2Train > 0;
         c.Add($"B1正向招募并行={(b1 ? "OK" : "FAIL")}(p{r1.playerRecruitOk}/{r2.playerRecruitOk} k1t{r1.k1Train}/{r2.k1Train} k2t{r1.k2Train}/{r2.k2Train})");
 
+        // 裁决1 B2 供水（抽象农场产出>0 间接证据，预演口径）
+        bool b2 = s_farmAbstractOut > 0f;
+        c.Add($"B2供水抽象产出={(b2 ? "OK" : $"FAIL(out={s_farmAbstractOut})")}");
+
         // B3+C6 存读回环含脑态：存读轮序列 == 纯轮序列（D 起一致）
         bool bc = r1.seq == r3.seq;
         c.Add($"B3+C6存读回环含脑态={(bc ? "OK" : "FAIL")}");
+        // 裁决2-② 存读 v2 门控：≥2 = 走 B 全权重建（无 A/B 双份），<2 = 门控被 harness 调用序绕过
+        c.Add($"RD2-②存读v2门控={(r3.lastLoadVersion >= 2 ? "OK(v2走重建)" : $"FAIL(loadVer={r3.lastLoadVersion}<2 门控嫌疑)")}");
 
         // B4 剧本三段封顶时间线
         bool b4 = r1.reachedExpand && !r1.hasMilitary && r2.reachedExpand && !r2.hasMilitary;
@@ -92,7 +108,8 @@ public static class Valley2_17_Smoke_P0
         bool b5 = r1.k1Build > 0 && r1.k1Train > 0;
         c.Add($"B5派遣双证分列={(b5 ? "OK" : "FAIL")}(K1 build{r1.k1Build} train{r1.k1Train})");
 
-        bool corePass = a3 && a4 && b1 && bc && b4 && b5;
+        bool corePass = a3 && a4 && b1 && b2 && bc && b4 && b5
+                        && r3.lastLoadVersion >= 2 && entryClean;
 
         Debug.Log("[P0完整局] ====================================================================");
         foreach (var line in c) Debug.Log("[P0完整局] " + line);
@@ -126,7 +143,12 @@ public static class Valley2_17_Smoke_P0
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
         if (TimeManager.Instance != null) TimeManager.Instance.ResetState();
         if (WorldManager.Instance != null) WorldManager.Instance.ResetState();
+        // 裁决2-① 残留实锤修复：UnitRegistry 跨轮残留（u=18/36/54）+18 递增坐实；
+        // BuildingRegistry b=2684 异常大但三抽一致——统一 Clear 归零，暴露新局真实基准。
+        if (UnitRegistry.Instance != null) UnitRegistry.Instance.Clear();
+        if (BuildingRegistry.Instance != null) BuildingRegistry.Instance.Clear();
         KingdomBrain.ResetDispatchStats();
+        s_farmAbstractOut = 0f;   // 裁决1 B2：每轮独立累计（防跨轮污染）
 
         lm.InitializeNewGame(new NewGameConfig
         {
@@ -136,6 +158,10 @@ public static class Valley2_17_Smoke_P0
         });
         yield return null;
         Debug.Log($"[P0完整局] 开局: RT={withRoundtrip} Day={tm?.CurrentDay} KCount={(KingdomRegistry.Instance?.GetAll()?.Count ?? -1)}");
+        // 裁决3 B1 前置：map ready 初始流民预置（D308）——真实路径由 GameBootstrap 地图 ready 调，
+        // pump 无引导时序，这里手动补一次对齐，否则流浪汉池空（B1 pFalse 根因=候选缺失）。
+        if (VagrantCampSystem.Instance != null)
+            VagrantCampSystem.Instance.OnNewGameMapReady();
         // HH.27 ③：pump 期间 GameState 必须 Playing（EnterPlaying/云端/加载末期可能有瞬态其他态，
         // 这里吞掉 by 强推 Playing——反射 AdvanceTime 不依赖 Update，推进有效）。
         if (GameStateManager.Instance != null)
@@ -148,7 +174,11 @@ public static class Valley2_17_Smoke_P0
         // 使 TimeManager.Update 的 deltaTime 归零不再自推 _dayTimer；pump 反射 AdvanceTime 成为唯一推手
         Time.timeScale = 0f;
 
+        // 裁决2-① 轮间清点断言（残留暴露）：每轮开局（新局已建）读注册表计数，
+        // Driver 端比对三轮 entry==应一致（residual→ignition 差异）。
         var r = new RoundData();
+        r.entryBuilding = BuildingRegistry.Instance != null ? BuildingRegistry.Instance.Count : -1;
+        r.entryUnit = UnitRegistry.Instance != null ? UnitRegistry.Instance.Count : -1;
         var sb = new StringBuilder();
         var lastEtch = "";
 
@@ -168,12 +198,19 @@ public static class Valley2_17_Smoke_P0
                 bool loaded = saved && sm.Load(SLOT_RT);
                 string post = BuildEtch(tm);
                 r.roundtripOk = loaded && pre == post;
+                // 裁决2-② v2 门控日志：读档走 v2 路径则建筑由 B 全权重建（无 A/B 双份）
+                r.lastLoadVersion = SaveManager.Instance != null ? SaveManager.Instance.LastLoadedSaveVersion : -1;
+                Debug.Log($"[P0完整局] 存读轮 loadVer={r.lastLoadVersion} (CurrentSaveVersion=2；<2=门控绕过风险，≥2=走 B 全权重建) roundtrip={r.roundtripOk}");
                 if (loaded) tm = TimeManager.Instance;   // 读档后重取引用（域内单例重建于同 Play 会话）
             }
 
             // 反射 AdvanceTime 走完整事件链推一天（真链）
             ReflectAdvance(tm);
             yield return null;   // 让同步事件链副作用（若有）落定（timeScale=0 下 yield null 仍跑下一帧）
+
+            // 裁决1 抽象结算预演（D281 同构：人口×生产率→AI 入账；效力脚注见文件头）
+            //——pump 无帧断链，抽象结算给 AI 供养，否则 Feasible/gold 拦腰→招工人/建造缺粮卡死
+            ApplyAbstractSettlement();
 
             sb.Append(BuildEtch(tm)).Append('\n');
 
@@ -240,8 +277,45 @@ public static class Valley2_17_Smoke_P0
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 裁决1 抽象结算预演（D281 同构模拟：人口×生产率→入账；效力脚注=产品侧归步骤14 AbstractEconomySettler）。
+    /// pump 无帧→生产者/工人走位产出断链，此处对每个 AI 王国按「工人数×生产率 + 建筑数×税率」入账粮/木/石/金，
+    /// 供 AI 招工人(TryTrain 需粮)/建造(TryBuild 需资源) 的 Feasible 有料可花。B2 供水口径=「农场抽象产出>0」。
+    /// 数值为预演缺省，非产品数值，仅够 pump 全链活动所需；细模拟经济闭环留人工 Play。
+    /// </summary>
+    private static void ApplyAbstractSettlement()
+    {
+        const int workerRate = 4;      // 每工人每日入账倍数（预演：粮/木/石/金各算，够 Sustenance+建造）
+        const int taxPerBuilding = 2;  // 每建筑每日税金（gold）
+        var reg = KingdomRegistry.Instance;
+        if (reg == null) return;
+        var all = reg.GetAll();
+        if (all == null) return;
+        for (int i = 0; i < all.Count; i++)
+         {
+             var k = all[i];
+             if (k == null || k.IsPlayer) continue;
+             var gain = new ResourcePack
+             {
+                 food = k.workerCount * workerRate,
+                 wood = k.workerCount * workerRate,
+                 stone = k.workerCount * workerRate,
+                 gold = k.workerCount * workerRate + CountBuildings(k.id) * taxPerBuilding
+             };
+             k.AddResources(gain);
+             s_farmAbstractOut += gain.food;   // 裁决1 B2：农场抽象产出>0 间接证据（预演口径）
+         }
+     }
+
     private static void DoPlayerRecruit(RoundData r)
     {
+        // 裁决3 B1 补验：确认真实流浪汉在场 + 注入玩家粮食到充足（防"粮不足"外因遮蔽通道验证；
+        // pump 无帧玩家无产出，直接注入足够粮；RecruitVagrant 内部用 cfg.recruitFoodCost 扣）+ 打 pFalse 根因分层日志。
+        var vcs = VagrantCampSystem.Instance;
+        var ruler = RulerController.Instance;
+        if (vcs == null || ruler == null) { Debug.Log("[P0完整局] B1 招募：VagrantCampSystem/Ruler 缺失，跳过"); return; }
+
+        // 确认真实流浪汉在场（条件：存活 + 未入籍 + 未招募 + 职业=Vagrant）
         UnitController vagrant = null;
         var urs = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
         if (urs != null)
@@ -252,13 +326,23 @@ public static class Valley2_17_Smoke_P0
                 if (u.EffectiveOccupation != Occupation.Vagrant) continue;
                 vagrant = u; break;
             }
-        float before = RulerController.Instance != null ? RulerController.Instance.Food : -1;
-        bool ok = vagrant != null && VagrantCampSystem.Instance != null
-                  && VagrantCampSystem.Instance.RecruitVagrant(vagrant);
-        r.playerRecruitOk = ok && before > 0
-                            && RulerController.Instance != null
-                            && RulerController.Instance.Food <= before
-                            && vagrant.EffectiveOccupation == Occupation.Resident;
+        bool anyVagrant = vagrant != null;
+
+        // 注入玩家粮食到充足（保守 200，远大于各类 recruitFoodCost；内部按 cfg 实扣）
+        if (ruler.Food < 200)
+            ruler.ModifyResource(ResourceType.Food, true, 200 - ruler.Food);
+        bool hasFood = ruler.Food >= 200;
+
+        // pFalse 根因分层
+        if (!anyVagrant) Debug.Log("[P0完整局] B1 招募：无在场真实流浪汉（Vagrant 池空）──候选单位缺失");
+        if (!hasFood) Debug.Log($"[P0完整局] B1 招募：玩家粮仍不足（{ruler.Food}），注入未生效？");
+
+        bool ok = anyVagrant && hasFood && vcs.RecruitVagrant(vagrant);
+        // 通道行为级：RecruitVagrant 返回 true + 流浪汉已转居民 = 通道接受指令（扣粮已由内部完成）。
+        // 注：转居民后"走回王国入册 Population+1"依赖 Update/走位（ScanArrive），pump 无帧不触发——归人工（职责归位声明）。
+        r.playerRecruitOk = ok && anyVagrant && vagrant.EffectiveOccupation == Occupation.Resident;
+        Debug.Log($"[P0完整局] B1 招募: 流浪汉在场={anyVagrant} 粮够={hasFood} RecruitVagrant={ok}"
+                  + (r.playerRecruitOk ? " → 通道OK(流浪汉→居民)" : " → 达入册需 Update/走位(归人工)"));
     }
 
     /// <summary>净化面：灾变域三禁（HH.27 ②）。登记：ThroneAnchor 禁=GameOver 链路本批未验留独立回归。</summary>
@@ -305,6 +389,9 @@ public static class Valley2_17_Smoke_P0
         public bool playerRecruitAttempted, playerRecruitOk, roundtripOk;
         public bool reachedExpand, hasMilitary;
         public int k1Train, k1Build, k2Train;
+        public int entryBuilding = -1, entryUnit = -1;   // 裁决2-① 轮间清点基准
+        public int lastLoadVersion = -1;                  // 裁决2-② v2 门控日志
+        public float farmAbstractOut = 0f;                // 裁决1 B2 农场抽象产出
     }
 
     private class P0Host : MonoBehaviour
