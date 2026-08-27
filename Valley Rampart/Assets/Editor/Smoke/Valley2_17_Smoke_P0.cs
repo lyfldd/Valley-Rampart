@@ -150,6 +150,9 @@ public static class Valley2_17_Smoke_P0
         // BuildingRegistry b=2684 异常大但三抽一致——统一 Clear 归零，暴露新局真实基准。
         if (UnitRegistry.Instance != null) UnitRegistry.Instance.Clear();
         if (BuildingRegistry.Instance != null) BuildingRegistry.Instance.Clear();
+        // HH.27 终裁实锤：脑级跨轮残留（双层复合）复位——先逐脑 Unsubscribe 再 Clear
+        // （防旧脑 OnAttacked 幽灵订阅 + FocusController._defenseEndDay 跨轮留痕污染 R2 首日焦点）。
+        if (KingdomBrainRegistry.Instance != null) KingdomBrainRegistry.Instance.ResetState();
         KingdomBrain.ResetDispatchStats();
         s_farmAbstractOut = 0f;   // 裁决1 B2：每轮独立累计（防跨轮污染）
 

@@ -49,6 +49,14 @@ public class KingdomBrainRegistry : Singleton<KingdomBrainRegistry>
     /// <summary>是否已建某王国脑。</summary>
     public bool HasBrain(int kingdomId) => _brains.ContainsKey(kingdomId);
 
-    /// <summary>重置（返回主菜单清空，对齐 KingdomRegistry.ResetState）。</summary>
-    public void ResetState() => _brains.Clear();
+    /// <summary>重置（返回主菜单清空，对齐 KingdomRegistry.ResetState）。
+    /// 先逐脑 Unsubscribe 再 Clear（D340 对称，防旧脑 EventBus 幽灵订阅存活导致 A3 跨轮分叉）。</summary>
+    public void ResetState()
+    {
+        foreach (var brain in _brains.Values)
+        {
+            if (brain != null) brain.Unsubscribe();
+        }
+        _brains.Clear();
+    }
 }
