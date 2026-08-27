@@ -85,8 +85,8 @@ public class HappinessSystem : Singleton<HappinessSystem>
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.Data.faction != Faction.Human_Player) continue;
-            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人(Human_Player 冒充)不稀释玩家幸福(步骤10 退役)
+            if (unit.GetFaction() != Faction.Human_Player) continue;
+            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不稀释玩家幸福；收编后 GetFaction=AiKingdom 首条件已排除（此双条件保留兼容存量过渡态）
             if (!SatietySystem.IsNpc(unit.EffectiveOccupation)) continue;
 
             int h = ComputeUnitHappiness(unit, cfg);

@@ -107,11 +107,20 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
 
     /// <summary>
     /// 按 Faction + Occupation 直接创建单位。kingdomId 默认 0=玩家（2_16 步骤2 门面 D329）。
+    /// 2_17 步骤10 Faction 收编：新建 AI 王国单位（kingdomId>0）生成后覆写阵营为 AiKingdom，
+    /// 不再以 Human_Player 冒充（读档路径走 SpawnUnit(UnitData) 不经过本门面，存量旧档
+    /// Human_Player+kingdomId>0 过渡兼容保留，由各处 kingdomId 双条件守卫兜底）。
     /// </summary>
     public GameObject SpawnUnit(Faction faction, Occupation occupation, Vector2 position, int kingdomId = 0)
     {
         UnitData data = UnitDataManager.Instance.GetData(faction, occupation);
-        return SpawnUnit(data, position, kingdomId);
+        GameObject go = SpawnUnit(data, position, kingdomId);
+        if (go != null && kingdomId > 0)
+        {
+            var uc = go.GetComponent<UnitController>();
+            if (uc != null) uc.SetFaction(Faction.AiKingdom);   // 2_17 步骤10
+        }
+        return go;
     }
 
     // ===== ISaveableSpawner 实现 =====
