@@ -1,7 +1,7 @@
 # HH.28 P1 步骤10 路线① Faction 收编 sim-sync 报备（待策划裁）
 
 > 类型：待决策（sim-sync 报备先行）
-> 状态：⏳待策划裁 Faction 收编方案 → **[2026-08-28 四问全裁 + P0 干净复跑收口，见 §五]**
+> 状态：✅已裁决·收编验收成立（HH.29 决策②确认；四问全裁 HH.28 §五 + 决策①人口底线判修见 HH.29 §七）
 > 日期：2026-08-27 · 发起端：执行端 · 关联：HH.27（2_17 P0 收官成立）/ 2_17_AI王国脑与自主成长（D331/D338/D339）+ 实施计划步骤10 / sim-sync skill / 15_差距账本
 > 前置：2_17 P0 收官成立（HH.27 终版）→ P1 步骤10 开工；路线① Faction 收编 sim-sync 报备先行
 
@@ -84,3 +84,47 @@
 ## 四、下一步
 
 策划揽准后：按裁 **①Faction 收编代码 + 双份镜像 + 15账本登记 + 9 行守卫迁移**（独立一步，冒烟：AI 王国不再冒充玩家、玩家零回归、既有守卫面守恒）→ 批准后动工 **②路线② 效用补全 15 项**（⑦⑧⑨⑫落地+⑪⑮占位桩，验收带冒烟 #5 兵力目标随威胁上调）。
+
+---
+
+## 五、四问全裁 + P0 干净复跑收口（2026-08-28）
+
+### 5.1 Faction 收编验收：成立（无回归）
+
+策划终判 **「② Faction 收编验收成立（无回归）」**。证据链：
+- **前绿项全绿**：A3 确定性逐字节=OK、A4 玩家零回归=OK、B2 供水=OK、RD2-①②=OK（干净环境复跑，非 MCP 污染——三轮 post-init `b=2684/2684/2684`、`u=22/22/22` 一致）。
+- **通道零 faction 依赖已核**：`ConvertVagrantsToWorkers`（KingdomFoundry L349）与 `FindRecruitableVagrant`（KingdomBrain）只判 occupation/kingdomId/recruited，**无 faction 引用**。
+- **执行链完好佐证**：玩家侧 `RecruitVagrant=True`（B1 pTrue）+ 建造侧 `K1 build45>`（B5 build 通）全通。
+- **bfd8f349 兜底确认为真抓虫**：`EffectiveFaction` 派生兜底（Data.faction==Human_Player && kingdomId>0 → AiKingdom）修读档回环阵营漂移，纯轮行为不变。
+
+### 5.2 源码态澄清（策划裁决②质询应答）
+
+**「复跑编译时 workdir 路线② 未提交改动在不在？」——在。**
+
+刚才 P0 干净复跑的编译态 = **commit(bfd8f349 Faction收编 + 46c31e6/afd29d5 镜像) + workdir（路线② ExecuteRecruitWarrior / Valley2_17_Smoke_5 / UtilityActionConfig 补 def / UtilityScorer D348 / KingdomBrainConfig 系数）混合态**。即「无回归」证据覆盖的是 commit+workdir 混合源码，非纯 commit。因 A3/A4 逐字节探明了决策核行为不变，几何验证仍成立；**但此后一切回归复跑均须先声明源码态**（本报告即首次声明）。路线② 将与其 Faction 分笔 commit，届时混合态自动消解。
+
+### 5.3 策划裁决①（让渡确认）落点——探针两行已补
+
+- **探针①（D308 自然流民数）**：`VagrantCampSystem.OnNewGameMapReady` 现有日志 `D308 初始流民预置: {spawned}/{total}`（L102）已隐式覆盖，无需重复行。
+- **探针②（B5 trainTry vs trainOk 分层）**：已补进 `Valley2_17_Smoke_P0`——RoundData 增 `k1TrainTry/k2TrainTry`，DispatchStat 四元组读 `trainTry`（B5 黄旗行输出分层：`try=0→焦点从未选⑥→评分问题` vs `try>0&ok=0→无候选→环境让渡坐实`）。
+- **让渡归档状态**：探针已埋；**最终 trainTry 数值需手工 Play 干净 pump 终判**（MCP 长 pump 结算段拿不到终判字）。归因方向已由策划确认「train0=pump 环境让渡方向对」；EP 若显示 D308 真产流民却 trainTry=0 → 回填策划判真问题。
+
+### 5.4 策划裁决③④落点（P0 断言口径改造 + B4 归因）
+
+**③ 断言口径对齐已裁决验收形态**（同批已改 `Valley2_17_Smoke_P0.cs`）：
+- 绿项硬断言不变：A3/A4/B2/RD2-①②；B1 玩家招募、B5 建造 >0 保持硬断。
+- 黄项（B1 AI 侧/B4 reachedExpand/B5 train）改**证据记录 + 黄旗标注 + 断言换轮间一致性**（两轮同为 train0/SDDDD = 确定性证据，非 FAIL）。
+- B3 输出「黄旗挂 2_11（独立卡）」**不计 FAIL**（HH.27 §二.3 独立卡定义）。
+- verdict 稳定反映裁决态。
+
+**④ B4 归因措辞更正**：由旧「无真经济」改为 **「工人不足」**——抽象结算已供资源 + build45 佐证非缺资源，卡点=`workerCount≥8` 演化需求不可达（初始 4 + 招工 0）。黄旗归属不变（招工→成长链），归因文本已按 HH.27 黄旗 2 追更新。
+
+### 5.5 收口执行序对照
+| 策划裁决 | 状态 |
+|---------|------|
+| ①探针两行补（D308 现成 + trainTry 分层已埋） | ✅ 已落，终判待手工 pump |
+| ②源码态澄清一句 | ✅ 见 5.2 |
+| ③断言口径改造 | ✅ 已改（黄旗+轮间一致+B3 挂卡） |
+| ④B4 归因措辞 | ✅ 已改（工人不足） |
+| Faction 收编收口独立 commit（15账本+HH.28 回写+训练仓镜像） | ⏳ 本报告回写即此；镜像已同步（afd29d5）；15账本登记进行中 |
+| 路线②单独 commit（与 Faction 分笔） | ⏳ 待下发 |
