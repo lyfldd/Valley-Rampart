@@ -59,11 +59,11 @@ public class KingdomBrainConfig : ScriptableObject
     public int focusMinDurationDays = 3;
 
     [Header("常设底线（D322，触发式不评分；执行序=粮→人口→被攻击 三级底线）")]
-    [Tooltip("粮储低于 N 日消耗强制屯粮（粮储 < N × 人口 × perPop 时触发；底线第一级"保命")")]
+    [Tooltip("粮储低于 N 日消耗强制屯粮（粮储 < N × 人口 × perPop 时触发；底线第一级「保命」）")]
     public int grainReserveDaysFloor = 2;
     [Tooltip("每人口每日本人消耗粮估算（占位分母；对人口×日为防线阈值）")]
     public int grainConsumptionPerPop = 1;
-    [Tooltip("人口底线（自造件，贴既有哲学）：workerCount < popFloor 强制⑥招工人焦点（底线第二级"保增长下限"；触发式不评分跳防抖）。修复决策①结构性锁死（低扩张国⑥评分被轴乘入压制永不招工）。")]
+    [Tooltip("人口底线（自造件，贴既有哲学）：workerCount < popFloor 强制⑥招工人焦点（底线第二级「保增长下限」；触发式不评分跳防抖）。修复决策①结构性锁死（低扩张国⑥评分被轴乘入压制永不招工）。")]
     public int popFloor = 6;
 
     [Header("执行派遣（2_17 完整局批次，D345 执行面）")]

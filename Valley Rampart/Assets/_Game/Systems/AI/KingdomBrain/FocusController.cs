@@ -61,7 +61,7 @@ public class FocusController
 
     /// <summary>
     /// 每日刷新国策焦点（王国脑日 tick 内，入账前口径）。
-    /// 优先级：常设底线强制(⑤/⑭) &gt; 效用评分 &gt; 防抖切换。直接写 kingdom.focus。
+    /// 优先级：常设底线强制(⑤屯粮/⑥人口/⑭防御) &gt; 效用评分 &gt; 防抖切换。直接写 kingdom.focus。
     /// </summary>
     public void Update(KingdomState kingdom, KingdomBrainConfig brainCfg, UtilityActionConfig utilCfg, int day)
     {
@@ -80,10 +80,13 @@ public class FocusController
             && kingdom.GetResourceValue(ResourceType.Food)
                < brainCfg.grainReserveDaysFloor * population * brainCfg.grainConsumptionPerPop;
         if (grainAlarm) { SetFocus(kingdom, FocusGranary, day); return; }
-        //  底线第二级「保增长下限」（自造件，D322 决策①判修结构性锁死）：工人 < popFloor → 强制⑥招工人
-        //  低扩张国⑥评分被性格轴乘入长期压制（need=0.6 恒定 0.6×expansion 0.25=0.15 败给 BuildHouse），
-        //  人口卡死→Develop→Expand 的 worker≥8 永不可达→剧本卡存活期。触发式不评分跳防抖，与粮底线同构。
-        bool popAlarm = kingdom.workerCount < brainCfg.popFloor;
+        //  底线第二级「保增长下限」（自造件，D322 决策①判修结构性锁死 + HH.29 仲裁精确化）：工人 < 门槛 → 强制⑥
+        //  低扩张国⑥评分被性格轴乘入长期压制（need=0.6 恒定 0.6×expansion 0.25=0.15 败给 BuildHouse），人口卡死→
+        //  Develop→Expand 不可达→剧本卡存活期。触发式不评分跳防抖，与粮底线同构。
+        //  门槛 = max(popFloor, developToExpand_workersMin)——「保增长下限」的下限=能升 Expand 的工人数，
+        //  自动联动 SO 阈值（developToExpand_workersMin 改，此处不用跟着改）。
+        //  三档错峰达成：帐篷4<8✓ / 村落6<8✓ / 要塞8<8 不触发（已达标，评分自由）✓。
+        bool popAlarm = kingdom.workerCount < Mathf.Max(brainCfg.popFloor, brainCfg.developToExpand_workersMin);
         if (popAlarm) { SetFocus(kingdom, FocusRecruitWorker, day); return; }
         //  底线第三级「保命」：被攻击 → 强制防御窗口
         if (day < _defenseEndDay) { SetFocus(kingdom, FocusDefense, day); return; }
