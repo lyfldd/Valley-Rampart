@@ -9,10 +9,10 @@ using UnityEngine;
 //    1. 营地人数 ≥ foundingThresholdVagrants(12)
 //    2. 存续 ≥ foundingPersistenceDays(5)
 //    3. 全局王国数 < maxKingdomsGlobal(8)（Registry.Count 含玩家 D314）
-//    4. 营地中心格无主（2_17 TerritorySystem 落地前恒真；真判定接线归 2_17 步骤12）
+//    4. 营地中心格无主（2_17 步骤12 真判定：TerritorySystem.Ledger 反查，见 ResolveOwnerCampCell）
 //    5. 全局立国冷却 ≥ foundingCooldownDays(10)（冷却阻立国本身 D312；到期即立）
 //  吞并出口B（D306）：营地中心格有主 → ConvertVagrantsToWorkers(owner) + 移除 Camp，立国流程终止（不产生飞地 D283）。
-//    触发端（领土圈入检测）归 2_17 步骤12 接线——本片实现执行端管线 + 挂点，判定恒假则不触发。
+//    触发端=TryAnnex 每日逐营地账本反查（2_17 步骤12 接线）；条件4 同源真判定双保险防"有主仍立国"穿越。
 // ============================================================================
 
 /// <summary>营地日 tick 晋升调度（步骤11）。由 DayCycleSettlement 在每日结算末尾调用。</summary>
@@ -36,7 +36,7 @@ public static class CampUpgrader
             var camp = camps[i];
             if (camp == null || camp.foundedFlag) continue;
 
-            // 吞并出口B（D306）：营地中心格有主 → 转 owner 工人 + 移除，立国终止。当前判定占位恒假（2_17 接线）。
+            // 吞并出口B（D306）：营地中心格有主 → 转 owner 工人 + 移除，立国终止。真判定见 ResolveOwnerCampCell（2_17 步骤12）。
             if (TryAnnex(vcs, camp)) continue;
 
             var (pass, reason) = CheckConditions(camp, currentDay, registry, cfg);
@@ -64,7 +64,9 @@ public static class CampUpgrader
         if (camp.persistenceDays < PerDays(cfg)) return (false, $"存续 {camp.persistenceDays}<{PerDays(cfg)}");
         if (registry == null) return (false, "Registry 空");
         if (registry.Count >= MaxKingdoms(cfg)) return (false, $"王国数已达上限 {MaxKingdoms(cfg)} (Count 含玩家 D314)");
-        // 条件4 营地中心格无主：2_17 TerritorySystem 落地前恒真（占位；真判定接线归 2_17 步骤12）
+        // 条件4 营地中心格无主（2_17 步骤12 同源真判定，双保险防"有主仍立国"；TryAnnex 已前置，此处兜底）
+        int centerOwner = ResolveOwnerCampCell(camp);
+        if (centerOwner >= 0) return (false, $"营地中心格有主（王国 {centerOwner}）");
         if (!CooldownOk(registry, currentDay, cfg)) return (false, $"冷却期未过（距上次立国需 ≥{Cooldown(cfg)} 日）");
         return (true, "五条件全满足");
     }
@@ -72,18 +74,28 @@ public static class CampUpgrader
     /// <summary>吞并出口B 执行端（D306）：营地中心格有主 → 成员转该国工人 + 移除 Camp 记录。触发端归 2_17 步骤12；本片判定恒假。</summary>
     static bool TryAnnex(VagrantCampSystem vcs, Camp camp)
     {
-        int ownerKingdomId = ResolveOwnerCampCell(camp);   // 占位：2_17 前恒 -1=无主
+        int ownerKingdomId = ResolveOwnerCampCell(camp);   // 真判定（2_17 步骤12）
         if (ownerKingdomId < 0) return false;               // 无主 → 不吞并，走正常立国判定
 
         // 出口B：不插旗不建新国，流民并入该国工人（D306/D283 防飞地）
         KingdomFoundry.ConvertVagrantsToWorkers(camp.memberIds, ownerKingdomId);
         vcs.RemoveCamp(camp);
-        Debug.Log($"[CampUpgrader] 吞并出口B（D306）：营地 ({camp.centerCell.x},{camp.centerCell.y}) 并入王国 {ownerKingdomId}（领土圈入检测归 2_17 接线）。");
+        Debug.Log($"[CampUpgrader] 吞并出口B（D306）：营地 ({camp.centerCell.x},{camp.centerCell.y}) 并入王国 {ownerKingdomId}。");
         return true;
     }
 
-    /// <summary>占位：营地中心格归属王国 id（2_17 TerritorySystem 落地前恒 -1=无主）。真判定接线归 2_17 步骤12（TerritoryChangedEvent 联动）。</summary>
-    static int ResolveOwnerCampCell(Camp camp) => -1;
+    /// <summary>真判定（2_17 步骤12 接线）：营地中心格中区块归属王国 id，账本反查（D306）。无主/不可用返 -1。</summary>
+    static int ResolveOwnerCampCell(Camp camp)
+    {
+        if (camp == null) return -1;
+        var grid = GridSystem.Instance;
+        if (grid == null) return -1;
+        var mid = grid.CellToMidChunk(camp.centerCell);
+        var ts = TerritorySystem.Instance;
+        if (ts == null) return -1;
+        if (ts.Ledger.TryGetValue(mid, out int k) && k >= 0) return k;
+        return -1;
+    }
 
     // ===== SO 访问守卫（cfg 为空回退占位默认，防空引用）=====
     static int Threshold(KingdomFoundingConfig c) => c != null ? c.foundingThresholdVagrants : 12;

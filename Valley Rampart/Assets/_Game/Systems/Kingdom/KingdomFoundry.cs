@@ -328,6 +328,11 @@ public static class KingdomFoundry
         // 营地中心插旗（castle 建筑带 kingdomId；ThroneAnchor 全局单例约束见上方注释）
         PlaceCampCastle(camp, state.id);
 
+        // 2_17 步骤12 缺口① 补：动态立国新王国初始领土圈入（3×3 中区块并集 + 广播事件，
+        // 吞并判定/染色据此对动态立国生效）
+        if (TerritorySystem.Instance != null)
+            TerritorySystem.Instance.ClaimInitial(state.id);
+
         // 2_17 步骤8 创建钩子②（D337）：动态立国新王国建王国脑
         KingdomBrainFactory.Create(state.id);
 

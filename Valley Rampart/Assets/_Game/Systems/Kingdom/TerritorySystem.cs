@@ -88,4 +88,37 @@ public class TerritorySystem : Singleton<TerritorySystem>
     // 计数器（验收/完整局用）
     /// <summary>某王国领土中区块数。</summary>
     public int KingdomCellCount(int kingdomId) => GetKingdomTerritory(kingdomId).Count;
+
+    /// <summary>
+    /// 2_17 步骤12 缺口① 补：动态立国初始圈入（D343 同款 3×3 中区块并集）。
+    /// KingdomFoundry.FoundFromCamp 插旗后为新王国算初始圈（复用 CollectMidRing 同源逻辑），
+    /// 写入账本 + 广播 TerritoryChangedEvent（坐标序排序保确定性，供 2_10 染色/校验稳定）。
+    /// 幂等：只对该 kingdomId 的格子覆写；无该王国建筑则空操作。
+    /// </summary>
+    public void ClaimInitial(int kingdomId)
+    {
+        var list = CollectMidRing(kingdomId).ToList();
+        if (list.Count == 0) return;
+        list.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        foreach (var c in list)
+            _territory[c] = kingdomId;
+        EventBus.Publish(new TerritoryChangedEvent(kingdomId, list));
+    }
+
+    /// <summary>某王国全部建筑的中区块 Chebyshev 1-ring 并集（D343 3×3）。RebuildInitial 与 ClaimInitial 共用同源逻辑。</summary>
+    private static HashSet<Vector2Int> CollectMidRing(int kingdomId)
+    {
+        var cells = new HashSet<Vector2Int>();
+        if (BuildingRegistry.Instance == null || BuildingRegistry.Instance.All == null) return cells;
+        if (GridSystem.Instance == null) return cells;
+        foreach (var b in BuildingRegistry.Instance.All)
+        {
+            if (b == null || b.kingdomId != kingdomId) continue;   // 自然建筑 kingdomId==-1 不计
+            Vector2Int mid = GridSystem.Instance.CellToMidChunk(b.coord);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    cells.Add(new Vector2Int(mid.x + dx, mid.y + dy));
+        }
+        return cells;
+    }
 }
