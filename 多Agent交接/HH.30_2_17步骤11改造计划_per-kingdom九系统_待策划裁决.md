@@ -1,7 +1,7 @@
-# HH.30 · 2_17 步骤11 改造计划（per-kingdom 九系统全量归属）· 待策划裁决
+# HH.30 · 2_17 步骤11 改造计划（per-kingdom 九系统全量归属）· 已裁决·三批实施收官
 
 > 类型：策划报告请求（Gate 前置——先报装配计划再动代码，HH.24 之裁，设计正源 D289/D330 第二步）
-> 状态：⏳待策划裁决
+> 状态：✅已裁决（§四）+ 三批制实施收官（§六，2026-08-28）——步骤11 收官待策划确认
 > 日期：2026-08-28 · 发起端：执行端 · 关联：HH.29（P0+步骤10 收官）/ HH.24（步骤8 设计报告"/裁后动工"铁律 / HH.28（Faction 收编于步骤10 已收口）
 > 前置：P0 / 步骤10 已收官（HH.29 §九 收盘）；per-kingdom 第一步（归属地基 5 系统）已落地（2_17 步骤3/4/5/2b）；AIEconomySettlement（第6段）已于步骤2b 落地
 
@@ -102,7 +102,47 @@
 
 ---
 
-*待策划裁决后按 HH.24「裁后动工」铁律动工。*
+*已裁决动工，见 §五/§六。*
+
+---
+
+## 六、三批实施收官回写（2026-08-28 执行端，步骤11 收官待策划确认）
+
+> 留痕：本节两次写入均被同工作区并行会话（HH.31 对账端）覆盖丢失，第三次改用脚本落盘并同命令 commit（多会话并行纪律：文档修改即写即提交）。
+
+### 6.1 批次交付实录（commit 链）
+
+| 批 | commit | 内容 | 验证结果 |
+|---|---|---|---|
+| 批1·结构零接触 | 4a6ee3e | TaxSystem AI 开征（独立 TaxConfig SO+asset，玩家分支逐位保留+AI 走 KingdomState 台账）；Trade 额度分桶（API 未动，AI 贸易留 TODO 归 P2）；Siege 归属结构 overload；Hap/Sat 守卫升格标注；序0 schema 预留（KingdomState.moduleLevels/castleLevel） | 0 错；P0 纯绿（b=2684×3，A3/A4 OK） |
+| 批2·计算路径 | f0a1efb（含 using 修复 amend） | Happiness 分桶（getter 读桶0 逐位等价，OnUnitDied 按 kingdomId 分流补 AI 桶=§四破缺守卫清偿）；Satiety 均值分桶（FeedUnit 不动）；Ranch List→Dictionary（玩家桶0 扣 Ruler 原逻辑，存档 struct 未动归 2_11）；KingdomManager 解锁态镜像接线→KingdomState[0]；TaxSystem AI 幸福系数改读 per-kingdom 桶 | 首跑编译错（漏 using×2）修复 amend 后 0 error；P0 纯绿（A3/A4 OK） |
+| 批3a·水网 B′ | 45171ae | WaterNetwork 拆桶（玩家桶0=_stored 逐位等价；AI 桶恒 0）；ProducerComponent.TryConsumeFarmWater L208 补 kingdomId 路由（AI 农田吃 AI 桶→缺水停产，堵吃玩家网水泄漏面=B′②）；AI 井恒不产水守卫已在（B′①） | 0 error |
+| 批3b·科技闭环 | b15d1ca | ExecuteTech 真升 moduleLevels[target]+1（clamp 城堡1 上限+升满停防刷分）；TechGap 改读解锁态（升满=0=§四问④硬性）；AI 立国 castleLevel=1+moduleLevels 全0（RegisterNewKingdom，2_16 语义正源）；techTargetModule SO 字段（默认 Civil）；新增 Smoke_11 三探针 | 0 error；S11 探针 ALL PASS；P0 纯绿且 B5 build15/15 try30 与批2 逐位一致（行为零漂移） |
+
+### 6.2 批3 前置阻塞与策划补裁（留痕）
+
+批3b 动工前执行端报阻塞（AI castleLevel 无驱动源/moduleLevels 未初始化/目标模块来源），策划补裁 Q1→A（techTargetModule 禁选 Science——CastleUnlockTable.asset 实证 module5 城堡1 无解锁，选之闭环死路）/ Q2→A′（castleLevel=1 为 2_16 立国语义正源非占位；moduleLevels 全0 起步；AI 城堡升级记债挂账）/ Q3 确认（UtilityScorer 纯函数层玩家天然零接触）/ WaterNetwork 先行批准。批3 据此拆 3a/3b 双 commit。
+
+### 6.3 §二 序0~10 对账
+
+序0=批1 载体（kingdoms[] 拆分归 2_11）；序1=实施方式偏差（诚实对账）：未做段序重组，改为各系统 OnNewDay 内部 per-kingdom 分桶，达成序1 目的（AI 结算进日结链）且玩家段零改动，验收点由批1/批2 P0 纯绿达成；序2~10 分别落批1/2/3（Happiness/Satiety/Ranch/解锁=批2；Tax/Trade/Siege=批1；水网=批3a；ExecuteTech=批3b）✅。
+
+### 6.4 探针证据（S11 ALL PASS 原文摘录）
+
+S11-①AI桶初值=OK(AI王国×4)（k1~k4 castleLevel=1 moduleLevels=全0）/ S11-②水网B′=OK 玩家桶[注+10/扣2/存量8.0] AI扣99折=阻(缺水停产) 零染=OK / S11-③TechGap点环=OK 目标=Civil(cap=1) 当前Lv=0 需升=Y(闭环活) 升满后TechGap归零=OK / ===== ALL PASS ===== / [P0完整局] ===== ALL PASS(状态面) =====（A3/A4 OK；B5 build15/15 try30 与批2 逐位一致）
+
+### 6.5 挂账清单（继承+新增）
+
+- AI 城堡升级动作（批3b 新增记债）：恒 1 级直到真实玩法需求，随军事期一并议
+- 存档 kingdoms[] 完整迁移（含 moduleLevels/Ranch AI 桶）→ 2_11
+- Trade AI 主动贸易 → P2 训练侧（代码留 TODO）
+- Siege 完整 AI 生产链 / Satiety AI 国库进食 → 步骤13/14 AbstractEconomySettler 一并裁
+- 玩家死亡/GameOver 链路 → 独立回归（HH.27②）
+- 细模拟经济闭环/工人真走真产 → P1 收官人工 Play 批（让渡照旧）
+
+### 6.6 步骤11 收官判定（执行端自评，待策划确认）
+
+九系统 per-kingdom 归属全量落地，三批 P0 基线全绿（玩家侧零回归逐位成立），S11 三探针闭环，四问裁决+三点顺裁+节奏补令全部执行到位，无破基线事件（批2 编译错为交付前拦截，未触达基线）。**步骤11 收口态成立，报策划确认收官。**
 
 ---
 
