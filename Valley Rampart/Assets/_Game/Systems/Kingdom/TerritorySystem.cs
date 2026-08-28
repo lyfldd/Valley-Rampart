@@ -93,16 +93,22 @@ public class TerritorySystem : Singleton<TerritorySystem>
     /// 2_17 步骤12 缺口① 补：动态立国初始圈入（D343 同款 3×3 中区块并集）。
     /// KingdomFoundry.FoundFromCamp 插旗后为新王国算初始圈（复用 CollectMidRing 同源逻辑），
     /// 写入账本 + 广播 TerritoryChangedEvent（坐标序排序保确定性，供 2_10 染色/校验稳定）。
-    /// 幂等：只对该 kingdomId 的格子覆写；无该王国建筑则空操作。
+    /// HH.33 §五 随裁修正：**只纳无主**（裁4/D327/D283 同源精神）——环内已有主格（含玩家 id=0）不覆写，
+    /// 防边境立国静默夺取他国中区块；事件只广播实际纳入格。
+    /// 幂等：无该王国建筑则空操作；全环已有主则不写不广播。
     /// </summary>
     public void ClaimInitial(int kingdomId)
     {
-        var list = CollectMidRing(kingdomId).ToList();
-        if (list.Count == 0) return;
-        list.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
-        foreach (var c in list)
+        var claimed = new List<Vector2Int>();
+        foreach (var c in CollectMidRing(kingdomId))
+        {
+            if (_territory.TryGetValue(c, out int owner) && owner != kingdomId) continue;   // 只纳无主：他国已有主不覆写
             _territory[c] = kingdomId;
-        EventBus.Publish(new TerritoryChangedEvent(kingdomId, list));
+            claimed.Add(c);
+        }
+        if (claimed.Count == 0) return;
+        claimed.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        EventBus.Publish(new TerritoryChangedEvent(kingdomId, claimed));
     }
 
     /// <summary>某王国全部建筑的中区块 Chebyshev 1-ring 并集（D343 3×3）。RebuildInitial 与 ClaimInitial 共用同源逻辑。</summary>

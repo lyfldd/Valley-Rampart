@@ -9,7 +9,8 @@ using UnityEditor;
 //  用法：菜单「Valley/验证/2_17_步骤12_领土接线」——须 GameScene Play（先 Play 再点）。
 //  自含断言（不依赖世界生成/NewGame 引导链，对齐 Smoke_11 哲学——MCP/菜单 NewGame 引导链已知缺世界生成）：
 //    P1 吞并真判定：注入账本有主中区块 → ResolveOwnerCampCell 解析出 owner id；无主（极大坐标）→ -1。
-//    P2 缺口① ClaimInitial：注入最小 Building（新王国 id=88）→ ClaimInitial 写入 3×3 初始圈 + 广播事件（坐标序确定性）。
+//    P2 缺口① ClaimInitial：注入最小 Building（新王国 id=88）→ ClaimInitial 写入 3×3 初始圈 + 广播事件（坐标序确定性）；
+//       HH.33 §五 随裁修正负探针——预注入他国(id=77)归属环内一格 → 不被覆写（只纳无主，裁4/D327/D283 同源）。
 //    P3 DZ-008 两探针（裁决补裁1）：8 国满员拦截立国（CheckConditions 因 Count>=max 拒）+ 吞并路径不受上限影响
 //       （Count=8 时有主营地 TryAnnex 仍真，不查 Count）。
 //  私方法经反射调产品实现（与 P0/S11 harness 同规）；所有注入 fixture 收尾清理，防污染。
@@ -55,9 +56,9 @@ public static class Valley2_17_Smoke_12
         bool p1 = ownerResolved == OWNED_KINGDOM && unownedResolved == -1;
         results.Add($"P1 吞并真判定 有主→{ownerResolved}=={OWNED_KINGDOM} 无主→{unownedResolved}==-1 ={p1}");
 
-        // ---- P2 缺口① ClaimInitial 写入+广播+确定性 ----
+        // ---- P2 缺口① ClaimInitial 写入+广播+确定性+只纳无主（HH.33 §五 负探针）----
         bool p2 = ProbeClaimInitial(ts, br, grid);
-        results.Add($"P2 缺口① ClaimInitial 3×3写入+广播+确定性 ={p2}");
+        results.Add($"P2 缺口① ClaimInitial 3×3写入+广播+确定性+只纳无主负探针 ={p2}");
 
         // ---- P3 DZ-008 满员拦截立国 + 吞并不受上限影响 ----
         bool p3block, p3annex;
@@ -107,7 +108,11 @@ public static class Valley2_17_Smoke_12
         if (d != null) d.Remove(mid);
     }
 
-    /// <summary>P2：注入最小建筑（新王国 id=88）→ ClaimInitial 写入 3×3 圈 + 广播（坐标序确定性）。返 true=全通过。</summary>
+    /// <summary>
+    /// P2：注入最小建筑（新王国 id=88）→ ClaimInitial 写入 3×3 圈 + 广播（坐标序确定性）。
+    /// HH.33 §五 随裁修正负探针：预注入他国(id=77)归属于环内一格 → ClaimInitial 后**不被覆写**（只纳无主）。
+    /// 返 true=全通过。
+    /// </summary>
     private static bool ProbeClaimInitial(TerritorySystem ts, BuildingRegistry br, GridSystem grid)
     {
         var go = new GameObject("s12_claim_building");
@@ -116,6 +121,11 @@ public static class Valley2_17_Smoke_12
         b.coord = cell;
         b.kingdomId = CLAIM_KINGDOM;
         br.Register(b);
+
+        int ms = grid.Config != null && grid.Config.midChunkSize > 0 ? grid.Config.midChunkSize : 4;
+        var mid = grid.CellToMidChunk(cell);
+        var preOwned = new Vector2Int(mid.x + 1, mid.y);       // 环内一格预注入他国归属（负探针靶格）
+        InjectTerritory(ts, preOwned, OWNED_KINGDOM);
 
         int fired = 0;
         List<Vector2Int> added = null;
@@ -127,28 +137,29 @@ public static class Valley2_17_Smoke_12
         ts.ClaimInitial(CLAIM_KINGDOM);
         EventBus.Unsubscribe(handler);
 
+        var d = Ledger(ts);
+        bool preOwnedKept = d != null && d.TryGetValue(preOwned, out int ownerNow) && ownerNow == OWNED_KINGDOM;   // 不被覆写
         int size = ts.KingdomCellCount(CLAIM_KINGDOM);
-        var mid = grid.CellToMidChunk(cell);
-        bool sorted = true;
-        bool inRing = added != null;
+        bool sorted = true, eventExcludesPreOwned = added != null;
         if (added != null)
             for (int i = 0; i < added.Count; i++)
             {
+                if (added[i] == preOwned) eventExcludesPreOwned = false;   // 事件只广播实际纳入格
                 int dx = System.Math.Abs(added[i].x - mid.x), dy = System.Math.Abs(added[i].y - mid.y);
-                if (dx > 2 || dy > 2) inRing = false;                    // 快照不越界（中区块含 footprint≥1 者 dx,dy≤1；留 1 容差）
+                if (dx > 2 || dy > 2) sorted = false;                      // 越环即坏（兼做环界校验）
                 if (i > 0 && (added[i - 1].x > added[i].x || (added[i - 1].x == added[i].x && added[i - 1].y > added[i].y))) sorted = false;
             }
-        bool ok = fired >= 1 && size >= 9 && sorted && inRing;
+        bool ok = fired >= 1 && preOwnedKept && size == 9 - 1 && eventExcludesPreOwned && sorted;
 
-        // 清理：注销建筑 + 清账本该王国残留
+        // 清理：注销建筑 + 清账本该王国残留 + 移除预注入格
         br.Unregister(b);
         Object.Destroy(go);
-        var d = Ledger(ts);
         if (d != null)
         {
             var kv = new List<Vector2Int>();
             foreach (var pair in d) if (pair.Value == CLAIM_KINGDOM) kv.Add(pair.Key);
             for (int i = 0; i < kv.Count; i++) d.Remove(kv[i]);
+            d.Remove(preOwned);
         }
         return ok;
     }
