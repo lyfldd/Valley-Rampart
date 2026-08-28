@@ -69,4 +69,22 @@ public class KingdomBrainConfig : ScriptableObject
     public int aiRecruitFoodCost = 2;
     [Tooltip("AI 建造选址半径（以本国主城为中心的切比雪夫格半径上限）")]
     public int aiBuildRadius = 8;
+
+    [Header("⑦招战士 兵力目标（D348，P1 步骤10；系数入训项注释见 D324）")]
+    [Tooltip("兵力目标公式 clamp(2+⌈威胁×兵力ThreatScale⌉+阶段系数, forceFloor, 2+工人数) 的底数下限")]
+    public int militaryTargetFloor = 2;
+    [Tooltip("威胁→兵力系数（D348 ×3；k=目标=clamp(2+ceil(threat×scale)+stageFactor, floor, 2+workerCount)）")]
+    public float militaryThreatScale = 3f;
+    [Tooltip("扩张期阶段系数追加（D348：存活/发育 0、扩张 +1、军事 +militaryStageFactor）")]
+    public int militaryExpandStageFactor = 1;
+    [Tooltip("军事期阶段系数追加（D348：存活/发育 0、扩张 +militaryExpandStageFactor、军事 +本值）")]
+    public int militaryStageFactor = 2;
+    [Tooltip("威胁值分母下限（威胁=邻国兵力/己方兵力，分母 max(己方兵力, 1)）")]
+    public int militaryThreatDenominatorMin = 1;
+    [Tooltip("⑦招战士成本（金/人，worker→warrior 直转通道；so-data-driven 禁魔法数）")]
+    public int recruitWarriorCostGold = 20;
+    [Tooltip("⑦招战士成本（粮/人，同上）")]
+    public int recruitWarriorCostFood = 4;
+    [Tooltip("⑧科技升级成本（金/次，per-kingdom 解锁态步骤11 落地的占位执行成本）")]
+    public int techUpgradeCostGold = 80;
 }

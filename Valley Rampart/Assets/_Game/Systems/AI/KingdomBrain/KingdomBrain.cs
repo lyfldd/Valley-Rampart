@@ -152,7 +152,20 @@ public class KingdomBrain
             case UtilityAction.BuildCapacity:
             case UtilityAction.BoostHarvest:
             case UtilityAction.Grain:
+            case UtilityAction.BuildWall:
                 ExecuteBuildFocus(kingdom, cfg);
+                break;
+            case UtilityAction.RecruitWarrior:
+                ExecuteRecruitWarrior(kingdom, cfg);
+                break;
+            case UtilityAction.Tech:
+                ExecuteTech(kingdom, cfg);
+                break;
+            case UtilityAction.Expedition:
+            case UtilityAction.Reinforce:
+            case UtilityAction.Diplomacy:
+                // ⑪⑫⑮ 占位可执行子集：可被选作焦点并"执行"，但宣战/增援动作接口指向 2_18 未落地桩（S0 无实体指令）
+                Debug.Log($"[KingdomBrain] k{kingdomId} 占位焦点 {(UtilityAction)kingdom.focus} 执行（L3/2_18 接口待接线，仅置位无实体动作）");
                 break;
             case UtilityAction.Rebuild:
             case UtilityAction.Defense:
@@ -186,6 +199,65 @@ public class KingdomBrain
         Bump(kingdomId, train: true, ok: ok);
         if (ok)
             Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招工人落地：流浪汉#{vagrant.npcId} → Worker（粮-{cost}）");
+    }
+
+    /// <summary>⑦招战士真实通道（D348 兵力目标）：直转本国一个活工人为战士（直转模式，成本 SO）。</summary>
+    private void ExecuteRecruitWarrior(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        int gold = Mathf.Max(1, cfg.recruitWarriorCostGold);
+        int food = Mathf.Max(1, cfg.recruitWarriorCostFood);
+        if (kingdom.GetResourceValue(ResourceType.Gold) < gold || kingdom.GetResourceValue(ResourceType.Food) < food)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;
+        }
+        var w = FindOwnWorker();
+        if (w == null)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;   // 无本国工人可转战士（人口不足），明日再试
+        }
+        if (kingdom.warriorCount >= UtilityScorer.MilitaryTarget(kingdom, cfg))
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;   // 已达兵力目标：无需再招（评分门控兜底）
+        }
+
+        kingdom.Spend(new ResourcePack { gold = gold, food = food });
+        w.SetOccupation(Occupation.Warrior);
+        Bump(kingdomId, train: true, ok: true);
+        Debug.Log($"[KingdomBrain] k{kingdomId} ⑦招战士落地：工人#{w.npcId} → Warrior（金-{gold} 粮-{food}，兵力 {kingdom.warriorCount}）");
+    }
+
+    /// <summary>找一个本王国活工人（Worker/Porter/Civilian，对齐 workerCount 口径；确定性：npcId 最小序）。</summary>
+    private UnitController FindOwnWorker()
+    {
+        if (UnitRegistry.Instance == null || UnitRegistry.Instance.GetAllUnits() == null) return null;
+        UnitController best = null;
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (u == null || !u.IsAlive) continue;
+            if (u.kingdomId != kingdomId) continue;
+            if (u.EffectiveOccupation != Occupation.Worker
+                && u.EffectiveOccupation != Occupation.Porter
+                && u.EffectiveOccupation != Occupation.Civilian) continue;   // 仅工人口径（对齐 workerCount）
+            if (best == null || u.npcId < best.npcId) best = u;
+        }
+        return best;
+    }
+
+    /// <summary>⑧科技升级真实通道（占位可执行）：花金提升王国科技（per-kingdom 解锁态步骤11 落地的门面；执行以金可负担为门）。</summary>
+    private void ExecuteTech(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        int cost = Mathf.Max(1, cfg.techUpgradeCostGold);
+        if (kingdom.GetResourceValue(ResourceType.Gold) < cost)
+        {
+            Bump(kingdomId, train: false, ok: false);
+            return;
+        }
+        kingdom.Spend(new ResourcePack { gold = cost });
+        Bump(kingdomId, train: false, ok: true);
+        Debug.Log($"[KingdomBrain] k{kingdomId} ⑧科技升级落地（金-{cost}；per-kingdom 解锁态步骤11 接入）");
     }
 
     /// <summary>找一个可招募流浪汉（活体、Vagrant、未被招募、未入籍 kingdomId&lt;0）。固定遍历序=确定性。</summary>
