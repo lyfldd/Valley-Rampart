@@ -64,6 +64,8 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
             foundedDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1,
             templateSourceId = -1
         };
+        // 2_17 步骤11 批2：玩家立国时由 KingdomManager 当前值填入解锁态（castleLevel/moduleLevels 镜像，见 KingdomManager.SyncPlayerUnlockToState）
+        if (km != null) km.SyncPlayerUnlockToState(state);
         _kingdoms.Add(state);
         PublishFounded(state);
         Debug.Log($"[KingdomRegistry] 玩家王国开局注册: id=0, name={state.name}, foundedDay={state.foundedDay}");
@@ -179,7 +181,13 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
                     // 2_17 步骤4 台账转派生：workerCount/warriorCount 为实体派生只读属性，不再从存档恢复
                     // （读档单位 SpawnFromSave 回笼，王国派生统计自动重建）
                 };
-                if (state.IsPlayer) _playerRegistered = true;
+                if (state.IsPlayer)
+                {
+                    _playerRegistered = true;
+                    // 2_17 步骤11 批2：读档重建玩家 KingdomState 后，从 KingdomManager 当前解锁态回拉镜像（若 Manager 先就绪）
+                    if (KingdomManager.Instance != null)
+                        KingdomManager.Instance.SyncPlayerUnlockToState(state);
+                }
                 _kingdoms.Add(state);
             }
         }

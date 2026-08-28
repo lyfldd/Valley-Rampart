@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -16,6 +17,18 @@ using UnityEngine;
 public class SatietySystem : Singleton<SatietySystem>
 {
     private KingdomConfig _config;
+
+    // ===== 2_17 步骤11 批2·平均饱食 per-kingdom 分桶（Singleton 门面 + 内部 Dictionary，玩家桶0=原语义 HH.30）=====
+    // 玩家(id=0) 桶 = 原 GetAverageSatiety 整体均值；AI(id>0) 各王国独立桶（AI 均饱食供王国脑/评分消费）。
+    // 无参 GetAverageSatiety 仍走玩家实时计算（逐位一致）；OnNewDay 结算时把每王国均值写入本桶供 AI 下游读。
+    private readonly Dictionary<int, float> _avgSatiety = new Dictionary<int, float>();
+
+    /// <summary>读某王国最近一次每日结算的均饱食缓存桶（未结算回退 50）。供 AI 下游（王国脑/评分）消费；玩家请走 GetAverageSatiety() 实时口径。</summary>
+    public float GetAverageSatietyCached(int kingdomId)
+    {
+        if (_avgSatiety.TryGetValue(kingdomId, out var v)) return v;
+        return 50f;
+    }
 
     /// <summary>食品等级（§10 粮/特殊食物/肉）。</summary>
     public enum FoodQuality
@@ -61,7 +74,8 @@ public class SatietySystem : Singleton<SatietySystem>
         }
     }
 
-    /// <summary>全体我方 NPC 平均饱食（供 PopulationSystem 生育条件 / 幸福计算）。无 NPC 返回 50。</summary>
+    /// <summary>全体我方 NPC 平均饱食（供 PopulationSystem 生育条件 / 幸福计算）。无 NPC 返回 50。
+    /// 2_17 步骤11 批2：玩家桶0——返回值与现状逐位一致（仅玩家口径）。</summary>
     public float GetAverageSatiety()
     {
         if (UnitRegistry.Instance == null) return 50f;
@@ -71,9 +85,25 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.GetFaction() != Faction.Human_Player) continue;
-            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不吃玩家国库粮/不拉低均饱食；收编后 GetFaction=AiKingdom 首条件已排除（双条件保留兼容存量过渡态）。
-            // 2_17 步骤11 批1 守卫升格吸收：此 kingdomId!=0 内联守卫不动分桶（分桶属批2），本批仅标注——守卫将在批2 被 per-kingdom 饱食分桶吸收，玩家行为不变。
+            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不吃玩家国库粮/不拉低均饱食（双条件保留兼容存量过渡态）。
             if (unit.kingdomId != 0) continue;   // GetAverageSatiety 平均饱食（玩家口径）
+            if (!IsNpc(unit.EffectiveOccupation)) continue;
+            sum += unit.Satiety;
+            count++;
+        }
+        return count > 0 ? sum / (float)count : 50f;
+    }
+
+    /// <summary>某王国平均饱食（per-kingdom；0=玩家走 GetAverageSatiety() 实时、>0=AI 按 kingdomId 实时算）。</summary>
+    public float GetAverageSatiety(int kingdomId)
+    {
+        if (kingdomId == 0) return GetAverageSatiety();
+        if (UnitRegistry.Instance == null) return 50f;
+        int count = 0, sum = 0;
+        foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (unit == null || unit.Data == null) continue;
+            if (unit.kingdomId != kingdomId) continue;
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             sum += unit.Satiety;
             count++;
@@ -95,12 +125,23 @@ public class SatietySystem : Singleton<SatietySystem>
             if (unit == null || unit.Data == null) continue;
             if (unit.GetFaction() != Faction.Human_Player) continue;
             // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不参与玩家每日饱食结算/国库进食（同上述收编双条件语义）。
-            // 2_17 步骤11 批1 守卫升格吸收：此 kingdomId!=0 内联守卫不动分桶（分桶属批2），本批仅标注——守卫将在批2 被 per-kingdom 饱食分桶吸收，玩家行为不变。
             if (unit.kingdomId != 0) continue;   // OnNewDay 每日饱食结算（玩家口径）
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             if (!unit.IsAlive) continue;
 
             SettleUnit(unit, cfg);
+        }
+
+        // 2_17 步骤11 批2：每王国均饱食写入分桶（玩家桶0=玩家均值；AI 桶=按 kingdomId 独立算——AI 进食/结算语义归步骤13/14 AbstractEconomySettler）
+        if (KingdomRegistry.Instance != null)
+        {
+            var all = KingdomRegistry.Instance.GetAll();
+            for (int i = 0; i < all.Count; i++)
+            {
+                var k = all[i];
+                if (k == null) continue;
+                _avgSatiety[k.id] = k.IsPlayer ? GetAverageSatiety() : GetAverageSatiety(k.id);
+            }
         }
 
         Debug.Log($"[SatietySystem] 每日饱食结算完成（>>> 见各单位日志）");

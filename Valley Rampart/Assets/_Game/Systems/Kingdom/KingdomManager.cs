@@ -135,7 +135,29 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         RecomputeModuleLevels();
         var castle = FindCastleBuilding();
         if (castle != null) castle.level = Mathf.Max(1, clamped);
+        // 2_17 步骤11 批2：主城等级变更后镜像到用户王国 KingdomState[0]（per-kingdom 解锁态数据通道）
+        MirrorPlayerUnlockToRegistry();
         Debug.Log($"[KingdomManager] 主城等级 → {clamped}，模块等级=[{string.Join(",", ModuleLevels)}]");
+    }
+
+    // ===== 2_17 步骤11 批2·玩家解锁态 → KingdomState[0] 镜像（HH.30：CastleLevel/ModuleLevels 玩家 getter 不变，另写 KingdomState[0] 供 per-kingdom 消费）=====
+
+    /// <summary>
+    /// 把玩家(id=0) 主城/模块解锁态同步到 KingdomState[0]。
+    /// per-kingdom 数据通道：KingdomManager 仍为玩家的真源，KingdomState[0].castleLevel/moduleLevels 为镜像（读档/升级/复位时镜像写桶0）。
+    /// AI 王国解锁态由各 KingdomState 独立持有（本批只建数据通道，不实现 AI 升级逻辑）。
+    /// </summary>
+    public void SyncPlayerUnlockToState(KingdomState playerK)
+    {
+        if (playerK == null) return;
+        playerK.castleLevel = CastleLevel;
+        playerK.moduleLevels = ModuleLevels != null ? (int[])ModuleLevels.Clone() : new int[6];
+    }
+
+    private void MirrorPlayerUnlockToRegistry()
+    {
+        if (KingdomRegistry.Instance == null) return;
+        SyncPlayerUnlockToState(KingdomRegistry.Instance.Get(0));
     }
 
     /// <summary>查找场景主城建筑（BuildingRegistry 按 CastleCore 来源）。</summary>
@@ -382,6 +404,9 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         TreasuryMeat = data.treasuryMeat;
         TreasuryMetal = data.treasuryMetal;
 
+        // 2_17 步骤11 批2：读档后把玩家解锁态镜像到 KingdomState[0]（若 Registry 已就绪；未就绪则 Registry 创建玩家态时回拉）
+        MirrorPlayerUnlockToRegistry();
+
         Debug.Log($"[KingdomManager] 读档恢复：主城 Lv.{CastleLevel}，模块=[{string.Join(",", ModuleLevels)}]，研究=[{string.Join(",", ResearchLevels)}]");
     }
 
@@ -419,5 +444,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         InitTradeQuotas();   // 新建游戏重新初始化贸易额度
         // 2_12 步骤8.4：清国库读档缓存（防新建局读到上局残留）
         TreasuryStone = TreasuryWood = TreasuryFood = TreasurySpecialFood = TreasuryMeat = TreasuryMetal = 0;
+        // 2_17 步骤11 批2：复位同步玩家解锁态镜像到 KingdomState[0]（随 Registry 重置后回拉一致）
+        MirrorPlayerUnlockToRegistry();
     }
 }

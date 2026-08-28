@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -18,11 +19,36 @@ public class HappinessSystem : Singleton<HappinessSystem>
 {
     private KingdomConfig _config;
 
-    /// <summary>整体幸福（0-100，全体 NPC 平均）。由 RecomputeHappiness 每日刷新。</summary>
-    public float OverallHappiness { get; private set; } = 50f;
+    // ===== 2_17 步骤11 批2·per-kingdom 幸福分桶（Singleton 门面 + 内部 Dictionary，玩家桶0=原全局语义逐位一致 HH.30）=====
+    // 玩家(id=0) 桶 = 原单标量 OverallHappiness/TaxBurdenLastDay；AI(id>0) 各王国独立桶（供 Tax/王国脑消费）。
+    // 玩家无参 getter（OverallHappiness/TaxBurdenLastDay/GetTaxCoefficient/GetPopulationGrowthFactor/
+    // GetRetreatThresholdModifier）读桶0，玩家现有调用点零改动。
 
-    /// <summary>上一日税负水平（0-1，供幸福税负因子计算；由 TaxSystem 每日写入）。</summary>
-    public float TaxBurdenLastDay { get; set; }
+    private readonly Dictionary<int, float> _overallHappiness = new Dictionary<int, float>();
+    private readonly Dictionary<int, float> _taxBurdenLastDay = new Dictionary<int, float>();
+
+    /// <summary>读某王国整体幸福（桶不存在回退默认 50，玩家/AI 一致占位）。</summary>
+    private float GetOverallHappiness(int kingdomId)
+    {
+        if (_overallHappiness.TryGetValue(kingdomId, out var v)) return v;
+        return 50f;
+    }
+
+    /// <summary>读某王国税负（未写入回退 0）。</summary>
+    private float GetTaxBurden(int kingdomId)
+    {
+        if (_taxBurdenLastDay.TryGetValue(kingdomId, out var v)) return v;
+        return 0f;
+    }
+
+    /// <summary>整体幸福（0-100，玩家桶0）。由 OnNewDay 每日刷新。玩家调用点读本 getter=桶0（=原全局语义）。</summary>
+    public float OverallHappiness => GetOverallHappiness(0);
+
+    /// <summary>上一日税负水平（0-1，玩家桶0；由 TaxSystem 每日写入玩家口径）。玩家调用点读本 getter=桶0。</summary>
+    public float TaxBurdenLastDay { get => GetTaxBurden(0); set => _taxBurdenLastDay[0] = value; }
+
+    /// <summary>写入某王国税负水平（AI 由 Tax 分王国写入；内部用，玩家走 TaxBurdenLastDay setter 等价桶0）。</summary>
+    public void SetTaxBurden(int kingdomId, float v) => _taxBurdenLastDay[kingdomId] = v;
 
     protected override void Awake()
     {
@@ -55,22 +81,42 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// </summary>
     private void OnUnitDied(UnitDiedEvent evt)
     {
-        // 2_17 步骤11 批1 守卫升格吸收：本死亡幸福扣减仅服务玩家(Human_Player)/幸福桶0——守卫将在批2 被 per-kingdom 幸福分桶吸收，
-        // 本批不动分桶，仅标注（AI 王国阵亡幸福扣减归批2），玩家行为不变。
-        if (evt.Faction != Faction.Human_Player) return;
+        // 2_17 步骤11 批2：per-kingdom 幸福分桶吸收批1 守卫——按 evt.Unit.kingdomId 分流（0=玩家，>0=AI 王国）。
         var uc = evt.Unit as UnitController;
         if (uc == null || uc.Data == null) return;
         if (!SatietySystem.IsNpc(uc.EffectiveOccupation)) return;   // 非 NPC（工事/君主）不扣幸福
-
         var cfg = Cfg();
         if (cfg == null) return;
-        int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
-        if (population <= 0) return;   // 无人口基数，无从扣减
-
         float k = cfg.deathHappinessK > 0f ? cfg.deathHappinessK : 0.5f;
-        OverallHappiness *= (1f - k / population);
-        OverallHappiness = Mathf.Clamp(OverallHappiness, 0f, 100f);
-        Debug.Log($"[HappinessSystem] NPC 阵亡，整体幸福 ×= (1 - {k}/{population}) → {OverallHappiness:F1}");
+
+        int kingdomId = uc.kingdomId;   // 分流：0=玩家，>0=AI 王国
+        if (kingdomId == 0)
+        {
+            // 玩家桶0 原语义（HH.30 逐位一致）：保留原 Faction 守卫 + 玩家人口基数（PopulationSystem 玩家口径）
+            if (evt.Faction != Faction.Human_Player) return;
+            int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
+            if (population <= 0) return;   // 无人口基数，无从扣减
+            _overallHappiness[0] *= (1f - k / population);
+            _overallHappiness[0] = Mathf.Clamp(_overallHappiness[0], 0f, 100f);
+            Debug.Log($"[HappinessSystem] NPC 阵亡，整体幸福 ×= (1 - {k}/{population}) → {OverallHappiness:F1}");
+        }
+        else
+        {
+            // AI 王国桶：人口基数=该国工人+战士（KingdomState 派生人口口径）
+            int pop = AiPopulation(kingdomId);
+            if (pop <= 0) return;
+            float cur = GetOverallHappiness(kingdomId);
+            cur *= (1f - k / pop);
+            _overallHappiness[kingdomId] = Mathf.Clamp(cur, 0f, 100f);
+            Debug.Log($"[HappinessSystem] AI王国[{kingdomId}] 阵亡，幸福 ×= (1 - {k}/{pop}) → {_overallHappiness[kingdomId]:F1}");
+        }
+    }
+
+    /// <summary>AI 王国人口基数（工人+战士；玩家走 PopulationSystem 玩家口径，AI 用 KingdomState 派生人口）。</summary>
+    private static int AiPopulation(int kingdomId)
+    {
+        var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        return k != null ? k.workerCount + k.warriorCount : 0;
     }
 
     /// <summary>
@@ -82,29 +128,52 @@ public class HappinessSystem : Singleton<HappinessSystem>
         var cfg = Cfg();
         if (cfg == null || UnitRegistry.Instance == null) return;
 
+        // ===== 玩家桶0（2_17 步骤11 批2：原全局语义逐位一致，HH.30）=====
         int npcCount = 0;
         int happinessSum = 0;
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.GetFaction() != Faction.Human_Player) continue;
-            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不稀释玩家幸福；收编后 GetFaction=AiKingdom 首条件已排除（此双条件保留兼容存量过渡态）。
-            // 2_17 步骤11 批1 守卫升格吸收：此 kingdomId!=0 内联守卫不动分桶（分桶属批2），本批仅标注——守卫将在批2 被 per-kingdom 幸福分桶吸收，玩家行为不变。
+            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不稀释玩家幸福（双条件保留兼容存量过渡态）。
             if (unit.kingdomId != 0) continue;
             if (!SatietySystem.IsNpc(unit.EffectiveOccupation)) continue;
 
-            int h = ComputeUnitHappiness(unit, cfg);
+            int h = ComputeUnitHappiness(unit, cfg, 0);
             unit.IndividualHappiness = Mathf.Clamp(h, 0, 100);
             happinessSum += h;
             npcCount++;
         }
+        _overallHappiness[0] = npcCount > 0 ? happinessSum / (float)npcCount : 50f;
 
-        OverallHappiness = npcCount > 0 ? happinessSum / (float)npcCount : 50f;
-        Debug.Log($"[HappinessSystem] 整体幸福 = {OverallHappiness:F1}（{npcCount} 名 NPC）");
+        // ===== AI 桶（kingdomId>0）：按王国各自算平均（供 Tax/王国评分消费）=====
+        if (KingdomRegistry.Instance != null)
+        {
+            var all = KingdomRegistry.Instance.GetAll();
+            for (int i = 0; i < all.Count; i++)
+            {
+                var k = all[i];
+                if (k == null || k.IsPlayer) continue;
+                int c = 0, s = 0;
+                foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+                {
+                    if (unit == null || unit.Data == null) continue;
+                    if (unit.kingdomId != k.id) continue;
+                    if (!SatietySystem.IsNpc(unit.EffectiveOccupation)) continue;
+                    int h = ComputeUnitHappiness(unit, cfg, k.id);
+                    unit.IndividualHappiness = Mathf.Clamp(h, 0, 100);
+                    s += h;
+                    c++;
+                }
+                _overallHappiness[k.id] = c > 0 ? s / (float)c : 50f;
+            }
+        }
+
+        Debug.Log($"[HappinessSystem] 整体幸福 = {OverallHappiness:F1}（玩家 {npcCount} 名 NPC）");
     }
 
-    /// <summary>计算单个 NPC 的幸福（多因素加权，§五）。</summary>
-    private int ComputeUnitHappiness(UnitController unit, KingdomConfig cfg)
+    /// <summary>计算单个 NPC 的幸福（多因素加权，§五）。kingdomId 决定税负取桶（玩家桶0=原语义）。</summary>
+    private int ComputeUnitHappiness(UnitController unit, KingdomConfig cfg, int kingdomId = 0)
     {
         int satietyFactor = 0;
         if (unit.Satiety >= cfg.feedSatietyThreshold)
@@ -118,7 +187,7 @@ public class HappinessSystem : Singleton<HappinessSystem>
         int hospitalFactor = Mathf.Clamp(Mathf.RoundToInt(cfg.happinessHospitalWeight * 100f * CountActiveBuildings("Hospital")), 0, 100);
 
         // 税负：税越重幸福越低（0-1 税负 → 0-最高惩罚）
-        float taxBurden = Mathf.Clamp01(TaxBurdenLastDay);
+        float taxBurden = Mathf.Clamp01(GetTaxBurden(kingdomId));
         int taxPenalty = Mathf.RoundToInt(cfg.happinessTaxPenaltyMax * taxBurden);
 
         // 食品品质：王国产出高档食品（特殊食物/肉）时小幅加成
@@ -196,11 +265,14 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// 税收幸福系数（§六）：幸福100%全额收，幸福0收0.5倍（lowHappinessTaxFloor）。
     /// 区间 [lowHappinessTaxFloor, 1.0]。TaxSystem 用它缩放应征税额。
     /// </summary>
-    public float GetTaxCoefficient()
+    public float GetTaxCoefficient() => GetTaxCoefficient(0);   // 玩家桶0（原语义，HH.30）
+
+    /// <summary>税收幸福系数（per-kingdom）：幸福100%全额收，幸福0收0.5倍。AI Tax/评分消费。</summary>
+    public float GetTaxCoefficient(int kingdomId)
     {
         var cfg = Cfg();
         float floor = cfg != null ? cfg.lowHappinessTaxFloor : 0.5f;
-        float t = Mathf.Clamp01(OverallHappiness / 100f);
+        float t = Mathf.Clamp01(GetOverallHappiness(kingdomId) / 100f);
         return Mathf.Lerp(floor, 1f, t);
     }
 
@@ -208,11 +280,17 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// 人口增长幸福因子（§五 惩罚2）：整体幸福低 → 人口增长减少。
     /// 0..1，PopulationSystem 生育判定时叠加（幸福越低增长率越低）。
     /// </summary>
-    public float GetPopulationGrowthFactor() => Mathf.Clamp01(OverallHappiness / 100f);
+    public float GetPopulationGrowthFactor() => GetPopulationGrowthFactor(0);   // 玩家桶0（原语义）
+
+    /// <summary>人口增长幸福因子（per-kingdom）。</summary>
+    public float GetPopulationGrowthFactor(int kingdomId) => Mathf.Clamp01(GetOverallHappiness(kingdomId) / 100f);
 
     /// <summary>
     /// 士气修正（§五 惩罚3）：整体幸福低 → 个体撤退阈值降低（更容易撤退）。
     /// 返回 1 - 幸福系数（0..1 惩罚量），供 AI 撤退逻辑接入（当前暴露 API，AI 接入后置）。
     /// </summary>
-    public float GetRetreatThresholdModifier() => 1f - Mathf.Clamp01(OverallHappiness / 100f);
+    public float GetRetreatThresholdModifier() => GetRetreatThresholdModifier(0);   // 玩家桶0（原语义）
+
+    /// <summary>士气修正（per-kingdom）：AI 撤退逻辑供接口。</summary>
+    public float GetRetreatThresholdModifier(int kingdomId) => 1f - Mathf.Clamp01(GetOverallHappiness(kingdomId) / 100f);
 }

@@ -153,13 +153,15 @@ public class TaxSystem : Singleton<TaxSystem>
                 }
             }
 
-            // 2_17 步骤11 批1 注释：AI 幸福系数暂按满额 1.0（AI 无幸福桶；批2 econ-train 接 HappinessSystem per-kingdom 幸福后再缩放）
-            int aiTotal = Mathf.RoundToInt((aiHead + aiBuilding) * 1f);
+            // 2_17 步骤11 批2：AI 幸福系数改用 per-kingdom 幸福桶（HappinessSystem.GetTaxCoefficient(kId)）；
+            // 玩家零回归——玩家分支走原无参 GetTaxCoefficient() 不受影响（HH.30）。
+            float aiCoeff = HappinessSystem.Instance != null ? HappinessSystem.Instance.GetTaxCoefficient(kId) : 1f;
+            int aiTotal = Mathf.RoundToInt((aiHead + aiBuilding) * aiCoeff);
 
             if (aiTotal > 0)
                 kingdom.AddResources(new ResourcePack { gold = aiTotal });
 
-            Debug.Log($"[TaxSystem] AI 税收结算：王国[{kId}]{kingdom.name} 人头税{aiHead} + 建筑税{aiBuilding} → 入账 {aiTotal} 金（工人{kingdom.workerCount}）");
+            Debug.Log($"[TaxSystem] AI 税收结算：王国[{kId}]{kingdom.name} 人头税{aiHead} + 建筑税{aiBuilding}，幸福系数{aiCoeff:F2} → 入账 {aiTotal} 金（工人{kingdom.workerCount}）");
         }
     }
 }
