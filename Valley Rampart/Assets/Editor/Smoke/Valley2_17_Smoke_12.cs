@@ -65,9 +65,17 @@ public static class Valley2_17_Smoke_12
         ProbeDZ008(reg, ts, vcs, out p3block, out p3annex);
         results.Add($"P3 DZ008 满员拦截立国={p3block} 吞并不受上限={p3annex}");
 
-        bool allPass = p1 && p2 && p3block && p3annex;
+        // ---- P4 批B ⑩ TerritoryGap 评分（裁2 A′）+ NonInitialTerritoryCount ----
+        bool p4 = ProbeTerritoryGap(ts);
+        results.Add($"P4 批B ⑩ TerritoryGap A′评分+非初始占区计数 ={p4}");
+
+        // ---- P5 批B ⑩ ExpandTick 行为（日推1~2邻接无主/冷却/D326 升序/只纳无主）----
+        bool p5 = ProbeExpandTick(ts, reg);
+        results.Add($"P5 批B ⑩ ExpandTick 推进+冷却+只纳无主 ={p5}");
+
+        bool allPass = p1 && p2 && p3block && p3annex && p4 && p5;
         Debug.Log("[2_17_12冒烟] " + string.Join(" | ", results));
-        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定 / P2缺圈入 / P3 DZ-008 探针）=====");
+        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2缺圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick）=====");
     }
 
     // ===== 供 Camp 构造：中区块 → 中心格（CellToMidChunk 回落该中区块，LODSystem L101 同款映射）=====
@@ -202,6 +210,111 @@ public static class Valley2_17_Smoke_12
         finally
         {
             f.SetValue(reg, orig);   // 恢复，防污染
+        }
+    }
+
+    // ===== 批B ⑩ TerriitoryGap 评分 + ExpandTick 行为探针 =====
+    // 探针用合成 AI 王国（id=99，IsPlayer=false）；workerCount 为派生(PopulationSystem)→0，D327 容量 β+0−非初始。
+
+    /// <summary>P4 裁2 A′：NeedScore(needA=6, 非初始占区=3) = (6-3)/6 = 0.5；NonInitialTerritoryCount 正确区分初始圈外。</summary>
+    private static bool ProbeTerritoryGap(TerritorySystem ts)
+    {
+        var k = new KingdomState { id = 99 };
+        const int needA = 6;
+        var def = new UtilityActionDef { id = UtilityAction.Expand, need = NeedKind.TerritoryGap, needA = needA };
+
+        // 注册一栋建筑(kingdomId=99)于 cell(9000,9000)，其 CellToMidChunk→mid(2250,2250)，D343 初始圈=3×3 环 → ring 为初始
+        var bGo = new GameObject("s12_p4_building");
+        var b = bGo.AddComponent<Building>();
+        b.coord = new GridCoord(9000, 9000);
+        b.kingdomId = 99;
+        BuildingRegistry.Instance.Register(b);
+
+        // 注入初始圈 9 块（=mid(2250,2250) 的 3×3）= 初始
+        var grid = GridSystem.Instance;
+        Vector2Int bMid = grid != null ? grid.CellToMidChunk(b.coord) : new Vector2Int(2250, 2250);
+        for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++)
+            InjectTerritory(ts, new Vector2Int(bMid.x + dx, bMid.y + dy), 99);
+        // 圈外（非初始）：3 块远离环
+        var extra = new List<Vector2Int> { new Vector2Int(bMid.x + 50, bMid.y), new Vector2Int(bMid.x + 50, bMid.y + 1), new Vector2Int(bMid.x + 51, bMid.y) };
+        foreach (var c in extra) InjectTerritory(ts, c, 99);
+
+        int nonInit = ts.NonInitialTerritoryCount(99);   // 应=3（圈外）
+
+        // 断言须在领土仍在时（清理前）计算：A′ score = clamp01((6-3)/6)=0.5
+        bool countOk = nonInit == 3;
+        float score = UtilityScorer.NeedScore(k, def);
+        bool scoreOk = Mathf.Abs(score - 0.5f) < 0.001f;
+
+        // 干净回滚：注销建筑 + 清账本
+        BuildingRegistry.Instance.Unregister(b);
+        Object.Destroy(bGo);
+        for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++)
+            RemoveTerritory(ts, new Vector2Int(bMid.x + dx, bMid.y + dy));
+        foreach (var c in extra) RemoveTerritory(ts, c);
+
+        return countOk && scoreOk;
+    }
+
+    /// <summary>P5 ExpandTick 行为：合成王国(id=99)注入可走初始领土 → ExpandTick 日推邻接无主→领土增；冷却生效；只纳无主。</summary>
+    private static bool ProbeExpandTick(TerritorySystem ts, KingdomRegistry reg)
+    {
+        // 1) 注入合成王国到 registry
+        var f = typeof(KingdomRegistry).GetField("_kingdoms", BindingFlags.Instance | BindingFlags.NonPublic);
+        var orig = (List<KingdomState>)f.GetValue(reg);
+        if (orig == null) return false;
+        var synth = new KingdomState { id = 99 };
+        var temp = new List<KingdomState>(orig) { synth };
+        f.SetValue(reg, temp);
+        try
+        {
+            // 2) 自含 fixture：裸 Play GridSystem 无地形 → 初始化全 Plain（绕开真实地形耦合），任意 midchunk 可走
+            var grid = GridSystem.Instance;
+            if (grid != null && (typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
+            {
+                grid.Initialize(128, 128);
+                for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
+                    grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+            }
+            var baseMid = new Vector2Int(25, 25);   // 全 Plain 下必可走
+            InjectTerritory(ts, baseMid, 99);
+            int before = ts.KingdomCellCount(99);
+
+            // 3) 首次 tick：应推 1~2 邻接无主 → 领土增
+            ts.ExpandTick();
+            int after = ts.KingdomCellCount(99);
+            bool grew = after > before;
+
+            // 4) 只纳无主：给刚才新增格之一注入他国(77) → 再 tick 不吞（该格不算 99 的新增，且 99 领土数不再因吞它而增）
+            //    为干净验证，把新增格归还无主再注 77，然后 tick：99 不把 77 占的格吞回
+            var gained = ts.GetKingdomTerritory(99);
+            Vector2Int crossTarget = default;
+            bool hasGain = false;
+            foreach (var g in gained) { if (g != baseMid) { crossTarget = g; hasGain = true; break; } }
+            bool noCross = true;
+            if (hasGain)
+            {
+                RemoveTerritory(ts, crossTarget);              // 先归还无主
+                InjectTerritory(ts, crossTarget, 77);          // 再由他国占据
+                ts.ExpandTick();                               // 冷却不满时最多推新区块，绝不把 crossTarget 夺回
+                bool stillOther = ts.Ledger.TryGetValue(crossTarget, out int ownerNow) && ownerNow == 77;
+                noCross = stillOther;                          // 他国格未被覆写
+                RemoveTerritory(ts, crossTarget);
+            }
+
+            // 5) 冷却：grew 那次刚 tick 过 → 立即再 tick 同一 "日"(无跨日) 应因冷却不变
+            int cBefore = ts.KingdomCellCount(99);
+            ts.ExpandTick();
+            int cAfter = ts.KingdomCellCount(99);
+            bool cooldown = cAfter == cBefore;
+
+            // 清理账本
+            foreach (var g in ts.GetKingdomTerritory(99)) RemoveTerritory(ts, g);
+            return grew && cooldown && noCross;
+        }
+        finally
+        {
+            f.SetValue(reg, orig);   // 恢复 registry
         }
     }
 

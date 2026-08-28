@@ -157,3 +157,21 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
+  - id: 10
+    name: "\u63A8\u8FB9\u754C"
+    minStage: 2
+    axis: 3
+    axisWeight: 1
+    need: 14
+    needA: 6
+    needB: 0
+    stageWeight:
+    - 0
+    - 0.5
+    - 1
+    - 1
+    buildingId:
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0

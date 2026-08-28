@@ -14,6 +14,8 @@ using UnityEngine;
 public class TerritorySystem : Singleton<TerritorySystem>
 {
     private readonly Dictionary<Vector2Int, int> _territory = new Dictionary<Vector2Int, int>();
+    // ⑩推边界冷却（批B 运行时态；④债批C 入档时持久化 lastExpandDay）
+    private readonly Dictionary<int, int> _lastExpandDay = new Dictionary<int, int>();
 
     /// <summary>账本唯一真源（只读视图）。</summary>
     public IReadOnlyDictionary<Vector2Int, int> Ledger => _territory;
@@ -126,5 +128,112 @@ public class TerritorySystem : Singleton<TerritorySystem>
                     cells.Add(new Vector2Int(mid.x + dx, mid.y + dy));
         }
         return cells;
+    }
+
+    // ===== 步骤12 批B：⑩推边界（AI 领土推进，D326/D327；HH.32 裁2 欲望与容量分离）=====
+
+    /// <summary>非初始占区数（D343 初始圈之外、由推边界新增的领土中区块数；⑩ TerritoryGap 欲望分母）。</summary>
+    public int NonInitialTerritoryCount(int kingdomId)
+    {
+        var initial = CollectMidRing(kingdomId);
+        int n = 0;
+        foreach (var c in GetKingdomTerritory(kingdomId))
+            if (initial == null || initial.Count == 0 || !initial.Contains(c)) n++;
+        return n;
+    }
+
+    /// <summary>
+    /// ⑩ AI 领土日 tick（D326 确定性 + D327 额度硬容量门）。DayCycleSettlement 步骤3 接线。
+    /// 遍历 AI 王国 id 升序（D326 同日多国按 kingdomId 升序）；每王国：冷却/额度硬门 → 邻接无主可走候选 → 推 1~2 块 → 写账本 → 广播。
+    /// 只纳无主 + 4-邻接（D283 防飞地）；玩家(id=0)无脑 D338 不参与。
+    /// </summary>
+    public void ExpandTick()
+    {
+        if (GridSystem.Instance == null || KingdomRegistry.Instance == null) return;
+        var reg = KingdomRegistry.Instance;
+        var bcfg = KingdomBrain.LoadConfig();
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
+
+        var ids = new List<int>();
+        foreach (var k in reg.GetAll())
+            if (k != null && !k.IsPlayer) ids.Add(k.id);
+        ids.Sort();   // D326 确定性升序
+
+        int cd = Mathf.Max(1, bcfg.expandCooldownDays);
+        int capBase = bcfg.expandCapacityBase;
+        int capMax = Mathf.Max(0, bcfg.expandCapacityMax);
+        int perMin = Mathf.Max(1, bcfg.expandPerDayMin);
+        int perMax = Mathf.Max(perMin, bcfg.expandPerDayMax);
+
+        for (int i = 0; i < ids.Count; i++)
+        {
+            int id = ids[i];
+            var k = reg.Get(id);
+            if (k == null) continue;
+
+            // D327 硬容量门：capacity = clamp(β + 工人 − 非初始占区, 0, 上限)；≤0 不再推进
+            int nonInit = NonInitialTerritoryCount(id);
+            int capacity = Mathf.Clamp(capBase + k.workerCount - nonInit, 0, capMax);
+            if (capacity <= 0) continue;
+
+            // 冷却：距上次推进 ≥ 冷却日
+            if (_lastExpandDay.TryGetValue(id, out int last) && day - last < cd) continue;
+
+            // 邻接无主可走候选（4 邻接，D326）
+            var gains = CandidateExpandCells(id);
+            if (gains.Count == 0) continue;
+
+            // 单日推 1~2 块（不超额度剩余）
+            int take = Mathf.Clamp(Mathf.Min(gains.Count, capacity), perMin, perMax);
+            var claimed = new List<Vector2Int>(take);
+            for (int j = 0; j < take; j++)
+            {
+                _territory[gains[j]] = id;
+                claimed.Add(gains[j]);
+            }
+            _lastExpandDay[id] = day;
+            EventBus.Publish(new TerritoryChangedEvent(id, claimed));
+        }
+    }
+
+    /// <summary>某王国当前领土 4 邻接的无主可走中区块候选（D326 坐标序排序；只纳无主）。</summary>
+    private List<Vector2Int> CandidateExpandCells(int id)
+    {
+        var ownedList = GetKingdomTerritory(id);   // 已按坐标序
+        var owned = new List<Vector2Int>(ownedList);
+        var ownedSet = new HashSet<Vector2Int>(owned);
+        var cand = new HashSet<Vector2Int>();
+        for (int i = 0; i < owned.Count; i++)
+        {
+            var c = owned[i];
+            TryAddNeighbor(cand, ownedSet, c.x + 1, c.y);
+            TryAddNeighbor(cand, ownedSet, c.x - 1, c.y);
+            TryAddNeighbor(cand, ownedSet, c.x, c.y + 1);
+            TryAddNeighbor(cand, ownedSet, c.x, c.y - 1);
+        }
+        var list = new List<Vector2Int>(cand);
+        list.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        return list;
+    }
+
+    private void TryAddNeighbor(HashSet<Vector2Int> cand, HashSet<Vector2Int> owned, int x, int y)
+    {
+        var c = new Vector2Int(x, y);
+        if (owned.Contains(c) || _territory.ContainsKey(c)) return;   // 已有主/已含 → 不候选（只纳无主）
+        if (MidChunkWalkable(c)) cand.Add(c);                          // 域推进门槛（可走率 ≥ SO 阈值）
+    }
+
+    /// <summary>中区块内可走格占比 ≥ SO 阈值（目标域推进门槛；D326 只推进可走域）。</summary>
+    private bool MidChunkWalkable(Vector2Int mid)
+    {
+        var grid = GridSystem.Instance;
+        int ms = grid != null && grid.Config != null && grid.Config.midChunkSize > 0 ? grid.Config.midChunkSize : 4;
+        var bcfg = KingdomBrain.LoadConfig();
+        float thr = bcfg.expandWalkableRatioMin;
+        int total = ms * ms, walk = 0;
+        for (int dx = 0; dx < ms; dx++)
+            for (int dy = 0; dy < ms; dy++)
+                if (grid.IsWalkable(new GridCoord(mid.x * ms + dx, mid.y * ms + dy, 0))) walk++;
+        return total > 0 && (float)walk / total >= thr;
     }
 }

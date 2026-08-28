@@ -37,7 +37,10 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         // 步骤2：王国脑日 tick（D347 步②，日结入账之前 → 脑看到昨日结存；只循环非玩家王国，玩家无脑 D338）
         TickKingdomBrains();
 
-        // 步骤3：领土变更（P0 占位空跑——AI 推边界/玩家建造纳土归步骤12；此处预留 TerritoryChangedEvent 领土写入口）
+        // 步骤3：领土变更（2_17 步骤12 批B：AI 推边界日 tick——⑩ ExpandTick；
+        //         玩家建造纳土 ClaimAdjacentUnclaimed 归批C；吞并 A 日 tick 归 CampUpgrader 步骤4 前置）
+        if (TerritorySystem.Instance != null)
+            TerritorySystem.Instance.ExpandTick();
         // 步骤4：营地晋升调度（2_16 已有；顺序归位到③之后 = D347 五步第 4 步）
         CampUpgrader.TickAll();
 

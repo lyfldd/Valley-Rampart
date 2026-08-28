@@ -161,6 +161,9 @@ public class KingdomBrain
             case UtilityAction.Tech:
                 ExecuteTech(kingdom, cfg);
                 break;
+            case UtilityAction.Expand:
+                ExecuteExpand(kingdom, cfg);
+                break;
             case UtilityAction.Expedition:
             case UtilityAction.Reinforce:
             case UtilityAction.Diplomacy:
@@ -286,6 +289,18 @@ public class KingdomBrain
     {
         var table = Resources.Load<CastleUnlockTable>("Config/CastleUnlockTable");
         return table != null ? table.GetModuleLevel(module, castleLevel) : 0;
+    }
+
+    /// <summary>
+    /// ⑩推边界焦点下发（2_17 步骤12 批B，HH.32 裁3 吞并/扩张=A 日 tick 一致性）。
+    /// 实际扩张引擎=DayCycleSettlement 步骤3 TerritorySystem.ExpandTick（D326 升序/冷却5日/日推1~2邻接无主/D327 硬容量门）。
+    /// 本方法=焦点一致性占位：确认 AI 已选⑩ 即可，无需实体指令——扩张随日 tick 自动落地，避免双写。
+    /// </summary>
+    private void ExecuteExpand(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        int nonInitial = TerritorySystem.Instance != null
+            ? TerritorySystem.Instance.NonInitialTerritoryCount(kingdomId) : -1;
+        Debug.Log($"[KingdomBrain] k{kingdomId} 焦点⑩推边界 下发（实际扩张=DayCycle 步骤3 ExpandTick 日 tick；非初始占区={nonInitial}）");
     }
 
     /// <summary>找一个可招募流浪汉（活体、Vagrant、未被招募、未入籍 kingdomId&lt;0）。固定遍历序=确定性。</summary>

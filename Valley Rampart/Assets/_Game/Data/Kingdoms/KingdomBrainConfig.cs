@@ -96,4 +96,18 @@ public class KingdomBrainConfig : ScriptableObject
     [Tooltip("AI 科技升级的目标模块（so-data-driven 铁律：禁硬编码）。默认 Civil——须满足 GetModuleLevel(module, castleLevel=1) > 0 才有闭环；"
            + "Science(5) 在城堡1 无解锁（CastleUnlockTable.asset 实配 module5 首现于 castle2）→ 选 Science 会闭环死路，禁止作默认。")]
     public ModuleType techTargetModule = ModuleType.Civil;
+
+    [Header("⑩推边界（步骤12 AI 领土推进，D326/D327；HH.32 裁2 欲望与容量分离）")]
+    [Tooltip("⑩推进冷却（日）：距上次推进 ≥ 本值才再推（冷却 5 日占位）")]
+    public int expandCooldownDays = 5;
+    [Tooltip("⑩单日推进下限（块）")]
+    public int expandPerDayMin = 1;
+    [Tooltip("⑩单日推进上限（块）")]
+    public int expandPerDayMax = 2;
+    [Tooltip("⑩目标中区块可走率阈值：中区块内可走格占比 ≥ 本值才可推进（域推进门槛）")]
+    public float expandWalkableRatioMin = 0.5f;
+    [Tooltip("D327 扩张额度硬容量门 clamp(本值 + 工人数 − 非初始占区, 0, 上限) 的容量基线 β")]
+    public int expandCapacityBase = 4;
+    [Tooltip("D327 额度上限（硬容量 max；达限即不再推进）")]
+    public int expandCapacityMax = 96;
 }

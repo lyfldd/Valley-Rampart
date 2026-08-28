@@ -50,7 +50,8 @@ public enum NeedKind : byte
     WallGap,         // 工事城墙缺口（⑨）：needA=城墙目标座数，现存城墙不足则补
     ExpeditionNeed,  // 出征军（⑪ 占位可执行）：军事期兵力充裕即想出征（needA=兵力基线）
     ReinforceNeed,   // 边境增援（⑫ 占位）：军事期边境需增强（needA=增援目标；L3 意图接口占位）
-    DiplomacyNeed    // 外交姿态（⑮ 占位可执行）：外交轴意愿（needA=外交基线）
+    DiplomacyNeed,   // 外交姿态（⑮ 占位可执行）：外交轴意愿（needA=外交基线）
+    TerritoryGap     // 领土缺口（⑩ 推边界）：needA=目标非初始占区数；非初始占区 < 目标越缺越想扩（HH.32 裁2 A′，欲望与容量分离）
 }
 
 /// <summary>效用评分器（纯函数层，2_17 步骤9）。单入口 ScoreTop。</summary>
@@ -150,6 +151,13 @@ public static class UtilityScorer
                 return 0.5f;
             case NeedKind.ExpeditionNeed: // ⑪ 出征军（占位可执行）：军事期且战士达标 → 想出征（占位底分 0.5）
                 return k.warriorCount >= MilitaryTarget(k, KingdomBrain.LoadConfig()) ? 0.5f : 0f;
+            case NeedKind.TerritoryGap:    // ⑩ 推边界（HH.32 裁2 A′）非初始占区 < 目标越缺越想扩（欲望与容量分离）
+            {
+                // 非初始占区 = 初始圈(D343)之外的新增中区块；needA=目标数(SO，占位 6)
+                int nonInitial = TerritorySystem.Instance != null
+                    ? TerritorySystem.Instance.NonInitialTerritoryCount(k.id) : 0;
+                return d.needA > 0 ? Mathf.Clamp01((d.needA - nonInitial) / d.needA) : 0f;
+            }
             default: return 0f;
         }
     }
@@ -253,6 +261,14 @@ public static class UtilityScorer
             case UtilityAction.Diplomacy:
                 // ⑪⑫⑮ 占位可执行：无硬门槛（L3 意图 / 2_18 外交接口占位，评分够即可选）
                 return true;
+            case UtilityAction.Expand:
+            {
+                // ⑩ 推边界可行性（D346 二值）：有初始领土可向外扩 + 非初始占区未达目标（needA=SO 目标）
+                int nonInitial = TerritorySystem.Instance != null
+                    ? TerritorySystem.Instance.NonInitialTerritoryCount(k.id) : 0;
+                return k.Territory.Count > 0
+                       && nonInitial < (int)Mathf.Max(0, d.needA);
+            }
             case UtilityAction.BuildHouse:
             case UtilityAction.BuildWarehouse:
             case UtilityAction.BuildCapacity:
