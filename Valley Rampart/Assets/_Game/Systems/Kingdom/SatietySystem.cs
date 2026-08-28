@@ -71,7 +71,9 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.GetFaction() != Faction.Human_Player) continue;
-            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不吃玩家国库粮/不拉低均饱食；收编后 GetFaction=AiKingdom 首条件已排除（双条件保留兼容存量过渡态）
+            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不吃玩家国库粮/不拉低均饱食；收编后 GetFaction=AiKingdom 首条件已排除（双条件保留兼容存量过渡态）。
+            // 2_17 步骤11 批1 守卫升格吸收：此 kingdomId!=0 内联守卫不动分桶（分桶属批2），本批仅标注——守卫将在批2 被 per-kingdom 饱食分桶吸收，玩家行为不变。
+            if (unit.kingdomId != 0) continue;   // GetAverageSatiety 平均饱食（玩家口径）
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             sum += unit.Satiety;
             count++;
@@ -92,7 +94,9 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.GetFaction() != Faction.Human_Player) continue;
-            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不参与玩家每日饱食结算/国库进食（同上述收编双条件语义）
+            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不参与玩家每日饱食结算/国库进食（同上述收编双条件语义）。
+            // 2_17 步骤11 批1 守卫升格吸收：此 kingdomId!=0 内联守卫不动分桶（分桶属批2），本批仅标注——守卫将在批2 被 per-kingdom 饱食分桶吸收，玩家行为不变。
+            if (unit.kingdomId != 0) continue;   // OnNewDay 每日饱食结算（玩家口径）
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             if (!unit.IsAlive) continue;
 

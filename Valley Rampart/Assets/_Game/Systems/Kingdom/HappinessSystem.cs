@@ -55,6 +55,8 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// </summary>
     private void OnUnitDied(UnitDiedEvent evt)
     {
+        // 2_17 步骤11 批1 守卫升格吸收：本死亡幸福扣减仅服务玩家(Human_Player)/幸福桶0——守卫将在批2 被 per-kingdom 幸福分桶吸收，
+        // 本批不动分桶，仅标注（AI 王国阵亡幸福扣减归批2），玩家行为不变。
         if (evt.Faction != Faction.Human_Player) return;
         var uc = evt.Unit as UnitController;
         if (uc == null || uc.Data == null) return;
@@ -86,7 +88,9 @@ public class HappinessSystem : Singleton<HappinessSystem>
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.GetFaction() != Faction.Human_Player) continue;
-            if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不稀释玩家幸福；收编后 GetFaction=AiKingdom 首条件已排除（此双条件保留兼容存量过渡态）
+            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不稀释玩家幸福；收编后 GetFaction=AiKingdom 首条件已排除（此双条件保留兼容存量过渡态）。
+            // 2_17 步骤11 批1 守卫升格吸收：此 kingdomId!=0 内联守卫不动分桶（分桶属批2），本批仅标注——守卫将在批2 被 per-kingdom 幸福分桶吸收，玩家行为不变。
+            if (unit.kingdomId != 0) continue;
             if (!SatietySystem.IsNpc(unit.EffectiveOccupation)) continue;
 
             int h = ComputeUnitHappiness(unit, cfg);

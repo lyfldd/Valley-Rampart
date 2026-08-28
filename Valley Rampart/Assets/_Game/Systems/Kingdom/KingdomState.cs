@@ -38,6 +38,20 @@ public class KingdomState
     /// <summary>起始国库过渡账本（baseStockpile D300；由 Foundry 步骤5 写入。2_17 步骤2 WarehouseRegistry per-kingdom 迁移吸收前，AI 无脑不消费，零风险）。</summary>
     public ResourcePack resources;
 
+    // ===== 科技解锁态 per-kingdom（2_17 步骤11 序0 schema 预留 + 序8 落地载体）=====
+    // D330 第二步：CastleUnlockTable 解锁态 per-kingdom（动态立国科技不继承 D295）。
+    // 载体迁址路径：KingdomManager.ModuleLevels（全局单例，玩家）→ 每王国一份 dict[id]。
+    // 索引=ModuleType 枚举（CastleUnlockTable：Civil/Production/Livelihood/Military/Commerce/Science，6 模块）。
+    // 玩家 id=0 桶与原 KingdomManager.ModuleLevels 转置一致；AI 各国独立不串。
+    // ⚠️ schema 完全拆分（KingdomSaveData kings[] 数组化）归 2_11 统一迁移（实施计划 L55：kingdoms[] 拆桶旧档展开单元素）。
+    // 本步仅载体预留：KingdomState 持有本王国解锁态数组，供序8/序10 ExecuteTech 消费；未入存量存档（随 kingdoms[] 迁移入档）。
+
+    /// <summary>本王国科技解锁态（6 模块等级；玩家桶=原 KingdomManager.ModuleLevels 转置；AI=本国）。</summary>
+    public int[] moduleLevels;
+
+    /// <summary>本王国主堡等级（0=废墟未修复，1-6；玩家桶=KingdomManager.CastleLevel 转置；AI 由王国脑/领土驱动）。</summary>
+    public int castleLevel;
+
     // ===== 王国脑运行时态（2_17 步骤8，D317~D320/D322/D337/D338）=====
     // 由 KingdomBrainRegistry/KingdomBrain 于日 tick 写入，不入档（读档时王国脑由 Foundry 创建钩子重建）。
     // AI(id>0) 非空；玩家(id=0) 无脑 → scriptPhase=null（D338，情报面板不展示玩家剧本阶段）。

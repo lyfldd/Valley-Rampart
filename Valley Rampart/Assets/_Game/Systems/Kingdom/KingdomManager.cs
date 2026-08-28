@@ -36,6 +36,13 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     /// <summary>贸易剩余额度（索引=资源等级-1，13 档：1粮/2木/3石/4矿/5金/6水晶/7火油/8特食/9肉/10Metal/11石弹/12火弹/13魔弹）。</summary>
     public int[] TradeQuotaRemaining { get; private set; } = new int[13];
 
+    // ===== 2_17 步骤11 批1·per-kingdom 贸易额度结构（只结构，AI 主动贸易归 P2 econ-train）=====
+    // TradeQuotaRemaining / TryConsumeTradeQuota 是玩家(id=0) 单例数组，TradePanel 依赖其公开 API。
+    // 本批不改 API 签名（玩家路径完全不动 = 零回归，HH.30）。以下 per-kingdom 额度映射（Dictionary<int,int[]>）
+    // 备 AI/动态王国主动贸易接入：key=kingdomId，value=13 档额度（索引=资源等级-1，同玩家）。
+    // TODO[批2 econ-train] AI 主动贸易：填充 _perKingdomTradeQuota 并接入每日刷新/消耗语义（玩家名额度不受影响）
+    private readonly Dictionary<int, int[]> _perKingdomTradeQuota = new Dictionary<int, int[]>();
+
     /// <summary>贸易额度刷新倒计时（天，索引=资源等级-1，13 档；D220 每日全量重置后保留数组兼容存档，语义退化为占位）。</summary>
     public int[] TradeCooldownDays { get; private set; } = new int[13];
 
