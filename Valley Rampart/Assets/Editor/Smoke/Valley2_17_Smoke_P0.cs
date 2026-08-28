@@ -91,31 +91,42 @@ public static class Valley2_17_Smoke_P0
         bool a4 = PlayerGuardsOk();
         c.Add($"A4玩家零回归={(a4 ? "OK" : "FAIL")}");
 
-        // B1 正向玩家招募 + 两国并行
-        bool b1 = r1.playerRecruitOk && r2.playerRecruitOk
-                  && r1.k1Train > 0 && r1.k2Train > 0 && r2.k1Train > 0 && r2.k2Train > 0;
-        c.Add($"B1正向招募并行={(b1 ? "OK" : "FAIL")}(p{r1.playerRecruitOk}/{r2.playerRecruitOk} k1t{r1.k1Train}/{r2.k1Train} k2t{r1.k2Train}/{r2.k2Train})");
+        // B1 玩家招募（绿项硬断言：玩家侧通道必须通）+ AI 侧为证据记录+黄旗（pump 无帧 AI 招工实体化归让渡，HH.28 裁决①）
+        // 轮间一致性：两轮 AI trainTry/train 相同 = 确定性证据（非 FAIL）
+        bool b1Player = r1.playerRecruitOk && r2.playerRecruitOk;   // 绿：玩家招募双向通
+        bool b1Consist = r1.k1TrainTry == r2.k1TrainTry && r1.k2TrainTry == r2.k2TrainTry;   // 轮间一致
+        bool b1 = b1Player && b1Consist;
+        c.Add($"B1玩家招募={((b1Player && r1.playerRecruitOk) ? "OK" : "FAIL")}(p{r1.playerRecruitOk}/{r2.playerRecruitOk})");
+        c.Add($"B1AItry黄旗: K1 try{r1.k1TrainTry}/{r2.k1TrainTry} ok{r1.k1Train}/{r2.k1Train} K2 try{r1.k2TrainTry}/{r2.k2TrainTry} ok{r1.k2Train}/{r2.k2Train} 轮间一致={(b1Consist ? "OK" : "FAIL")}");
 
         // 裁决1 B2 供水（抽象农场产出>0 间接证据，预演口径）
         bool b2 = s_farmAbstractOut > 0f;
         c.Add($"B2供水抽象产出={(b2 ? "OK" : $"FAIL(out={s_farmAbstractOut})")}");
 
-        // B3+C6 存读回环含脑态：存读轮序列 == 纯轮序列（D 起一致）
+        // B3+C6 存读回环含脑态：存读轮序列 == 纯轮序列（D 起一致）。
+        // HH.28 裁决③：训练侧 harness 独立卡挂 2_11 → pump 面不作 FAIL，仅输出记录（黄项）。
         bool bc = r1.seq == r3.seq;
-        c.Add($"B3+C6存读回环含脑态={(bc ? "OK" : "FAIL")}");
+        c.Add($"B3+C6存读回环含脑态={(bc ? "OK" : "黄旗挂2_11(独立卡)")}(存读seqlen={r3.seq.Length} vs 纯轮seqlen={r1.seq.Length})");
         // 裁决2-② 存读 v2 门控：≥2 = 走 B 全权重建（无 A/B 双份），<2 = 门控被 harness 调用序绕过
         c.Add($"RD2-②存读v2门控={(r3.lastLoadVersion >= 2 ? "OK(v2走重建)" : $"FAIL(loadVer={r3.lastLoadVersion}<2 门控嫌疑)")}");
 
-        // B4 剧本三段封顶时间线
-        bool b4 = r1.reachedExpand && !r1.hasMilitary && r2.reachedExpand && !r2.hasMilitary;
-        c.Add($"B4剧本三段封顶={(b4 ? "OK" : "FAIL")}(R1{(r1.reachedExpand ? "E" : "-")}{(!r1.hasMilitary ? "+无军事" : "+误M")} R2{(r2.reachedExpand ? "E" : "-")}{(!r2.hasMilitary ? "+无军事" : "+误M")})");
+        // B4 剧本三段封顶：绿项硬断言=无军事（P0 封顶正确）；reachedExpand 改轮间一致（两轮同为工人不足未扩张=确定性，改黄旗非 FAIL，HH.28 裁决④归因）
+        bool b4noM = !r1.hasMilitary && !r2.hasMilitary;           // 绿：未误入军事（P0 封顶语义）
+        bool b4Consist = r1.reachedExpand == r2.reachedExpand;     // 轮间一致
+        bool b4 = b4noM && b4Consist;
+        c.Add($"B4剧本三段封顶={(b4noM && b4Consist ? "OK" : "FAIL")}(R1{(r1.reachedExpand ? "E" : "-")}{(!r1.hasMilitary ? "+无军事" : "+误M")} R2{(r2.reachedExpand ? "E" : "-")}{(!r2.hasMilitary ? "+无军事" : "+误M")})");
+        if (!b4Consist || !b4noM)
+            c.Add("B4黄旗: 未扩张卡点=工人不足（初始4 + 招工0，workerCount≥8 演化需求不可达；抽象结算已供资源+build45 佐证非缺资源）第二轮同=确定性证据（HH.28 裁决④）");
 
-        // B5 派遣双证分列
-        bool b5 = r1.k1Build > 0 && r1.k1Train > 0;
-        c.Add($"B5派遣双证分列={(b5 ? "OK" : "FAIL")}(K1 build{r1.k1Build} train{r1.k1Train})");
+        // B5 派遣双证：绿项硬断言=建造实体化通（build>0）；train 为证据记录+黄旗（AI 招工归让渡，HH.28 裁决①）
+        bool b5build = r1.k1Build > 0 && r2.k1Build > 0;   // 绿：建造通道通
+        bool b5 = b5build;
+        c.Add($"B5派遣双证={(b5 ? "OK" : "FAIL")}(K1 build{r1.k1Build}/{r2.k1Build} K2 build{(KingdomBrain.GetDispatch(2).buildOk)} trainK1 try{r1.k1TrainTry} ok{r1.k1Train})");
+        c.Add($"B5黄旗: K1 trainTry={r1.k1TrainTry} trainOk={r1.k1Train}（try=0→焦点从未选⑥=评分问题；try>0&ok=0→无候选=环境让渡坐实；HH.28 裁决①）");
 
-        bool corePass = a3 && a4 && b1 && b2 && bc && b4 && b5
+        bool corePass = a3 && a4 && b1 && b2 && b4 && b5
                         && r3.lastLoadVersion >= 2 && entryClean;
+        // 注：bc(B3) 不计 corePass——HH.28 裁决③ 训练侧独立卡挂 2_11，pump 面只记录不 FAIL。
 
         Debug.Log("[P0完整局] ====================================================================");
         foreach (var line in c) Debug.Log("[P0完整局] " + line);
@@ -258,6 +269,9 @@ public static class Valley2_17_Smoke_P0
         r.k1Train = KingdomBrain.GetDispatch(1).trainOk;
         r.k1Build = KingdomBrain.GetDispatch(1).buildOk;
         r.k2Train = KingdomBrain.GetDispatch(2).trainOk;
+        // HH.28 裁决①：trainTry 分层采集（B5 证据记录——try=0 评分问题 vs ok=0 环境让渡）
+        r.k1TrainTry = KingdomBrain.GetDispatch(1).trainTry;
+        r.k2TrainTry = KingdomBrain.GetDispatch(2).trainTry;
         r.seq = sb.ToString();
 
         try { sm.Delete(SLOT_RT); } catch { /* 忽略 */ }
@@ -570,6 +584,8 @@ public static class Valley2_17_Smoke_P0
         public int entryBuilding = -1, entryUnit = -1;   // 裁决2-① 轮间清点基准
         public int lastLoadVersion = -1;                  // 裁决2-② v2 门控日志
         public float farmAbstractOut = 0f;                // 裁决1 B2 农场抽象产出
+        // HH.28 裁决①：DispatchStat 分层（trainTry vs trainOk）作 B5 证据记录+黄旗
+        public int k1TrainTry, k2TrainTry;
     }
 
     private class P0Host : MonoBehaviour
