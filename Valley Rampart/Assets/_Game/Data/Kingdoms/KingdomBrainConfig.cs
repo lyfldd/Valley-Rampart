@@ -65,6 +65,8 @@ public class KingdomBrainConfig : ScriptableObject
     public int grainConsumptionPerPop = 1;
     [Tooltip("人口底线（自造件，贴既有哲学）：workerCount < popFloor 强制⑥招工人焦点（底线第二级「保增长下限」；触发式不评分跳防抖）。修复决策①结构性锁死（低扩张国⑥评分被轴乘入压制永不招工）。")]
     public int popFloor = 6;
+    [Tooltip("人口底线份额式修正（HH.30 策划裁决）：⑥连续占焦点天数。popAlarm 触发后⑥占本值日，第 popAlarmFocusCapDays+1 日让位 1 轮给评分焦点（含建造）再轮替回⑥——防独占⑥在「招满8人真空窗」饿死建造（与决策①⑥永不选为镜像缺陷）。")]
+    public int popAlarmFocusCapDays = 2;
 
     [Header("执行派遣（2_17 完整局批次，D345 执行面）")]
     [Tooltip("AI 招募流浪汉成本（粮/人；⑥招工人通道，镜像玩家 recruitFoodCost 语义）")]

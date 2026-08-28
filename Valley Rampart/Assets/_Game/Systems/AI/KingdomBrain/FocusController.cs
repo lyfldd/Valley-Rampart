@@ -36,6 +36,10 @@ public class FocusController
     /// <summary>当前焦点设定日（防抖基准：切换需距上次 ≥ focusMinDurationDays）。</summary>
     private int _focusSinceDay = int.MinValue / 2;
 
+    /// <summary>份额式人口底线（策划裁决）：上次进入 popAlarm 的日（窗口起点，供轮替相位取模）。</summary>
+    private bool _wasPopAlarm;
+    private int _popWindowStartDay = int.MinValue / 2;
+
     /// <summary>本次评分顶行动（调试/冒烟断言：对比常设底线是否覆盖评分排序，冒烟#4）。</summary>
     public UtilityAction LastTop { get; private set; } = UtilityAction.None;
 
@@ -86,8 +90,28 @@ public class FocusController
         //  门槛 = max(popFloor, developToExpand_workersMin)——「保增长下限」的下限=能升 Expand 的工人数，
         //  自动联动 SO 阈值（developToExpand_workersMin 改，此处不用跟着改）。
         //  三档错峰达成：帐篷4<8✓ / 村落6<8✓ / 要塞8<8 不触发（已达标，评分自由）✓。
+        //  HH.30 份额式修正（策划裁决-HH.29 二次定性纠偏）：独占⑥会在"招满8人真空窗"饿死建造——
+        //  底线本意是"保增长下限"不该吞掉正常经营，与决策①"⑥永不选"是镜像缺陷。故改"独占"为"份额"：
+        //  popAlarm 触发→⑥占 popAlarmFocusCapDays 日，第 popAlarmFocusCapDays+1 日让位 1 轮给评分焦点
+        //  （含建造），下轮若仍 popAlarm 再回来（相位轮替）。与粮底线 grainReserveDaysFloor 时窗语义同构。
         bool popAlarm = kingdom.workerCount < Mathf.Max(brainCfg.popFloor, brainCfg.developToExpand_workersMin);
-        if (popAlarm) { SetFocus(kingdom, FocusRecruitWorker, day); return; }
+        if (popAlarm)
+        {
+            if (!_wasPopAlarm) { _popWindowStartDay = day; _wasPopAlarm = true; }
+            int phase = day - _popWindowStartDay;
+            int cap = Mathf.Max(1, brainCfg.popAlarmFocusCapDays);
+            bool recruitedTurn = phase % (cap + 1) < cap;
+            if (recruitedTurn) { SetFocus(kingdom, FocusRecruitWorker, day); return; }
+            // 让位日：⑥聚焦暂停 1 轮，交还评分焦点（含建造），防独占饿死经营；下轮槽位自然轮替回⑥。
+            // 评分 + 强制切换（让位日无视防抖，保证建造得以落地）。
+            if (day < _defenseEndDay) { SetFocus(kingdom, FocusDefense, day); return; }
+            ScriptStage popStage = kingdom.scriptPhase ?? ScriptStage.Survive;
+            UtilityAction popTop = UtilityScorer.ScoreTop(kingdom, utilCfg, popStage);
+            LastTop = popTop;
+            if (popTop != UtilityAction.None) SetFocus(kingdom, (int)popTop, day);
+            return;
+        }
+        _wasPopAlarm = false;
         //  底线第三级「保命」：被攻击 → 强制防御窗口
         if (day < _defenseEndDay) { SetFocus(kingdom, FocusDefense, day); return; }
 
