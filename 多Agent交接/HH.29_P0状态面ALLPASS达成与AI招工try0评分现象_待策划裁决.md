@@ -121,7 +121,7 @@ bool popAlarm = kingdom.workerCount < Mathf.Max(brainCfg.popFloor, brainCfg.deve
 ---
 
 
-## 九、份额式修正（2026-08-28 三次裁决，覆盖 §八 独占修法；HH.30 定性纠偏 + Yjy裁决）
+## 九、份额式修正（2026-08-28 三次裁决，覆盖 §八 独占修法——策划核码定性纠偏）
 
 **策划核码前置纠偏**：P0 复跑显示 try>0 达成（K1/K2 try=45）但 **B5 build=0 FAIL**——执行端一度按"环境让渡黄旗"上报，策划否决该定性：
 - **这不是纯环境让渡，真帧同样饿死建造，只是死得慢一点。** 真帧有流浪汉→招满 8 人→popAlarm 释放没错；但触发到招满的真空窗内 ⑥**独占**焦点（FocusController 原 if(popAlarm) return 排他），评分/建造全停。流浪汉靠营地补员(D371=1/日)，招满 2 人缺口≈2+ 日全停建造；候选稀薄（流民游荡/被玩家抢招/被怪杀）⇒真空窗拉到周级 = AI 在"保增长"名义下冻结核经济。
@@ -132,7 +132,7 @@ bool popAlarm = kingdom.workerCount < Mathf.Max(brainCfg.popFloor, brainCfg.deve
 - 改后：真空窗内建造仅停 popAlarmFocusCapDays+1 日一轮，随后每 popAlarm 期至少 1 轮建造落地；⑥仍高频尝试（try 涨）。
 
 **实施（协作已落盘，未提交）**：
-- FocusController.cs：新增 _wasPopAlarm/_popWindowStartDay 窗口字段 + 份额相位 phase=day-windowStart; recruitedTurn = phase%(cap+1) < cap；⑥日强制并 return，让位日走评分（强制切换）。注释 HH.30 定性。
+- FocusController.cs：新增 _wasPopAlarm/_popWindowStartDay 窗口字段 + 份额相位 phase=day-windowStart; recruitedTurn = phase%(cap+1) < cap；⑥日强制并 return，让位日走评分（强制切换）。注释定性纠偏。
 - KingdomBrainConfig.cs + .asset：新增 popAlarmFocusCapDays=2（SO 占位）。
 - 冒烟#5 PopFloorGuard：追加份额轮替断言（2 周期 ⑥⑥B⑥⑥B 纯谓词）。
 

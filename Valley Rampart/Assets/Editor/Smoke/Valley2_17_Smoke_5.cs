@@ -96,8 +96,8 @@ public static class Valley2_17_Smoke_5
         bool triggersAtVillage = 6 < floor;   // 村落档 Medium 初始6工人，应 < 门槛(8) 触发 → try>0 金线
         bool notAtFortress = !(8 < floor);    // 要塞档初始8工人，已达 Expand 门槛，不强制（评分自由）
         if (!triggersAtVillage || !notAtFortress) ok = false;
-        // ④ 份额式轮替相位（HH.30 策划裁决：popAlarm 期间⑥占 popAlarmFocusCapDays 日、让位 1 轮评分，防独占饿死建造）：
-        //   相位相位 = (day-windowStart) % (cap+1)；<cap → ⑥日，==cap → 让位日。纯谓词，编辑态确定。
+        // ④ 份额式轮替相位（策划纠偏裁决：popAlarm 期间⑥占 popAlarmFocusCapDays 日、让位 1 轮评分，防独占饿死建造）：
+        //   轮替相位 = (day-windowStart) % (cap+1)；<cap → ⑥日，==cap → 让位日。纯谓词，编辑态确定。
         int cap = Mathf.Max(1, cfg.popAlarmFocusCapDays);
         bool altOk = true;
         // 走 2 个完整周期：期望序列 ⑥⑥B ⑥⑥B（cap=2）→ 每个 cap+1 槽位恰有 cap 个⑥ + 1 个让位

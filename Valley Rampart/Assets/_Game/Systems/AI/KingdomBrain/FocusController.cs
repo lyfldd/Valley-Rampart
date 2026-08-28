@@ -90,7 +90,7 @@ public class FocusController
         //  门槛 = max(popFloor, developToExpand_workersMin)——「保增长下限」的下限=能升 Expand 的工人数，
         //  自动联动 SO 阈值（developToExpand_workersMin 改，此处不用跟着改）。
         //  三档错峰达成：帐篷4<8✓ / 村落6<8✓ / 要塞8<8 不触发（已达标，评分自由）✓。
-        //  HH.30 份额式修正（策划裁决-HH.29 二次定性纠偏）：独占⑥会在"招满8人真空窗"饿死建造——
+        //  份额式修正（策划纠偏裁决，覆盖 §八 独占修法）：独占⑥会在"招满8人真空窗"饿死建造——
         //  底线本意是"保增长下限"不该吞掉正常经营，与决策①"⑥永不选"是镜像缺陷。故改"独占"为"份额"：
         //  popAlarm 触发→⑥占 popAlarmFocusCapDays 日，第 popAlarmFocusCapDays+1 日让位 1 轮给评分焦点
         //  （含建造），下轮若仍 popAlarm 再回来（相位轮替）。与粮底线 grainReserveDaysFloor 时窗语义同构。
