@@ -246,7 +246,10 @@ public class KingdomBrain
         return best;
     }
 
-    /// <summary>⑧科技升级真实通道（占位可执行）：花金提升王国科技（per-kingdom 解锁态步骤11 落地的门面；执行以金可负担为门）。</summary>
+    /// <summary>⑧科技升级真实通道（2_17 步骤11 批3b，HH.30 策划 Q1→A / Q2→A′ 裁）：花金提升王国目标模块解锁态。</summary>
+    /// 闭环（HH.30 Q2-A′ 语义链）：moduleLevels 全0 起步 → TechGap 评分(金) → ExecuteTech 花金升降目标模块+1(≤城堡1上限)
+    ///  → 升满 TechGap=0 → 停。castleLevel 固定 1（2_16 立国 AI 城堡即 Active，等价玩家主城修复完成 Lv1）。
+    /// AI 城堡升级动作记债挂账（超批3 范围，随军事期内容一并议，见 HH.30）。
     private void ExecuteTech(KingdomState kingdom, KingdomBrainConfig cfg)
     {
         int cost = Mathf.Max(1, cfg.techUpgradeCostGold);
@@ -255,9 +258,34 @@ public class KingdomBrain
             Bump(kingdomId, train: false, ok: false);
             return;
         }
+
+        // 初始化 AI 王国产科技解锁态（castleLevel 固定 1 = 2_16 立国 AI 城堡 Active 等价玩家修复完成；moduleLevels 全0 起步）
+        if (kingdom.moduleLevels == null) kingdom.moduleLevels = new int[6];
+        if (kingdom.castleLevel <= 0) kingdom.castleLevel = 1;
+
+        // 目标模块（SO 驱动，默认 Civil；城堡1 上限 = CastleUnlockTable 该城堡级最大可达模块级）
+        ModuleType target = cfg.techTargetModule;
+        int idx = (int)target;
+        int cap = GetCastleModuleCap(target, kingdom.castleLevel);
+        if (kingdom.moduleLevels[idx] >= cap)
+        {
+            // 已升满城堡1上限 → 不可再升（TechGap 应为 0 已停；防御性 Bump ok:false 防刷分）
+            Bump(kingdomId, train: false, ok: false);
+            Debug.Log($"[KingdomBrain] k{kingdomId} ⑧科技已达城堡{kingdom.castleLevel}上限 {target}={cap}，停（防刷分）");
+            return;
+        }
+
         kingdom.Spend(new ResourcePack { gold = cost });
+        kingdom.moduleLevels[idx]++;
         Bump(kingdomId, train: false, ok: true);
-        Debug.Log($"[KingdomBrain] k{kingdomId} ⑧科技升级落地（金-{cost}；per-kingdom 解锁态步骤11 接入）");
+        Debug.Log($"[KingdomBrain] k{kingdomId} ⑧科技升级落地：{target} → Lv{kingdom.moduleLevels[idx]}（金-{cost}；城堡{kingdom.castleLevel}上限{cap}）");
+    }
+
+    /// <summary>城堡该级可达到的目标模块上限（CastleUnlockTable.GetModuleLevel，静态表共享）。</summary>
+    private static int GetCastleModuleCap(ModuleType module, int castleLevel)
+    {
+        var table = Resources.Load<CastleUnlockTable>("Config/CastleUnlockTable");
+        return table != null ? table.GetModuleLevel(module, castleLevel) : 0;
     }
 
     /// <summary>找一个可招募流浪汉（活体、Vagrant、未被招募、未入籍 kingdomId&lt;0）。固定遍历序=确定性。</summary>

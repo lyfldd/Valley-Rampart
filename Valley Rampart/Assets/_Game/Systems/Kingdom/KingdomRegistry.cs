@@ -82,6 +82,11 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
             foundedDay = foundedDay,
             templateSourceId = templateSourceId
         };
+        // 2_17 步骤11 批3b（HH.30 Q2→A′）：AI 王国解锁态立国即初始化——castleLevel=1（2_16 立国 AI 城堡即 Active，
+        // 等价玩家主城修复完成 Lv1，语义正源非占位）+ moduleLevels 全0 起步（TechGap 评分门，闭环活）。
+        // 玩家(id=0) 不在此（走 EnsurePlayerRegistered 的 KingdomManager 镜像）。AI 城堡升级动作记债挂账（超批3 范围）。
+        state.castleLevel = 1;
+        state.moduleLevels = new int[6];
         _kingdoms.Add(state);
         PublishFounded(state);
         return state;

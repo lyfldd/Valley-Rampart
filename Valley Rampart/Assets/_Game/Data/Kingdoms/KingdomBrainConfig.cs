@@ -91,4 +91,9 @@ public class KingdomBrainConfig : ScriptableObject
     public int recruitWarriorCostFood = 4;
     [Tooltip("⑧科技升级成本（金/次，per-kingdom 解锁态步骤11 落地的占位执行成本）")]
     public int techUpgradeCostGold = 80;
+
+    [Header("⑧科技升级·目标模块（2_17 步骤11 批3b，HH.30 策划 Q1→A 裁）")]
+    [Tooltip("AI 科技升级的目标模块（so-data-driven 铁律：禁硬编码）。默认 Civil——须满足 GetModuleLevel(module, castleLevel=1) > 0 才有闭环；"
+           + "Science(5) 在城堡1 无解锁（CastleUnlockTable.asset 实配 module5 首现于 castle2）→ 选 Science 会闭环死路，禁止作默认。")]
+    public ModuleType techTargetModule = ModuleType.Civil;
 }

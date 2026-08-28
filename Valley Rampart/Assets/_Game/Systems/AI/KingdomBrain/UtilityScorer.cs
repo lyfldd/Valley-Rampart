@@ -124,8 +124,16 @@ public static class UtilityScorer
                 int target = MilitaryTarget(k, KingdomBrain.LoadConfig());
                 return WarriorGapScore(k.warriorCount, target);
             }
-            case NeedKind.TechGap:       // ⑧ 科技：金存量越高越想升级（needA=目标金基线；解锁态步骤11）
+            case NeedKind.TechGap:       // ⑧ 科技：金存量越高越想升级；但目标模块已满城堡1上限 → 0（HH.30 Q3 防刷分，读解锁态）
+            {
+                var tcfg = KingdomBrain.LoadConfig();
+                ModuleType target = tcfg != null ? tcfg.techTargetModule : ModuleType.Civil;
+                // moduleLevels 未初始化（AI 未科技升级过）= 0；castleLevel 立国=1。满分前提=未达城堡1 上限。
+                if (k.moduleLevels != null && k.castleLevel > 0
+                    && k.moduleLevels[(int)target] >= GetTargetCap(target, k.castleLevel))
+                    return 0f;   // 已升满 → 无需求（TechGap=0，行动停）
                 return Mathf.Clamp01(k.GetResourceValue(ResourceType.Gold) / Mathf.Max(1f, d.needA));
+            }
             case NeedKind.WallGap:       // ⑨ 城墙：现存城墙不足目标需补建（needA=目标座数）
             {
                 int have = CountForts(k.id);
@@ -153,6 +161,13 @@ public static class UtilityScorer
     /// </summary>
     public static int MilitaryTarget(KingdomState k, KingdomBrainConfig cfg)
         => MilitaryTargetFromThreat(k, NeighborMilitary(k.id), cfg);
+
+    /// <summary>城堡该级可达到的目标模块上限（CastleUnlockTable 静态表共享；2_17 批3b TechGap 读解锁态）。</summary>
+    private static int GetTargetCap(ModuleType module, int castleLevel)
+    {
+        var table = UnityEngine.Resources.Load<CastleUnlockTable>("Config/CastleUnlockTable");
+        return table != null ? table.GetModuleLevel(module, castleLevel) : 0;
+    }
 
     /// <summary>纯威胁注入版兵力目标（冒烟#5 探针）：直接给威胁兵力，可脱离世界确定性测试 D348 公式与⑧⑪⑫缺口。</summary>
     public static int MilitaryTargetFromThreat(KingdomState k, int neighborMilitary, KingdomBrainConfig cfg)
