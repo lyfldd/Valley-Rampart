@@ -205,7 +205,9 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     private bool TryConsumeFarmWater()
     {
         if (WaterNetwork.Instance == null) return false;
-        if (WaterNetwork.Instance.ConsumeWater(2f)) return true;
+        // 2_17 步骤11 批3a（B′）：农田耗水按建筑归属路由——玩家(kingdomId=0) 耗玩家网水（原逻辑）；
+        // AI(kingdomId>0) 耗 AI 桶水（恒 0 → AI 农田缺水停产，堵 "AI 农田吃玩家网水" 泄漏面）。
+        if (WaterNetwork.Instance.ConsumeWater(2f, _building != null ? _building.kingdomId : 0)) return true;
         // 缺水停产 + 头顶冒"缺水"图标提示（OverheadSpeech 复用气泡机制）
         OverheadSpeech.Show(_building.transform, "缺水", duration: 1.2f);
         return false;
