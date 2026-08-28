@@ -24,6 +24,7 @@ public static class Valley2_17_Smoke_5
         pass &= ThreatRaises( cfg, sb);
         pass &= SoftCapAndFloor(cfg, sb);
         pass &= WarriorGapRises(cfg, sb);
+        pass &= PopFloorGuard(cfg, sb);   // 人口底线（决策①修复）探针
         Debug.Log($"[2_17_5冒烟] {sb}");
         Debug.Log($"[2_17_5冒烟] ===== {(pass ? "ALL PASS" : "HAS FAIL")}（威胁上调→目标升→⑦分数升，D348）=====");
     }
@@ -75,6 +76,25 @@ public static class Valley2_17_Smoke_5
             prevScore = s;
         }
         sb.Append($"⑦分数随威胁升={(ok ? "OK" : "FAIL")}(4战20工,威胁0→30) ");
+        return ok;
+    }
+
+    // ---- 人口底线（D322 决策①修复·结构调整）：配置+触发谓词一致性 ----
+    //  行为验收（worker 突破 popFloor / trainTry>0 / 时间线E段 / SnowRock池）归 P0 完整局手工回归；
+    //  本探针锁配置与语义（编辑态确定性），防回归时丢 popFloor 或误改触发源。
+    private static bool PopFloorGuard(KingdomBrainConfig cfg, System.Text.StringBuilder sb)
+    {
+        bool ok = true;
+        // ① 常量映射：FocusRecruitWorker 必须=⑥ RecruitWorker（强制焦点到招工人通道）
+        if (FocusController.FocusRecruitWorker != (int)UtilityAction.RecruitWorker) ok = false;
+        // ② popFloor 有效：>0 且 ≤ RecruitWorker.needA(10)——超过后执行器 Feasible 不再通过→人口底线会被"招工人不可行"架空
+        var rw = UtilityActionConfig.LoadConfig().Find(UtilityAction.RecruitWorker);
+        int workerNeed = rw.HasValue ? (int)rw.Value.needA : 0;
+        if (cfg.popFloor <= 0 || cfg.popFloor > workerNeed) ok = false;
+        // ③ 触发谓词真值：workerCount<popFloor 应强制⑥（纯逻辑，不依赖场景）；popFloor 门槛合理（初始4<6 应触发）
+        bool triggersAt4 = 4 < cfg.popFloor;
+        if (!triggersAt4) ok = false;   // 初始工人4 应低于底线6 → 触发人口底线（否则初始就卡死）
+        sb.Append($"人口底线={ok ? "OK" : "FAIL"}(popFloor={cfg.popFloor}触发@worker<{cfg.popFloor},ineedA≤{workerNeed},=>⑥) ");
         return ok;
     }
 }

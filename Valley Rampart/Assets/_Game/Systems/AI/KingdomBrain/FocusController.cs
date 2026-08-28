@@ -22,6 +22,9 @@ public class FocusController
     /// <summary>常设底线焦点：防御姿态（= 效用行动⑭ Defense）。</summary>
     public const int FocusDefense = (int)UtilityAction.Defense;   // 14
 
+    /// <summary>常设底线焦点：招工人（= 效用行动⑥ RecruitWorker）。人口底线（保增长下限）。</summary>
+    public const int FocusRecruitWorker = (int)UtilityAction.RecruitWorker;   // 6
+
     private readonly int _kingdomId;
 
     /// <summary>本王国被攻击标记（KingdomAttackedEvent 命中置位，Update 消费）。</summary>
@@ -71,11 +74,18 @@ public class FocusController
             _attackedFlag = false;
         }
 
-        // ---- 常设底线（D322 优先级最高、不评分、即时强制，跳过防抖）----
+        // ---- 常设底线（D322 优先级最高、不评分、即时强制，跳过防抖；执行序=粮→人口→被攻击）----
+        //  底线第一级「保命」：粮储<2日消耗 → 强制屯粮
         bool grainAlarm = population > 0
             && kingdom.GetResourceValue(ResourceType.Food)
                < brainCfg.grainReserveDaysFloor * population * brainCfg.grainConsumptionPerPop;
         if (grainAlarm) { SetFocus(kingdom, FocusGranary, day); return; }
+        //  底线第二级「保增长下限」（自造件，D322 决策①判修结构性锁死）：工人 < popFloor → 强制⑥招工人
+        //  低扩张国⑥评分被性格轴乘入长期压制（need=0.6 恒定 0.6×expansion 0.25=0.15 败给 BuildHouse），
+        //  人口卡死→Develop→Expand 的 worker≥8 永不可达→剧本卡存活期。触发式不评分跳防抖，与粮底线同构。
+        bool popAlarm = kingdom.workerCount < brainCfg.popFloor;
+        if (popAlarm) { SetFocus(kingdom, FocusRecruitWorker, day); return; }
+        //  底线第三级「保命」：被攻击 → 强制防御窗口
         if (day < _defenseEndDay) { SetFocus(kingdom, FocusDefense, day); return; }
 
         // ---- 效用评分（D322 step2；阶段门控过滤 + 四因子打分）----
