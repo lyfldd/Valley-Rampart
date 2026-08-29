@@ -66,3 +66,20 @@
 ---
 
 > 状态建议回写：HH.34 待策划验收；队列 Q1 批B 完工（策划验收后置）；索引登记。
+
+## 五、策划验收（2026-08-29 · 用户代表策划端）
+
+**批B 验收=成立，放行批C。** 抽查记录：
+
+- git 构成核对：8528188=8 文件 293+/ffc6b92=2 文件 34/17，与交付声明一致（产品6+Smoke_12+asset / 修正2 文件）。
+- 代码实读：TerritoryGap 裁2 A′（clamp01((needA−非初始占区)/needA)）符合 HH.32 裁2；ExpandTick D326 升序+D327 容量硬门+4-邻接只纳无主；DayCycle L40 接线明确标注玩家纳土归批C。
+- 冒烟行为级：Smoke_12 P1-P5 ALL PASS（P4 TerritoryGap A′ 评分、P5 ExpandTick 推进+冷却+只纳无主行为级合格）；P0 A3 逐字节/A4 零回归/b=2684 无新增分叉。
+- B1/B2/B5 空单位/流浪汉池环境让渡如实标注，不伪造 PASS（HH.27 口径）。
+
+### 随裁放行批C（抄 HH.35 §四 / HH.32 §六 裁4）
+
+1. **玩家建造纳土 `ClaimAdjacentUnclaimed(kingdomId, coord)`**：建筑落成 → 该建筑脚下中区块的 4-邻接无主中区块自动纳入（D327）；**只纳无主**（裁4），他国领土上的玩家建造静默不动、不吞并（D283 防飞地）；广播 TerritoryChangedEvent（坐标序保确定性）——补全「三写入广播」最后一件（裁4 补遗）。
+2. **④债领土入档**：`TerritorySystem` 实现 `ISaveable`（SaveId="TerritorySystem"，独立 Global 段，勿夹带 kingdoms[] 2_11 债——HH.32 补裁2）；`EnterPlaying` 门控三路：读档走存档恢复 / 新游戏 `RebuildInitial` 重推 / 旧档无段 → 兜底 `RebuildInitial`。
+3. 批C 首动作=挂账④债（到期必落），ClaimAdjacentUnclaimed 接线 BuildController 落成点。
+
+> 批C 玩家纳土属玩家侧接触面——验收标准含「玩家侧基线不破」；若破基线即停手报裁（HH.30 纪律）。
