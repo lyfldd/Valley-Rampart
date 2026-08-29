@@ -157,6 +157,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     private bool _pendingUpgrade;   // 当前 Constructing 是升级而非首次建造
     private bool _pendingRepair;    // 2_12 步骤7 / D156：当前 Constructing 是从废墟重建（完成满血回原级，不升级）
+    private bool _territoryClaimed; // 批次C：首次建成已纳土（升级/重建不再重复纳土）
     private SpriteRenderer _renderer;
     private BuildProgressBar _progressBar;   // 2_12 步骤7B / D117：头顶施工进度条（Constructing/Ruined/Upgrading 态显示，惰性创建）
 
@@ -473,6 +474,16 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         UpdateVisual();
         EventBus.Publish(new BuildingActivatedEvent(this));
         RegisterWithTaskScheduler();   // QQQ.2 T17：转 Active 注册任务源
+        ClaimTerritoryIfFirstBuilt();  // 批次C：首次建成纳土（升级/重建 `_territoryClaimed` 已真 → 跳过）
+    }
+
+    /// <summary>首次建成纳土（2_17 步骤12 批C，D327/HH.32 裁4）：建筑脚下中区块 4-邻接无主→纳入 owner；只纳无主不吞他国。</summary>
+    void ClaimTerritoryIfFirstBuilt()
+    {
+        if (_territoryClaimed) return;   // 升级/重建/重复建成不重复纳土
+        _territoryClaimed = true;
+        if (TerritorySystem.Instance != null && kingdomId >= 0)
+            TerritorySystem.Instance.ClaimAdjacentUnclaimed(kingdomId, coord);
     }
 
     /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 footprint w×h 缩放（2_2）。</summary>

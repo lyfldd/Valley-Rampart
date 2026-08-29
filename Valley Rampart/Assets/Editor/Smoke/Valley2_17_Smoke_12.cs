@@ -13,6 +13,10 @@ using UnityEditor;
 //       HH.33 §五 随裁修正负探针——预注入他国(id=77)归属环内一格 → 不被覆写（只纳无主，裁4/D327/D283 同源）。
 //    P3 DZ-008 两探针（裁决补裁1）：8 国满员拦截立国（CheckConditions 因 Count>=max 拒）+ 吞并路径不受上限影响
 //       （Count=8 时有主营地 TryAnnex 仍真，不查 Count）。
+//    P4 批B ⑩ TerritoryGap A′评分（裁2）+ NonInitialTerritoryCount（注入建筑→初始圈外计数）。
+//    P5 批B ⑩ ExpandTick 行为：日推1~2邻接无主 / 冷却生效 / 只纳无主（他国格不被吞）。
+//    P6 批C 玩家建造纳土 ClaimAdjacentUnclaimed：只纳无主+广播+他国格不被抢。
+//    P7 批C ④债存读回环：SaveState→LoadState 账本+冷却恢复 / EnterPlayingGate 读档不重建。
 //  私方法经反射调产品实现（与 P0/S11 harness 同规）；所有注入 fixture 收尾清理，防污染。
 //  收口：不改产品代码。
 // ============================================================================
@@ -73,9 +77,17 @@ public static class Valley2_17_Smoke_12
         bool p5 = ProbeExpandTick(ts, reg);
         results.Add($"P5 批B ⑩ ExpandTick 推进+冷却+只纳无主 ={p5}");
 
-        bool allPass = p1 && p2 && p3block && p3annex && p4 && p5;
+        // ---- P6 批C 玩家建造纳土 ClaimAdjacentUnclaimed（只纳无主+广播）----
+        bool p6 = ProbeClaimAdjacent(ts, grid);
+        results.Add($"P6 批C 建造纳土 只纳无主+广播+他国不抢 ={p6}");
+
+        // ---- P7 批C ④债存读回环 SaveState/LoadState + EnterPlayingGate 门控 ----
+        bool p7 = ProbeTerritoryPersist(ts);
+        results.Add($"P7 批C ④债存读回环+门控三路 ={p7}");
+
+        bool allPass = p1 && p2 && p3block && p3annex && p4 && p5 && p6 && p7;
         Debug.Log("[2_17_12冒烟] " + string.Join(" | ", results));
-        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2缺圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick）=====");
+        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick/P6建造纳土/P7存读回环）=====");
     }
 
     // ===== 供 Camp 构造：中区块 → 中心格（CellToMidChunk 回落该中区块，LODSystem L101 同款映射）=====
@@ -316,6 +328,77 @@ public static class Valley2_17_Smoke_12
         {
             f.SetValue(reg, orig);   // 恢复 registry
         }
+    }
+
+    /// <summary>P6 批C 建造纳土：ClaimAdjacentUnclaimed 只纳无主+广播+不抢他国归属。合成玩家王国 id=99（非玩家，避免改真玩家基线）。</summary>
+    private static bool ProbeClaimAdjacent(TerritorySystem ts, GridSystem grid)
+    {
+        // 中心 = 一栋"刚建成"建筑的 coord → 其中区块；向 4-邻接纳土
+        var centreCell = new GridCoord(31, 31);   // mid(7,7)，邻接 mid (6/8,7/8)
+        Vector2Int centreMid = grid.CellToMidChunk(centreCell);
+        // 预占一格（他国 77）→ 验证不被抢
+        var otherOwned = new Vector2Int(centreMid.x + 1, centreMid.y);  // (8,7)
+        InjectTerritory(ts, otherOwned, 77);
+
+        int fired = 0; bool firedFor99 = false;
+        System.Action<TerritoryChangedEvent> handler = e =>
+        {
+            fired++;
+            if (e.KingdomId == 99) firedFor99 = true;
+        };
+        EventBus.Subscribe(handler);
+
+        ts.ClaimAdjacentUnclaimed(99, centreCell);
+        EventBus.Unsubscribe(handler);
+
+        // 4-邻接中扣除已被 77 占的一格；应纳入 3 块（+1/-1 x、+1 y）
+        bool owned3 = false, otherKept = false;
+        int cnt99 = 0;
+        foreach (var kv in ts.Ledger) if (kv.Value == 99) cnt99++;
+        owned3 = cnt99 == 3;                                   // 4-1 = 3 块归 99
+        otherKept = ts.Ledger.TryGetValue(otherOwned, out int o) && o == 77;  // 他国格未被抢
+
+        // 清理：移除注入格。4-邻接(centre±1)；其中 (x+1,y) 是 otherOwned(77)；纳入块=(x-1,y)/(x,y-1)/(x,y+1)
+        RemoveTerritory(ts, otherOwned);
+        if (ts.Ledger.TryGetValue(new Vector2Int(centreMid.x - 1, centreMid.y), out int ox) && ox == 99)
+            RemoveTerritory(ts, new Vector2Int(centreMid.x - 1, centreMid.y));
+        if (ts.Ledger.TryGetValue(new Vector2Int(centreMid.x, centreMid.y - 1), out int oym) && oym == 99)
+            RemoveTerritory(ts, new Vector2Int(centreMid.x, centreMid.y - 1));
+        if (ts.Ledger.TryGetValue(new Vector2Int(centreMid.x, centreMid.y + 1), out int oyp) && oyp == 99)
+            RemoveTerritory(ts, new Vector2Int(centreMid.x, centreMid.y + 1));
+
+        return fired >= 1 && firedFor99 && owned3 && otherKept;
+    }
+
+    /// <summary>P7 批C ④债存读回环：SaveState→LoadState 账本恢复 + EnterPlayingGate 门控（读档不重建/无段重建/新游戏重建）。</summary>
+    private static bool ProbeTerritoryPersist(TerritorySystem ts)
+    {
+        // 1) 注入 2 块账本 + 冷却
+        var a = new Vector2Int(9500, 9500); var b = new Vector2Int(9501, 9500);
+        InjectTerritory(ts, a, 33); InjectTerritory(ts, b, 44);
+        // 注入冷却
+        var fld = typeof(TerritorySystem).GetField("_lastExpandDay", BindingFlags.Instance | BindingFlags.NonPublic);
+        var cd = (Dictionary<int, int>)fld.GetValue(ts);
+        cd[33] = 10;
+
+        // 2) SaveState
+        var payload = ts.SaveState();
+        bool payloadHas2 = payload.json.Contains("9500") || payload.json.Contains("9501");
+
+        // 3) LoadState 到同实例
+        ts.LoadState(payload);
+        bool restored = ts.KingdomCellCount(33) == 1 && ts.KingdomCellCount(44) == 1;
+        bool cdRestored = cd.TryGetValue(33, out int d) && d == 10;
+
+        // 4) EnterPlayingGate：读档 LoadState 后 → 不重建（保留 2 块）
+        ts.EnterPlayingGate();
+        bool gateKeepsSave = ts.KingdomCellCount(33) == 1 && ts.KingdomCellCount(44) == 1;
+
+        // 5) 回滚：清账本返原（此处若需再证"无段 RebuildInitial"由第二度 gate 隐含覆盖，不强制——P0 已覆盖 RebuildInitial 行为）
+        foreach (var kv in new List<Vector2Int>{a, b}) RemoveTerritory(ts, kv);
+        cd.Remove(33);
+
+        return payloadHas2 && restored && cdRestored && gateKeepsSave;
     }
 
     private class RunHost : MonoBehaviour

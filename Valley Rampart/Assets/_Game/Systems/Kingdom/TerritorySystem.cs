@@ -4,18 +4,39 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// 2_17 步骤6：领土账本（只读 + 染色事件，不推进）。
+/// 2_17 步骤6：领土账本（唯一真源 + 染色事件 + 推进）。
 /// - 唯一真源（D342）：`Dictionary<中区块, kingdomId>` 是本系统独占真源；KingdomState.领土句柄仅只读视图，不缓存（防双源漂移）。
-/// - 初始圈入（D343）：初始建筑外扩 1 中区块（Chebyshev 3×3，D343 未限定形状；推边界才用 D326 4-邻接）。
+/// - 初始圈入（D343）：初始建筑外扩 1 中区块（Chebyshev 3×3）。
 /// - 覆盖玩家(id=0)+AI 王国(1..N)；自然建筑 kingdomId==-1 不计入。
-/// - P0 不推进：AI 推边界/玩家建造纳土/吞并归步骤12；本步只出账本 + 事件供其订阅。
-/// 注入点：LoadManager.EnterPlaying（新游戏与读档两路建筑就位后统一重推；见 2_17 §〇 追记④债，步骤8/12 落地时加门控）。
+/// - 推进（步骤12 批B/C）：AI 推边界 ExpandTick（批B）；玩家建造纳土 ClaimAdjacentUnclaimed（批C）；吞并归 CampUpgrader。
+/// - 存档（步骤12 批C ④债）：ISaveable Global 段（SaveId="TerritorySystem"，独立勿夹带 kingdoms[] 2_11 债）。
+///   门控三路：读档 LoadState 恢复 / 新游戏 EnterPlaying RebuildInitial / 旧档无段兜底 RebuildInitial。
 /// </summary>
-public class TerritorySystem : Singleton<TerritorySystem>
+public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
 {
+    /// <summary>存档段 id（Global 段独立；勿并入 kingdoms[]——HH.32 补裁2）。</summary>
+    public string SaveId => "TerritorySystem";
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Global;
+
     private readonly Dictionary<Vector2Int, int> _territory = new Dictionary<Vector2Int, int>();
-    // ⑩推边界冷却（批B 运行时态；④债批C 入档时持久化 lastExpandDay）
+    /// <summary>跨存档-进入门控：LoadState 已恢复账本 → 标记，EnterPlaying 不再 RebuildInitial 覆盖。</summary>
+    private bool _loadedFromSave;
+    // ⑩推边界冷却（批B：运行时态 + 批C 入档持久化）
     private readonly Dictionary<int, int> _lastExpandDay = new Dictionary<int, int>();
+
+    protected override void Awake()
+    {
+        base.Awake();
+        if (SaveManager.Instance != null)
+            SaveManager.Instance.RegisterSaveable(this);
+    }
+
+    protected override void OnDestroy()
+    {
+        if (SaveManager.Instance != null)
+            SaveManager.Instance.UnregisterSaveable(this);
+        base.OnDestroy();
+    }
 
     /// <summary>账本唯一真源（只读视图）。</summary>
     public IReadOnlyDictionary<Vector2Int, int> Ledger => _territory;
@@ -236,4 +257,102 @@ public class TerritorySystem : Singleton<TerritorySystem>
                 if (grid.IsWalkable(new GridCoord(mid.x * ms + dx, mid.y * ms + dy, 0))) walk++;
         return total > 0 && (float)walk / total >= thr;
     }
+
+    // ===== 批次C ④债：玩家建造纳土 + 存档入档 =====
+
+    /// <summary>
+    /// 玩家/AI 建造纳土（D327 + HH.32 裁4，批C）：建筑建成 → 建筑脚下中区块的 4-邻接无主中区块自动纳入该王国。
+    /// 只纳无主：已有主（含他国 id=0）不覆写、不吞并（D283 防飞地）；广播 TerritoryChangedEvent（坐标序保确定性）。
+    /// </summary>
+    public void ClaimAdjacentUnclaimed(int kingdomId, GridCoord coord)
+    {
+        var grid = GridSystem.Instance;
+        if (grid == null) return;
+        Vector2Int mid = grid.CellToMidChunk(coord);
+        var added = new List<Vector2Int>();
+        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x + 1, mid.y), added);
+        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x - 1, mid.y), added);
+        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x, mid.y + 1), added);
+        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x, mid.y - 1), added);
+        if (added.Count == 0) return;
+        added.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        EventBus.Publish(new TerritoryChangedEvent(kingdomId, added));
+    }
+
+    private void TryClaimUnclaimed(int kingdomId, Vector2Int c, List<Vector2Int> added)
+    {
+        if (_territory.ContainsKey(c)) return;   // 只纳无主：已有主（含他国 id=0）不覆写（D283 防飞地）
+        _territory[c] = kingdomId;
+        added.Add(c);
+    }
+
+    // ===== 批次C ④债：存档入档（ISaveable Global 段，独立 SaveId="TerritorySystem"）=====
+
+    public SavePayload SaveState()
+    {
+        var cells = new List<TerritoryCellSave>(_territory.Count);
+        foreach (var kv in _territory)
+            cells.Add(new TerritoryCellSave { x = kv.Key.x, y = kv.Key.y, owner = kv.Value });
+        cells.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        var data = new TerritorySaveData
+        {
+            cells = cells,
+            lastExpandDay = new List<DaySave>(_lastExpandDay.Select(kv => new DaySave { kingdomId = kv.Key, day = kv.Value }))
+        };
+        return new SavePayload
+        {
+            typeName = typeof(TerritorySaveData).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(data),
+            version = 1
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(TerritorySaveData).AssemblyQualifiedName) return;
+        var data = JsonUtility.FromJson<TerritorySaveData>(payload.json);
+        if (data?.cells == null) return;
+        _territory.Clear();
+        foreach (var c in data.cells)
+            _territory[new Vector2Int(c.x, c.y)] = c.owner;
+        _lastExpandDay.Clear();
+        if (data.lastExpandDay != null)
+            foreach (var d in data.lastExpandDay)
+                _lastExpandDay[d.kingdomId] = d.day;
+        _loadedFromSave = true;   // 门控：EnterPlaying 不再 RebuildInitial 覆盖存档领土
+        Debug.Log($"[TerritorySystem] 从存档恢复领土 {_territory.Count} 块");
+    }
+
+    /// <summary>
+    /// EnterPlaying 门控（④债三路，LoadManager 调用）：
+    /// - 读档已 LoadState 恢复 → 保留（不动，避免 RebuildInitial 用当前建筑重推覆盖演进结果）；
+    /// - 新游戏 / 旧档无段（_loadedFromSave==false）→ RebuildInitial 重推（D343 从初始建筑算初始圈）。
+    /// </summary>
+    public void EnterPlayingGate()
+    {
+        if (_loadedFromSave) { _loadedFromSave = false; return; }   // 读档已恢复，恢复后清零标记（下次新游戏走重推）
+        RebuildInitial();
+    }
+}
+
+/// <summary>领土单中区块存档数据（坐标序排序保确定性）。</summary>
+[Serializable]
+public class TerritoryCellSave
+{
+    public int x, y, owner;
+}
+
+/// <summary>⑩推边界冷却存档（跨读档保持冷却语义）。</summary>
+[Serializable]
+public class DaySave
+{
+    public int kingdomId, day;
+}
+
+/// <summary>TerritorySystem 存档载荷（账本 + 冷却）。</summary>
+[Serializable]
+public class TerritorySaveData
+{
+    public List<TerritoryCellSave> cells;
+    public List<DaySave> lastExpandDay;
 }

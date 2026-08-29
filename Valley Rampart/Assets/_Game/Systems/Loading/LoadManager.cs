@@ -123,11 +123,11 @@ public class LoadManager : Singleton<LoadManager>
         {
             GameStateManager.Instance.SetState(GameState.Playing);
         }
-        // 2_17 步骤6：世界就绪、建筑全部到位后统一重推初始领土（D343 建筑外扩 1 中区块）。
-        // 统一挂新游戏(InitializeWorld 完成)与读档(_saveLoader.Load 恢复建筑)两路共同的 EnterPlaying，
-        // 保证两路都从「当前建筑」重推——P0 领土无存档，读档重推=与新建一致（②追记④一并登记步骤8/12 门控债）。
+        // 2_17 步骤6/12：领土门控（④债批C 三路）。
+        // 读档 LoadState 已恢复账本 → EnterPlayingGate 保留存档领土（不覆盖演进结果）；
+        // 新游戏 / 旧档无段 → 从当前建筑 RebuildInitial 重推初始圈。
         if (TerritorySystem.Instance != null)
-            TerritorySystem.Instance.RebuildInitial();
+            TerritorySystem.Instance.EnterPlayingGate();
         Debug.Log("[LoadManager] 进入运行时，可按需动态加载");
     }
 
