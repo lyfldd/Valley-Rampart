@@ -250,7 +250,7 @@ public bool IsSubWalkable(GridCoord sub)              // 微格可走 = 小区�
 public GridCoord SubToCell(GridCoord sub)             // 微格 → 小区块（sub/4，layer 透传）
 public GridCoord CellToSub(GridCoord cell, int sx, int sy) // 小区块 → 微格（cell*4+(sx,sy)）
 ```
-- `WorldToSubCoord` 公式：`sx = Floor((pos.x + W*cellW*subDiv/2) / subW)`（`subW = cellW/subDiv`，y 分量同理），越界 null
+- `WorldToSubCoord` 公式：`sx = Floor((pos.x + W*cellW/2) / subW)`（`subW = cellW/subDiv`，y 分量同理），越界 null
 - `IsSubWalkable` 查询逻辑：
 ```
 IsSubWalkable(sub):

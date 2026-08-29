@@ -189,7 +189,7 @@ public class LODSystem : Singleton<LODSystem>
 | `Systems/AI/NPCBrain.cs` | 适配：`GetLevelAt(worldPos)` → `GetThinkHz(cell)`（从所在中区块读频率） |
 | `Systems/AI/Formation/FormationBrain.cs` | 适配：热度输入从大区块 → 中区块（`GetHeatAt(cell)`） |
 | `Systems/AI/Debug/AIDebugSpawnController.cs` | 适配：调试面板区块索引改 Vector2Int 中区块坐标 |
-| `Data/AttentionTuningConfig.cs` | **保留** lod/heat 区段字段不迁移不删除（sim 同源，sim-sync 红线；2026-08-29 裁决修订 D414）——LodConfig 新增同功能字段并存（原设计"移除/迁移干净"作废） |
+| `Data/AttentionTuningConfig.cs` | **保留** lod/heat 区段字段不迁移不删除（sim 同源，sim-sync 红线；2026-08-29 裁决修订 D414）——LodConfig 新增同功能字段并存（原"移除"设计作废） |
 | `Data/LodConfig.cs` | **新增**：SO 字段（见三） |
 | `Resources/Config/LodConfig.asset` | 新增资产 |
 
@@ -242,7 +242,7 @@ public class LODSystem : Singleton<LODSystem>
 4. 跨中区块移动继承新状态
 5. 远处 NPC 降频不"冻结"（移动仍每帧）
 6. 稀疏存储：256² 地图常驻状态 < 活跃中区块数 + 热点数（不建全量 4096 状态）
-7. 旧 `AttentionTuningConfig` lod/heat 字段迁移干净（grep 无残留）
+7. 旧 `AttentionTuningConfig` lod/heat 字段**必须保留**（sim 同源，sim-sync 红线；2026-08-29 裁决修订 D414）——grep 命中=正确状态，零命中=缺陷（勿误删 sim 同源字段）
 
 ---
 
@@ -256,7 +256,7 @@ public class LODSystem : Singleton<LODSystem>
 | R4 多中心活跃带合并开销 | 中心列表上限 8；区块级取 max（任一中心覆盖即升档），不逐单位算 |
 | R5 休眠区 NPC 移动冻结 | 休眠档 = Think 0.5Hz，移动仍每帧（2_3 联动，降频插值可选） |
 | R6 热点抖动导致档位抖动 | 升降档迟滞：升档即时，降档需 idleTimer ≥ 3s |
-| 旧 LOD 字段迁移遗漏 | grep 复核 `lodActiveThinkHz/lodSemiThinkHz/lodSleepThinkHz/lodActiveRadius/lodSemiRadius/lodDowngradeIdleTime/heatHitGain/heatEnemyEnterGain/heatAllyRetreatGain/heatDecayRate/heatSpreadThreshold/heatSpreadRatio` 无残留 |
+| 旧 LOD 字段迁移遗漏（反向确认） | 复核 `lodActiveThinkHz/lodSemiThinkHz/lodSleepThinkHz/lodActiveRadius/lodSemiRadius/lodDowngradeIdleTime/heatHitGain/heatEnemyEnterGain/heatAllyRetreatGain/heatDecayRate/heatSpreadThreshold/heatSpreadRatio` **应在场**（sim 同源红线，勿删）——grep 命中=正确，零命中=缺陷（2026-08-29 裁决修订 D414） |
 | NPCBrain 消费签名 | 适配 `GetLevelAt(worldPos)` → `GetThinkHz(cell)`，FormationBrain `GetHeatAt` 同步 |
 | 回滚 | LOD 属性能优化不阻塞功能；git revert LODSystem/RegionLodState 可回 region 粒度；LodConfig 与 AttentionTuningConfig 双份时以 LodConfig 优先 |
 
