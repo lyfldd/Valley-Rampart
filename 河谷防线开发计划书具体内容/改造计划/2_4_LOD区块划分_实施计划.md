@@ -189,7 +189,7 @@ public class LODSystem : Singleton<LODSystem>
 | `Systems/AI/NPCBrain.cs` | 适配：`GetLevelAt(worldPos)` → `GetThinkHz(cell)`（从所在中区块读频率） |
 | `Systems/AI/Formation/FormationBrain.cs` | 适配：热度输入从大区块 → 中区块（`GetHeatAt(cell)`） |
 | `Systems/AI/Debug/AIDebugSpawnController.cs` | 适配：调试面板区块索引改 Vector2Int 中区块坐标 |
-| `Data/AttentionTuningConfig.cs` | 迁移：lod/heat 区段字段移除（迁入 LodConfig）；保留 speedChaseBoost 等其余字段 |
+| `Data/AttentionTuningConfig.cs` | **保留** lod/heat 区段字段不迁移不删除（sim 同源，sim-sync 红线；2026-08-29 裁决修订 D414）——LodConfig 新增同功能字段并存（原设计"移除/迁移干净"作废） |
 | `Data/LodConfig.cs` | **新增**：SO 字段（见三） |
 | `Resources/Config/LodConfig.asset` | 新增资产 |
 
