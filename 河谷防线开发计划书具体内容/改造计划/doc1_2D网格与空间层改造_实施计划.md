@@ -471,7 +471,7 @@ public interface IPathGrid
 | R2 稠密数组初始化 GC spike | GridCell 懒分配（null 起步，TryEnter/占用时才 new）；地形/walkFlags 值类型数组 |
 | R3 单位列表 GC（GetUnitsInCell 每次 new List） | 高频方直接遍历 `cell.Units`；新接口 `FillUnitsInRect` 复用缓冲 |
 | R5 原点政策变更破坏旧场景/存档坐标 | 存档 schema 迁移归 2_11；改造期旧档可显式作废 |
-| R7 27 文件漏改某个 L1 消费方 | §2.7 总表即认领清单；每个子文档验收时 grep 复核 |
+| R7 28 文件漏改某个 L1 消费方 | §2.7 总表即认领清单；每个子文档验收时 grep 复核 |
 | R8 寻路接口预留不足/过度 | §5.4 只定最小契约（IsWalkable/GetCost），2_6 可扩不可改语义 |
 | R9 超大地图（384²）Chunk 分区过粗 | chunkSize 走 SO 可调；不满足时 2_4 再细分 |
 | 确定性漂移 | code review 禁 `UnityEngine.Random` 进生成管线 |
