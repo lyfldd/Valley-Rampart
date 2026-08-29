@@ -474,16 +474,16 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         UpdateVisual();
         EventBus.Publish(new BuildingActivatedEvent(this));
         RegisterWithTaskScheduler();   // QQQ.2 T17：转 Active 注册任务源
-        ClaimTerritoryIfFirstBuilt();  // 批次C：首次建成纳土（升级/重建 `_territoryClaimed` 已真 → 跳过）
+        ClaimTerritoryIfFirstBuilt();  // 批C′：首次建成纳脚下格（升级/重建 `_territoryClaimed` 已真 → 跳过）
     }
 
-    /// <summary>首次建成纳土（2_17 步骤12 批C，D327/HH.32 裁4）：建筑脚下中区块 4-邻接无主→纳入 owner；只纳无主不吞他国。</summary>
+    /// <summary>首次建成纳脚下格（2_17 步骤12 批C′，D327/HH.32 裁4）：建筑脚下中区块本身（无主纳入 / 有主食零变更）。</summary>
     void ClaimTerritoryIfFirstBuilt()
     {
         if (_territoryClaimed) return;   // 升级/重建/重复建成不重复纳土
         _territoryClaimed = true;
         if (TerritorySystem.Instance != null && kingdomId >= 0)
-            TerritorySystem.Instance.ClaimAdjacentUnclaimed(kingdomId, coord);
+            TerritorySystem.Instance.ClaimFootprintChunk(kingdomId, coord);
     }
 
     /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 footprint w×h 缩放（2_2）。</summary>

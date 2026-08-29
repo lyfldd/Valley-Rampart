@@ -26,7 +26,9 @@
 | AI 触发 | ⑩Expand 被评分选中 → ExecuteFocus 下发 ExecuteExpand | ⑩ 枚举位已在（UtilityScorer.cs L29）但 **UtilityActionConfig.actions 14 条无 Expand def（勘察缺口，见 §二）**→ 本步补 def（axis=Expansion、need=TerritoryGap 新缺口、minStage 待裁 §五-1）+ UtilityScorer 加 TerritoryGap 分支 + KingdomBrain 加 ExecuteExpand |
 | 推进节奏 | 每日 1~2 块**邻接无主**中区块（可走率 ≥50%）；冷却 5 日；同日多国竞争按 kingdomId 升序（D326 确定性）；扩张额度 `clamp(4+工人−非初始占区, 0, 96)`（D327/D341） | TerritorySystem 新增 `ExpandTick()`（遍历王国 id 升序 → 冷却/额度门 → 邻接无主可选集排序 → 推块 → 写账本 → 广播 TerritoryChangedEvent） |
 | 入口接线 | DayCycleSettlement L40 预留位 → 调 TerritorySystem.ExpandTick() | 五步权威序不动，只在预留位接入（步骤8 骨架纪律照旧） |
-| 玩家纳土 | 建筑落成 → 邻接无主中区块自动纳入（D327）；**只纳无主**，有主（他国）不动 | 建造落成回调接线（BuildController 落成点 → TerritorySystem.ClaimAdjacentUnclaimed(kingdomId, coord)） |
+| 玩家纳土 | 建筑落成 → 纳**脚下中区块本身**（D327 字面；2_17 设计 L165"自动纳该中区块"/L282"落成即纳该中区块"两处白纸黑字）；无主→纳入+广播，有主（他国）→**静默零变更**（裁4） ⚠️[L1 修订·批C′/D413] | 建造落成回调接线（Building.OnConstructionComplete → TerritorySystem.ClaimFootprintChunk(kingdomId, coord)）⚠️[L1 修订·批C′/D413 名实相符] |
+
+> ⚠️ **L1 修订标记（2026-08-29 · 批C′/0.6 D413）**：本行原写"**邻接无主**中区块自动纳入 → ClaimAdjacentUnclaimed"，为批C（HH.36 §五）退回的**漂移源**——D327 字面=落成纳脚下格本身，非 4-邻接扩张。修订为"纳脚下中区块本身 + 更名 ClaimFootprintChunk"，其余照批C′ 修正指令（HH.36 §5.4）。
 
 ### 问b 吞并接线（2_16 出口B 判定占位 → 真触发）
 

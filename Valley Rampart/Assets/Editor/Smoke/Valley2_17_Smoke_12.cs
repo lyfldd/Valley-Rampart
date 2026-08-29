@@ -15,7 +15,7 @@ using UnityEditor;
 //       （Count=8 时有主营地 TryAnnex 仍真，不查 Count）。
 //    P4 批B ⑩ TerritoryGap A′评分（裁2）+ NonInitialTerritoryCount（注入建筑→初始圈外计数）。
 //    P5 批B ⑩ ExpandTick 行为：日推1~2邻接无主 / 冷却生效 / 只纳无主（他国格不被吞）。
-//    P6 批C 玩家建造纳土 ClaimAdjacentUnclaimed：只纳无主+广播+他国格不被抢。
+//    P6 批C′ 建造纳土 ClaimFootprintChunk：纳**脚下中区块本身**（无主→纳入+广播）；脚下有主（他国）→静默零变更（裁4 负探针）。
 //    P7 批C ④债存读回环：SaveState→LoadState 账本+冷却恢复 / EnterPlayingGate 读档不重建。
 //  私方法经反射调产品实现（与 P0/S11 harness 同规）；所有注入 fixture 收尾清理，防污染。
 //  收口：不改产品代码。
@@ -77,9 +77,9 @@ public static class Valley2_17_Smoke_12
         bool p5 = ProbeExpandTick(ts, reg);
         results.Add($"P5 批B ⑩ ExpandTick 推进+冷却+只纳无主 ={p5}");
 
-        // ---- P6 批C 玩家建造纳土 ClaimAdjacentUnclaimed（只纳无主+广播）----
+        // ---- P6 批C′ 建造纳土 ClaimFootprintChunk（纳脚下格本身 + 脚下有主食零变更裁4负探针）----
         bool p6 = ProbeClaimAdjacent(ts, grid);
-        results.Add($"P6 批C 建造纳土 只纳无主+广播+他国不抢 ={p6}");
+        results.Add($"P6 批C′ 建造纳脚下格 无主纳入+广播+有主食零变更 ={p6}");
 
         // ---- P7 批C ④债存读回环 SaveState/LoadState + EnterPlayingGate 门控 ----
         bool p7 = ProbeTerritoryPersist(ts);
@@ -87,7 +87,7 @@ public static class Valley2_17_Smoke_12
 
         bool allPass = p1 && p2 && p3block && p3annex && p4 && p5 && p6 && p7;
         Debug.Log("[2_17_12冒烟] " + string.Join(" | ", results));
-        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick/P6建造纳土/P7存读回环）=====");
+        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick/P6纳脚下格/P7存读回环）=====");
     }
 
     // ===== 供 Camp 构造：中区块 → 中心格（CellToMidChunk 回落该中区块，LODSystem L101 同款映射）=====
@@ -330,44 +330,46 @@ public static class Valley2_17_Smoke_12
         }
     }
 
-    /// <summary>P6 批C 建造纳土：ClaimAdjacentUnclaimed 只纳无主+广播+不抢他国归属。合成玩家王国 id=99（非玩家，避免改真玩家基线）。</summary>
+    /// <summary>
+    /// P6 批C′ 建造纳土：ClaimFootprintChunk 纳**脚下中区块本身**，非 4-邻接。
+    /// ① 无主 → 脚下格纳入 + 广播（仅 1 块，无 4-邻接扩张）；② 脚下有主（他国77）→ **静默零变更**（裁4 负探针：不吞、不广播、99 数不变）。
+    /// 合成王国 id=99（非玩家，避免改真玩家基线）。
+    /// </summary>
     private static bool ProbeClaimAdjacent(TerritorySystem ts, GridSystem grid)
     {
-        // 中心 = 一栋"刚建成"建筑的 coord → 其中区块；向 4-邻接纳土
-        var centreCell = new GridCoord(31, 31);   // mid(7,7)，邻接 mid (6/8,7/8)
-        Vector2Int centreMid = grid.CellToMidChunk(centreCell);
-        // 预占一格（他国 77）→ 验证不被抢
-        var otherOwned = new Vector2Int(centreMid.x + 1, centreMid.y);  // (8,7)
-        InjectTerritory(ts, otherOwned, 77);
+        var goMid = new GridCoord(31, 31);                 // cell → 中区块 mid(7,7)，即"脚下格本身"
+        Vector2Int footMid = grid.CellToMidChunk(goMid);
+        // 清理前置：确保脚下格当前无主（探针自行干净）
+        RemoveTerritory(ts, footMid);
 
-        int fired = 0; bool firedFor99 = false;
-        System.Action<TerritoryChangedEvent> handler = e =>
-        {
-            fired++;
-            if (e.KingdomId == 99) firedFor99 = true;
-        };
-        EventBus.Subscribe(handler);
+        // ---- ① 无主路径：纳脚下格本身 + 广播 ----
+        int fired0 = 0; bool fired99a = false;
+        System.Action<TerritoryChangedEvent> h1 = e => { fired0++; if (e.KingdomId == 99) fired99a = true; };
+        EventBus.Subscribe(h1);
+        ts.ClaimFootprintChunk(99, goMid);
+        EventBus.Unsubscribe(h1);
+        bool ownsFoot = ts.Ledger.TryGetValue(footMid, out int fo) && fo == 99;   // 脚下格本身被纳入
+        bool onlyOne = ts.KingdomCellCount(99) == 1;                              // 无 4-邻接扩张：仅 1 块
+        bool firedProper = fired0 >= 1 && fired99a;                               // 无主路径有广播
 
-        ts.ClaimAdjacentUnclaimed(99, centreCell);
-        EventBus.Unsubscribe(handler);
+        // 清理①：归还无主，供负探针复测
+        RemoveTerritory(ts, footMid);
 
-        // 4-邻接中扣除已被 77 占的一格；应纳入 3 块（+1/-1 x、+1 y）
-        bool owned3 = false, otherKept = false;
-        int cnt99 = 0;
-        foreach (var kv in ts.Ledger) if (kv.Value == 99) cnt99++;
-        owned3 = cnt99 == 3;                                   // 4-1 = 3 块归 99
-        otherKept = ts.Ledger.TryGetValue(otherOwned, out int o) && o == 77;  // 他国格未被抢
+        // ---- ② 脚下有主（他国77）→ 静默零变更（裁4 负探针：不吞他国、无领土变更）----
+        InjectTerritory(ts, footMid, 77);
+        bool fired99b = false;
+        System.Action<TerritoryChangedEvent> h2 = e => { if (e.KingdomId == 99) fired99b = true; };
+        EventBus.Subscribe(h2);
+        ts.ClaimFootprintChunk(99, goMid);
+        EventBus.Unsubscribe(h2);
+        bool otherKept = ts.Ledger.TryGetValue(footMid, out int fo2) && fo2 == 77;   // 他国格未被抢
+        bool noTake = ts.KingdomCellCount(99) == 0;                                  // 99 无任何新增（管内不误伤跟进 x 邻）
+        bool silentNoBroadcast = !fired99b;                                          // 无 99 广播（裁4 静默零变更）
 
-        // 清理：移除注入格。4-邻接(centre±1)；其中 (x+1,y) 是 otherOwned(77)；纳入块=(x-1,y)/(x,y-1)/(x,y+1)
-        RemoveTerritory(ts, otherOwned);
-        if (ts.Ledger.TryGetValue(new Vector2Int(centreMid.x - 1, centreMid.y), out int ox) && ox == 99)
-            RemoveTerritory(ts, new Vector2Int(centreMid.x - 1, centreMid.y));
-        if (ts.Ledger.TryGetValue(new Vector2Int(centreMid.x, centreMid.y - 1), out int oym) && oym == 99)
-            RemoveTerritory(ts, new Vector2Int(centreMid.x, centreMid.y - 1));
-        if (ts.Ledger.TryGetValue(new Vector2Int(centreMid.x, centreMid.y + 1), out int oyp) && oyp == 99)
-            RemoveTerritory(ts, new Vector2Int(centreMid.x, centreMid.y + 1));
+        // 清理
+        RemoveTerritory(ts, footMid);
 
-        return fired >= 1 && firedFor99 && owned3 && otherKept;
+        return ownsFoot && onlyOne && firedProper && otherKept && noTake && silentNoBroadcast;
     }
 
     /// <summary>P7 批C ④债存读回环：SaveState→LoadState 账本恢复 + EnterPlayingGate 门控（读档不重建/无段重建/新游戏重建）。</summary>

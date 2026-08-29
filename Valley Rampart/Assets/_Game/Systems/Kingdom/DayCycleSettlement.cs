@@ -38,7 +38,7 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         TickKingdomBrains();
 
         // 步骤3：领土变更（2_17 步骤12 批B：AI 推边界日 tick——⑩ ExpandTick；
-        //         玩家建造纳土 ClaimAdjacentUnclaimed 归批C；吞并 A 日 tick 归 CampUpgrader 步骤4 前置）
+        //         玩家/AI 建造纳脚下格 ClaimFootprintChunk 归批C′；吞并 A 日 tick 归 CampUpgrader 步骤4 前置）
         if (TerritorySystem.Instance != null)
             TerritorySystem.Instance.ExpandTick();
         // 步骤4：营地晋升调度（2_16 已有；顺序归位到③之后 = D347 五步第 4 步）

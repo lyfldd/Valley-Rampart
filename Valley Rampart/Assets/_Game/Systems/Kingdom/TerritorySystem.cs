@@ -8,7 +8,7 @@ using UnityEngine;
 /// - 唯一真源（D342）：`Dictionary<中区块, kingdomId>` 是本系统独占真源；KingdomState.领土句柄仅只读视图，不缓存（防双源漂移）。
 /// - 初始圈入（D343）：初始建筑外扩 1 中区块（Chebyshev 3×3）。
 /// - 覆盖玩家(id=0)+AI 王国(1..N)；自然建筑 kingdomId==-1 不计入。
-/// - 推进（步骤12 批B/C）：AI 推边界 ExpandTick（批B）；玩家建造纳土 ClaimAdjacentUnclaimed（批C）；吞并归 CampUpgrader。
+/// - 推进（步骤12 批B/批C′）：AI 推边界 ExpandTick（批B）；玩家/AI 建造纳脚下格 ClaimFootprintChunk（批C′）；吞并归 CampUpgrader。
 /// - 存档（步骤12 批C ④债）：ISaveable Global 段（SaveId="TerritorySystem"，独立勿夹带 kingdoms[] 2_11 债）。
 ///   门控三路：读档 LoadState 恢复 / 新游戏 EnterPlaying RebuildInitial / 旧档无段兜底 RebuildInitial。
 /// </summary>
@@ -258,32 +258,24 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
         return total > 0 && (float)walk / total >= thr;
     }
 
-    // ===== 批次C ④债：玩家建造纳土 + 存档入档 =====
+    // ===== 步骤12 批C′ ④债：建造纳脚下格 + 存档入档 =====
 
     /// <summary>
-    /// 玩家/AI 建造纳土（D327 + HH.32 裁4，批C）：建筑建成 → 建筑脚下中区块的 4-邻接无主中区块自动纳入该王国。
-    /// 只纳无主：已有主（含他国 id=0）不覆写、不吞并（D283 防飞地）；广播 TerritoryChangedEvent（坐标序保确定性）。
+    /// 玩家/AI 建造纳土（D327 + HH.32 裁4，批C′）：建筑建成 → 建筑**脚下中区块本身**纳入该王国
+    ///（2_17 设计 L165/L282 字面"纳该中区块"；批C′ 裁决：非 4-邻接、脚下反而不纳的漂移）。
+    /// 无主→纳入+广播；有主（含他国 id=0）→**静默零变更**（裁4：他国领地不吞并、无领土变更）。
+    /// AI 也纳脚下格：事实占有不分阵营，1 格/栋不构成绕容量门（裁2 额度硬门只在 ExpandTick 的 D327 容量门）。
+    /// 升级/重建由调用方 `_territoryClaimed` 门控，不重复纳入。
     /// </summary>
-    public void ClaimAdjacentUnclaimed(int kingdomId, GridCoord coord)
+    public void ClaimFootprintChunk(int kingdomId, GridCoord coord)
     {
         var grid = GridSystem.Instance;
         if (grid == null) return;
         Vector2Int mid = grid.CellToMidChunk(coord);
-        var added = new List<Vector2Int>();
-        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x + 1, mid.y), added);
-        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x - 1, mid.y), added);
-        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x, mid.y + 1), added);
-        TryClaimUnclaimed(kingdomId, new Vector2Int(mid.x, mid.y - 1), added);
-        if (added.Count == 0) return;
-        added.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
-        EventBus.Publish(new TerritoryChangedEvent(kingdomId, added));
-    }
-
-    private void TryClaimUnclaimed(int kingdomId, Vector2Int c, List<Vector2Int> added)
-    {
-        if (_territory.ContainsKey(c)) return;   // 只纳无主：已有主（含他国 id=0）不覆写（D283 防飞地）
-        _territory[c] = kingdomId;
-        added.Add(c);
+        // 脚下格本身纳土：有主（含他国 id=0）→ 静默零变更（裁4），不吞并不扩张
+        if (_territory.ContainsKey(mid)) return;
+        _territory[mid] = kingdomId;
+        EventBus.Publish(new TerritoryChangedEvent(kingdomId, new List<Vector2Int> { mid }));
     }
 
     // ===== 批次C ④债：存档入档（ISaveable Global 段，独立 SaveId="TerritorySystem"）=====

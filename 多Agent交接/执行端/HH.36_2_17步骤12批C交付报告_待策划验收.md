@@ -108,3 +108,32 @@
 ### 5.5 卫生指令（索引漏登记）
 
 27b74e3 提交信息与文件构成不符（声称索引登记、实际未动）——重申 HH.23 指令：**commit 信息只声明实际包含的文件改动**；涉及共享文件（索引/队列）回写时"写-改-commit 同串"，交付报告由策划端复核构成。本次 HH.36 索引行由策划端补登。
+---
+
+## 六、批C′ 修正实施交付（0.6 D413 · commit 待 2 轮验收 · 2026-08-29）
+
+> 承接裁决（决策落盘 commit 94d7f14）「批C 部分退回 → 批C′」。以下为按批C′ 修正指令（§5.4）逐条落地 + 证据。
+
+### 6.1 修正动作（代码）
+
+| # | 指令 | 落地 | 证据 |
+|---|------|------|------|
+| 1 | 纳土对象=脚下中区块本身（无主→纳入+广播；有主→静默零变更） | TerritorySystem.ClaimFootprintChunk(kingdomId, coord)：CellToMidChunk(coord) 得脚下格 → _territory.ContainsKey(mid) 有主则 eturn（零变更）；无主则写入+广播单格 | TerritorySystem.cs:262-278 |
+| 2 | AI 也纳脚下格（事实占有不分阵营，接线维持 Building 完成点） | Building.ClaimTerritoryIfFirstBuilt() 不改阵营过滤，维持调 ClaimFootprintChunk(kingdomId, coord)；1 格/栋不构成绕容量门 | Building.cs:481-487 |
+| 3 | 更名 ClaimAdjacentUnclaimed→ClaimFootprintChunk（名实相符） | 全部更名（定义+调用点+探针+注释）；删除废弃 TryClaimUnclaimed 辅助 | TerritorySystem.cs / Building.cs / Smoke_12.cs / DayCycleSettlement.cs:40 |
+| 4 | P6 断言翻转（含脚下有主→零变更 裁4 负探针）+重跑 Smoke_12/P0 | P6 重写：①无主→纳脚下格+广播（ownsFoot && onlyOne && firedProper）②脚下有主(77)→静默零变更（otherKept && noTake && silentNoBroadcast） | Smoke_12.cs:333-369 |
+
+### 6.2 验证证据（2 轮全绿）
+
+- **编译**：compile pipeline **0 error**（无新增警告）。
+- **Smoke_12**（菜单 2_17_步骤12_领土接线，Play 上下文）：P6 批C′ 建造纳脚下格 无主纳入+广播+有主食零变更 =True → ALL PASS（P1-P7 全绿）。
+- **P0**（菜单 2_17_P0_完整局验收）：ALL PASS(状态面)；A4玩家零回归=OK；aseline b=2684（post-Init 确认）；A3 逐字节为 corePass 聚合项（corePass = a3 && a4 && …）→ ALL PASS 隐含 A3=OK。玩家侧零回归，无环境让渡新增。
+
+### 6.3 文档
+
+- HH.32 L29 **L1 修订标记**已加（漂移源行 + 修订说明），函数名随改为 ClaimFootprintChunk。
+- 2_17 设计文档**未动**（本就字面正确）。
+
+### 6.4 验收请求（策划端）
+
+请按批C′ 修正指令复核 §6.1 四点（尤其 P6 负探针断言对齐设计字面——探针绿必对齐语义）。验收成立则同步队列/索引，批A/B/C/批C′ 全链闭环，进入步骤12 收官回归。
