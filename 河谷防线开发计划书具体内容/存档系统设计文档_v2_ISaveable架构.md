@@ -1023,3 +1023,6 @@ v1 的 `SaveManager` 是个"知道所有事的管家"——糟糕。
 v2 的 `SaveManager` 是个"只管搬箱子的快递员"——业务模块自己装箱拆箱，SaveManager 只负责运。
 
 你研究的方向完全正确，ISaveable 是 Unity 生态事实标准。本文件把你方案里的 4 个坑（Dictionary 序列化、object 多态、动态对象注册、加载依赖）填了，并落地到你的 `TimeManager` / `RulerController` / `UnitController` / `UnitFactory` 上。
+
+>> 📌 **2026-08-30 漂移追记**（转录自 [文档对账报告_2026-08-23](./报告/落实对账/文档对账报告_2026-08-23.md) §三 及 _目录 状态列后续裁决；仅转录未重审代码，最后核对日期以 _目录 为准）：
+> - 版本 v2→v5（QQQ.2/QQQ.4）；BuildingSaveData 已 2D 化；2_11 明确 ISaveable 架构零重构，迁移细节归 2_11；WorldSystem/DifficultyManager 注册点补录待办仍有效。

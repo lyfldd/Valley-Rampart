@@ -546,3 +546,6 @@ enum KingdomDestType { None, Treasury, NearestWarehouse, WaterNetwork, SpecificB
 | T16-T20 任务系统 | KingdomTask/ITaskSource（OnRegister/OnUnregister）/ITaskScheduler/TaskScheduler（1s/tick+距离升序+引用占用）/TaskState；WorkerTask 内化工厂（T18）；资源点采集生命周期（T19 gatherSeconds 2/4/8s+对象池+锁定复位） | 新 Tasks/、TaskScheduling/、WorkerTask.cs、Building.cs、BuildingFactory.cs、BuildingDef.cs、BuildingPanel.cs |
 | T21 训练配置字段 | supportedOccupations + trainDuration | TrainingConfig.cs |
 | T22 验证场景 | 生产链路端到端 + 闲逛遇敌撤退 一键生成 | AIDebugSpawnController.SpawnProductionChainScenario / SpawnWanderRetreatScenario |
+
+>> 📌 **2026-08-30 漂移追记**（转录自 [文档对账报告_2026-08-23](./报告/落实对账/文档对账报告_2026-08-23.md) §三 及 _目录 状态列后续裁决；仅转录未重审代码，最后核对日期以 _目录 为准）：
+> - T18"入国库"→两段式搬运（WorkerInventory）；T19→2_12 步骤6 双路径。
