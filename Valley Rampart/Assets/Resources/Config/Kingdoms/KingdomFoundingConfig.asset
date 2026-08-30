@@ -76,3 +76,4 @@ MonoBehaviour:
       magicAmmo: 0
   gatherScoreWeights: {x: 1, y: 1, z: 1}
   gatherCandidateRefreshSeconds: 15
+  gatherInfluenceRadiusCells: 8
