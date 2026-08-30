@@ -59,7 +59,6 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             case Occupation.Wall:
             case Occupation.Gate:
-            case Occupation.Barricade:
             case Occupation.ArrowTower:
             case Occupation.CrossbowTower:
             case Occupation.MagicTower:

@@ -23,7 +23,7 @@ public enum Occupation
     SiegeMachine,   // 投掷机（攻城机器）
     Ballista,       // 弩炮
     Tower,          // 防御塔（3.7 废弃共用值：三塔拆独立枚举防 UnitDataManager key 去重丢资产，见下）
-    Barricade,      // 拒马
+    Barricade,      // D122 砍除退役，值保留防序列化错位（Q8）
     Wall,           // 城墙
     Gate,           // 城门
     // ===== 3.7 P1.6 三塔拆独立（Tower 共用导致三塔资产 key 冲突/UnitDataManager 去重丢塔，末尾追加防 int 错位）=====

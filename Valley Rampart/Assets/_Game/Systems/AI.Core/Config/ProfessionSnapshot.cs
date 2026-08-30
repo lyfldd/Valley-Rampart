@@ -58,7 +58,7 @@ public struct ProfessionSnapshot
     // ===== 漫游 =====
     public float wanderRadiusCells;
 
-    // ===== 静态单位（M8 工事/静止机器：塔/墙/拒马等）=====
+    // ===== 静态单位（M8 工事/静止机器：塔/墙等）=====
     // 静态单位不参与 AI 决策、不移动、不逃逸；有攻击值的按 CD 攻击射程内敌人，attack=0 纯阻挡。
     public bool isStatic;
 
@@ -108,11 +108,11 @@ public struct ProfessionSnapshot
     public float chargeGroupCooldown;       // 组间隔（秒，20）
     public float chargeDamageReduce;        // 冲锋过程免伤（0-1，70%）
 
-    // ===== 工事（3.6 §4.4：墙/门/拒马/塔。Unity 侧 FortificationDef → 快照拉平，sim 场景 JSON 直接配）=====
+    // ===== 工事（3.6 §4.4：墙/门/塔。Unity 侧 FortificationDef → 快照拉平，sim 场景 JSON 直接配）=====
     public bool isFortification;            // 是否工事
     public int fortDefenseLevel;            // 防御等级（int，不设上限）
-    public float fortHeightCells;           // 工事高度（拒马矮 0.5 / 城墙高 2 / 塔高 3）
-    public bool fortBlocksMovement;         // 挡移动（墙/拒马）
+    public float fortHeightCells;           // 工事高度（城墙高 2 / 塔高 3）
+    public bool fortBlocksMovement;         // 挡移动（墙）
     public bool fortPassable;               // 可通行（城门开合）
     public float fortMeleeDamageReduce;     // 工事近战减免（3.6 §4.4：近战攻击工事时减免比例）
 

@@ -44,7 +44,6 @@ public enum DebugSpawnType
     PlayerSiegeMachine,     // 投掷机（弹药：石/火/魔）
     PlayerBallista,         // 弩炮（弹药：重弩矢）
     PlayerArrowTower,       // 箭塔
-    PlayerBarricade,        // 拒马
     PlayerWall,             // 城墙
     PlayerGate,             // 城门
 
@@ -133,7 +132,6 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerSiegeMachine:
             case DebugSpawnType.PlayerBallista:
             case DebugSpawnType.PlayerArrowTower:
-            case DebugSpawnType.PlayerBarricade:
             case DebugSpawnType.PlayerWall:
             case DebugSpawnType.PlayerGate:
                 return Faction.Human_Player;
@@ -174,7 +172,6 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerSiegeMachine: return Occupation.SiegeMachine;
             case DebugSpawnType.PlayerBallista: return Occupation.Ballista;
             case DebugSpawnType.PlayerArrowTower: return Occupation.ArrowTower;
-            case DebugSpawnType.PlayerBarricade: return Occupation.Barricade;
             case DebugSpawnType.PlayerWall: return Occupation.Wall;
             case DebugSpawnType.PlayerGate: return Occupation.Gate;
             case DebugSpawnType.EnemyWarrior: return Occupation.Warrior;
@@ -212,7 +209,6 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerSiegeMachine: return "己方投掷机";
             case DebugSpawnType.PlayerBallista: return "己方弩炮";
             case DebugSpawnType.PlayerArrowTower: return "己方箭塔";
-            case DebugSpawnType.PlayerBarricade: return "己方拒马";
             case DebugSpawnType.PlayerWall: return "己方城墙";
             case DebugSpawnType.PlayerGate: return "己方城门";
             case DebugSpawnType.EnemyWarrior: return "敌方士兵";

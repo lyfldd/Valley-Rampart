@@ -29,7 +29,6 @@ MonoBehaviour:
     - Gate
     - ArrowTower
     unlockBuildings:
-    - Barricade
     - CrossbowTower
   - tier: 3
     requiredCastleLevel: 3

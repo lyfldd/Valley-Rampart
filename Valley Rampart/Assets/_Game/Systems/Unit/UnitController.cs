@@ -1135,8 +1135,6 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         Vector2 movement = GridDistClampDir(direction) * speed * Time.deltaTime; // 格空间归一化 §1.6
         _rb.MovePosition(_rb.position + movement);   // 2D 平面：删 y 固定 / 删撞墙停（D68）
         UpdateGridPosition();
-        // 拒马减速：经过敌方拒马格减速（友方拒马不减速）
-        ApplyBarricadeSlowIfNeeded();
     }
 
     /// <summary>
@@ -1163,8 +1161,6 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
         _rb.MovePosition(newPos);
         UpdateGridPosition();
-        // 拒马减速：经过敌方拒马格减速（友方拒马不减速）
-        ApplyBarricadeSlowIfNeeded();
 
         return IsArrived(destination);   // 2_3 到达判定：格单位分量归一化距离（§1.6）
     }
@@ -1246,33 +1242,6 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                 return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// 3.7 P1.4 拒马减速：移动后所在格有敌方拒马（Barricade 职业 + fortification）→ 施加减速。
-    /// 拒马 = 减速带（不硬挡，blocksMovement=false），友方拒马不减速。值住 FortificationDef（SO 防硬编码）。
-    /// </summary>
-    private void ApplyBarricadeSlowIfNeeded()
-    {
-        if (Data == null || fortification != null) return;   // 自身是工事不自我减速
-        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
-
-        var coordOpt = GridSystem.Instance.WorldToCoord(_rb.position);
-        if (!coordOpt.HasValue) return;
-        GridCoord coord = coordOpt.Value;
-        var units = GridSystem.Instance.GetUnitsInCell(coord);
-        foreach (var unit in units)
-        {
-            var uc = unit as UnitController;
-            if (uc == null || uc == this || uc.fortification == null) continue;
-            if (uc.Data == null || uc.Data.occupation != Occupation.Barricade) continue;
-            if (uc.Data.faction == Data.faction) continue;   // 友方拒马不减速
-            float factor = uc.fortification.barricadeSlowFactor;
-            float duration = uc.fortification.barricadeSlowDuration;
-            if (factor <= 0f) return;
-            ApplySlow(factor, duration);
-            return;
-        }
     }
 
     /// <summary>

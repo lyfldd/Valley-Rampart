@@ -79,7 +79,6 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             case Occupation.ArrowTower:
             case Occupation.CrossbowTower:
             case Occupation.MagicTower:
-            case Occupation.Barricade:
             case Occupation.Wall:
             case Occupation.Gate:
             case Occupation.Vagrant:   // 王国领域外（营地），招募抵达王国后才转居民入表（§4.1）

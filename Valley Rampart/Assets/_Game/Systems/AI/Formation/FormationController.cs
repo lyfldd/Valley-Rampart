@@ -222,7 +222,7 @@ public class FormationController : MonoBehaviour
             if (unit == null || unit.Data == null) continue;
             // 3.0.1_6 §4.3：招募只招本阵营空闲士兵（敌方将军招 Undead，不抢我方兵）
             if (unit.Data.faction != faction) continue;
-            // 3.7：全兵种入编，但排除工人/君主/静态工事（机器/塔/拒马/墙/门不参与编队移动）
+            // 3.7：全兵种入编，但排除工人/君主/静态工事（机器/塔/墙/门不参与编队移动）
             if (!IsRecruitable(unit.Data.occupation)) continue;
             if (brain.HasFormationSlot) continue;  // 已编队
             result.Add(brain);
@@ -249,7 +249,6 @@ public class FormationController : MonoBehaviour
             case Occupation.ArrowTower:
             case Occupation.CrossbowTower:
             case Occupation.MagicTower:
-            case Occupation.Barricade:
             case Occupation.Wall:
             case Occupation.Gate:
                 return false;

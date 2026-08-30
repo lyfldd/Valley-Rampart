@@ -1395,7 +1395,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             float travel = reachEnd ? rangeWorld : _chargeTraveled;
 
             Vector2 newPos = _chargeStart + _chargeDir * travel;
-            // 3.7 P1.5：冲锋撞墙即止（城墙阻挡冲锋路径，骑兵不穿墙；拒马=减速带不挡，冲过正常结算）
+            // 3.7 P1.5：冲锋撞墙即止（城墙阻挡冲锋路径，骑兵不穿墙）
             if (SelfUnit.IsBlockedByFortification(newPos))
             {
                 SelfUnit.ChargeState = 0;

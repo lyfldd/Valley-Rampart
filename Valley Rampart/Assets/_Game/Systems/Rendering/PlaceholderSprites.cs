@@ -57,7 +57,6 @@ public static class PlaceholderSprites
         { "bld_castle",     new Def(3, 3, 4, new Color(0.80f, 0.70f, 0.30f)) },  // 主城 3×3 高4
         { "bld_farm",       new Def(2, 2, 0, new Color(0.72f, 0.68f, 0.20f)) },  // 农田 2×2 无高
         { "bld_mine_b",     new Def(2, 2, 1, new Color(0.40f, 0.42f, 0.48f)) },  // 矿场 2×2
-        { "bld_wall_barr",  new Def(1, 1, 1, new Color(0.55f, 0.35f, 0.25f)) },  // 拒马 1×1 高1
         { "bld_bridge",     new Def(1, 1, 0, new Color(0.55f, 0.40f, 0.25f)) },  // 桥 1×1 无高
         { "bld_warehouse",  new Def(2, 2, 2, new Color(0.55f, 0.42f, 0.20f)) },  // 仓库 2×2
         { "bld_market",     new Def(2, 2, 2, new Color(0.70f, 0.50f, 0.30f)) },  // 市场 2×2
