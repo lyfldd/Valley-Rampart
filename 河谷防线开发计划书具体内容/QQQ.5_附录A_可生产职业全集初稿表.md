@@ -20,7 +20,7 @@
 | 4 | Civilian 平民 | 13 | SiegeMachine 投掷机 | 22 | Resident 居民 |
 | 5 | Mage 法师 | 14 | Ballista 弩炮 | 23 | Worker 工人 |
 | 6 | Healer 治疗师 | 15 | Tower(废弃共用) | 24 | Porter 搬运工 |
-| 7 | Crossbowman 弩手 | 16 | Barricade 拒马 | 25 | Vagrant 流浪汉 |
+| 7 | Crossbowman 弩手 | 16 | Barricade 拒马（D122 退役） | 25 | Vagrant 流浪汉 |
 | 8 | HeavyWarrior 重装 | 17 | Wall 城墙 | 26 | Child 小孩 |
 
 > 机器/工事（13-21）不属"可生产职业"，不进训练链，此处仅列值供占用参考。
