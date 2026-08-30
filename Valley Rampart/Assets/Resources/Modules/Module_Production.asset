@@ -17,7 +17,6 @@ MonoBehaviour:
   - tier: 1
     requiredCastleLevel: 1
     upgradeBuildings:
-    - Lumbermill
     - Quarry
     - Mine
     - Farm
@@ -27,7 +26,6 @@ MonoBehaviour:
   - tier: 2
     requiredCastleLevel: 2
     upgradeBuildings:
-    - Lumbermill
     - Quarry
     - Mine
     - Farm
@@ -39,7 +37,6 @@ MonoBehaviour:
   - tier: 3
     requiredCastleLevel: 3
     upgradeBuildings:
-    - Lumbermill
     - Quarry
     - Mine
     - Farm

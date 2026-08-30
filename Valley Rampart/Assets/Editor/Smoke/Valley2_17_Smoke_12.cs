@@ -17,6 +17,9 @@ using UnityEditor;
 //    P5 批B ⑩ ExpandTick 行为：日推1~2邻接无主 / 冷却生效 / 只纳无主（他国格不被吞）。
 //    P6 批C′ 建造纳土 ClaimFootprintChunk：纳**脚下中区块本身**（无主→纳入+广播）；脚下有主（他国）→静默零变更（裁4 负探针）。
 //    P7 批C ④债存读回环：SaveState→LoadState 账本+冷却恢复 / EnterPlayingGate 读档不重建。
+//    P8 收官回归 #15 领土真源：改 TerritorySystem 账本归属 → KingdomState.Territory 句柄实时读到新值（不缓存，D342）。
+//    P9 收官回归 #18 同日圈营吞并链：合成营地置于 99 邻接无主 mid → ExpandTick 圈入 → 同日 TickAll TryAnnex 吞并真（产品内顺序由代码读证实，行为观测归 T8）。
+//    P10 收官回归 #6 额度耗尽：非初始占区顶满 D327 额度（capacity≤0）→ ExpandTick 零增长。
 //  私方法经反射调产品实现（与 P0/S11 harness 同规）；所有注入 fixture 收尾清理，防污染。
 //  收口：不改产品代码。
 // ============================================================================
@@ -85,9 +88,21 @@ public static class Valley2_17_Smoke_12
         bool p7 = ProbeTerritoryPersist(ts);
         results.Add($"P7 批C ④债存读回环+门控三路 ={p7}");
 
-        bool allPass = p1 && p2 && p3block && p3annex && p4 && p5 && p6 && p7;
+        // ---- P8 收官回归 2_17设计 §六 #15 领土真源：改账本归属后 KingdomState 句柄实时读到新值（不缓存）----
+        bool p8 = ProbeTerritoryHandle(ts);
+        results.Add($"P8 #15 句柄真源 账本变更后句柄实时读到新值 ={p8}");
+
+        // ---- P9 收官回归 2_17设计 §六 #18 同日圈营吞并链：99 邻接无主营地格 → ExpandTick 圈入 → 同日 TickAll TryAnnex 吞并真 ----
+        bool p9 = ProbeSameDayAnnex(ts, reg, vcs);
+        results.Add($"P9 #18 同日圈营吞并链 ExpandTick圈入+TickAll吞并 ={p9}");
+
+        // ---- P10 收官回归 2_17设计 §六 #6 额度耗尽：非初始占区顶满额度(capacity≤0) → ExpandTick 零增长 ----
+        bool p10 = ProbeCapacityExhausted(ts, reg);
+        results.Add($"P10 #6 额度耗尽 非初始顶满→ExpandTick零增长 ={p10}");
+
+        bool allPass = p1 && p2 && p3block && p3annex && p4 && p5 && p6 && p7 && p8 && p9 && p10;
         Debug.Log("[2_17_12冒烟] " + string.Join(" | ", results));
-        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick/P6纳脚下格/P7存读回环）=====");
+        Debug.Log($"[2_17_12冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（P1真判定/P2圈入/P3 DZ-008/P4 TerritoryGap/P5 ExpandTick/P6纳脚下格/P7存读回环/P8句柄真源/P9圈营吞并/P10额度耗尽）=====");
     }
 
     // ===== 供 Camp 构造：中区块 → 中心格（CellToMidChunk 回落该中区块，LODSystem L101 同款映射）=====
@@ -401,6 +416,142 @@ public static class Valley2_17_Smoke_12
         cd.Remove(33);
 
         return payloadHas2 && restored && cdRestored && gateKeepsSave;
+    }
+
+    // ===== 收官回归探针（Q1 步骤12 全量收官回归清单 T4：P8~P10 补 2_17设计 §六 #15/#18/#6 缺口）=====
+
+    /// <summary>
+    /// P8 #15 领土真源（D342）：KingdomState.Territory 是只读视图、**不缓存**——每次实时查 TerritorySystem。
+    /// 探针：账本归属由 (10,10)→99 改为 (11,10)→99 后，同一句柄实时读到新值（无旧值残留）。
+    /// 注：D341 扣初始（初始圈不计非初始）已被 P4 的 NonInitialTerritoryCount 断言覆盖，此处引 P4 即可。
+    /// </summary>
+    private static bool ProbeTerritoryHandle(TerritorySystem ts)
+    {
+        var k = new KingdomState { id = 99 };
+        var a = new Vector2Int(10, 10);
+        var b = new Vector2Int(11, 10);
+        InjectTerritory(ts, a, 99);
+        bool t1 = ContainsMid(k.Territory, a) && !ContainsMid(k.Territory, b);
+        RemoveTerritory(ts, a);
+        InjectTerritory(ts, b, 99);
+        bool t2 = ContainsMid(k.Territory, b) && !ContainsMid(k.Territory, a);   // 句柄不缓存：账本变更后实时读到新值
+        RemoveTerritory(ts, b);
+        return t1 && t2;
+    }
+
+    /// <summary>
+    /// P9 #18 同日圈营吞并链：合成营地置于 99 国**邻接无主** mid(99,100)（坐标序第一候选）→
+    /// ① ExpandTick 推边界圈入该格 → ② 同日 CampUpgrader.TickAll → TryAnnex 账本反查有主 → 吞并（营地从 vcs 移除）。
+    /// 产品内 DayCycle 顺序（ExpandTick 先于 TickAll）由代码读证实（DayCycleSettlement 步骤3 接线），行为观测归 T8 完整局。
+    /// </summary>
+    private static bool ProbeSameDayAnnex(TerritorySystem ts, KingdomRegistry reg, VagrantCampSystem vcs)
+    {
+        var f = typeof(KingdomRegistry).GetField("_kingdoms", BindingFlags.Instance | BindingFlags.NonPublic);
+        var orig = (List<KingdomState>)f.GetValue(reg);
+        if (orig == null) return false;
+        var temp = new List<KingdomState>(orig) { new KingdomState { id = 99 } };
+        f.SetValue(reg, temp);
+
+        var fc = typeof(VagrantCampSystem).GetField("_camps", BindingFlags.Instance | BindingFlags.NonPublic);
+        var camps = fc != null ? (List<Camp>)fc.GetValue(vcs) : null;
+        var grid = GridSystem.Instance;
+        // P5 探针曾对 99 调 ExpandTick 留下 _lastExpandDay[99] 冷却（未清），P9 同日内再 tick 会被冷却拦截
+        //（P10 用 98 不受影响）。开始前清冷却保证本探针首 tick 放行，finally 再清防污染。
+        var cdF = typeof(TerritorySystem).GetField("_lastExpandDay", BindingFlags.Instance | BindingFlags.NonPublic);
+        var cdDict = cdF != null ? (Dictionary<int, int>)cdF.GetValue(ts) : null;
+        if (cdDict != null) cdDict.Remove(99);
+        Camp probeCamp = null;
+        try
+        {
+            if (grid != null && (typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
+            {
+                grid.Initialize(128, 128);
+                for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
+                    grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+            }
+            var baseMid = new Vector2Int(30, 30);   // 界内（cell 120~123，128×128 网内）
+            InjectTerritory(ts, baseMid, 99);
+
+            int ms = grid != null && grid.Config != null && grid.Config.midChunkSize > 0 ? grid.Config.midChunkSize : 4;
+            var campMid = new Vector2Int(baseMid.x - 1, baseMid.y);   // (29,30)：坐标序第一候选（D326），界内 cell 116~119
+            probeCamp = new Camp(new GridCoord(campMid.x * ms + ms / 2, campMid.y * ms + ms / 2), 0);
+            if (camps != null) camps.Add(probeCamp);
+
+            ts.ExpandTick();                                   // ① 圈入营地格
+            bool circled = ts.Ledger.TryGetValue(campMid, out int own) && own == 99;
+
+            CampUpgrader.TickAll();                            // ② 同日 TickAll → TryAnnex 吞并
+            bool annexed = camps != null && !camps.Contains(probeCamp);   // 营地从 vcs 移除 = 吞并路径走通
+
+            foreach (var g in ts.GetKingdomTerritory(99)) RemoveTerritory(ts, g);
+            return circled && annexed;
+        }
+        finally
+        {
+            if (camps != null) camps.Remove(probeCamp);        // 兜底清理（吞并成功时已自移除）
+            if (cdDict != null) cdDict.Remove(99);            // 清冷却残留，防污染后续探针/完整局
+            f.SetValue(reg, orig);
+        }
+    }
+
+    /// <summary>
+    /// P10 #6 额度耗尽（D327 硬容量门）：capacity = Clamp(β + 工人 − 非初始占区, 0, 上限)。
+    /// 对照：98 国仅 1 块领土（capacity 充足）→ ExpandTick 增长（证明 tick 生效、冷却未挡）；
+    /// 额度耗尽：注入 capBase 块非初始占区（worker=0 → capacity=0）→ ExpandTick **零增长**。
+    /// 注：无建筑王国初始圈为空集 → 全部领土计入非初始（NonInitialTerritoryCount 语义）。
+    /// </summary>
+    private static bool ProbeCapacityExhausted(TerritorySystem ts, KingdomRegistry reg)
+    {
+        var f = typeof(KingdomRegistry).GetField("_kingdoms", BindingFlags.Instance | BindingFlags.NonPublic);
+        var orig = (List<KingdomState>)f.GetValue(reg);
+        if (orig == null) return false;
+        var temp = new List<KingdomState>(orig) { new KingdomState { id = 98 } };
+        f.SetValue(reg, temp);
+
+        var grid = GridSystem.Instance;
+        try
+        {
+            if (grid != null && (typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
+            {
+                grid.Initialize(128, 128);
+                for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
+                    grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+            }
+            int capBase = Mathf.Max(1, KingdomBrain.LoadConfig().expandCapacityBase);
+
+            // 对照：容量充足 → 应增长（界内 mid(20,20) → cell 80~83）
+            var baseMid = new Vector2Int(20, 20);
+            InjectTerritory(ts, baseMid, 98);
+            int before = ts.KingdomCellCount(98);
+            ts.ExpandTick();
+            int after = ts.KingdomCellCount(98);
+            bool growsWhenCapOk = after > before;
+            foreach (var g in ts.GetKingdomTerritory(98)) RemoveTerritory(ts, g);
+
+            // 额度耗尽：capBase 块非初始占区（worker=0 → capacity=0）→ 零增长（界内 mid(22..28,22)）
+            var f2 = new List<Vector2Int>();
+            for (int i = 0; i < capBase; i++) f2.Add(new Vector2Int(22 + i * 2, 22));
+            foreach (var c in f2) InjectTerritory(ts, c, 98);
+            int cBefore = ts.KingdomCellCount(98);
+            ts.ExpandTick();
+            int cAfter = ts.KingdomCellCount(98);
+            bool zeroWhenExhausted = cAfter == cBefore;
+            foreach (var c in f2) RemoveTerritory(ts, c);
+
+            return growsWhenCapOk && zeroWhenExhausted;
+        }
+        finally
+        {
+            f.SetValue(reg, orig);
+        }
+    }
+
+    /// <summary>句柄集合包含判定（P8 用；集合可能为只读视图）。</summary>
+    private static bool ContainsMid(IReadOnlyCollection<Vector2Int> coll, Vector2Int mid)
+    {
+        if (coll == null) return false;
+        foreach (var c in coll) if (c == mid) return true;
+        return false;
     }
 
     private class RunHost : MonoBehaviour
