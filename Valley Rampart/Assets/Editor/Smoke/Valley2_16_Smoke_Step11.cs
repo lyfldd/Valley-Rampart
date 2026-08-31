@@ -82,7 +82,7 @@ public static class Valley2_16_Smoke_Step11
         for (int i = 0; i < 15; i++)
         {
             var pos = campWorld + new Vector2((i % 3) * 0.7f - 0.7f, (i / 3) * 0.7f - 1.4f);
-            var go = UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Vagrant, pos, 0);
+            var go = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Vagrant, pos, 0);
             if (go == null) continue;
             var uc = go.GetComponent<UnitController>();
             if (uc == null) continue;

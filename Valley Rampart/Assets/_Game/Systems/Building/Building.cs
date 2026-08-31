@@ -527,7 +527,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public InteractionResult Interact(Interactor ctx)
     {
         // 非玩家阵营建筑不可交互（3.3.4 批次10 留口，首版直接拒绝敌方）
-        if (faction != Faction.Human_Player && faction != Faction.None)
+        if (faction != Faction.PlayerCamp && faction != Faction.None)
             return InteractionResult.None;
 
         // 打开 BuildingPanel（首版用 FindObjectOfType 找场景面板，后期可改为注入）

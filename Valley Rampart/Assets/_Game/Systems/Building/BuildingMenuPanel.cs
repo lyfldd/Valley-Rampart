@@ -177,7 +177,7 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         else
         {
             Debug.Log("[BuildingMenuPanel] 打开菜单");
-            ui.Push(this, new Interactor(Faction.Human_Player, Vector3.zero));
+            ui.Push(this, new Interactor(Faction.PlayerCamp, Vector3.zero));
         }
     }
 
@@ -370,7 +370,7 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         if (ui != null)
         {
             ui.Pop();  // 关闭菜单
-            ui.Push(new BuildModeEntry(def, this), new Interactor(Faction.Human_Player, Vector3.zero));
+            ui.Push(new BuildModeEntry(def, this), new Interactor(Faction.PlayerCamp, Vector3.zero));
         }
         else
         {

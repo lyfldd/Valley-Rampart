@@ -615,8 +615,8 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     {
         switch (f)
         {
-            case Faction.Human_Player: return "我方";
-            case Faction.Undead: return "亡灵";
+            case Faction.PlayerCamp: return "我方";
+            case Faction.Monster: return "亡灵";
             case Faction.None: return "中立";
             default: return f.ToString();
         }

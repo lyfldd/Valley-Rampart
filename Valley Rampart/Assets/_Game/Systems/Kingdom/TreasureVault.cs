@@ -119,7 +119,7 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
         var cell = Castle != null && GridSystem.Instance != null
             ? GridSystem.Instance.WorldToCoord(Castle.transform.position).GetValueOrDefault()
             : new GridCoord(0, 0);
-        ChestManager.Instance.SpawnChest(cell, pack, Faction.Human_Player);
+        ChestManager.Instance.SpawnChest(cell, pack, Faction.PlayerCamp);
         Debug.Log($"[TreasureVault] 国库满 {type} 溢出 {amount} → 装箱落主城格 ({cell.x},{cell.y})（D223 不丢资源）");
     }
 

@@ -67,7 +67,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         return baseLimit + perLevel * Mathf.Max(0, lv - 1);
     }
 
-    /// <summary>当前已放置战争机器数（场上投掷机+弩炮单位）。玩家路径：按 Faction.Human_Player 统计（现网语义不变）。</summary>
+    /// <summary>当前已放置战争机器数（场上投掷机+弩炮单位）。玩家路径：按 Faction.PlayerCamp 统计（现网语义不变）。</summary>
     public int GetPlacedMachineCount()
     {
         int count = 0;
@@ -75,7 +75,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.Data.faction != Faction.Human_Player) continue;
+            if (unit.Data.faction != Faction.PlayerCamp) continue;
             if (unit.EffectiveOccupation == Occupation.SiegeMachine || unit.EffectiveOccupation == Occupation.Ballista)
                 count++;
         }
@@ -120,7 +120,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         RulerController.Instance.Spend(cost);
         if (UnitFactory.Instance != null)
         {
-            UnitFactory.Instance.SpawnUnit(Faction.Human_Player, type, spawnPos);
+            UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos);
             Debug.Log($"[SiegeProduction] 生产 {type}（造价 金{cost.gold} 石{cost.stone} 木{cost.wood}）");
             return true;
         }
@@ -128,12 +128,12 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
     }
 
     /// <summary>
-    /// 2_17 步骤11 批1·生产战争机器（AI/王国归属预留 overload）。玩家(id=0) 缺省走原 ProduceMachine→Faction.Human_Player，零回归。
+    /// 2_17 步骤11 批1·生产战争机器（AI/王国归属预留 overload）。玩家(id=0) 缺省走原 ProduceMachine→Faction.PlayerCamp，零回归。
     /// 只统计不改产：AI 真正生产链归步骤13；本批仅落归属维度结构，AI 分支暂返回 false。
     /// </summary>
     public bool ProduceMachine(Occupation type, Vector2 spawnPos, int kingdomId)
     {
-        if (kingdomId == 0) return ProduceMachine(type, spawnPos);   // 玩家缺省走原路径（Faction.Human_Player）
+        if (kingdomId == 0) return ProduceMachine(type, spawnPos);   // 玩家缺省走原路径（Faction.PlayerCamp）
         Debug.Log($"[SiegeProduction] AI 战争机器生产链未接入（王国[{kingdomId}]），归属维度已预留，真正生产归步骤13");
         return false;
     }

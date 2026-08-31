@@ -141,7 +141,7 @@ public static class GuardDeploymentSystem
         int r = Mathf.Max(1, Mathf.CeilToInt(warnCells));
         var region = new GuardRegion(
             new RectInt(center.x - r, center.y - r, r * 2 + 1, r * 2 + 1),   // 中心居中，含资源点所在格
-            node.faction != Faction.None ? node.faction : Faction.Human_Player
+            node.faction != Faction.None ? node.faction : Faction.PlayerCamp
         );
         _regions.Add(region);
         _nodes.Add(node);
@@ -273,7 +273,7 @@ public static class GuardDeploymentSystem
                 if (sq < bestSq)
                 {
                     bestSq = sq;
-                    best = new GuardResourceNode(c, f, Faction.Human_Player, FeatureDisplayName(f));
+                    best = new GuardResourceNode(c, f, Faction.PlayerCamp, FeatureDisplayName(f));
                 }
             }
         }

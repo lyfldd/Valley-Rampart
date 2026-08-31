@@ -19,7 +19,7 @@ using UnityEngine;
 /// </summary>
 public class SceneHomePointProvider : Singleton<SceneHomePointProvider>, IHomePointProvider
 {
-    [Tooltip("P0 占位：我方（Human_Player）城墙内驻留点空 Transform。P1 替换为城墙计算器")]
+    [Tooltip("P0 占位：我方（PlayerCamp）城墙内驻留点空 Transform。P1 替换为城墙计算器")]
     public Transform homePointAnchor;
 
     [Tooltip("3.0.1_6 §4.1：敌方（Undead）侧锚点，地图右侧敌方出生地。修敌逃往人类城墙/漫游人类城墙/归巢站人类城墙")]
@@ -27,7 +27,7 @@ public class SceneHomePointProvider : Singleton<SceneHomePointProvider>, IHomePo
 
     /// <summary>
     /// 按阵营分流返回 HomePoint（3.0.1_6 §4.1 + QQQ.1 需求2+3 + QQQ.2 T11 / DR-7）：
-    /// 我方（Human_Player/None）→ 主城坐标（WorldManager.GetKingdomAnchorWorld，城堡中心）；
+    /// 我方（PlayerCamp/None）→ 主城坐标（WorldManager.GetKingdomAnchorWorld，城堡中心）；
     /// 敌方（Undead）→ 敌方侧锚点。
     /// QQQ.2 T11 / DR-7：未招募流浪汉（IsVagrantRecruited=false）→ 出生营地坐标（营地游荡不朝王国走）；
     /// 已招募 → 王国锚点（走回王国入册）。
@@ -39,7 +39,7 @@ public class SceneHomePointProvider : Singleton<SceneHomePointProvider>, IHomePo
             var unit = npc.GetComponent<UnitController>();
             if (unit != null && unit.Data != null)
             {
-                bool isEnemy = unit.Data.faction == Faction.Undead;
+                bool isEnemy = unit.Data.faction == Faction.Monster;
                 if (isEnemy)
                     return enemyHomePointAnchor != null ? (Vector2)enemyHomePointAnchor.position : ResolveKingdomAnchor();
                 // QQQ.2 T11 / DR-7：未招募流浪汉 HomePoint = 出生营地坐标（在营地附近游荡）

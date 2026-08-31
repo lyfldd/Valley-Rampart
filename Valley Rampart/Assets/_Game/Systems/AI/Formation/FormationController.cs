@@ -41,7 +41,7 @@ public class FormationController : MonoBehaviour
     public FormationTable formationTable;
 
     [Tooltip("编队阵营（3.0.1_6 §4.3：招募只招本阵营空闲士兵；敌方将军用 Undead + FormationTable_Enemy）")]
-    public Faction faction = Faction.Human_Player;
+    public Faction faction = Faction.PlayerCamp;
 
     [Tooltip("阵型切换防抖时间（秒，§15.3 即时触发+防抖）")]
     public float switchDebounce = 1f;

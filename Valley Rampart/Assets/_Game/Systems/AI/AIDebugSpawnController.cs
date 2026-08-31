@@ -18,7 +18,7 @@ using UnityEngine;
 /// </summary>
 public enum DebugSpawnType
 {
-    // ===== 己方（Human_Player）=====
+    // ===== 己方（PlayerCamp）=====
     PlayerGeneral,      // 将军（挂 FormationController，统帅编队）
     PlayerWarrior,      // 近战士兵
     PlayerArcher,       // 弓箭手
@@ -31,7 +31,7 @@ public enum DebugSpawnType
     EnemyGeneral,       // 敌方将军（3.0.1_6 §4.3：挂 FormationController + FormationTable_Enemy）
     EnemyCavalry,       // 敌方骑兵（3.6）
 
-    // ===== 3.7 新职业（己方 Human_Player，验证 M8 全兵种）=====
+    // ===== 3.7 新职业（己方 PlayerCamp，验证 M8 全兵种）=====
     PlayerMage,             // 法师：远程高伤
     PlayerArchmage,         // 大法师：远程更远
     PlayerCrossbowman,      // 弩手：远程点杀
@@ -134,7 +134,7 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.PlayerArrowTower:
             case DebugSpawnType.PlayerWall:
             case DebugSpawnType.PlayerGate:
-                return Faction.Human_Player;
+                return Faction.PlayerCamp;
             case DebugSpawnType.EnemyWarrior:
             case DebugSpawnType.EnemyArcher:
             case DebugSpawnType.EnemyGeneral:
@@ -146,7 +146,7 @@ public class AIDebugSpawnController : MonoBehaviour
             case DebugSpawnType.EnemyHeavyWarrior:
             case DebugSpawnType.EnemyShieldGuard:
             case DebugSpawnType.EnemyBishop:
-                return Faction.Undead;
+                return Faction.Monster;
             default:
                 return Faction.None;
         }
@@ -228,7 +228,7 @@ public class AIDebugSpawnController : MonoBehaviour
 
     private static string GetFactionName(DebugSpawnType type)
     {
-        return GetFaction(type) == Faction.Human_Player ? "己方" : "敌方";
+        return GetFaction(type) == Faction.PlayerCamp ? "己方" : "敌方";
     }
 
     // ===== 公开接口（UI 调用）=====
@@ -321,14 +321,14 @@ public class AIDebugSpawnController : MonoBehaviour
             fc = generalGo.AddComponent<FormationController>();
 
         // 3.0.1_6 §4.3：按将军阵营分流——敌方将军用 Undead + FormationTable_Enemy（独立阵型表）
-        fc.faction = generalUnit.Data != null ? generalUnit.Data.faction : Faction.Human_Player;
+        fc.faction = generalUnit.Data != null ? generalUnit.Data.faction : Faction.PlayerCamp;
         if (fc.formationTable == null)
             fc.formationTable = Resources.Load<FormationTable>(
-                fc.faction == Faction.Undead ? "Formations/FormationTable_Enemy" : "Formations/FormationTable");
+                fc.faction == Faction.Monster ? "Formations/FormationTable_Enemy" : "Formations/FormationTable");
 
         fc.BindGeneral(generalUnit);
         fc.RecruitStandard();
-        Debug.Log($"[AIDebugSpawn] {(fc.faction == Faction.Undead ? "敌方" : "己方")}将军已编组，招募满编。");
+        Debug.Log($"[AIDebugSpawn] {(fc.faction == Faction.Monster ? "敌方" : "己方")}将军已编组，招募满编。");
     }
 
     // ===== 王国任务（7.8 T-K/T-R）验证辅助 =====

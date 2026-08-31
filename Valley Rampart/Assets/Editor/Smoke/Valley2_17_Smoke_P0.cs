@@ -398,7 +398,7 @@ public static class Valley2_17_Smoke_P0
         // （确定性位置，不依赖 ActiveMap；招工→入册走 Update 归人工 Play）。
         if (!anyVagrant && UnitFactory.Instance != null)
         {
-            var go = UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Vagrant, Vector3.zero);
+            var go = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Vagrant, Vector3.zero);
             if (go != null)
             {
                 var uc = go.GetComponent<UnitController>();

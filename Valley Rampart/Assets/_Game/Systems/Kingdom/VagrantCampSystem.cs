@@ -258,7 +258,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         float offsetX = (float)((rng.NextDouble() * 2.0 - 1.0) * cfg.campVagrantRadiusCells * 0.5f) * cs;
 
         var go = UnitFactory.Instance.SpawnUnit(
-            Faction.Human_Player, Occupation.Vagrant,
+            Faction.PlayerCamp, Occupation.Vagrant,
             new Vector2(campPos.x + offsetX, campPos.y));
         if (go == null) return false;
 
@@ -278,7 +278,7 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         float cs = grid != null && grid.Config != null ? grid.Config.cellSize.x : 2.26f;
         float jx = (float)((rng.NextDouble() * 2.0 - 1.0) * 0.3 * cs);
         var go = UnitFactory.Instance.SpawnUnit(
-            Faction.Human_Player, Occupation.Vagrant,
+            Faction.PlayerCamp, Occupation.Vagrant,
             new Vector2(worldPos.x + jx, worldPos.y));
         if (go == null) return false;
         var uc = go.GetComponent<UnitController>();

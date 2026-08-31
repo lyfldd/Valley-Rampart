@@ -94,7 +94,7 @@ public class InteractionManager : Singleton<InteractionManager>
             var interactable = hit.GetComponentInParent<IInteractable>();
             if (interactable != null)
             {
-                var ctx = new Interactor(Faction.Human_Player, worldPos);
+                var ctx = new Interactor(Faction.PlayerCamp, worldPos);
                 var result = interactable.Interact(ctx);
 
                 switch (result.kind)

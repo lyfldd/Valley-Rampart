@@ -9,6 +9,13 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
 {
     public string SaveIdPrefix => "Unit_";
 
+    // P5.3 D432：旧档过滤计数——读档重建单位时，faction/occupation 查表失败（如 Undead 职业资产已删）丢弃的累计数。
+    // 供读档过滤探针读取：含废弃阵营单位的旧档可载不炸 + 计数在场。
+    public static int FilteredSaveUnitCount { get; private set; }
+
+    /// <summary>读档流程开始前清零过滤计数（SaveManager.Load 调用）。</summary>
+    public static void ResetFilteredSaveUnitCount() => FilteredSaveUnitCount = 0;
+
     // 3.0.1 §7.4 对象池：实例层（按 UnitData 分桶），门面挂在 UnitFactory 现有生成路径
     private readonly UnitInstancePool _instancePool = new UnitInstancePool();
 
@@ -108,8 +115,8 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
     /// <summary>
     /// 按 Faction + Occupation 直接创建单位。kingdomId 默认 0=玩家（2_16 步骤2 门面 D329）。
     /// 2_17 步骤10 Faction 收编：新建 AI 王国单位（kingdomId>0）生成后覆写阵营为 AiKingdom，
-    /// 不再以 Human_Player 冒充（读档路径走 SpawnUnit(UnitData) 不经过本门面，存量旧档
-    /// Human_Player+kingdomId>0 过渡兼容保留，由各处 kingdomId 双条件守卫兜底）。
+    /// 不再以 PlayerCamp 冒充（读档路径走 SpawnUnit(UnitData) 不经过本门面，存量旧档
+    /// PlayerCamp+kingdomId>0 过渡兼容保留，由各处 kingdomId 双条件守卫兜底）。
     /// </summary>
     public GameObject SpawnUnit(Faction faction, Occupation occupation, Vector2 position, int kingdomId = 0)
     {
@@ -142,7 +149,7 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
 
         // HH.17 裁决（决策2/3）：上帝视角君主实体已退役。旧档 occupation=Ruler 单位读档过滤，
         // 不重建君主（新建档无君主，此分支仅旧档触发——2_14 步骤14 迁移待办在此落地）。
-        if (faction == Faction.Human_Player && occupation == Occupation.Ruler)
+        if (faction == Faction.PlayerCamp && occupation == Occupation.Ruler)
         {
             Debug.Log($"[UnitFactory] 旧档君主 occupation=Ruler 已退役（HH.17 上帝视角），读档过滤不重建（saveId={entry.saveId}）。");
             return;
@@ -151,7 +158,9 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
         UnitData config = UnitDataManager.Instance.GetData(faction, occupation);
         if (config == null)
         {
-            Debug.LogError($"[UnitFactory] 找不到配置: {faction}_{occupation}，跳过。");
+            // P5.3 D432：faction/occupation 查表失败（旧档废弃阵营/职业，如 Undead 职业资产已删）→ 丢弃不重建 + 计数。
+            FilteredSaveUnitCount++;
+            Debug.Log($"[UnitFactory] 旧档单位 {faction}_{occupation} 查表失败过滤（P5.3 D432），丢弃第 {FilteredSaveUnitCount} 个（saveId={entry.saveId}）。");
             return;
         }
 

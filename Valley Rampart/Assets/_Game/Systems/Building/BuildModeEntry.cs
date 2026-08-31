@@ -26,6 +26,6 @@ public class BuildModeEntry : IUIStackEntry
         BuildController.Instance?.ExitBuildMode();
         // 退出建造模式后重新打开返回面板（建造菜单）
         if (_returnTo != null && UIManager.Instance != null)
-            UIManager.Instance.Push(_returnTo, new Interactor(Faction.Human_Player, Vector3.zero));
+            UIManager.Instance.Push(_returnTo, new Interactor(Faction.PlayerCamp, Vector3.zero));
     }
 }

@@ -186,7 +186,7 @@ public static class PatrolTaskSystem
         if (UnitRegistry.Instance == null) return null;
         NPCBrain best = null;
         float bestSq = float.MaxValue;
-        var units = UnitRegistry.Instance.GetUnitsByFaction(Faction.Human_Player);
+        var units = UnitRegistry.Instance.GetUnitsByFaction(Faction.PlayerCamp);
         if (units == null) return null;
         for (int i = 0; i < units.Count; i++)
         {

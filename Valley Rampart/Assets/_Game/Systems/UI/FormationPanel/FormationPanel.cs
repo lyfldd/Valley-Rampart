@@ -131,7 +131,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
             return;
         }
         if (top != null) return; // 其它 UI 打开中，E 不响应
-        UIManager.Instance.Push(this, new Interactor(Faction.Human_Player, Vector3.zero));
+        UIManager.Instance.Push(this, new Interactor(Faction.PlayerCamp, Vector3.zero));
     }
 
     private void OnCloseClicked()
@@ -234,7 +234,7 @@ public class FormationPanel : MonoBehaviour, IUIPanel
         // 阵营（敌方红色）
         var factionLabel = new Label { text = FactionDisplayName(fc.faction) };
         factionLabel.AddToClassList("formation-row-faction");
-        if (fc.faction == Faction.Undead)
+        if (fc.faction == Faction.Monster)
             factionLabel.AddToClassList("formation-row-faction--enemy");
         row.Add(factionLabel);
 
@@ -576,8 +576,8 @@ public class FormationPanel : MonoBehaviour, IUIPanel
     {
         switch (faction)
         {
-            case Faction.Human_Player: return "我方";
-            case Faction.Undead: return "敌方";
+            case Faction.PlayerCamp: return "我方";
+            case Faction.Monster: return "敌方";
             default: return "中立";
         }
     }

@@ -9,7 +9,7 @@ using UnityEngine;
 //  挂载点：WorldManager.GenerateMap 末尾（步骤3 同 rng 派生链，确定性）。
 //
 //  人口口径（2_17 步骤3/4）：
-//    - 步骤3 实体化：直出首代实体工人（Faction.Human_Player + kingdomId>0 冒充态，靠 kingdomId 守卫隔离）。
+//    - 步骤3 实体化：直出首代实体工人（Faction.PlayerCamp + kingdomId>0 冒充态，靠 kingdomId 守卫隔离）。
 //    - 步骤4 台账转派生：workerCount/warriorCount 由 KingdomState 对实体按 kingdomId 派生（实体=唯一真源），
 //      Foundry 不再手写台账——此处档位 workerCount 仅作生成指令数。AI 工人不入玩家人口（双条件守卫）。
 //    - AI 王座只放 castle 建筑（带 kingdomId），不挂 ThroneAnchor 组件——ThroneAnchor 是全局单例，
@@ -100,7 +100,7 @@ public static class KingdomFoundry
             Vector3 world = (grid != null && grid.Config != null)
                 ? (Vector3)grid.CoordToWorld(new GridCoord(cell.x, cell.y))
                 : new Vector3(cell.x, cell.y, 0f);
-            if (UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Worker, world, kingdomId) != null)
+            if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, world, kingdomId) != null)
                 placed++;
         }
         if (placed > 0)

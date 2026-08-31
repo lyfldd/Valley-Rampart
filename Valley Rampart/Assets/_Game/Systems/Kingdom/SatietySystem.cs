@@ -83,7 +83,7 @@ public class SatietySystem : Singleton<SatietySystem>
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.GetFaction() != Faction.Human_Player) continue;
+            if (unit.GetFaction() != Faction.PlayerCamp) continue;
             // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不吃玩家国库粮/不拉低均饱食（双条件保留兼容存量过渡态）。
             if (unit.kingdomId != 0) continue;   // GetAverageSatiety 平均饱食（玩家口径）
             if (!IsNpc(unit.EffectiveOccupation)) continue;
@@ -122,7 +122,7 @@ public class SatietySystem : Singleton<SatietySystem>
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.GetFaction() != Faction.Human_Player) continue;
+            if (unit.GetFaction() != Faction.PlayerCamp) continue;
             // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不参与玩家每日饱食结算/国库进食（同上述收编双条件语义）。
             if (unit.kingdomId != 0) continue;   // OnNewDay 每日饱食结算（玩家口径）
             if (!IsNpc(unit.EffectiveOccupation)) continue;

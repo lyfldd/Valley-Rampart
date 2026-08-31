@@ -10,7 +10,8 @@ using UnityEngine;
 [DefaultExecutionOrder(-90)]
 public class SaveManager : Singleton<SaveManager>
 {
-    private const int CurrentSaveVersion = 2;
+    // P5.3 D432：v3——旧档废弃阵营/职业单位读档过滤（UnitFactory.SpawnFromSave 查表失败丢弃+计数）。
+    private const int CurrentSaveVersion = 3;
     private const string SaveFolderName = "Saves";
     private const string SaveFileExtension = ".json";
 
@@ -322,6 +323,9 @@ public class SaveManager : Singleton<SaveManager>
 
             // 版本门控依据：在 Global 分发（WorldManager.LoadState 重建世界）前记录本次存档版本
             LastLoadedSaveVersion = root.saveVersion;
+
+            // P5.3 D432：读档开始前清零旧档过滤计数（UnitFactory.SpawnFromSave 丢弃废弃阵营/职业单位时递增）
+            UnitFactory.ResetFilteredSaveUnitCount();
 
             // 阶段 1: 全局模块恢复
             DistributePayloads(root.modules, SaveLoadPhase.Global);

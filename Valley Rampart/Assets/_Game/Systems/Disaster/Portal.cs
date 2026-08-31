@@ -81,7 +81,7 @@ public class Portal : MonoBehaviour, IDamageable, IGridOccupant, ISaveable
     public int MaxHp => maxHp;
     public int Defense => 0;
     public UnityEngine.Vector2 GetPosition() => transform.position;
-    public Faction GetFaction() => Faction.Undead;
+    public Faction GetFaction() => Faction.Monster;
 
     private bool _summonSpedUp;                  // 本夜是否已进入反向强化档
 

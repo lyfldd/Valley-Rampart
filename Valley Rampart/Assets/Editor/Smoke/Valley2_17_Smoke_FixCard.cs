@@ -277,7 +277,7 @@ public static class Valley2_17_Smoke_FixCard
 
     private static (UnitController unit, int unitId) Worker(GridSystem g, int kingdomId, Vector2 pos)
     {
-        var go = UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Worker, pos, kingdomId);
+        var go = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, pos, kingdomId);
         if (go == null) return (null, 0);
         var uc = go.GetComponent<UnitController>();
         return (uc, uc != null ? uc.npcId : 0);

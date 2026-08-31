@@ -64,7 +64,7 @@ public class MonsterController : UnitController
         if (!cellOpt.HasValue) return;
         var pack = BuildLootPack();
         if (pack.IsZero) return;
-        ChestManager.Instance.SpawnChest(cellOpt.Value, pack, Faction.Undead);
+        ChestManager.Instance.SpawnChest(cellOpt.Value, pack, Faction.Monster);
     }
 
     /// <summary>把 CarryResource 装进 ResourcePack（按 MonsterDef.lootResource 映射，未映射槽回退 Food）。</summary>
@@ -120,8 +120,8 @@ public class MonsterController : UnitController
                 {
                     var uc = unit as UnitController;
                     if (uc == null || uc == this || !uc.IsAlive || uc.CurrentHp <= 0) continue;
-                    if (uc.GetFaction() != Faction.Human_Player) continue;
-                    // 2_17 步骤4 patch C（③）：单位级盲区守卫——步骤3 实体化的 AI 工人是 Human_Player+kingdomId>0 冒充态，
+                    if (uc.GetFaction() != Faction.PlayerCamp) continue;
+                    // 2_17 步骤4 patch C（③）：单位级盲区守卫——步骤3 实体化的 AI 工人是 PlayerCamp+kingdomId>0 冒充态，
                     // 会被怪感知为玩家目标；这里补 kingdomId==0（与建筑 L192 同模式同语义），P0 只袭玩家。
                     // 步骤10 Faction 收编时随迁移退役（与既有守卫同生命周期）。
                     if (uc.kingdomId != 0) continue;
@@ -183,7 +183,7 @@ public static class MonsterSpawner
             // MonsterDef.Brute 属性桥接成 NpcProfessionDef（决策核吃 profession 快照，怪物字段仍读 MonsterDef）。
             var npc = ScriptableObject.CreateInstance<NpcProfessionDef>();
             npc.name = "Monster_" + def.type;
-            npc.faction = Faction.Undead;
+            npc.faction = Faction.Monster;
             npc.occupation = Occupation.Monster;
             npc.prefab = def.prefab;
             npc.maxHp = Mathf.RoundToInt(def.hp * scale);
@@ -204,7 +204,7 @@ public static class MonsterSpawner
         {
             var bu = ScriptableObject.CreateInstance<UnitData>();
             bu.name = "Monster_" + def.type;
-            bu.faction = Faction.Undead;
+            bu.faction = Faction.Monster;
             bu.occupation = Occupation.Monster;
             bu.prefab = def.prefab;
             bu.maxHp = Mathf.RoundToInt(def.hp * scale);

@@ -951,7 +951,7 @@ public class AIDebugUIManager : MonoBehaviour
     private void PushModeEntry()
     {
         if (_modeEntryPushed || UIManager.Instance == null) return;
-        UIManager.Instance.Push(new AIDebugModeEntry(this), new Interactor(Faction.Human_Player, Vector3.zero));
+        UIManager.Instance.Push(new AIDebugModeEntry(this), new Interactor(Faction.PlayerCamp, Vector3.zero));
         _modeEntryPushed = true;
     }
 
@@ -959,7 +959,7 @@ public class AIDebugUIManager : MonoBehaviour
     private void PushInteractionEntry()
     {
         if (_interactionEntryPushed || UIManager.Instance == null) return;
-        UIManager.Instance.Push(new AIDebugInteractionEntry(this), new Interactor(Faction.Human_Player, Vector3.zero));
+        UIManager.Instance.Push(new AIDebugInteractionEntry(this), new Interactor(Faction.PlayerCamp, Vector3.zero));
         _interactionEntryPushed = true;
     }
 
@@ -967,7 +967,7 @@ public class AIDebugUIManager : MonoBehaviour
     private void PushSpawnEntry()
     {
         if (_spawnEntryPushed || UIManager.Instance == null) return;
-        UIManager.Instance.Push(new AIDebugSpawnEntry(this), new Interactor(Faction.Human_Player, Vector3.zero));
+        UIManager.Instance.Push(new AIDebugSpawnEntry(this), new Interactor(Faction.PlayerCamp, Vector3.zero));
         _spawnEntryPushed = true;
     }
 

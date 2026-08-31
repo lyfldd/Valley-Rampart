@@ -125,7 +125,7 @@ public class TopLeftHUD : MonoBehaviour
     {
         if (_monarch != null) return;
         UnitData data = evt.Unit != null ? evt.Unit.Data : null;
-        if (data != null && data.faction == Faction.Human_Player && data.occupation == Occupation.Ruler)
+        if (data != null && data.faction == Faction.PlayerCamp && data.occupation == Occupation.Ruler)
         {
             TryBindMonarch();
         }
@@ -200,7 +200,7 @@ public class TopLeftHUD : MonoBehaviour
             Debug.LogWarning("[TopLeftHUD] 未找到 PopulationPanel（场景缺少挂载 PopulationPanel + UIDocument 的 GameObject）");
             return;
         }
-        UIManager.Instance?.Push(popPanel, new Interactor(Faction.Human_Player, Vector3.zero));
+        UIManager.Instance?.Push(popPanel, new Interactor(Faction.PlayerCamp, Vector3.zero));
     }
 
     private void OnDayChanged(TimeDayChangedEvent evt)

@@ -1197,7 +1197,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
         // 死拼（Berserk）：亡灵 Tank 撤退时血低 <40% 反冲最近敌（对齐 sim BerserkHpRatio 0.4）
         if (role == RoleFamily.Tank && !_profession.isRanged
-            && _self.GetFaction() == Faction.Undead
+            && _self.GetFaction() == Faction.Monster
             && cmd.Module == BehaviorModule.RetreatMove && ctx.HpRatio < 0.4f)
         {
             IDamageable nearest = FindNearestEnemyInPerception();

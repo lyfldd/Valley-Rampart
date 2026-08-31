@@ -6,7 +6,7 @@ using UnityEngine;
 ///
 /// 3.5.1 §3.2 实体化（E-S2）：人口从计数制改为实体制——本系统维护王国领域内 NPC 实体注册表，
 /// PopulationCount 为注册表派生值（不再独立维护）。生育/出生/长大/招募/转职/死亡均通过注册表增删实体。
-///   - 注册范围：Human_Player 的君主/居民/小孩/工人/军事职业（不含机器工事；Vagrant 在王国领域外不计入，招募抵达后才注册）
+///   - 注册范围：PlayerCamp 的君主/居民/小孩/工人/军事职业（不含机器工事；Vagrant 在王国领域外不计入，招募抵达后才注册）
 ///   - 自动注册：订阅 UnitSpawnedEvent（合格实体入表）/ UnitDiedEvent（死亡出表）
 ///   - 存档：实体本体走各自 UnitController 的 UnitSaveData（Scene 阶段），读档时 SpawnFromSave 触发事件自动回表
 ///
@@ -132,7 +132,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     public static bool IsPopulationEntity(UnitController unit)
     {
         if (unit == null || unit.Data == null) return false;
-        if (unit.GetFaction() != Faction.Human_Player) return false;
+        if (unit.GetFaction() != Faction.PlayerCamp) return false;
         if (!unit.IsAlive) return false;
         // 2_17 步骤3 双条件过滤（守门员）：kingdomId>0 为 AI 王国工人（含动态立国实体），不得计入玩家人口台账。
         // 判两条件铁律：收编后 GetFaction=AiKingdom 的首条件已把新建 AI 排除，此 kingdomId 双条件保留兼容存量过渡态。
@@ -206,9 +206,9 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         int idx = 0;
         int ok = 0;
         for (int i = 0; i < cfg.initialWorkerCount; i++)
-            if (SpawnAtAnchorSide(Faction.Human_Player, Occupation.Worker, idx++, anchor, gap)) ok++;
+            if (SpawnAtAnchorSide(Faction.PlayerCamp, Occupation.Worker, idx++, anchor, gap)) ok++;
         for (int i = 0; i < cfg.initialResidentCount; i++)
-            if (SpawnAtAnchorSide(Faction.Human_Player, Occupation.Resident, idx++, anchor, gap)) ok++;
+            if (SpawnAtAnchorSide(Faction.PlayerCamp, Occupation.Resident, idx++, anchor, gap)) ok++;
 
         BirthCooldownDays = cfg.birthCooldownDefault;
         Debug.Log($"[PopulationSystem] 开局实体生成完成：{ok}/{cfg.initialWorkerCount + cfg.initialResidentCount} " +
@@ -309,7 +309,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             // 进房表演（占位：日志 + 房屋旁生成）→ 出来两人 + 一小孩
             Vector2 birthPos = GetBirthPosition();
             GameObject childGo = UnitFactory.Instance != null
-                ? UnitFactory.Instance.SpawnUnit(Faction.Human_Player, Occupation.Child, birthPos)
+                ? UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Child, birthPos)
                 : null;
             if (childGo != null)
                 Debug.Log($"[PopulationSystem] 繁殖：两居民进房表演 → +1 小孩 @ {birthPos}（幸福因子{growthFactor}%；人口 → {PopulationCount}）");

@@ -112,10 +112,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
     }
 
     // 从 UnitDataManager 查找君主数据资产
-    // 使用 Faction.Human_Player + Occupation.Ruler 作为组合键
+    // 使用 Faction.PlayerCamp + Occupation.Ruler 作为组合键
     private void FetchRulerDataFromManager()
     {
-        UnitData data = LoadManager.Instance.GetUnitData(Faction.Human_Player, Occupation.Ruler);
+        UnitData data = LoadManager.Instance.GetUnitData(Faction.PlayerCamp, Occupation.Ruler);
         rulerData = data as RulerData;
 
         if (rulerData != null)
@@ -181,7 +181,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     // 在场景中查找已有的君主单位。
     // 识别标准（优先级从高到低）：
-    //   1. Data 已初始化 且 faction=Human_Player, occupation=Ruler
+    //   1. Data 已初始化 且 faction=PlayerCamp, occupation=Ruler
     //   2. Data 已初始化 但带有 PlayerInputHandler（兜底识别）
     //   3. Data==null 但有 PlayerInputHandler（场景中手动放置但未初始化）
     private UnitController FindExistingMonarch()
@@ -193,7 +193,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
         {
             if (unit == null || unit.gameObject == null) continue;
             if (unit.Data != null &&
-                unit.Data.faction == Faction.Human_Player &&
+                unit.Data.faction == Faction.PlayerCamp &&
                 unit.Data.occupation == Occupation.Ruler)
             {
                 Debug.Log($"[RulerController] FindExistingMonarch → 找到已初始化君主: {unit.name}");
@@ -241,7 +241,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
             bool isMonarch = unit.GetComponent<PlayerInputHandler>() != null;
             if (!isMonarch && unit.Data != null)
             {
-                isMonarch = unit.Data.faction == Faction.Human_Player
+                isMonarch = unit.Data.faction == Faction.PlayerCamp
                          && unit.Data.occupation == Occupation.Ruler;
             }
 

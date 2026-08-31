@@ -334,7 +334,7 @@ public static class MapGenRules
                     coord = p,
                     direction = dir,
                     strength = Mathf.Clamp(difficulty, 1, 3),
-                    faction = Faction.Undead   // 阶段4前只怪物波次（D38）
+                    faction = Faction.Monster   // 阶段4前只怪物波次（D38）
                 });
             }
         }

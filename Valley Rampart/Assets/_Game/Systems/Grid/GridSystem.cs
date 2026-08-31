@@ -329,7 +329,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
 
         // 跨界检测 → 发 EnemyEnteredChunkEvent（聚焦到 cell 级开始，精确微格事件归 2_7）
         bool crossedChunk = !prev.HasValue || CellToChunk(subCoord) != CellToChunk(prev.Value);
-        if (crossedChunk && unit.GetFaction() == Faction.Undead)
+        if (crossedChunk && unit.GetFaction() == Faction.Monster)
             EventBus.Publish(new EnemyEnteredChunkEvent(new Vector2Int(CellToChunk(subCoord).x, CellToChunk(subCoord).y), unit));
         return true;
     }

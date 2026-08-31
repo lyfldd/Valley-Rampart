@@ -170,7 +170,7 @@ public class MapData
     public PlainSubState[] plainSub;     // W×H
     public List<Vector2Int> kingdomSpawns; // 王国出生点（0=玩家，1..N=AI 王国，2_1 生成）
     public List<SpawnDef>   threatSpawns;  // 敌人晚上刷点/威胁方向（2_1 写入、2_8 消费）
-    // 资源点/裂隙/特殊点占位 → 2_1 重新定义（BuildingPlaceholder 2D 化）
+    // 资源点/传送门/特殊点占位 → 2_1 重新定义（BuildingPlaceholder 2D 化）
     // 冻结遗留：isPlayerHome / isConquered / bigTerrain（删）
 }
 

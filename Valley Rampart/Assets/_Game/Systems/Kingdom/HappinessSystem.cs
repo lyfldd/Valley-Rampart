@@ -93,7 +93,7 @@ public class HappinessSystem : Singleton<HappinessSystem>
         if (kingdomId == 0)
         {
             // 玩家桶0 原语义（HH.30 逐位一致）：保留原 Faction 守卫 + 玩家人口基数（PopulationSystem 玩家口径）
-            if (evt.Faction != Faction.Human_Player) return;
+            if (evt.Faction != Faction.PlayerCamp) return;
             int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
             if (population <= 0) return;   // 无人口基数，无从扣减
             _overallHappiness[0] *= (1f - k / population);
@@ -134,7 +134,7 @@ public class HappinessSystem : Singleton<HappinessSystem>
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.GetFaction() != Faction.Human_Player) continue;
+            if (unit.GetFaction() != Faction.PlayerCamp) continue;
             // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不稀释玩家幸福（双条件保留兼容存量过渡态）。
             if (unit.kingdomId != 0) continue;
             if (!SatietySystem.IsNpc(unit.EffectiveOccupation)) continue;

@@ -349,7 +349,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         foreach (var u in UnitRegistry.Instance.GetAllUnits())
         {
             if (u == null || u.Data == null) continue;
-            if (u.Data.faction == Faction.Undead && u.IsAlive) return true;
+            if (u.Data.faction == Faction.Monster && u.IsAlive) return true;
         }
         return false;
     }

@@ -293,7 +293,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
             foreach (var unit in UnitRegistry.Instance.GetAllUnits())
             {
                 if (unit == null || unit.Data == null) continue;
-                if (unit.GetFaction() != Faction.Human_Player) continue;
+                if (unit.GetFaction() != Faction.PlayerCamp) continue;
                 if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不入玩家转职池；收编后 GetFaction=AiKingdom 首条件已排除（双条件保留兼容存量过渡态）
                 if (unit.EffectiveOccupation != def.fromOccupation) continue;
                 if (!unit.IsAlive) continue;
@@ -339,7 +339,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.GetFaction() != Faction.Human_Player) continue;
+            if (unit.GetFaction() != Faction.PlayerCamp) continue;
             if (unit.kingdomId != 0) continue;   // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不计玩家可训练数（同上述收编双条件语义）
             if (!unit.IsAlive) continue;
             if (fromSet.Contains(unit.EffectiveOccupation)) count++;
@@ -429,7 +429,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
             foreach (var unit in UnitRegistry.Instance.GetAllUnits())
             {
                 if (unit == null || unit.Data == null) continue;
-                if (unit.Data.faction != Faction.Human_Player) continue;
+                if (unit.Data.faction != Faction.PlayerCamp) continue;
                 if (unit.EffectiveOccupation == Occupation.General) count++;
             }
         }
