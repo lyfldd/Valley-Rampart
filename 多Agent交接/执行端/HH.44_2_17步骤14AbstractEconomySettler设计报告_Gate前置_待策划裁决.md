@@ -1,7 +1,7 @@
 # HH.44 · 2_17 步骤14（AbstractEconomySettler）开工前置 Gate 设计报告（待策划裁决）
 
 > 类型：策划报告请求（Gate 前置，先报告后代码）
-> 状态：⏳待裁决
+> 状态：✅ 已裁决（2026-08-31 五问全准照裁，D459~D463=0.6 §四十五）
 > 日期：2026-08-31 · 发起端：执行端 · 关联：`2_17_AI王国脑与自主成长.md` §3.3/§3.4（D335/D336/D400）· `2_17_AI王国脑与自主成长_实施计划.md` 步骤14+⑤-3 · `2_20_四族种族体系总纲.md` §六 · `2_20.1_专属兵种行为与种族数值.md` §二 · HH.42 §四（D453）· `15_训练侧harness与Unity端差距文档.md`「一·补二」· Q6 报告 A4/种子②（D401）
 
 ## 〇、锚点声明
@@ -154,20 +154,28 @@
 
 ---
 
-## 策划裁决（策划端回写，裁决前保持空白）
+
+
+## 策划裁决（2026-08-31 策划端实盘复核后回写；用户 ask_user 拍板）
+
+> **复核记录（策划端）**：git 84c5869 构成=声明一致（HH.44 报告 173 行+索引+1+主计划书日志+1+2_17 实施计划状态行 4 文件），工作树净；发现①直读实证（15_账本 L49 原文+训练仓 harness/Economy 8 文件清单无 AbstractEconomySettler.cs，公式真源=SimEconomy.cs）；发现②D401 原文实证（3.5 L108/L153「学院/工坊不再实施」）；发现③ModuleType.cs 直读（Science=尾值 index5）+moduleLevels 多处 new int[6]/Length==6 硬校验；D453/D336/D400 原文核读吻合；SatietySystem 现状（PlayerCamp+kingdomId==0 双过滤/SettleUnit 国库源=RulerController/_avgSatiety 分桶已落）与 CastleUnlockTable L34 module:5 在案；sim-sync §五/§六 直读核实。**执行端关键声明零失真。**
 
 | 决策点 | 裁决 | 理由 |
 |--------|------|------|
-| 1 AbstractEconomySettler 与 2b 关系 | | |
-| 2 D453 Satiety 统一口径 | | |
-| 3 种子② Academy 退役深度 | | |
-| 4 2_20 经济修正挂载预留 | | |
-| 5 sim-sync 义务判定+15 账本修正 | | |
+| 1 AbstractEconomySettler 与 2b 关系 | **准 A：并存+分叉调用**（D459） | 2b Fine 实体结算已验收路径零回归；D336 原文「纯 C# 零 Unity 引用，公式与 SimEconomy 同构」与 DTO+薄适配层方案吻合；文件放 Systems/AI/KingdomBrain/ 不进 AI.Core 正确——AI.Core=harness/Core 双份镜像区，sim 无同名文件，放入即制造假同步义务 |
+| 2 D453 Satiety 统一口径 | **准 A：Fine 实体扣国库+Abstract 计数进食+唤醒拉平**（D460）；流失参数载体=**独立 AbstractEconomyConfig SO**（用户拍板） | D453 原文逐字吻合（0.6 L1014）；AbstractEconomyConfig 与 sim harness/Economy/EconomyConfig.cs 同构对照、经济公式参数不与 KingdomBrainConfig 脑参数混桶（so-data-driven 独立载体） |
+| 3 种子② Academy 退役深度 | **准 A：全量退役含 Workshop+moduleLevels 保留长度 6 零 schema 变更**（D461）；**策划端补充修正：P6 探针口径** | D401 原文含工坊=Workshop 退役有裁决出处非扩权；Science=尾值 index5 删除无重排（ModuleType.cs 实证）；多处 new int[6]+Length==6 硬校验实证缩容破坏面大（数组迁移归 2_11 域）。**P6 修正：「grep Workshop 零命中」按字面必误报在役 SiegeWorkshop/SiegeWorkshopBuilding/isSiegeWorkshop 活代码——口径改为词边界 grep 排除 Siege* 变体+例外清单（UXML/USS/文档作废注同列）** |
+| 4 2_20 经济修正挂载预留 | **准 A：本步只留乘点结构占位 1.0，真值+实体挂载点归 Q10-M5/M8**（D462） | 2_20.1 §二 映射表=Q10 实装权威；预留防 Q10 改两处公式乘点；Fine 侧 TaskScheduler/DamagePipeline/Building.Init 三实体挂载点本步不碰；不创建 RaceDef/不读 raceId（M1/M2 域） |
+| 5 sim-sync 义务判定+15 账本修正 | **准：零 harness 代码改动→非 §六 T/F 分级对象**（D463）；15_账本 L49 措辞修正批准；回填按 §五 授权执行端落盘、commit 随批策划端代执（HH.41 口径） | sim-sync §五/§六 直读：回填授权条款属实；分级针对 harness 改动，本步零触碰；执行端「T 级文档义务」措辞修正为「§五 差距账本维护义务（文档级，无门禁对象）」——实质结论不变；L49 前向引用失真直读实证 |
+
+**三发现处置**：①15_账本 L49 修正批准（并入 D463，随批A 落）；②Workshop 并入 Q3 全量退役（并入 D461，有 D401 原文出处）；③moduleLevels 保留长度并入 D461。
 
 ### 分歧裁决记录
-- 执行端意见：{..} · 策划端意见：{..}
-- 裁决：{..} · 依据：{..}
+- 执行端意见：五问各推 A+三发现诚实申报+本串零产品代码改动（Gate 未裁禁动代码遵守）
+- 策划端意见：五问全盘核实通过零失真；补充 P6 探针口径修正+流失参数载体裁决（独立 AbstractEconomyConfig）+「T 级文档义务」措辞修正（实为 §五 差距账本维护义务）
+- 裁决：**五问全准照裁**（用户 2026-08-31 ask_user 两拍板：「全准照裁」+「独立 AbstractEconomyConfig」）
+- 依据：实盘复核清单见本节头部复核记录；决策登记=0.6 §四十五（D459~D463）
 
 ### 衍生产物
-- 新建设计文档：{..}
-- 新建清单任务：{..}
+- 新建设计文档：无（AbstractEconomyConfig SO 载体随批B 建资产+字段，参数域=SimEconomy 镜像公式+D400 流失参数（居民无粮 N 日等），不单独立设计文档）
+- 新建清单任务：Smoke_14 随批C（P6 按 D461 修正口径）；队列 14 行 Gate 状态更新+挂账池 Satiety/种子② 两行指针更新；2_20 §六/§十一+实施清单 §三 D462 注记
