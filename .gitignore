@@ -46,6 +46,9 @@ Assets/AssetStoreTools*
 # Crashlytics
 crashlytics-build.properties
 
+# 河谷指挥台（独立工具，自管运行时与依赖，2026-08-28 起）
+指挥台/
+
 # 拷贝/传输临时产物与杂物
 U盘拷贝日志.log
 垃圾文件夹/
