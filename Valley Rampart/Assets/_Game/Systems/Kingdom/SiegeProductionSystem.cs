@@ -128,13 +128,39 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
     }
 
     /// <summary>
-    /// 2_17 步骤11 批1·生产战争机器（AI/王国归属预留 overload）。玩家(id=0) 缺省走原 ProduceMachine→Faction.PlayerCamp，零回归。
-    /// 只统计不改产：AI 真正生产链归步骤13；本批仅落归属维度结构，AI 分支暂返回 false。
+    /// 生产战争机器（AI/王国归属 overload，2_17 步骤13 批C 清偿 D454：能力打通+触发延后军事期）。
+    /// 玩家(id=0) 缺省走原 ProduceMachine→Faction.PlayerCamp，零回归。
+    /// AI(id&gt;0)：国库扣费 + per-kingdom 上限 + 生成带 kingdomId 单位（SpawnUnit 门面自动覆写 AiKingdom 阵营）。
+    /// 触发方（UtilityAction/SiegeWorkshop 前置）属 2_18 军事期内容一并议（HH.42 §四决策点2 裁 A）。
     /// </summary>
     public bool ProduceMachine(Occupation type, Vector2 spawnPos, int kingdomId)
     {
         if (kingdomId == 0) return ProduceMachine(type, spawnPos);   // 玩家缺省走原路径（Faction.PlayerCamp）
-        Debug.Log($"[SiegeProduction] AI 战争机器生产链未接入（王国[{kingdomId}]），归属维度已预留，真正生产归步骤13");
+        if (type != Occupation.SiegeMachine && type != Occupation.Ballista) return false;
+
+        // per-kingdom 上限（D454：AI 本国战争机器数不超厂上限）
+        if (GetPlacedMachineCountByKingdom(kingdomId) >= GetMachineLimit())
+        {
+            Debug.Log($"[SiegeProduction] k{kingdomId} 战争机器已达上限 {GetMachineLimit()}，需升级投掷机厂");
+            return false;
+        }
+        var cfg = Cfg();
+        var kingdom = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        if (cfg == null || kingdom == null) return false;
+        var cost = type == Occupation.SiegeMachine ? cfg.catapultCost : cfg.ballistaCost;
+        if (!kingdom.CanAfford(cost))
+        {
+            Debug.Log($"[SiegeProduction] k{kingdomId} 资源不足，无法生产 {type}");
+            return false;
+        }
+
+        kingdom.Spend(cost);   // AI 国库台账扣费（镜像玩家 Spend 语义）
+        if (UnitFactory.Instance != null)
+        {
+            UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos, kingdomId);
+            Debug.Log($"[SiegeProduction] k{kingdomId} 生产 {type}（造价 金{cost.gold} 石{cost.stone} 木{cost.wood}）");
+            return true;
+        }
         return false;
     }
 
