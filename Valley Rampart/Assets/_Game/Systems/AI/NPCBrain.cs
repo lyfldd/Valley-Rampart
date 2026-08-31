@@ -195,6 +195,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     private MonsterMode _monsterMode = MonsterMode.Raiding;     // 当前模式（Raiding 默认）
     private Vector2 _monsterHomePortal;                         // 传送门召唤锚点（世界坐标）：Guarding 回援 / Retreating 撤退 目标
 
+    // ===== 2_17 步骤13 批B（D334）：SimMode 休眠冻结 =====
+    // Abstract 王国非军事单位（Worker/Porter/Civilian）：停 Think + 停寻路/移动，实体常驻原地冻结；
+    // 军事单位（Warrior 等）不受影响（D281 军队永远真实体）；玩家(kingdomId=0)/无国籍不冻结。
+    // 唤醒=原地续干（位置/任务/进度保留，simMode 回 Fine 即自然恢复）。
+    private bool _simDormantWas;   // 进入冻结首帧标记（停移动只做一次，防每帧重复 Stop）
+
     /// <summary>威胁因子（上一帧 rawFactor，连续 0-1，映射训练侧 ThreatFactor）。</summary>
     public float ThreatFactor => _lastRaw;
 
@@ -382,10 +388,46 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
     // ===== Update（感知 + Think，含 tick 分片）=====
 
+    /// <summary>
+    /// 2_17 步骤13 批B（D334）：SimMode 休眠判定。
+    /// 仅 Abstract 王国的非军事单位（Worker/Porter/Civilian）冻结——停 Think/停感知/停移动原地冻结；
+    /// 军事单位（Warrior 等）不受影响（D281 军队永远真实体）；玩家(kingdomId=0)/无国籍不冻结。
+    /// </summary>
+    private bool IsSimDormant()
+    {
+        if (_controller == null || _controller.kingdomId <= 0) return false;
+        switch (_controller.EffectiveOccupation)
+        {
+            case Occupation.Worker:
+            case Occupation.Porter:
+            case Occupation.Civilian:
+                break;   // 非军事单位 → 可冻结
+            default:
+                return false;   // 军事/其他单位不冻结（D281）
+        }
+        var reg = KingdomRegistry.Instance;
+        if (reg == null) return false;
+        var k = reg.Get(_controller.kingdomId);
+        return k != null && !k.IsPlayer && k.simMode == SimMode.Abstract;
+    }
+
     private void Update()
     {
         if (_self == null || _profession == null || _config == null) return;
         if (_self.CurrentHp <= 0) return;
+
+        // 2_17 步骤13 批B（D334）：Abstract 王国非军事单位休眠冻结——停 Think/停感知/停移动，实体常驻原地冻结
+        if (IsSimDormant())
+        {
+            if (!_simDormantWas)
+            {
+                _simDormantWas = true;
+                StopAttacking();      // 注销攻击注册（防冻结期间残留战斗态）
+                _executor?.Stop();    // 停 PathFollower 移动（原地冻结）
+            }
+            return;
+        }
+        _simDormantWas = false;
 
         // 3.0.1_LOD：每帧按所在 region 刷新思考/感知间隔（读 LODSystem；未挂载则活跃区频率）
         RefreshLodIntervals();
