@@ -33,7 +33,10 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
     {
         // ==== 2_17 步骤8：D347 五步权威日 tick 顺序（HH.24 裁决① A 准：Brain 植入②、日结入账前花昨日结存）====
 
-        // 步骤1：SimMode 判定（P0 恒 Fine 占位；SimModeManager.GetMode 恒 Fine，真实判定/休眠唤醒归步骤13）
+        // 步骤1：SimMode 判定（D347 步①；步骤13 落真实判定——活跃带覆盖→Fine 立即 / 连续2日未覆盖→Abstract 迟滞 /
+        //         战斗锁强制 Fine，写 KingdomState.simMode，读档默认 Fine 续跑 D456）
+        if (SimModeManager.Instance != null)
+            SimModeManager.Instance.EvaluateAllKingdoms();
         // 步骤2：王国脑日 tick（D347 步②，日结入账之前 → 脑看到昨日结存；只循环非玩家王国，玩家无脑 D338）
         TickKingdomBrains();
 

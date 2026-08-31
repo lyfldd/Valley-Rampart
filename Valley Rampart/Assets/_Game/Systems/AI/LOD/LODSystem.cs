@@ -26,6 +26,8 @@ public class LODSystem : Singleton<LODSystem>
     private LodConfig _config;
 
     // 中区块坐标 -> LOD+热度状态（稀疏：只登记活跃带附近 + 有热度的，D80）
+    // 2_4③ 回收口径（D455，2_17 步骤13 定案）：保持现役稀疏登记不逐条回收——「MapGenerated 整体清空即回收」。
+    // 登记有界（≤ 活跃带 + 历史热点，受地图中区块总量硬上限），逐条回收时间相关会威胁同 seed 确定性 + 丢热度记忆。
     private readonly Dictionary<Vector2Int, MidChunkLodState> _midStates = new Dictionary<Vector2Int, MidChunkLodState>();
 
     // 军队锚点注册表（拓宽保留：外部编队/守卫可注册，为中心候选）
@@ -398,6 +400,22 @@ public class LODSystem : Singleton<LODSystem>
             case LodLevel.Dormant: return DormantHz();
             default: return ActiveHz();
         }
+    }
+
+    /// <summary>查询中区块是否被活跃带覆盖（2_17 步骤13，D333/D344：SimMode「视野」=LOD 活跃带，D77 同源信号）。</summary>
+    /// <remarks>活跃带 = 多中心（玩家视角焦点 + 战斗热点）固定半径区块集，与相机缩放无关（D344）——缩放全图 Fine 集不变。</remarks>
+    public bool IsActivelyCovered(Vector2Int mid)
+    {
+        // 无中心兜底（与 RenderActiveBands 同哲学：测试场景/无锚点时不"变傻"，全部视为被覆盖）
+        if (_activeCenters.Count == 0) return true;
+        return _activeBandSet.Contains(mid);
+    }
+
+    /// <summary>查询中区块是否为当前战斗热点（热度 &gt; 热点阈值；与 ComputeActiveCenters D77 同判据，供 SimMode 战斗锁 D333）。</summary>
+    public bool HasActiveCombatHotspot(Vector2Int mid)
+    {
+        return _midStates.TryGetValue(mid, out var s)
+            && s.threatHeat > Cfg(C => C.hotspotThreshold, 0.3f);
     }
 
     /// <summary>查询所在中区块的最近战斗热点（有效期内，供 NPCBrain 支援）。</summary>
