@@ -409,14 +409,23 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
                 if (InBounds(x, y)) yield return new GridCoord(x, y);
     }
 
-    // ===== IPathGrid 实现 =====
+    // ===== IPathGrid 实现（微格坐标语义，HH.47 寻路1 修复）=====
+    // 修（寻路1 / HH.47）：IPathGrid.IsWalkable 契约=微格可走（IPathGrid.cs：跨格地形逐微格判定），
+    // 原隐式实现把微格坐标直接当宏格查表——微格域 _w×4=1024 远超宏格域 _w=256，
+    // sub≥256 的查询全部 InBounds 失败 → WalkFlags.None → 不可走，A* 除 sub<256（左下 64×64 格）
+    // 外全图不可达。症状：首帧起 NPC 游走 PathFailed→Idle、右键 MoveTo 位移 0.00（destination 送达但无路）。
+    // 显式接口实现改走 IsSubWalkable（sub→cell 映射 + 障碍判定），与 PathFollower.FollowNext 的
+    // 动态阻挡判定同一语义；宏格 IsWalkable 保留原语义供建造/校验等 cell 级消费方（IsFootprintClear 等）。
+    bool IPathGrid.IsWalkable(GridCoord subCoord) => IsSubWalkable(subCoord);
+
     public bool IsDiagonalMoveAllowed(GridCoord from, GridCoord to)
     {
         int dx = Mathf.Abs(to.x - from.x), dy = Mathf.Abs(to.y - from.y);
         if (dx == 0 || dy == 0) return true;
         var a = new GridCoord(from.x + System.Math.Sign(to.x - from.x), from.y, from.layer);
         var b = new GridCoord(from.x, from.y + System.Math.Sign(to.y - from.y), from.layer);
-        return IsWalkable(a) && IsWalkable(b);
+        // 修（HH.47）：入参为微格坐标，防穿角须按微格判定（原 IsWalkable 宏格查表同上越界问题）
+        return IsSubWalkable(a) && IsSubWalkable(b);
     }
 
     public float GetEnterCost(GridCoord subCoord)
