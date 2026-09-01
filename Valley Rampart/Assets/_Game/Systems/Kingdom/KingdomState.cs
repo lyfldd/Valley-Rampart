@@ -41,7 +41,8 @@ public class KingdomState
     // ===== 科技解锁态 per-kingdom（2_17 步骤11 序0 schema 预留 + 序8 落地载体）=====
     // D330 第二步：CastleUnlockTable 解锁态 per-kingdom（动态立国科技不继承 D295）。
     // 载体迁址路径：KingdomManager.ModuleLevels（全局单例，玩家）→ 每王国一份 dict[id]。
-    // 索引=ModuleType 枚举（CastleUnlockTable：Civil/Production/Livelihood/Military/Commerce/Science，6 模块）。
+    // 索引=ModuleType 枚举（CastleUnlockTable：Civil/Production/Livelihood/Military/Commerce，5 模块；
+    // Science 已退役 D461 → 索引5 空置保留，数组长度恒 6=schema 零变更）。
     // 玩家 id=0 桶与原 KingdomManager.ModuleLevels 转置一致；AI 各国独立不串。
     // ⚠️ schema 完全拆分（KingdomSaveData kings[] 数组化）归 2_11 统一迁移（实施计划 L55：kingdoms[] 拆桶旧档展开单元素）。
     // 本步仅载体预留：KingdomState 持有本王国解锁态数组，供序8/序10 ExecuteTech 消费；未入存量存档（随 kingdoms[] 迁移入档）。
@@ -64,6 +65,11 @@ public class KingdomState
 
     /// <summary>演算粒度（SimModeManager 判定；P0 恒 Fine，D333）。</summary>
     public SimMode simMode;
+
+    // ===== 抽象结算运行时态（2_17 步骤14 批B；不入档 D456 同哲学，读档默认重建/派生）=====
+    /// <summary>最近一次抽象结算的王国均饱食（-1=无抽象历史）。唤醒对账（D335/D460）：
+    /// Abstract→Fine 首次日结由 SatietySystem 把实体饱食拉平到本值（确定性无跳变）。</summary>
+    public float lastAbstractAvgSatiety = -1f;
 
     // ===== 人口（2_17 步骤4 台账转派生，实体=唯一真源）=====
     // ①真源演进规则（§〇 追记裁决①）：步骤3 实体化后工人/战士已为实体，步骤4 起由本属性对存活实体

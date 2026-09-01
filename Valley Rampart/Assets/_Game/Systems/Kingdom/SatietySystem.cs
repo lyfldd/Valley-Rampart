@@ -30,6 +30,13 @@ public class SatietySystem : Singleton<SatietySystem>
         return 50f;
     }
 
+    /// <summary>写某王国均饱食缓存桶（2_17 步骤14 批B：AbstractEconomySettler 抽象结算写入公式值；
+    /// 唤醒拉平由 OnNewDay 消费）。玩家桶仍走实时口径，勿外部写。</summary>
+    public void SetAverageSatietyCached(int kingdomId, float value)
+    {
+        _avgSatiety[kingdomId] = value;
+    }
+
     /// <summary>食品等级（§10 粮/特殊食物/肉）。</summary>
     public enum FoodQuality
     {
@@ -113,25 +120,63 @@ public class SatietySystem : Singleton<SatietySystem>
     /// <summary>
     /// 每日饱食结算（DayCycleSettlement 统一入口调用）。
     /// 对全体我方 NPC：尝试进食（消耗国库粮）→ 未进食则衰减 → 应用 0 扣血 / 80+ 回血 / 饥饿降幸福。
+    /// 2_17 步骤14 批B（D453/D460）：玩家(id=0)原样零回归；AI Fine 王国逐实体进食（国库源=王国 resources.Food）；
+    /// AI Abstract 王国实体冻结跳过逐位结（与 NPCBrain 冻结语义一致），进食由 AbstractEconomySettler 计数公式结算。
     /// </summary>
     public void OnNewDay()
     {
         var cfg = Cfg();
         if (cfg == null || UnitRegistry.Instance == null) return;
 
+        // 收集王国 simMode 快照（结算中途不重查，确定性固定当日档）
+        var modes = new Dictionary<int, SimMode>();
+        if (KingdomRegistry.Instance != null)
+        {
+            var all = KingdomRegistry.Instance.GetAll();
+            for (int i = 0; i < all.Count; i++) modes[all[i].id] = all[i].simMode;
+        }
+
+        // 唤醒拉平（D335/D460）：AI 王国刚从 Abstract 切回 Fine（lastAbstractAvgSatiety>=0）→
+        // 首次日结把实体饱食统一拉平到抽象结算均值（确定性无跳变），然后重置标记。
+        foreach (var kv in modes)
+        {
+            if (kv.Key == 0 || kv.Value != SimMode.Fine) continue;
+            var k = KingdomRegistry.Instance.Get(kv.Key);
+            if (k == null || k.lastAbstractAvgSatiety < 0f) continue;
+            float target = k.lastAbstractAvgSatiety;
+            k.lastAbstractAvgSatiety = -1f;
+            foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+            {
+                if (unit == null || !unit.IsAlive || unit.kingdomId != kv.Key) continue;
+                if (!IsNpc(unit.EffectiveOccupation)) continue;
+                unit.Satiety = Mathf.Clamp(Mathf.RoundToInt(target), 0, 100);
+            }
+            Debug.Log($"[SatietySystem] k{kv.Key} 唤醒拉平：实体饱食 ← 抽象均值 {target}（D335/D460）");
+        }
+
         foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
             if (unit == null || unit.Data == null) continue;
-            if (unit.GetFaction() != Faction.PlayerCamp) continue;
-            // 2_17 步骤4 关账扫描：仅玩家桶0——AI 工人不参与玩家每日饱食结算/国库进食（同上述收编双条件语义）。
-            if (unit.kingdomId != 0) continue;   // OnNewDay 每日饱食结算（玩家口径）
+            // 关账扫描（2_17 步骤4 + 步骤14 批B 修正）：PlayerCamp=玩家、AiKingdom=AI 王国两类受治平民
+            // 都参与每日饱食结算；国库源按 kingdomId 路由（0→RulerController、>0→KingdomState，D453）。
+            // 敌阵营/自由态（None/敌族）不参与。AI 单位此前被 PlayerCamp 过滤误跳过（批B 收口修正：D453 死代码）。
+            var fac = unit.GetFaction();
+            if (fac != Faction.PlayerCamp && fac != Faction.AiKingdom) continue;
             if (!IsNpc(unit.EffectiveOccupation)) continue;
             if (!unit.IsAlive) continue;
 
-            SettleUnit(unit, cfg);
+            int kid = unit.kingdomId;
+            SimMode mode = modes.TryGetValue(kid, out var m) ? m : SimMode.Fine;
+            if (mode == SimMode.Abstract) continue;   // Abstract 王国实体冻结，跳过逐位结
+
+            // 国库源：玩家(id=0)=null → RulerController.Food；AI Fine → KingdomState.resources.Food（D453）
+            KingdomState k = kid == 0 || KingdomRegistry.Instance == null
+                ? null : KingdomRegistry.Instance.Get(kid);
+            SettleUnit(unit, cfg, k);
         }
 
-        // 2_17 步骤11 批2：每王国均饱食写入分桶（玩家桶0=玩家均值；AI 桶=按 kingdomId 独立算——AI 进食/结算语义归步骤13/14 AbstractEconomySettler）
+        // 2_17 步骤11 批2 + 步骤14 批B：每王国均饱食写入分桶——玩家桶=玩家实时均值；
+        // AI Fine 桶=按 kingdomId 独立实时算；AI Abstract 桶不覆盖（保留 AbstractEconomySettler 写入的公式值）
         if (KingdomRegistry.Instance != null)
         {
             var all = KingdomRegistry.Instance.GetAll();
@@ -139,24 +184,31 @@ public class SatietySystem : Singleton<SatietySystem>
             {
                 var k = all[i];
                 if (k == null) continue;
-                _avgSatiety[k.id] = k.IsPlayer ? GetAverageSatiety() : GetAverageSatiety(k.id);
+                if (k.IsPlayer) { _avgSatiety[k.id] = GetAverageSatiety(); continue; }
+                if (modes.TryGetValue(k.id, out var m) && m == SimMode.Abstract) continue;   // Abstract 桶归公式写
+                _avgSatiety[k.id] = GetAverageSatiety(k.id);
             }
         }
 
         Debug.Log($"[SatietySystem] 每日饱食结算完成（>>> 见各单位日志）");
     }
 
-    /// <summary>单个单位每日饱食结算。</summary>
-    private void SettleUnit(UnitController unit, KingdomConfig cfg)
+    /// <summary>单个单位每日饱食结算。kingdom=null → 玩家国库源（RulerController）；非空 → AI 王国国库源（D460）。</summary>
+    private void SettleUnit(UnitController unit, KingdomConfig cfg, KingdomState kingdom)
     {
         int dailyFoodCost = cfg.GetDailyFoodByOccupation(unit.EffectiveOccupation);
 
         // 1. 进食（数据层）：饱食不满阈值 且 国库粮足 → 消耗粮恢复饱食
+        bool hasFood = kingdom == null
+            ? (RulerController.Instance != null && RulerController.Instance.GetResource(ResourceType.Food) >= dailyFoodCost)
+            : kingdom.resources.food >= dailyFoodCost;
         bool fed = false;
-        if (unit.Satiety < cfg.feedSatietyThreshold && RulerController.Instance != null
-            && RulerController.Instance.GetResource(ResourceType.Food) >= dailyFoodCost)
+        if (unit.Satiety < cfg.feedSatietyThreshold && hasFood)
         {
-            RulerController.Instance.ModifyResource(ResourceType.Food, false, dailyFoodCost);
+            if (kingdom == null)
+                RulerController.Instance.ModifyResource(ResourceType.Food, false, dailyFoodCost);
+            else
+                kingdom.resources.food -= dailyFoodCost;   // AI 扣本国国库（D453）
             unit.Satiety = Mathf.Clamp(unit.Satiety + cfg.foodRestoreGrain, 0, 100);
             fed = true;
         }
