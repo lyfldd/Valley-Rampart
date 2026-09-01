@@ -36,6 +36,13 @@ public class MainMenuPanel : MonoBehaviour
 
     private void OnSettingsClicked()
     {
-        Debug.Log("[MainMenu] 设置面板尚未实现。");
+        // D240（2_13 步骤5）：打开设置面板（MainMenuScene 的 SettingsUI GameObject）
+        var settings = FindObjectOfType<SettingsPanel>();
+        if (settings == null)
+        {
+            Debug.LogWarning("[MainMenu] 未找到 SettingsPanel（MainMenuScene 缺少挂载 SettingsPanel + UIDocument 的 SettingsUI GameObject）");
+            return;
+        }
+        settings.Show();
     }
 }

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="settings-root" class="settings-root" style="display: none;">
+        <ui:VisualElement name="settings-panel" class="settings-panel">
+            <ui:Label text="设置" class="settings-title" />
+
+            <ui:VisualElement class="creation-form">
+                <!-- 音量（主音量，AudioListener.volume；用户偏好存 PlayerPrefs） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="音量" class="form-label" />
+                    <ui:Slider name="volume-slider" low-value="0" high-value="1" value="1" class="form-input" />
+                </ui:VisualElement>
+
+                <!-- 语言（D240 占位：i18n 未建，仅存偏好——让渡登记） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="语言" class="form-label" />
+                    <ui:DropdownField name="language-select" choices="简体中文,English" value="简体中文" class="form-select" />
+                </ui:VisualElement>
+
+                <!-- 倍速（D240/D241：0.5x/1x/2x/3x → TimeManager.SetGameSpeed；sim 对拍锁定 1x） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="倍速" class="form-label" />
+                    <ui:VisualElement name="speed-row" class="speed-row">
+                        <ui:Button name="speed-05" text="0.5x" class="speed-button" />
+                        <ui:Button name="speed-10" text="1x" class="speed-button speed-button--active" />
+                        <ui:Button name="speed-20" text="2x" class="speed-button" />
+                        <ui:Button name="speed-30" text="3x" class="speed-button" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- 快捷键清单（D240 只读展示） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="快捷键" class="form-label" />
+                    <ui:Label name="hotkeys-label" text="左键=选择/框选 · 右键=指令 · 中键=平移 · 滚轮=缩放&#10;B=建造菜单 · R=训练菜单 · E=作战面板 · ESC=暂停&#10;Shift+点击=加选/减选 · Ctrl+数字=保存控制组 · 数字=调用" class="form-hint" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:Button name="settings-close-button" text="关闭" class="form-button" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

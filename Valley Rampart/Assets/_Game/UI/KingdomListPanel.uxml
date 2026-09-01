@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="kingdom-list-root" class="settings-root" style="display: none;">
+        <ui:VisualElement name="kingdom-list-panel" class="settings-panel">
+            <ui:Label text="列国名单" class="settings-title" />
+            <ui:Label name="kingdoms-empty" text="尚无已知王国" class="form-hint" style="display: none;" />
+            <ui:ScrollView name="kingdom-list" class="kingdom-list-scroll" />
+            <ui:Button name="kingdom-list-close-button" text="关闭" class="form-button" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

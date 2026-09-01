@@ -32,6 +32,10 @@ public class InputManager : Singleton<InputManager>
     // Unity Input System 生成的 Action Map 实例
     private GameInput _inputActions;
 
+    // 数字键 1~9 的 Action 与闭包处理器引用（解绑用；2_13 步骤11C D274）
+    private InputAction[] _digitActions;
+    private System.Action<InputAction.CallbackContext>[] _digitHandlers;
+
     // 当前输入模式（3.3.1 C3）。Build/Dialog 模式下禁用交互输入。
     public InputMode CurrentMode { get; private set; } = InputMode.Normal;
     // 交互是否可用（仅 Normal 模式；2_13 步骤1 改名 IsInteractionEnabled，Q6 C 面落地）
@@ -57,6 +61,25 @@ public class InputManager : Singleton<InputManager>
 
         // 绑定 B 键（开关建造菜单）回调
         _inputActions.Player.togglebuildmenu.performed += OnToggleBuildMenu;
+
+        // 绑定 R 键（开关训练菜单）回调（2_13 步骤11C P1 输入档 D274）
+        _inputActions.Player.toggleTrainingMenu.performed += OnToggleTrainingMenu;
+
+        // 绑定数字键 1~9（控制组保存/调用；Ctrl+数字=保存，数字=调用；D274）
+        _digitActions = new InputAction[]
+        {
+            _inputActions.Player.digit1, _inputActions.Player.digit2, _inputActions.Player.digit3,
+            _inputActions.Player.digit4, _inputActions.Player.digit5, _inputActions.Player.digit6,
+            _inputActions.Player.digit7, _inputActions.Player.digit8, _inputActions.Player.digit9,
+        };
+        _digitHandlers = new System.Action<InputAction.CallbackContext>[_digitActions.Length];
+        for (int i = 0; i < _digitActions.Length; i++)
+        {
+            int idx = i + 1;    // 闭包捕获（1-based 控制组槽位）
+            var h = new System.Action<InputAction.CallbackContext>(ctx => OnDigitKey(idx, ctx));
+            _digitHandlers[i] = h;
+            _digitActions[i].performed += h;
+        }
 
         // 中键 pan / 滚轮 zoom：CameraRig（2_10）Legacy Input 自理，此处不重复绑定、
         // 不发布 CameraPanEvent/CameraZoomEvent（避免双轨消费，漂移报策划裁决）。
@@ -146,6 +169,32 @@ public class InputManager : Singleton<InputManager>
         EventBus.Publish(new ToggleBuildMenuPressedEvent(null)); // null = toggle
     }
 
+    // R 键（开关训练菜单）回调（2_13 步骤11C：P1 输入档 D274）
+    // Playing 状态下发布 ToggleTrainingMenuPressedEvent；BuildingMenuPanel 消费（打开+切军事页）
+    private void OnToggleTrainingMenu(InputAction.CallbackContext ctx)
+    {
+        if (ctx.phase != InputActionPhase.Performed) return;
+        if (GameStateManager.Instance == null ||
+            GameStateManager.Instance.CurrentState != GameState.Playing) return;
+
+        Debug.Log("[InputManager] R 键按下：发布 ToggleTrainingMenuPressedEvent");
+        EventBus.Publish(new ToggleTrainingMenuPressedEvent());
+    }
+
+    // 数字键 1~9 回调（2_13 步骤11C：控制组保存/调用，D274）
+    // Playing + Normal 模式下发布 NumberKeyPressedEvent；SelectionController 消费
+    private void OnDigitKey(int index, InputAction.CallbackContext ctx)
+    {
+        if (ctx.phase != InputActionPhase.Performed) return;
+        if (!IsInteractionEnabled) return;
+        if (GameStateManager.Instance == null ||
+            GameStateManager.Instance.CurrentState != GameState.Playing) return;
+
+        bool withCtrl = Keyboard.current != null &&
+                        (Keyboard.current.leftCtrlKey.isPressed || Keyboard.current.rightCtrlKey.isPressed);
+        EventBus.Publish(new NumberKeyPressedEvent(index, withCtrl));
+    }
+
     protected override void OnDestroy()
     {
         base.OnDestroy();
@@ -168,6 +217,15 @@ public class InputManager : Singleton<InputManager>
         _inputActions.Player.rightClick.performed -= OnRightClick;
         _inputActions.Player.esc.performed -= OnEsc;
         _inputActions.Player.togglebuildmenu.performed -= OnToggleBuildMenu;
+        _inputActions.Player.toggleTrainingMenu.performed -= OnToggleTrainingMenu;
+        if (_digitActions != null && _digitHandlers != null)
+        {
+            for (int i = 0; i < _digitActions.Length; i++)
+            {
+                if (_digitActions[i] != null && _digitHandlers[i] != null)
+                    _digitActions[i].performed -= _digitHandlers[i];
+            }
+        }
         _inputActions.Disable();
         _inputActions.Dispose();
         _inputActions = null;

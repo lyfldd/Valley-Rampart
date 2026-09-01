@@ -20,6 +20,9 @@ public class TopLeftHUD : MonoBehaviour
     private Label _dayLabel;
     private Label _seasonLabel;
     private Button _populationButton;
+    private Button _kingdomListButton;                          // 2_13 批D：列国名单入口（四职责承接③）
+    private readonly Button[] _speedButtons = new Button[4];   // D241 倍速角落按钮（0.5x/1x/2x/3x）
+    private static readonly float[] SpeedValues = { 0.5f, 1f, 2f, 3f };
     private bool _labelsBound;
 
     private UnitController _monarch;
@@ -108,7 +111,36 @@ public class TopLeftHUD : MonoBehaviour
         _populationButton = root.Q<Button>("population-button");
         if (_populationButton != null) _populationButton.clicked += OnPopulationClicked;
 
+        // 2_13 批D：列国名单入口按钮绑定（四职责承接③；D305"播报点击展开"让渡登记）
+        _kingdomListButton = root.Q<Button>("kingdom-list-button");
+        if (_kingdomListButton != null) _kingdomListButton.clicked += OnKingdomListClicked;
+
+        // D241 倍速角落按钮绑定（0.5x/1x/2x/3x → TimeManager.SetGameSpeed）
+        _speedButtons[0] = root.Q<Button>("speed-05");
+        _speedButtons[1] = root.Q<Button>("speed-10");
+        _speedButtons[2] = root.Q<Button>("speed-20");
+        _speedButtons[3] = root.Q<Button>("speed-30");
+        for (int i = 0; i < _speedButtons.Length; i++)
+        {
+            int idx = i;    // 闭包捕获
+            if (_speedButtons[i] != null) _speedButtons[i].clicked += () => OnSpeedClicked(idx);
+        }
+
         _labelsBound = true;
+    }
+
+    /// <summary>D241 倍速角落按钮：切 TimeManager.SetGameSpeed 并高亮当前档。</summary>
+    private void OnSpeedClicked(int idx)
+    {
+        if (TimeManager.Instance == null) return;
+        TimeManager.Instance.SetGameSpeed(SpeedValues[idx]);
+        for (int i = 0; i < _speedButtons.Length; i++)
+        {
+            if (_speedButtons[i] == null) continue;
+            if (i == idx) _speedButtons[i].AddToClassList("speed-button--active");
+            else _speedButtons[i].RemoveFromClassList("speed-button--active");
+        }
+        Debug.Log($"[TopLeftHUD] 倍速切换：{SpeedValues[idx]}x");
     }
 
     private void TryBindMonarch()
@@ -201,6 +233,18 @@ public class TopLeftHUD : MonoBehaviour
             return;
         }
         UIManager.Instance?.Push(popPanel, new Interactor(Faction.PlayerCamp, Vector3.zero));
+    }
+
+    /// <summary>「列国」按钮：推送 KingdomListPanel 入栈（2_13 批D 四职责承接③）。</summary>
+    private void OnKingdomListClicked()
+    {
+        var listPanel = FindObjectOfType<KingdomListPanel>();
+        if (listPanel == null)
+        {
+            Debug.LogWarning("[TopLeftHUD] 未找到 KingdomListPanel（场景缺少 KingdomListUI 挂载）");
+            return;
+        }
+        UIManager.Instance?.Push(listPanel, new Interactor(Faction.PlayerCamp, Vector3.zero));
     }
 
     private void OnDayChanged(TimeDayChangedEvent evt)

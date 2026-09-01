@@ -59,6 +59,20 @@ public readonly struct FollowCommand
     { Followers = followers; Target = target; }
 }
 
+// ===== 2_13 步骤11C P1 输入档事件（D274）=====
+
+/// <summary>数字键 1~9 按下（P1 输入档）。withCtrl=true → 保存控制组到该槽；false → 调用该槽（恢复选中集）。
+/// SelectionController 订阅消费（控制组=选区恢复，2_13 自含真响应；2_8 编队层后续可接管为军令组）。</summary>
+public readonly struct NumberKeyPressedEvent
+{
+    public readonly int Index;        // 1~9
+    public readonly bool WithCtrl;
+    public NumberKeyPressedEvent(int index, bool withCtrl) { Index = index; WithCtrl = withCtrl; }
+}
+
+/// <summary>R 键训练菜单开关（P1 输入档）。BuildingMenuPanel 订阅：打开建造菜单并切军事页（训练设施归军事模块）。</summary>
+public readonly struct ToggleTrainingMenuPressedEvent { }
+
 // 已废弃：使用 ConfigsLoadedEvent 替代（引导书 3.2 节）
 // 原用途：通知 UnitData 静态配置加载完成。现由 LoadManager 统一发布 ConfigsLoadedEvent。
 public readonly struct UnitDataLoadedEvent

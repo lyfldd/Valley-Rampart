@@ -425,6 +425,102 @@
     background-color: var(--color-danger);
 }
 
+/* ===== 设置面板（2_13 D240/D241）===== */
+.settings-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-panel {
+    width: 460px;
+    background-color: var(--color-bg-panel);
+    padding: 24px;
+    border-radius: 12px;
+    border-width: 2px;
+    border-color: var(--color-accent);
+}
+
+.settings-title {
+    font-size: 26px;
+    color: var(--color-accent);
+    -unity-font-style: bold;
+    margin-bottom: 20px;
+    -unity-text-align: middle-center;
+}
+
+.speed-row {
+    flex-direction: row;
+}
+
+.speed-button {
+    height: 34px;
+    min-width: 56px;
+    margin-right: 6px;
+    font-size: 15px;
+    color: var(--color-text-primary);
+    background-color: var(--color-button);
+    border-radius: 6px;
+    border-width: 0;
+}
+
+.speed-button:hover {
+    background-color: var(--color-button-hover);
+}
+
+.speed-button--active {
+    background-color: var(--color-accent);
+    color: var(--color-bg-dark);
+    -unity-font-style: bold;
+}
+
+.form-hint {
+    color: var(--color-text-secondary, rgb(200, 200, 200));
+    font-size: 13px;
+    white-space: normal;
+}
+
+/* ===== 列国名单/王国情报（2_13 批D 四职责承接）===== */
+.kingdom-list-scroll {
+    max-height: 320px;
+}
+
+.kingdom-row {
+    flex-direction: row;
+    align-items: center;
+    height: 38px;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    background-color: var(--color-button);
+    border-radius: 6px;
+    border-width: 0;
+}
+
+.kingdom-row:hover {
+    background-color: var(--color-button-hover);
+}
+
+.kingdom-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    margin-right: 10px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.4);
+}
+
+.kingdom-row-label {
+    color: var(--color-text-primary);
+    font-size: 15px;
+    flex-grow: 1;
+    -unity-text-align: middle-left;
+}
+
 /* ===== GameOver 面板 ===== */
 .gameover-root {
     flex-grow: 1;

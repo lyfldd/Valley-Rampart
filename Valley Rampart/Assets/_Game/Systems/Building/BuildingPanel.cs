@@ -417,12 +417,28 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
 
         // 仓库/粮仓/高级仓储等有 StorageComponent 的：资源种类 + 当前存储 / 容量
         // （用户反馈：点击具体仓库建筑要能看到"存的是什么资源"，而非只有数字）
+        // D118（2_13 步骤11B）：此行即「仓库存量」字段（StorageComponent 与 IWarehouse.Query 同数据源）
         var storage = _target.GetComponent<StorageComponent>();
         if (storage != null)
         {
             AddFunctionRow("存储", $"{ResName(storage.resourceType)} {storage.storedAmount}/{storage.capacity}");
             any = true;
         }
+
+        // D118 信息面板三字段（2_13 步骤11B / D256）：仓库存量（上）+ 守卫状态 + 威胁等级
+        // 守卫状态：GuardDeploymentSystem.IsGuarded（2_8 消费端，2_13 批B 已接线右键部署）
+        var coord = GridSystem.Instance != null ? GridSystem.Instance.WorldToCoord(_target.transform.position) : null;
+        if (coord.HasValue)
+        {
+            bool guarded = GuardDeploymentSystem.IsGuarded(coord.Value);
+            AddFunctionRow("守卫状态", guarded ? "已守卫" : "未守卫");
+            any = true;
+        }
+        // 威胁等级：区块热度（2_7/2_8 热度口径，价值驱使 D56；LODSystem.GetHeatAt）
+        // 阈值对齐 AttentionTuningConfig：敌压近 0.3 / 冲锋 0.6 → 低/中/高
+        float heat = LODSystem.Instance != null ? LODSystem.Instance.GetHeatAt(_target.transform.position) : 0f;
+        AddFunctionRow("威胁等级", HeatLabel(heat));
+        any = true;
 
         // 市场：贸易入口按钮（打开 TradePanel）
         if (def.id == "market")
@@ -465,6 +481,15 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     private static int GatherAmount()
     {
         return TaskScheduler.HasInstance ? TaskScheduler.Instance.gatherAmount : 5;
+    }
+
+    /// <summary>威胁热度 → 等级文案（D118；阈值对齐 AttentionTuningConfig：敌压近 0.3 / 冲锋 0.6）。</summary>
+    private static string HeatLabel(float heat)
+    {
+        if (heat < 0.1f) return "无";
+        if (heat < 0.3f) return "低";
+        if (heat < 0.6f) return "中";
+        return "高";
     }
 
     /// <summary>资源类型中文名（仓库存储行显示用，与 WarehousePanel 保持一致）。</summary>

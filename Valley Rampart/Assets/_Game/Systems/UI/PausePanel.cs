@@ -35,6 +35,7 @@ public class PausePanel : MonoBehaviour
             {
                 doc.rootVisualElement.Q<Button>("resume-button").clicked -= OnResumeClicked;
                 doc.rootVisualElement.Q<Button>("save-button").clicked -= OnSaveClicked;
+                doc.rootVisualElement.Q<Button>("settings-button").clicked -= OnSettingsClicked;
                 doc.rootVisualElement.Q<Button>("quit-button").clicked -= OnQuitClicked;
             }
             _buttonsBound = false;
@@ -59,6 +60,7 @@ public class PausePanel : MonoBehaviour
         var root = doc.rootVisualElement;
         root.Q<Button>("resume-button").clicked += OnResumeClicked;
         root.Q<Button>("save-button").clicked += OnSaveClicked;
+        root.Q<Button>("settings-button").clicked += OnSettingsClicked;
         root.Q<Button>("quit-button").clicked += OnQuitClicked;
         _buttonsBound = true;
     }
@@ -113,6 +115,18 @@ public class PausePanel : MonoBehaviour
     // ===== 按钮回调 =====
 
     private void OnResumeClicked() => Resume();
+
+    // D240（2_13 步骤5）：暂停菜单打开设置面板（GameScene 的 SettingsUI GameObject）
+    private void OnSettingsClicked()
+    {
+        var settings = FindObjectOfType<SettingsPanel>();
+        if (settings == null)
+        {
+            Debug.LogWarning("[PausePanel] 未找到 SettingsPanel（GameScene 缺少 SettingsUI GameObject）");
+            return;
+        }
+        settings.Show();
+    }
 
     private void OnSaveClicked()
     {

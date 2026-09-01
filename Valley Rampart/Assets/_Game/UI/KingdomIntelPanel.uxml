@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/_Game/UI/Theme.uss" />
+    <ui:VisualElement name="kingdom-intel-root" class="settings-root" style="display: none;">
+        <ui:VisualElement name="kingdom-intel-panel" class="settings-panel">
+            <ui:Label text="王国情报" class="settings-title" />
+
+            <ui:VisualElement class="creation-form">
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="国名" class="form-label" />
+                    <ui:Label name="intel-name" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="存续" class="form-label" />
+                    <ui:Label name="intel-days" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="城堡" class="form-label" />
+                    <ui:Label name="intel-castle" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="人口" class="form-label" />
+                    <ui:Label name="intel-pop" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="军力" class="form-label" />
+                    <ui:Label name="intel-military" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="资源" class="form-label" />
+                    <ui:Label name="intel-resources" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="幸福" class="form-label" />
+                    <ui:Label name="intel-happiness" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="税收系数" class="form-label" />
+                    <ui:Label name="intel-tax-factor" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="增长系数" class="form-label" />
+                    <ui:Label name="intel-growth-factor" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="士气修正" class="form-label" />
+                    <ui:Label name="intel-morale-factor" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="关系" class="form-label" />
+                    <ui:Label name="intel-relation" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="剧本阶段" class="form-label" />
+                    <ui:Label name="intel-stage" text="—" class="form-input" />
+                </ui:VisualElement>
+                <ui:Label name="intel-debt-hint" text="关系/剧本阶段/AI国幸福值=让渡（2_18/2_17 域）" class="form-hint" />
+            </ui:VisualElement>
+
+            <ui:Button name="kingdom-intel-close-button" text="关闭" class="form-button" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -13,6 +13,7 @@ public class CharacterCreationPanel : MonoBehaviour
     public static readonly string[] SlotIds = { "slot_1", "slot_2", "slot_3" };
 
     private MainMenuController _controller;
+    private DropdownField _raceSelect;
     private TextField _kingdomNameInput;
     private DropdownField _difficultySelect;
     private DropdownField _mapSizeSelect;
@@ -32,6 +33,7 @@ public class CharacterCreationPanel : MonoBehaviour
             return;
         }
 
+        _raceSelect = root.Q<DropdownField>("race-select");
         _kingdomNameInput = root.Q<TextField>("kingdom-name-input");
         _difficultySelect = root.Q<DropdownField>("difficulty-select");
         _mapSizeSelect = root.Q<DropdownField>("map-size-select");
@@ -99,6 +101,21 @@ public class CharacterCreationPanel : MonoBehaviour
         };
     }
 
+    /// <summary>
+    /// 将种族文字映射为 raceId 索引（2_13 M10 / D431 UI 侧；0=人类,1=精灵,2=矮人,3=兽人）。
+    /// UI 暂存口径：RaceDef SO 未建（2_20 Q10-M1 让渡），2_16 kingdomSpawns 激活时定族消费。
+    /// </summary>
+    private int RaceTextToValue(string text)
+    {
+        return text switch
+        {
+            "精灵" => 1,
+            "矮人" => 2,
+            "兽人" => 3,
+            _ => 0  // 默认"人类"
+        };
+    }
+
     private void OnConfirmClicked()
     {
         // 自动分配第一个空存档槽（进入本面板前 MainMenuController 已校验有空槽）
@@ -117,6 +134,7 @@ public class CharacterCreationPanel : MonoBehaviour
         var config = new NewGameConfig
         {
             kingdomName = kingdomName,
+            raceId = RaceTextToValue(_raceSelect?.value ?? "人类"),   // M10 选族暂存（D431 UI 侧；2_16 激活时定族消费）
             difficulty = difficulty,
             selectedSlotId = slotId,
             worldSeed = worldSeed,
@@ -124,6 +142,7 @@ public class CharacterCreationPanel : MonoBehaviour
             mapSeed = worldSeed != 0 ? worldSeed : UnityEngine.Random.Range(1, int.MaxValue)
         };
 
+        Debug.Log($"[CharacterCreation] 新建游戏配置：kingdom={kingdomName}, raceId={config.raceId}, difficulty={difficulty}");
         _controller.OnCharacterCreateConfirmed(config);
     }
 }

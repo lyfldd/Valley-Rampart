@@ -146,15 +146,31 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
     private void BindEvent()
     {
         EventBus.Subscribe<ToggleBuildMenuPressedEvent>(OnToggleBuildMenu);
+        EventBus.Subscribe<ToggleTrainingMenuPressedEvent>(OnToggleTrainingMenu);
         _eventBound = true;
-        Debug.Log("[BuildingMenuPanel] 已订阅 ToggleBuildMenuPressedEvent");
+        Debug.Log("[BuildingMenuPanel] 已订阅 ToggleBuildMenuPressedEvent / ToggleTrainingMenuPressedEvent");
     }
 
     private void UnbindEvent()
     {
         if (!_eventBound) return;
         EventBus.Unsubscribe<ToggleBuildMenuPressedEvent>(OnToggleBuildMenu);
+        EventBus.Unsubscribe<ToggleTrainingMenuPressedEvent>(OnToggleTrainingMenu);
         _eventBound = false;
+    }
+
+    // R 键训练菜单（2_13 步骤11C D274）：打开建造菜单并切军事页（训练设施归军事模块）；
+    // 菜单已开则直接切页。Push 会触发 Open()（默认 Civil 页），故 Push 后再 SwitchTab(Military) 覆盖。
+    private void OnToggleTrainingMenu(ToggleTrainingMenuPressedEvent e)
+    {
+        var ui = UIManager.Instance;
+        if (ui == null) return;
+
+        bool wasOpen = ui.Peek() == this;
+        if (!wasOpen)
+            ui.Push(this, new Interactor(Faction.PlayerCamp, Vector3.zero));
+        SwitchTab(ModuleType.Military);
+        Debug.Log($"[BuildingMenuPanel] R 键训练菜单：{(wasOpen ? "已开→切军事页" : "打开+切军事页")}");
     }
 
     private void OnToggleBuildMenu(ToggleBuildMenuPressedEvent e)

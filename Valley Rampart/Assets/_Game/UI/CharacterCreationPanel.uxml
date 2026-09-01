@@ -6,6 +6,13 @@
             <ui:Label text="创建角色" class="creation-title" />
 
             <ui:VisualElement class="creation-form">
+                <!-- 开局选族（2_13 M10 / D431 UI 侧：与王国名/地图档位同屏；RaceDef SO 未建=四族占位，2_20 Q10-M1 让渡） -->
+                <ui:VisualElement class="form-row">
+                    <ui:Label text="种族" class="form-label" />
+                    <ui:DropdownField name="race-select" label="" class="form-select"
+                                      choices="人类,精灵,矮人,兽人" value="人类" />
+                </ui:VisualElement>
+
                 <!-- 王国名 -->
                 <ui:VisualElement class="form-row">
                     <ui:Label text="王国名" class="form-label" />

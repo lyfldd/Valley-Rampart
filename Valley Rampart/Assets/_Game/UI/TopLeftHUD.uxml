@@ -28,5 +28,14 @@
         </ui:VisualElement>
         <!-- 人口入口按钮（打开 PopulationPanel） -->
         <ui:Button name="population-button" text="人口" class="pop-button" />
+        <!-- 列国名单入口按钮（2_13 批D 四职责承接③：打开 KingdomListPanel；D305 播报点击展开让渡） -->
+        <ui:Button name="kingdom-list-button" text="列国" class="pop-button" />
+        <!-- 倍速角落按钮（2_13 D241：0.5x/1x/2x/3x → TimeManager.SetGameSpeed；sim 对拍锁定 1x） -->
+        <ui:VisualElement name="speed-row" class="speed-row">
+            <ui:Button name="speed-05" text="0.5x" class="speed-button" />
+            <ui:Button name="speed-10" text="1x" class="speed-button speed-button--active" />
+            <ui:Button name="speed-20" text="2x" class="speed-button" />
+            <ui:Button name="speed-30" text="3x" class="speed-button" />
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

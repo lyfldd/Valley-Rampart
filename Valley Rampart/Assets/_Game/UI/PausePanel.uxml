@@ -6,6 +6,7 @@
             <ui:Label text="游戏暂停" class="pause-title" />
             <ui:Button name="resume-button" text="继续游戏" class="pause-button pause-button--primary" />
             <ui:Button name="save-button" text="保存游戏" class="pause-button" />
+            <ui:Button name="settings-button" text="设置" class="pause-button" />
             <ui:Button name="quit-button" text="退出游戏" class="pause-button pause-button--danger" />
         </ui:VisualElement>
     </ui:VisualElement>

@@ -38,6 +38,10 @@ public class SelectionController : Singleton<SelectionController>
 
     private Vector2 _dragStartScreen;
 
+    // 控制组 1~9（2_13 步骤11C D274）：Ctrl+数字=保存当前选中集，数字=恢复选中集（选区级真响应；
+    // 2_8 编队层后续可接管为军令组语义）
+    private readonly Dictionary<int, List<UnitController>> _groups = new Dictionary<int, List<UnitController>>();
+
     protected override void Awake()
     {
         base.Awake();
@@ -45,9 +49,17 @@ public class SelectionController : Singleton<SelectionController>
         _config = SelectionConfig.Load();
     }
 
-    private void OnEnable() => EventBus.Subscribe<RightClickPressedEvent>(OnRightClickPressed);
+    private void OnEnable()
+    {
+        EventBus.Subscribe<RightClickPressedEvent>(OnRightClickPressed);
+        EventBus.Subscribe<NumberKeyPressedEvent>(OnNumberKeyPressed);
+    }
 
-    private void OnDisable() => EventBus.Unsubscribe<RightClickPressedEvent>(OnRightClickPressed);
+    private void OnDisable()
+    {
+        EventBus.Unsubscribe<RightClickPressedEvent>(OnRightClickPressed);
+        EventBus.Unsubscribe<NumberKeyPressedEvent>(OnNumberKeyPressed);
+    }
 
     private void Update()
     {
@@ -215,8 +227,14 @@ public class SelectionController : Singleton<SelectionController>
     {
         Vector2 world = ScreenToWorld(screenPos);
         var hit = Physics2D.OverlapPoint(world, selectableMask);
-        Selected.Clear();
-        SelectedBuilding = null;
+        // Shift+点击=加选/减选（2_13 步骤11C P1 输入档 D274；未按 Shift=常规重选）
+        bool shiftHeld = UnityEngine.InputSystem.Keyboard.current != null &&
+                         UnityEngine.InputSystem.Keyboard.current.shiftKey.isPressed;
+        if (!shiftHeld)
+        {
+            Selected.Clear();
+            SelectedBuilding = null;
+        }
 
         if (hit != null)
         {
@@ -226,7 +244,15 @@ public class SelectionController : Singleton<SelectionController>
             // 不得被玩家选中下右键指令（GetFaction() 对 AI 工人仍返 PlayerCamp，须以 kingdomId 区分）
             if (unit != null && unit.GetFaction() == Faction.PlayerCamp && unit.kingdomId == 0)
             {
-                Selected.Add(unit);
+                if (shiftHeld)
+                {
+                    // Shift 加选/减选：已选则移除，未选则加入
+                    if (!Selected.Remove(unit)) Selected.Add(unit);
+                }
+                else
+                {
+                    Selected.Add(unit);
+                }
                 return;
             }
             // 建筑：2_16 步骤7 补丁B——仅可选中己方王国（kingdomId==0），防玩家框选 AI 建筑下指令
@@ -258,6 +284,34 @@ public class SelectionController : Singleton<SelectionController>
                 Selected.Add(unit);
         }
         Debug.Log($"[Selection] 框选 {Selected.Count} 个己方单位");
+    }
+
+    // ===== 控制组（2_13 步骤11C D274：Ctrl+数字=保存，数字=调用）=====
+
+    private void OnNumberKeyPressed(NumberKeyPressedEvent evt)
+    {
+        if (IsInteractionBlocked()) return;
+
+        if (evt.WithCtrl)
+        {
+            // 保存：当前选中集（深拷贝；死亡单位在调用时过滤）
+            _groups[evt.Index] = new List<UnitController>(Selected);
+            Debug.Log($"[Selection] 控制组 {evt.Index} 保存：{_groups[evt.Index].Count} 单位");
+        }
+        else if (_groups.TryGetValue(evt.Index, out var group))
+        {
+            // 调用：恢复选中集（剔除已死亡单位）
+            Selected.Clear();
+            SelectedBuilding = null;
+            foreach (var u in group)
+                if (u != null && u.IsAlive && !Selected.Contains(u))
+                    Selected.Add(u);
+            Debug.Log($"[Selection] 控制组 {evt.Index} 调用：{Selected.Count} 单位存活");
+        }
+        else
+        {
+            Debug.Log($"[Selection] 控制组 {evt.Index} 为空，忽略调用");
+        }
     }
 
     // ===== 坐标辅助 =====
