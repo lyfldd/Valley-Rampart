@@ -146,15 +146,39 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { results });
     }
 
+    if (pathname === '/api/models' && req.method === 'GET') {
+      const cfg = await forge.loadConfig();
+      const oc = await ocHealth(cfg.opencodeBase);
+      if (!oc) return json(res, 503, { error: 'opencode 不可达' });
+      const r = await fetch(`${cfg.opencodeBase}/api/model`);
+      const j = await r.json();
+      const models = (j.data || []).map((m) => ({
+        id: m.id,
+        providerID: m.providerID,
+        name: m.name,
+        multimodal: (m.capabilities?.input || []).includes('image'),
+        status: m.status === 'deprecated' ? 'deprecated' : 'active',
+        context: m.limit?.context || 0,
+        output: m.limit?.output || 0,
+      }));
+      // 可用在前、废弃在后；同类按名称排
+      models.sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === 'active' ? -1 : 1));
+      return json(res, 200, { models });
+    }
+
     if (pathname === '/api/ai/edit' && req.method === 'POST') {
-      const { instruction, gridText } = await readJsonBody(req);
+      const { instruction, gridText, model } = await readJsonBody(req);
       if (!instruction || !gridText) return json(res, 400, { error: '缺少 instruction/gridText' });
       const cfg = await forge.loadConfig();
       const oc = await ocHealth(cfg.opencodeBase);
       if (!oc) {
         return json(res, 503, { error: `opencode 不可达（${cfg.opencodeBase}）。请先运行：opencode serve --port 4096` });
       }
-      const r = await aiEditGrid({ base: cfg.opencodeBase, instruction, gridText });
+      const safeModel =
+        model && typeof model.providerID === 'string' && typeof model.modelID === 'string'
+          ? { providerID: model.providerID.slice(0, 60), modelID: model.modelID.slice(0, 120) }
+          : null;
+      const r = await aiEditGrid({ base: cfg.opencodeBase, instruction, gridText, model: safeModel });
       return json(res, 200, r);
     }
 

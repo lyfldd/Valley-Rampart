@@ -72,6 +72,7 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; gap: 10
 }
 #palette .sw.sel { outline: 2px solid var(--accent2); }
 #palette .sw.transparent { background: repeating-conic-gradient(#3a3a44 0 25%, #2a2a33 0 50%) 0 0 / 10px 10px; }
+#aiModel { font-size: 12px; padding: 4px 6px; flex: 1; min-width: 0; }
 #aiStatus { font-size: 12px; margin: 6px 0; color: var(--muted); min-height: 18px; word-break: break-all; }
 #aiStatus.err { color: var(--danger); }
 #diffWrap { display: none; margin-top: 8px; }
@@ -152,6 +153,12 @@ aside { width: 260px; flex: none; display: flex; flex-direction: column; gap: 10
     </div>
     <div class="panel">
       <h3>AI 编辑</h3>
+      <div class="row" style="margin-top:0">
+        <select id="aiModel" title="AI 模型（网格编辑是纯文本任务，任何强文本模型可用；👁=多模态）">
+          <option value="">模型：加载中…</option>
+        </select>
+        <button id="btnModelRefresh" title="刷新模型列表">⟳</button>
+      </div>
       <textarea id="aiInstruction" rows="3" placeholder="例如：给头盔加一道高光；把整体色调调暖；给剑刃加金色描边"></textarea>
       <div class="row"><button id="btnAi" class="primary" style="flex:1">让 AI 修改</button></div>
       <div id="aiStatus"></div>
@@ -607,6 +614,44 @@ $('btnImport').onclick = async () => {
 
 /* ================= AI 编辑 ================= */
 function hideDiff() { $('diffWrap').classList.remove('show'); }
+
+async function loadModels() {
+  const sel = $('aiModel');
+  const saved = localStorage.getItem('pf.model') || '';
+  try {
+    const { models } = await api('/api/models');
+    sel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = '默认（opencode 当前模型）';
+    sel.appendChild(def);
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = `${m.providerID}::${m.id}`;
+      const flags = [
+        m.multimodal ? '👁' : '',
+        m.status === 'deprecated' ? '⚠旧' : '',
+        `${Math.round(m.context / 1024)}k`,
+      ].filter(Boolean).join(' ');
+      opt.textContent = `${m.name}${flags ? '（' + flags + '）' : ''}`;
+      opt.title = `${m.providerID}/${m.id} · 上下文 ${Math.round(m.context / 1024)}k · 输出 ${Math.round(m.output / 1024)}k${m.multimodal ? ' · 多模态（本工具只喂文本网格，优势=文本底子强）' : ''}`;
+      sel.appendChild(opt);
+    }
+    sel.value = saved;
+    if (sel.value !== saved) sel.value = ''; // 已保存的模型不在列表 → 回落默认
+  } catch {
+    sel.innerHTML = '<option value="">模型列表不可用（opencode 未启动）</option>';
+  }
+}
+$('aiModel').addEventListener('change', () => localStorage.setItem('pf.model', $('aiModel').value));
+$('btnModelRefresh').onclick = loadModels;
+const selectedModel = () => {
+  const v = $('aiModel').value;
+  if (!v) return null;
+  const [providerID, modelID] = v.split('::');
+  return providerID && modelID ? { providerID, modelID } : null;
+};
+
 $('btnAi').onclick = async () => {
   if (!state.parsed) return alert('先打开一个文件');
   const instruction = $('aiInstruction').value.trim();
@@ -620,7 +665,7 @@ $('btnAi').onclick = async () => {
   try {
     const r = await api('/api/ai/edit', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ instruction, gridText: serializeGridText(state.parsed) }),
+      body: JSON.stringify({ instruction, gridText: serializeGridText(state.parsed), model: selectedModel() }),
     });
     const newParsed = parseGridText(r.gridText);
     const diffs = diffGrids(state.parsed, newParsed);
@@ -631,7 +676,7 @@ $('btnAi').onclick = async () => {
     drawGridToCanvas($('diffMap'), state.parsed, dz, diffs);
     $('diffInfo').textContent = `改动 ${diffs.length} 像素 · 调色板 ${state.parsed.palette.length}→${newParsed.palette.length} 色`;
     $('diffWrap').classList.add('show');
-    st.textContent = `AI 完成（会话 ${r.sessionId.slice(0, 12)}…）。请检查差异后接受或放弃。`;
+    st.textContent = `AI 完成（模型 ${r.modelID || '默认'}，会话 ${r.sessionId.slice(0, 12)}…）。请检查差异后接受或放弃。`;
   } catch (e) {
     st.className = 'err';
     st.textContent = '失败：' + e.message;
@@ -747,6 +792,7 @@ window.addEventListener('beforeunload', (e) => {
 refreshHealth();
 setInterval(refreshHealth, 30000);
 refreshList();
+loadModels();
 </script>
 </body>
 </html>

@@ -34,8 +34,8 @@ function extractJson(text) {
   return null;
 }
 
-// AI 单图编辑：gridText 进 → 新 gridText 出（强校验）
-export async function aiEditGrid({ base, instruction, gridText }) {
+// AI 单图编辑：gridText 进 → 新 gridText 出（强校验）；model 可选 {providerID, modelID}，不传用 opencode 当前默认
+export async function aiEditGrid({ base, instruction, gridText, model }) {
   const parsed = parseGridText(gridText);
   const { width: w, height: h, name } = parsed;
 
@@ -88,6 +88,7 @@ export async function aiEditGrid({ base, instruction, gridText }) {
     body: JSON.stringify({
       parts: [{ type: 'text', text: prompt }],
       format: { type: 'json_schema', schema, retryCount: 2 },
+      ...(model && model.providerID && model.modelID ? { model } : {}),
     }),
   });
   if (!mr.ok) {
@@ -116,5 +117,10 @@ export async function aiEditGrid({ base, instruction, gridText }) {
   };
   const text = serializeGridText(rebuilt);
   const reparsed = parseGridText(text); // 任一硬性规则违反 → 抛错
-  return { gridText: text, sessionId: session.id, paletteCount: reparsed.palette.length };
+  return {
+    gridText: text,
+    sessionId: session.id,
+    paletteCount: reparsed.palette.length,
+    modelID: model?.modelID || msg.info?.modelID || '',
+  };
 }
