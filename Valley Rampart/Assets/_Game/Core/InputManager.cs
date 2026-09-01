@@ -4,20 +4,24 @@ using UnityEngine.InputSystem;
 /// <summary>输入模式（3.3.1 C3）。各系统通过 SetMode 切换，避免冲突输入。</summary>
 public enum InputMode
 {
-    Normal,  // 正常游戏（移动 + 交互）
-    Build,   // 建造模式（禁用移动，ghost 跟随光标）
-    Dialog   // 对话/菜单模式（禁用移动 + 交互）
+    Normal,  // 正常游戏（交互 + 选择）
+    Build,   // 建造模式（禁用交互，ghost 跟随光标）
+    Dialog   // 对话/菜单模式（禁用交互）
 }
 
 // 全局输入管理器（InputManager）
 // 职责：封装 Unity Input System 的 Action Map，提供统一的输入读取与事件发布接口。
+// 2_13 步骤1 God-view 改造（2026-09-01）：
+//   - 旧 WASD 君主移动链退役（PlayerMoveEvent/MoveInput/RunHeld/OnMove/OnFastMove 移除——无君主可操控，
+//     且 2_12/HH.17 君主实体已退役）；其遗留 .inputactions move/fastmove 定义保留待清理（漂移标注，报策划裁决）。
+//   - 新增鼠标上帝视角输入：leftClick → LeftClickPressedEvent、rightClick → RightClickPressedEvent（含屏幕坐标）。
+//   - 中键 pan / 滚轮 zoom 由 CameraRig（2_10）Legacy Input 自理，不重复事件化（漂移标注）；摄像机键盘 WASD 平移
+//     属 CameraRig 输入链路，用户红线=保留不动。
+//   - IsMovementEnabled → IsInteractionEnabled 改名（Q6 C 面注落地：Build/Dialog 禁交互点击）。语义不变。
 //
 // 输入响应策略（引导书第 4 节）：
-//   - 移动/跑步输入仅在 GameState.Playing 时响应，避免暂停/菜单状态下角色移动。
-//   - ESC 键始终响应，但行为随当前 GameState 变化——
-//     - Playing → 发布 EscapePressedEvent，UI 层暂停游戏并弹出暂停菜单。
-//     - Paused  → 发布 EscapePressedEvent，UI 层恢复游戏并关闭暂停菜单。
-//     - 其他   → 发布 EscapePressedEvent，UI 层根据上下文弹出确认对话框（下一步/退出等）。
+//   - ESC 键始终响应，但行为随当前 GameState 变化——Playing→暂停菜单 / Paused→恢复 / 其他→确认框。
+//   - 左键/右键仅 GameState.Playing 且 Normal 模式下发布（Build/Dialog 禁交互，玩家路径零回归）。
 //
 // 生命周期：
 //   - Awake 时创建 GameInput 实例并绑定回调，但默认禁用（Disable）。
@@ -28,16 +32,10 @@ public class InputManager : Singleton<InputManager>
     // Unity Input System 生成的 Action Map 实例
     private GameInput _inputActions;
 
-    // 当前移动输入向量（二维，来自 WASD/左摇杆）
-    public Vector2 MoveInput { get; private set; }
-
-    // 跑步键是否按住
-    public bool RunHeld { get; private set; }
-
-    // 当前输入模式（3.3.1 C3）。Build/Dialog 模式下禁用移动输入。
+    // 当前输入模式（3.3.1 C3）。Build/Dialog 模式下禁用交互输入。
     public InputMode CurrentMode { get; private set; } = InputMode.Normal;
-    // 移动是否可用（仅 Normal 模式）
-    public bool IsMovementEnabled => CurrentMode == InputMode.Normal;
+    // 交互是否可用（仅 Normal 模式；2_13 步骤1 改名 IsInteractionEnabled，Q6 C 面落地）
+    public bool IsInteractionEnabled => CurrentMode == InputMode.Normal;
 
     protected override void Awake()
     {
@@ -49,13 +47,10 @@ public class InputManager : Singleton<InputManager>
 
         _inputActions = new GameInput();
 
-        // 绑定移动输入回调（performed = 按下/持续，canceled = 松开）
-        _inputActions.Player.move.performed += OnMove;
-        _inputActions.Player.move.canceled += OnMove;
-
-        // 绑定跑步输入回调
-        _inputActions.Player.fastmove.performed += OnFastMove;
-        _inputActions.Player.fastmove.canceled += OnFastMove;
+        // 绑定左键点击回调（performed = 按下；2_13 God-view 点选/框选起锚）
+        _inputActions.Player.leftClick.performed += OnLeftClick;
+        // 绑定右键指令回调（performed = 按下；统一指令入口）
+        _inputActions.Player.rightClick.performed += OnRightClick;
 
         // 绑定 ESC 键回调
         _inputActions.Player.esc.performed += OnEsc;
@@ -63,11 +58,15 @@ public class InputManager : Singleton<InputManager>
         // 绑定 B 键（开关建造菜单）回调
         _inputActions.Player.togglebuildmenu.performed += OnToggleBuildMenu;
 
+        // 中键 pan / 滚轮 zoom：CameraRig（2_10）Legacy Input 自理，此处不重复绑定、
+        // 不发布 CameraPanEvent/CameraZoomEvent（避免双轨消费，漂移报策划裁决）。
+        // CameraRig 键盘 WASD 平移同样由 CameraRig 自理——用户红线：摄像机组 WASD 移动保留。
+
         // 默认禁用输入，等待 GameBootstrap 在初始化完成后调用 EnableInput()
         // 这样可以避免在 Loading/Ready 阶段误触输入导致异常
         _inputActions.Disable();
 
-        Debug.Log("[InputManager] 初始化完成（输入未启用，等待 GameBootstrap 激活）");
+        Debug.Log("[InputManager] 初始化完成（God-view 输入：鼠标左/右键事件；输入未启用，等待 GameBootstrap 激活）");
     }
 
     // 启用全部玩家输入（由 GameBootstrap 在游戏正式开始时调用）
@@ -78,13 +77,12 @@ public class InputManager : Singleton<InputManager>
         Debug.Log("[InputManager] 输入已启用");
     }
 
-    // 禁用全部玩家输入并重置移动向量（暂停/切场景时调用）
+    // 禁用全部玩家输入并重置（暂停/切场景时调用）
     // null 防御：退出时 OnApplicationQuit 顺序不确定，CleanupInputActions 可能已将 _inputActions 置 null
     public void DisableInput()
     {
         if (_inputActions == null) return;
         _inputActions.Disable();
-        MoveInput = Vector2.zero;
     }
 
     /// <summary>切换输入模式（3.3.1 C3）。BuildController 进入建造时调 SetMode(Build)，退出调 SetMode(Normal)。</summary>
@@ -92,39 +90,27 @@ public class InputManager : Singleton<InputManager>
     {
         if (CurrentMode == mode) return;
         CurrentMode = mode;
-        // 非 Normal 模式清零移动输入，避免角色继续走
-        if (mode != InputMode.Normal)
-        {
-            MoveInput = Vector2.zero;
-        }
         Debug.Log($"[InputManager] 输入模式切换: {mode}");
     }
 
-    // 移动输入回调
-    // 仅在 Playing + Normal 模式下发布 PlayerMoveEvent；Build/Dialog 模式忽略移动输入
-    private void OnMove(InputAction.CallbackContext ctx)
+    // 左键点击回调：仅 Playing + Normal（IsInteractionEnabled）模式发布 LeftClickPressedEvent。
+    private void OnLeftClick(InputAction.CallbackContext ctx)
     {
-        // Build/Dialog 模式下不响应移动（3.3.1 C3）
-        if (CurrentMode != InputMode.Normal)
-        {
-            MoveInput = Vector2.zero;
-            return;
-        }
-
-        MoveInput = ctx.ReadValue<Vector2>();
-
-        // 只在 Playing 状态才广播移动事件，避免暂停/菜单状态下角色移动
-        if (GameStateManager.Instance != null &&
-            GameStateManager.Instance.CurrentState == GameState.Playing)
-        {
-            EventBus.Publish(new PlayerMoveEvent(Vector3.zero, MoveInput));
-        }
+        if (ctx.phase != InputActionPhase.Performed) return;
+        if (!IsInteractionEnabled) return;                      // Build/Dialog 禁交互点击
+        if (GameStateManager.Instance == null ||
+            GameStateManager.Instance.CurrentState != GameState.Playing) return;
+        EventBus.Publish(new LeftClickPressedEvent(Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero));
     }
 
-    // 跑步输入回调（仅更新 RunHeld 标志，不发布事件——跑步是移动的修饰状态）
-    private void OnFastMove(InputAction.CallbackContext ctx)
+    // 右键指令回调：仅 Playing + Normal 模式发布 RightClickPressedEvent。
+    private void OnRightClick(InputAction.CallbackContext ctx)
     {
-        RunHeld = ctx.ReadValueAsButton();
+        if (ctx.phase != InputActionPhase.Performed) return;
+        if (!IsInteractionEnabled) return;
+        if (GameStateManager.Instance == null ||
+            GameStateManager.Instance.CurrentState != GameState.Playing) return;
+        EventBus.Publish(new RightClickPressedEvent(Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero));
     }
 
     // ESC 键回调
@@ -178,10 +164,8 @@ public class InputManager : Singleton<InputManager>
     {
         if (_inputActions == null) return;
 
-        _inputActions.Player.move.performed -= OnMove;
-        _inputActions.Player.move.canceled -= OnMove;
-        _inputActions.Player.fastmove.performed -= OnFastMove;
-        _inputActions.Player.fastmove.canceled -= OnFastMove;
+        _inputActions.Player.leftClick.performed -= OnLeftClick;
+        _inputActions.Player.rightClick.performed -= OnRightClick;
         _inputActions.Player.esc.performed -= OnEsc;
         _inputActions.Player.togglebuildmenu.performed -= OnToggleBuildMenu;
         _inputActions.Disable();

@@ -127,6 +127,42 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""leftClick"",
+                    ""type"": ""Button"",
+                    ""id"": ""b1c2d3e4-5555-4000-8000-000000000001"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""rightClick"",
+                    ""type"": ""Button"",
+                    ""id"": ""b1c2d3e4-6666-4000-8000-000000000001"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""middleDrag"",
+                    ""type"": ""Button"",
+                    ""id"": ""b1c2d3e4-7777-4000-8000-000000000001"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""scroll"",
+                    ""type"": ""Value"",
+                    ""id"": ""b1c2d3e4-8888-4000-8000-000000000001"",
+                    ""expectedControlType"": ""Vector2"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -206,6 +242,50 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
                     ""action"": ""togglebuildmenu"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b1c2d3e4-5555-4000-8000-000000000002"",
+                    ""path"": ""<Mouse>/leftButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""leftClick"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b1c2d3e4-6666-4000-8000-000000000002"",
+                    ""path"": ""<Mouse>/rightButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""rightClick"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b1c2d3e4-7777-4000-8000-000000000002"",
+                    ""path"": ""<Mouse>/middleButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""middleDrag"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b1c2d3e4-8888-4000-8000-000000000002"",
+                    ""path"": ""<Mouse>/scroll"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""scroll"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -218,6 +298,10 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
         m_Player_fastmove = m_Player.FindAction("fastmove", throwIfNotFound: true);
         m_Player_esc = m_Player.FindAction("esc", throwIfNotFound: true);
         m_Player_togglebuildmenu = m_Player.FindAction("togglebuildmenu", throwIfNotFound: true);
+        m_Player_leftClick = m_Player.FindAction("leftClick", throwIfNotFound: true);
+        m_Player_rightClick = m_Player.FindAction("rightClick", throwIfNotFound: true);
+        m_Player_middleDrag = m_Player.FindAction("middleDrag", throwIfNotFound: true);
+        m_Player_scroll = m_Player.FindAction("scroll", throwIfNotFound: true);
     }
 
     ~@GameInput()
@@ -302,6 +386,10 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_fastmove;
     private readonly InputAction m_Player_esc;
     private readonly InputAction m_Player_togglebuildmenu;
+    private readonly InputAction m_Player_leftClick;
+    private readonly InputAction m_Player_rightClick;
+    private readonly InputAction m_Player_middleDrag;
+    private readonly InputAction m_Player_scroll;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -329,6 +417,22 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/togglebuildmenu".
         /// </summary>
         public InputAction @togglebuildmenu => m_Wrapper.m_Player_togglebuildmenu;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/leftClick".
+        /// </summary>
+        public InputAction @leftClick => m_Wrapper.m_Player_leftClick;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/rightClick".
+        /// </summary>
+        public InputAction @rightClick => m_Wrapper.m_Player_rightClick;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/middleDrag".
+        /// </summary>
+        public InputAction @middleDrag => m_Wrapper.m_Player_middleDrag;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/scroll".
+        /// </summary>
+        public InputAction @scroll => m_Wrapper.m_Player_scroll;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -367,6 +471,18 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
             @togglebuildmenu.started += instance.OnTogglebuildmenu;
             @togglebuildmenu.performed += instance.OnTogglebuildmenu;
             @togglebuildmenu.canceled += instance.OnTogglebuildmenu;
+            @leftClick.started += instance.OnLeftClick;
+            @leftClick.performed += instance.OnLeftClick;
+            @leftClick.canceled += instance.OnLeftClick;
+            @rightClick.started += instance.OnRightClick;
+            @rightClick.performed += instance.OnRightClick;
+            @rightClick.canceled += instance.OnRightClick;
+            @middleDrag.started += instance.OnMiddleDrag;
+            @middleDrag.performed += instance.OnMiddleDrag;
+            @middleDrag.canceled += instance.OnMiddleDrag;
+            @scroll.started += instance.OnScroll;
+            @scroll.performed += instance.OnScroll;
+            @scroll.canceled += instance.OnScroll;
         }
 
         /// <summary>
@@ -390,6 +506,18 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
             @togglebuildmenu.started -= instance.OnTogglebuildmenu;
             @togglebuildmenu.performed -= instance.OnTogglebuildmenu;
             @togglebuildmenu.canceled -= instance.OnTogglebuildmenu;
+            @leftClick.started -= instance.OnLeftClick;
+            @leftClick.performed -= instance.OnLeftClick;
+            @leftClick.canceled -= instance.OnLeftClick;
+            @rightClick.started -= instance.OnRightClick;
+            @rightClick.performed -= instance.OnRightClick;
+            @rightClick.canceled -= instance.OnRightClick;
+            @middleDrag.started -= instance.OnMiddleDrag;
+            @middleDrag.performed -= instance.OnMiddleDrag;
+            @middleDrag.canceled -= instance.OnMiddleDrag;
+            @scroll.started -= instance.OnScroll;
+            @scroll.performed -= instance.OnScroll;
+            @scroll.canceled -= instance.OnScroll;
         }
 
         /// <summary>
@@ -458,5 +586,33 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnTogglebuildmenu(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "leftClick" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnLeftClick(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "rightClick" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRightClick(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "middleDrag" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnMiddleDrag(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "scroll" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnScroll(InputAction.CallbackContext context);
     }
 }

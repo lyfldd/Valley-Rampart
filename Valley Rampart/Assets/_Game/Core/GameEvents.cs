@@ -3,18 +3,60 @@ using UnityEngine;
 
 // ===== 玩家输入事件 =====
 
-// 玩家移动事件。由 InputManager 在 Playing 状态下每帧发布。
-// position 当前未使用（预留3D扩展），moveDir 为二维移动方向向量。
-public readonly struct PlayerMoveEvent
+// 玩家左键点击（2_13 步骤1 God-view）。由 InputManager 在 Normal 模式（Play 态）发布。
+// screenPos 为屏幕像素坐标；SelectionController 订阅（点选/框选判起点）。InteractionManager 已自治轮询左键
+// 处理 IInteractable（保留），不重复订阅。
+public readonly struct LeftClickPressedEvent
 {
-    public readonly Vector3 position;
-    public readonly Vector3 moveDir;
+    public readonly Vector2 screenPos;
+    public LeftClickPressedEvent(Vector2 screen) { screenPos = screen; }
+}
 
-    public PlayerMoveEvent(Vector3 pos, Vector3 dir)
-    {
-        position = pos;
-        moveDir = dir;
-    }
+// 玩家右键指令（2_13 步骤1 God-view）。由 InputManager 发布。
+// worldPos 由订阅者（SelectionController）经屏幕坐标换算；右键=统一指令入口（移动/微操/守卫/跟进，D115/D116/D2）。
+// 仅发布屏幕坐标：实际世界坐标换算统一走 CameraRig.ScreenToGrid/Camera.main.ScreenToWorldPoint（2_10 拾取）。
+public readonly struct RightClickPressedEvent
+{
+    public readonly Vector2 screenPos;
+    public RightClickPressedEvent(Vector2 screen) { screenPos = screen; }
+}
+
+// ===== 2_13 步骤11 右键指令事件（D115/D116/D2；SelectionController 发布，2_8 任务/编队层消费）=====
+
+/// <summary>移动指令（MoveTo）。2_8 任务调度消费；本批 SelectionController 已用 PathFollower.SetDestination 直移保底（零回归），2_8 接管后以事件为准。</summary>
+public readonly struct UnitCommandEvent
+{
+    public readonly System.Collections.Generic.IReadOnlyList<UnitController> Units;
+    public readonly Vector2 WorldPos;
+    public UnitCommandEvent(System.Collections.Generic.IReadOnlyList<UnitController> units, Vector2 worldPos)
+    { Units = units; WorldPos = worldPos; }
+}
+
+/// <summary>优先采集指令（D115 微操：框选工人 + 右键资源点 → 优先采集）。2_8 TaskScheduler 消费（挂账）；本批发布占位。</summary>
+public readonly struct PrioritizeHarvestCommand
+{
+    public readonly System.Collections.Generic.IReadOnlyList<UnitController> Workers;
+    public readonly Vector2 TargetPos;
+    public PrioritizeHarvestCommand(System.Collections.Generic.IReadOnlyList<UnitController> workers, Vector2 targetPos)
+    { Workers = workers; TargetPos = targetPos; }
+}
+
+/// <summary>守卫部署指令（D116：选中士兵 + 右键高价值点 → 派兵守卫）。本批已接线 GuardDeploymentSystem.DeployGuard（消费端就绪=真响应）；事件同步发布供 2_8 后续接管。</summary>
+public readonly struct GuardDeployCommand
+{
+    public readonly System.Collections.Generic.IReadOnlyList<UnitController> Soldiers;
+    public readonly Vector2 TargetPos;
+    public GuardDeployCommand(System.Collections.Generic.IReadOnlyList<UnitController> soldiers, Vector2 targetPos)
+    { Soldiers = soldiers; TargetPos = targetPos; }
+}
+
+/// <summary>跟进指令（D2：右键己方单位 → 跟随目标移动）。2_8 编队层消费（挂账）；本批发布占位。</summary>
+public readonly struct FollowCommand
+{
+    public readonly System.Collections.Generic.IReadOnlyList<UnitController> Followers;
+    public readonly UnitController Target;
+    public FollowCommand(System.Collections.Generic.IReadOnlyList<UnitController> followers, UnitController target)
+    { Followers = followers; Target = target; }
 }
 
 // 已废弃：使用 ConfigsLoadedEvent 替代（引导书 3.2 节）

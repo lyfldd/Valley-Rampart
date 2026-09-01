@@ -179,91 +179,9 @@ public class RulerController : Singleton<RulerController>, ISaveable
         return spawnPosition;
     }
 
-    // 在场景中查找已有的君主单位。
-    // 识别标准（优先级从高到低）：
-    //   1. Data 已初始化 且 faction=PlayerCamp, occupation=Ruler
-    //   2. Data 已初始化 但带有 PlayerInputHandler（兜底识别）
-    //   3. Data==null 但有 PlayerInputHandler（场景中手动放置但未初始化）
-    private UnitController FindExistingMonarch()
-    {
-        UnitController[] allUnits = FindObjectsOfType<UnitController>();
-
-        // 优先级 1：已初始化的君主（最可靠，通过 Data 的 faction+occupation 判断）
-        foreach (var unit in allUnits)
-        {
-            if (unit == null || unit.gameObject == null) continue;
-            if (unit.Data != null &&
-                unit.Data.faction == Faction.PlayerCamp &&
-                unit.Data.occupation == Occupation.Ruler)
-            {
-                Debug.Log($"[RulerController] FindExistingMonarch → 找到已初始化君主: {unit.name}");
-                return unit;
-            }
-        }
-
-        // 优先级 2：已初始化的单位但带有 PlayerInputHandler（兜底：可能 Data 的 faction/occupation 被误设）
-        foreach (var unit in allUnits)
-        {
-            if (unit == null || unit.gameObject == null) continue;
-            if (unit.Data != null && unit.GetComponent<PlayerInputHandler>() != null)
-            {
-                Debug.Log($"[RulerController] FindExistingMonarch → 通过 PlayerInputHandler 找到已初始化单位: {unit.name}");
-                return unit;
-            }
-        }
-
-        // 优先级 3：未初始化但手动放置的单位（Data==null, 有 PlayerInputHandler）
-        foreach (var unit in allUnits)
-        {
-            if (unit == null || unit.gameObject == null) continue;
-            if (unit.Data == null && unit.GetComponent<PlayerInputHandler>() != null)
-            {
-                Debug.Log($"[RulerController] FindExistingMonarch → 找到未初始化君主（场景手动放置）: {unit.name}");
-                return unit;
-            }
-        }
-
-        return null;
-    }
-
-    // 清理场景中多余的君主单位。只保留第一个找到的，其余销毁。
-    // 返回清理的数量。
-    private int RemoveDuplicateMonarchs()
-    {
-        UnitController[] allUnits = FindObjectsOfType<UnitController>();
-        UnitController firstMonarch = null;
-        int removed = 0;
-
-        foreach (var unit in allUnits)
-        {
-            if (unit == null || unit.gameObject == null) continue;
-
-            bool isMonarch = unit.GetComponent<PlayerInputHandler>() != null;
-            if (!isMonarch && unit.Data != null)
-            {
-                isMonarch = unit.Data.faction == Faction.PlayerCamp
-                         && unit.Data.occupation == Occupation.Ruler;
-            }
-
-            if (!isMonarch) continue;
-
-            if (firstMonarch == null)
-            {
-                firstMonarch = unit;  // 保留第一个
-            }
-            else
-            {
-                Debug.LogWarning($"[RulerController] 移除重复君主: {unit.name} (SaveId={unit.SaveId})");
-                // 先注销 ISaveable（SaveId 可能为 null，UnregisterSaveable 内部已防御），再销毁
-                SaveManager.Instance.UnregisterSaveable(unit);
-                UnitRegistry.Instance.Unregister(unit);
-                Destroy(unit.gameObject);
-                removed++;
-            }
-        }
-
-        return removed;
-    }
+    // 注：FindExistingMonarch / RemoveDuplicateMonarchs 已删除（2026-09-01 批A）。
+    // 死代码实证：全文件零调用点；且依赖 PlayerInputHandler（本批退役删除）→ 连同清理。
+    // 上帝视角君主实体已退役（HH.17/2_12 步骤8.4），BindExistingMonarch 空实现承接语义。
 
     // ===== 状态重置（由 TeardownManager 返回主菜单时调用）=====
 
