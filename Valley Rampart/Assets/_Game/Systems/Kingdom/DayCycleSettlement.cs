@@ -70,9 +70,12 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         if (KingdomManager.Instance != null)
             KingdomManager.Instance.TickTradeCooldowns();
 
-        // - AI 段 日结转账（2_17 步骤2b 收入侧路由）：把 AI 建筑 Storage 累计产出 → AddResources 入
-        //   KingdomState.resources → 清零。只处理 kingdomId>0，玩家(id=0)零回归。
+        // - AI 段 日结（2_17 步骤2b 收入侧路由 + 步骤14 批A 分叉 D459）：Fine 王国→实体结算
+        //   （AIEconomySettlement 把 Storage 累计产出 AddResources 入国库→清零，内部跳过 Abstract）；
+        //   Abstract 王国→公式结算（AbstractEconomySettlement 镜像 sim SimEconomy，纯 C# DTO）。
+        //   玩家(id=0)恒 Fine 零回归。两分支统一日结粒度 1 日（D463 对账时点标注）。
         AIEconomySettlement.Tick();
+        AbstractEconomySettlement.Tick();
 
         // - 牧场养殖每日结算（喂粮/生长）
         if (RanchSystem.Instance != null)

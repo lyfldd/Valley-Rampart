@@ -19,7 +19,8 @@ using UnityEngine;
 /// </summary>
 public static class AIEconomySettlement
 {
-    /// <summary>日结 AI 段：把所有 AI 建筑产出的五经济资源路由入各自王国国库并清零本地仓储。</summary>
+    /// <summary>日结 AI 段：把所有 AI 建筑产出的五经济资源路由入各自王国国库并清零本地仓储。
+    /// 2_17 步骤14 批A（D459）：跳过 simMode==Abstract 王国（归 AbstractEconomySettlement 公式结算），防双写。</summary>
     public static void Tick()
     {
         var reg = KingdomRegistry.Instance;
@@ -30,6 +31,7 @@ public static class AIEconomySettlement
         {
             var kingdom = all[i];
             if (kingdom.IsPlayer) continue;   // 玩家国库不在此入账（零回归）
+            if (kingdom.simMode == SimMode.Abstract) continue;   // Abstract 王国走 AbstractEconomySettlement（D459 分叉）
             SettleKingdom(kingdom);
         }
     }

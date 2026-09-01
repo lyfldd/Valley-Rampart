@@ -49,7 +49,12 @@ public class SimModeManager : Singleton<SimModeManager>
         EventBus.Unsubscribe<MapGeneratedEvent>(OnMapGenerated);
     }
 
-    private void OnMapGenerated(MapGeneratedEvent evt) => _uncoveredDays.Clear();
+    private void OnMapGenerated(MapGeneratedEvent evt)
+    {
+        _uncoveredDays.Clear();
+        // 2_17 步骤14 批B：抽象结算连续断粮日随新图清空（对齐 _uncoveredDays 生命周期，防跨局残留）
+        AbstractEconomySettlement.OnMapGenerated();
+    }
 
     /// <summary>查询某王国日 tick 演算粒度（读 KingdomState.simMode，由日 tick 判定写入）。玩家/未知王国恒 Fine。</summary>
     public SimMode GetMode(int kingdomId)
