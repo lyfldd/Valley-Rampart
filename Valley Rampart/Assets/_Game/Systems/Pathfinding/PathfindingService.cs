@@ -15,6 +15,8 @@ public static class PathfindingService
     /// <summary>
     /// 同步微格 A*（推荐入口）。from/to 为世界坐标，先转微格再求解。
     /// 落点吸附微格只在调用时算（D73，由 PathFollower.SetDestination 每次调用触达）。
+    /// 寻路2（HH.48）：目标格不可走→snap 最近可走微格再求解（就近可达语义，替代原"目标不可走→
+    /// 全体 Unreachable→单位原地不动"；界内无可走格→保持原目标走原失败链）。
     /// </summary>
     public static PathResult FindPathImmediate(Vector2 fromWorld, Vector2 toWorld)
     {
@@ -24,6 +26,13 @@ public static class PathfindingService
         GridCoord? fromOpt = grid.WorldToSubCoord(fromWorld);
         GridCoord? toOpt = grid.WorldToSubCoord(toWorld);
         if (!fromOpt.HasValue || !toOpt.HasValue) return null;   // 越界
+
+        // 寻路2（HH.48）：目标格校验+snap（起点不 snap——路径起点必须=单位实际位置，防瞬移语义）
+        if (!grid.IsSubWalkable(toOpt.Value))
+        {
+            var snapped = SpawnPosSnapper.SnapSub(toOpt.Value);
+            if (snapped.HasValue) toOpt = snapped;
+        }
 
         int maxExp = GridSystemHasConfig() ? GridSystemMaxExpansions() : DEFAULT_MAX_EXPANSIONS;
         return AStarSolver.Solve(grid, fromOpt.Value, toOpt.Value, maxExp);

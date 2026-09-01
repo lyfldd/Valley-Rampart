@@ -100,7 +100,10 @@ public static class KingdomFoundry
             Vector3 world = (grid != null && grid.Config != null)
                 ? (Vector3)grid.CoordToWorld(new GridCoord(cell.x, cell.y))
                 : new Vector3(cell.x, cell.y, 0f);
-            if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, world, kingdomId) != null)
+            // 寻路2（HH.48）：MapData 层可走 ≠ 运行时可走（预置建筑占格/障碍）→ 落点不可走时就近吸附；
+            // 吸附为固定环序确定性扫描，不消耗 rng 流，同 seed 逐字节一致不破坏。
+            Vector2 spawnPos = SpawnPosSnapper.SnapWorld(world, $"AI工人k{kingdomId}#{k}");
+            if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, spawnPos, kingdomId) != null)
                 placed++;
         }
         if (placed > 0)

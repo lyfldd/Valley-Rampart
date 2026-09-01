@@ -319,7 +319,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         BirthCooldownDays = pairCooldown;
     }
 
-    /// <summary>生育落点：第一栋激活房屋旁（进房表演出口）；无房屋回退王国锚点。</summary>
+    /// <summary>生育落点：第一栋激活房屋旁（进房表演出口）；无房屋回退王国锚点。落点不可走→就近吸附（寻路2/HH.48）。</summary>
     private Vector2 GetBirthPosition()
     {
         if (BuildingRegistry.Instance != null)
@@ -329,10 +329,12 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             {
                 var b = all[i];
                 if (b == null || b.def == null || !b.IsActive || b.def.id != "House") continue;
-                return new Vector2(b.transform.position.x + 1f, b.transform.position.y);
+                return SpawnPosSnapper.SnapWorld(new Vector2(b.transform.position.x + 1f, b.transform.position.y), "繁殖Child");
             }
         }
-        return WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
+        return WorldManager.Instance != null
+            ? SpawnPosSnapper.SnapWorld(WorldManager.Instance.GetKingdomAnchorWorld(), "繁殖Child兜底")
+            : Vector2.zero;
     }
 
     /// <summary>

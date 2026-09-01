@@ -257,9 +257,10 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         float cs = grid != null && grid.Config != null ? grid.Config.cellSize.x : 2.26f;
         float offsetX = (float)((rng.NextDouble() * 2.0 - 1.0) * cfg.campVagrantRadiusCells * 0.5f) * cs;
 
+        // 寻路2（HH.48）：落点不可走→就近可走吸附（BirthCampPos 仍=营地语义点不变）
+        Vector2 spawnPos = SpawnPosSnapper.SnapWorld(new Vector2(campPos.x + offsetX, campPos.y), "流民补员");
         var go = UnitFactory.Instance.SpawnUnit(
-            Faction.PlayerCamp, Occupation.Vagrant,
-            new Vector2(campPos.x + offsetX, campPos.y));
+            Faction.PlayerCamp, Occupation.Vagrant, spawnPos);
         if (go == null) return false;
 
         // QQQ.2 T11 / DR-7：记录出生营地坐标（未招募流浪汉 HomePoint = 本值，在营地游荡不朝王国走）
@@ -277,12 +278,13 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         var grid = GridSystem.Instance;
         float cs = grid != null && grid.Config != null ? grid.Config.cellSize.x : 2.26f;
         float jx = (float)((rng.NextDouble() * 2.0 - 1.0) * 0.3 * cs);
+        // 寻路2（HH.48）：落点不可走→就近可走吸附；BirthCampPos=吸附后实际落点（滞留该处游荡语义对齐实体站位）
+        Vector2 spawnPos = SpawnPosSnapper.SnapWorld(new Vector2(worldPos.x + jx, worldPos.y), "初始流民");
         var go = UnitFactory.Instance.SpawnUnit(
-            Faction.PlayerCamp, Occupation.Vagrant,
-            new Vector2(worldPos.x + jx, worldPos.y));
+            Faction.PlayerCamp, Occupation.Vagrant, spawnPos);
         if (go == null) return false;
         var uc = go.GetComponent<UnitController>();
-        if (uc != null) uc.BirthCampPos = new Vector2(worldPos.x, worldPos.y);   // 滞留该处游荡（HomePoint=落点，不朝王国走）
+        if (uc != null) uc.BirthCampPos = spawnPos;   // 滞留该处游荡（HomePoint=落点，不朝王国走）
         return true;
     }
 

@@ -35,9 +35,13 @@ public class PathFollower : MonoBehaviour
     }
 
     /// <summary>设置目标（世界坐标）。落点吸附微格 + 发同步寻路请求（D73：仅在设置/到达时算）。
-    /// 2_7 缓存：已正跟随且目标未变（<0.1 世界单位）→ 不重寻，供 Executor 每帧同目标调用零开销。</summary>
+    /// 2_7 缓存：已正跟随且目标未变（<0.1 世界单位）→ 不重寻，供 Executor 每帧同目标调用零开销。
+    /// 寻路2（HH.48）：目标先经 SpawnPosSnapper 吸附可走格——_destination 与路径终点一致，
+    /// 防"路径走完仍未达→直线 MoveTowards(_destination) 拖单位穿入山体/水域 flags=None 格
+    /// →起点失效→Unreachable 困死"链（实测 npcId 29/35/37 复现）；snap 确定性环序，本格可走零开销。</summary>
     public void SetDestination(Vector2 worldPos, byte priority = 0)
     {
+        worldPos = SpawnPosSnapper.SnapWorld(worldPos, null, verbose: false);
         bool same = _state == PathFollowerState.Following &&
                     Vector2.Distance(_destination, worldPos) <= DestEpsilonWorld;
         _destination = worldPos;
