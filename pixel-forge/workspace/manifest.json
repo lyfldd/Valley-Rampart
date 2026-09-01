@@ -1,0 +1,191 @@
+{
+  "units/01_image-1786607542814-u7ibxrayc2e.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/01_image-1786607542814-u7ibxrayc2e.png",
+    "size": "32x32",
+    "paletteCount": 14,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "606fe21c025d571da2717d3be33147e83e35723bec0a4093f4722e357c8d1233"
+  },
+  "units/02_image-1786607542821-0zudme7nvxp.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/02_image-1786607542821-0zudme7nvxp.png",
+    "size": "32x32",
+    "paletteCount": 13,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "6da90ab19d3f5d0d55c04588045c3f88d5f04710c731630a128a59167ac79c78"
+  },
+  "units/03_image-1786607542829-lyvzpy2d30g.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/03_image-1786607542829-lyvzpy2d30g.png",
+    "size": "32x32",
+    "paletteCount": 15,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "20ceb7de9ea8c3d1f5c30269d9fbd540adc016784f1e614cc41d82712e915ff2"
+  },
+  "units/04_image-1786607542843-o2jtj0j20yh.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/04_image-1786607542843-o2jtj0j20yh.png",
+    "size": "32x32",
+    "paletteCount": 15,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "efe4eeaa17d904f1364b9c7086607a63d265bdc5f8f0ab58e01cc8f311b75e1f"
+  },
+  "units/05_image-1786607542854-bmkaghcn9d4.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/05_image-1786607542854-bmkaghcn9d4.png",
+    "size": "32x32",
+    "paletteCount": 13,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "78dd9de98ac8493a2d11cf364c8555951ce359a7fd01df8b30c1f212c599bc2b"
+  },
+  "units/06_image-1786607542861-sml4mfhlbq.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/06_image-1786607542861-sml4mfhlbq.png",
+    "size": "32x32",
+    "paletteCount": 14,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "f4be52226964240b72cba8f2913768523f08bf96c2826a94c0253f141572ed54"
+  },
+  "units/07_image-1786607542871-31u8xk76y84.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/07_image-1786607542871-31u8xk76y84.png",
+    "size": "32x32",
+    "paletteCount": 15,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "09b828c09a655e62015bccd04868c5eaaccf4095f00dea3e8ad43efdfd6ee4ed"
+  },
+  "units/08_image-1786607542879-0y5omsnpyczo.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/08_image-1786607542879-0y5omsnpyczo.png",
+    "size": "32x32",
+    "paletteCount": 15,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "319d785da0195d3cca5b2ac2c8b1a7b65ef0a76f5664beb39be1894294317046"
+  },
+  "units/09_image-1786607542886-gfwzo2b6y7.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/09_image-1786607542886-gfwzo2b6y7.png",
+    "size": "32x32",
+    "paletteCount": 16,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "6d96f7e91d883b9923c664eb0af88ae1f275654f883c0e840cd95adf306e338f"
+  },
+  "units/10_image-1786607542894-udloprrwmva.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/10_image-1786607542894-udloprrwmva.png",
+    "size": "32x32",
+    "paletteCount": 16,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "c47f82c5d900e4c31fe4a3d216b9694024ce80687c8d80f95892167ed6827c0b"
+  },
+  "units/11_image-1786607542904-xm7cnrusxi.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/11_image-1786607542904-xm7cnrusxi.png",
+    "size": "32x32",
+    "paletteCount": 15,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "1e184de2f272d80a031ea5d41ccba1bb0e9d051c88a057b7163f0770bbc0144b"
+  },
+  "units/12_image-1786607542911-anepc7gtgb.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/12_image-1786607542911-anepc7gtgb.png",
+    "size": "32x32",
+    "paletteCount": 15,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "d98405d8a42c3868340d7182a3ea2b4fe35c0fcb435fee0ff244bb49ded11aa8"
+  },
+  "units/13_image-1786607542920-tvlgkyq2yrg.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Units/13_image-1786607542920-tvlgkyq2yrg.png",
+    "size": "32x32",
+    "paletteCount": 16,
+    "manualOnly": false,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "954cfc2b410fd179e9660dae96818520004dac86d61adb7deaf8d1b0249ad313"
+  },
+  "ground/亚热带地块.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/亚热带地块.png",
+    "size": "170x200",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "21f68c846add5e19f55595a58a921372b5f9d3dc561e50d2e81a28a4f1c2b753"
+  },
+  "ground/寒带地块.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/寒带地块.png",
+    "size": "172x200",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "5632f5fae93148979fdcb3ef76fbfeeebef75af99a454fb1197b2b37b7488535"
+  },
+  "ground/温带地块.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/温带地块.png",
+    "size": "172x202",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "b98fc2471232319c40390d701a5546261828a1a8c9e2357199b539b14cc04589"
+  },
+  "ground/湾流河道1.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/湾流河道1.png",
+    "size": "172x204",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "ce48e302221503d2a2803f54267b1905665f2da62f528b196968cb1a157ce0e7"
+  },
+  "ground/湾流河道2.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/湾流河道2.png",
+    "size": "172x204",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "74e172d12a7eab32d2e85379da301a222e269dc2f8ac3fba9b4ba1178959ec22"
+  },
+  "ground/热带地块.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/热带地块.png",
+    "size": "172x202",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "96ee232804563f8e09ef28968a40dcac4f553327350518a80d5ff314873b8c9a"
+  },
+  "ground/直流河道1.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/直流河道1.png",
+    "size": "172x204",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "7540c3785d0c33ced3241a65053a6c9ce82259c71c5fe306818ce238159eba7c"
+  },
+  "ground/直流河道2.png": {
+    "alias": "",
+    "source": "Assets/_Game/Art/Ground/直流河道2.png",
+    "size": "172x204",
+    "paletteCount": 0,
+    "manualOnly": true,
+    "importedAt": "2026-09-01",
+    "importedChecksum": "3bcf01d1cdafb9744c82a4fe7dbf9810d582550a096bf3c26a125fe800d4ff39"
+  }
+}

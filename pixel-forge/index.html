@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>像素工坊 · pixel-forge</title>
+<style>
+:root {
+  --bg: #17171c; --panel: #1f1f27; --panel2: #26262f; --border: #33333e;
+  --text: #e8e8ee; --muted: #9a97a8; --accent: #7c6cff; --accent2: #9d8fff;
+  --danger: #ff6b6b; --ok: #5fd48a; --warn: #ffcc66;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.active { background: var(--accent); border-color: var(--accent2); color: #fff; }
+textarea, input[type=text], select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 100%;
+}
+header {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  background: var(--panel); border-bottom: 1px solid var(--border); flex: none;
+}
+header .logo { font-weight: 700; color: var(--accent2); margin-right: 4px; }
+header .file-title { flex: 1; text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .file-title b { color: var(--text); }
+#dirtyFlag { color: var(--warn); }
+#health { font-size: 12px; color: var(--muted); white-space: nowrap; }
+#health .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--danger); }
+#main { display: flex; flex: 1; min-height: 0; }
+aside { width: 260px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; }
+#center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#canvasWrap { flex: 1; overflow: auto; display: grid; place-items: center; padding: 20px; }
+#canvas { image-rendering: pixelated; cursor: crosshair; background: #101014; box-shadow: 0 0 0 1px var(--border); }
+#statusbar {
+  flex: none; display: flex; gap: 18px; padding: 6px 14px; font-size: 12px; color: var(--muted);
+  background: var(--panel); border-top: 1px solid var(--border);
+}
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.panel h3 { margin: 0 0 8px; font-size: 13px; color: var(--accent2); }
+.panel .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+#tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+#tools button { padding: 6px 0; font-size: 12px; }
+#fileList, #pubList { list-style: none; margin: 4px 0 0; padding: 0; max-height: 260px; overflow-y: auto; }
+#fileList li {
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  display: flex; justify-content: space-between; gap: 6px; align-items: center;
+  white-space: nowrap; overflow: hidden;
+}
+#fileList li:hover { background: var(--panel2); }
+#fileList li.current { background: var(--panel2); outline: 1px solid var(--accent); }
+#fileList li .meta { color: var(--muted); font-size: 11px; flex: none; }
+.badge { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--panel2); color: var(--muted); flex: none; }
+.badge.warn { color: var(--warn); border: 1px solid var(--warn); }
+#palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+#palette .sw {
+  aspect-ratio: 1; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;
+  display: grid; place-items: center; font-size: 10px; color: rgba(255,255,255,.75);
+  text-shadow: 0 0 2px rgba(0,0,0,.9);
+}
+#palette .sw.sel { outline: 2px solid var(--accent2); }
+#palette .sw.transparent { background: repeating-conic-gradient(#3a3a44 0 25%, #2a2a33 0 50%) 0 0 / 10px 10px; }
+#aiStatus { font-size: 12px; margin: 6px 0; color: var(--muted); min-height: 18px; word-break: break-all; }
+#aiStatus.err { color: var(--danger); }
+#diffWrap { display: none; margin-top: 8px; }
+#diffWrap.show { display: block; }
+#diffWrap .canvases { display: flex; gap: 8px; }
+#diffWrap canvas { image-rendering: pixelated; border: 1px solid var(--border); background: #101014; }
+#diffWrap .cap { font-size: 11px; color: var(--muted); text-align: center; margin-top: 2px; }
+#diffInfo { font-size: 12px; color: var(--muted); margin: 6px 0; }
+#pubLog { font-size: 12px; margin-top: 8px; max-height: 160px; overflow-y: auto; }
+#pubLog .ok { color: var(--ok); } #pubLog .conflict { color: var(--warn); } #pubLog .err { color: var(--danger); }
+#pubList li { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 0; }
+#pubList li span.name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#modalBg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; place-items: center; z-index: 10; }
+#modalBg.show { display: grid; }
+#modal { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; width: 300px; }
+#modal h3 { margin: 0 0 10px; color: var(--accent2); font-size: 14px; }
+#modal label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+.tip { font-size: 11px; color: var(--muted); margin-top: 6px; }
+::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">像素工坊</span>
+  <button id="btnRefreshList">刷新</button>
+  <span class="file-title" id="fileTitle">未打开文件</span>
+  <span id="dirtyFlag"></span>
+  <button id="btnSave" disabled>保存 Ctrl+S</button>
+  <button id="btnUndo" disabled>撤销</button>
+  <button id="btnRedo" disabled>重做</button>
+  <button id="btnRename" disabled>改名</button>
+  <span id="health"></span>
+</header>
+<div id="main">
+  <aside id="left">
+    <div class="panel">
+      <h3>工具</h3>
+      <div id="tools">
+        <button data-tool="pencil" class="active">铅笔 B</button>
+        <button data-tool="eraser">橡皮 E</button>
+        <button data-tool="picker">吸色 I</button>
+        <button data-tool="fill">填充 G</button>
+        <button data-tool="line">直线 L</button>
+        <button data-tool="rect">矩形 R</button>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="showGrid" checked>网格线</label>
+        <span style="flex:1"></span>
+        <button id="zoomOut">−</button><span id="zoomVal">12</span><button id="zoomIn">＋</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>文件</h3>
+      <div class="row">
+        <button id="btnNew">新建</button>
+        <button id="btnImport">导入…</button>
+      </div>
+      <ul id="fileList"></ul>
+      <div class="tip">导入填 Assets 相对路径，如 Assets/_Game/Art/Units</div>
+    </div>
+  </aside>
+  <section id="center">
+    <div id="canvasWrap"><canvas id="canvas"></canvas></div>
+    <div id="statusbar">
+      <span id="stName">—</span><span id="stSize">—</span><span id="stPalette">—</span>
+      <span id="stCursor">—</span><span id="stZoom">12x</span>
+    </div>
+  </section>
+  <aside id="right">
+    <div class="panel">
+      <h3>调色板 <span id="palCount" style="color:var(--muted);font-size:11px"></span></h3>
+      <div id="palette"></div>
+      <div class="row">
+        <input type="color" id="colorPicker" value="#ffffff" title="选择新颜色">
+        <button id="btnAddColor">加色</button>
+        <span class="tip" style="margin:0">≤64 色</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>AI 编辑</h3>
+      <textarea id="aiInstruction" rows="3" placeholder="例如：给头盔加一道高光；把整体色调调暖；给剑刃加金色描边"></textarea>
+      <div class="row"><button id="btnAi" class="primary" style="flex:1">让 AI 修改</button></div>
+      <div id="aiStatus"></div>
+      <div id="diffWrap">
+        <div class="canvases">
+          <div><canvas id="diffBefore"></canvas><div class="cap">改前</div></div>
+          <div><canvas id="diffAfter"></canvas><div class="cap">改后</div></div>
+          <div><canvas id="diffMap"></canvas><div class="cap">差异</div></div>
+        </div>
+        <div id="diffInfo"></div>
+        <div class="row">
+          <button id="btnAccept" class="primary" style="flex:1">接受（自动保存）</button>
+          <button id="btnReject" style="flex:1">放弃</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>发布到 Assets</h3>
+      <ul id="pubList"></ul>
+      <label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="forceOverwrite"> 强制覆盖外部修改</label>
+      <div class="row">
+        <button id="btnPubPreview" style="flex:1">预检</button>
+        <button id="btnPublish" class="primary" style="flex:1">发布</button>
+      </div>
+      <div id="pubLog"></div>
+      <div class="tip">只写 PNG，绝不碰 .meta（GUID 稳定）。发布后回 Unity 检查导入设置：Filter=Point / Compression=None</div>
+    </div>
+  </aside>
+</div>
+<div id="modalBg">
+  <div id="modal">
+    <h3>新建像素图</h3>
+    <label>名称</label>
+    <input type="text" id="newName" value="new-sprite" maxlength="40">
+    <label>尺寸（宽=高）</label>
+    <select id="newSize">
+      <option>16</option><option selected>32</option><option>48</option><option>64</option>
+    </select>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button id="btnNewCancel">取消</button>
+      <button id="btnNewOk" class="primary">创建</button>
+    </div>
+  </div>
+</div>
+<script type="module">
+import { parseGridText, serializeGridText, diffGrids, paletteEntry, CHARS } from '/server/gridtext.mjs';
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  key: null, parsed: null, undo: [], redo: [], dirty: false,
+  zoom: 12, tool: 'pencil', penChar: '.',
+  sessionTouched: new Set(), files: [],
+  aiPending: null, previewCells: null, dragging: null,
+};
+
+/* ================= 基础 ================= */
+const paletteMap = () => new Map(state.parsed.palette.map((p) => [p.char, p]));
+const cssColor = (p) => `rgba(${p.rgb[0]},${p.rgb[1]},${p.rgb[2]},${(p.a / 255).toFixed(3)})`;
+const api = (path, opts) => fetch(path, opts).then(async (r) => {
+  const text = await r.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+});
+
+function snapshot() {
+  return { rows: state.parsed.rows.slice(), palette: state.parsed.palette.map((p) => ({ ...p })) };
+}
+function pushUndo() {
+  state.undo.push(snapshot());
+  if (state.undo.length > 100) state.undo.shift();
+  state.redo = [];
+  refreshHistoryButtons();
+}
+function markDirty() { state.dirty = true; $('dirtyFlag').textContent = '●未保存'; $('btnSave').disabled = false; }
+function clearDirty() { state.dirty = false; $('dirtyFlag').textContent = ''; $('btnSave').disabled = !state.key; }
+function refreshHistoryButtons() { $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length; }
+
+/* ================= 渲染 ================= */
+function drawGridToCanvas(canvas, parsed, zoom, diffs) {
+  const { width: w, height: h, rows } = parsed;
+  const pm = new Map(parsed.palette.map((p) => [p.char, p]));
+  canvas.width = w * zoom; canvas.height = h * zoom;
+  canvas.style.width = `${w * zoom}px`; canvas.style.height = `${h * zoom}px`;
+  const ctx = canvas.getContext('2d');
+  const cs = 8;
+  for (let y = 0; y < canvas.height; y += cs)
+    for (let x = 0; x < canvas.width; x += cs) {
+      ctx.fillStyle = ((x / cs + y / cs) | 0) % 2 ? '#23232b' : '#1b1b22';
+      ctx.fillRect(x, y, cs, cs);
+    }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const ch = rows[y][x];
+      if (ch === '.') continue;
+      const p = pm.get(ch);
+      if (!p) continue;
+      ctx.fillStyle = cssColor(p);
+      ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+    }
+  if (diffs) {
+    ctx.fillStyle = 'rgba(255,60,60,.85)';
+    for (const d of diffs) ctx.fillRect(d.x * zoom, d.y * zoom, zoom, zoom);
+  }
+}
+function render() {
+  if (!state.parsed) return;
+  drawGridToCanvas($('canvas'), state.parsed, state.zoom);
+  const canvas = $('canvas');
+  const ctx = canvas.getContext('2d');
+  if (state.previewCells) {
+    const pm = paletteMap();
+    ctx.globalAlpha = 0.65;
+    for (const [x, y] of state.previewCells) {
+      const p = state.penChar === '.' ? null : pm.get(state.penChar);
+      ctx.fillStyle = p ? cssColor(p) : '#ffffff';
+      ctx.fillRect(x * state.zoom, y * state.zoom, state.zoom, state.zoom);
+    }
+    ctx.globalAlpha = 1;
+  }
+  if ($('showGrid').checked && state.zoom >= 8) {
+    const { width: w, height: h } = state.parsed;
+    const z = state.zoom;
+    ctx.strokeStyle = 'rgba(255,255,255,.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 1; x < w; x++) { ctx.moveTo(x * z + .5, 0); ctx.lineTo(x * z + .5, h * z); }
+    for (let y = 1; y < h; y++) { ctx.moveTo(0, y * z + .5); ctx.lineTo(w * z, y * z + .5); }
+    ctx.stroke();
+  }
+  $('stName').textContent = state.parsed.name;
+  $('stSize').textContent = `${state.parsed.width}×${state.parsed.height}`;
+  $('stPalette').textContent = `${state.parsed.palette.length} 色`;
+  $('stZoom').textContent = `${state.zoom}x`;
+}
+function renderPalette() {
+  const wrap = $('palette');
+  wrap.innerHTML = '';
+  if (!state.parsed) { $('palCount').textContent = ''; return; }
+  $('palCount').textContent = `${state.parsed.palette.length}/64`;
+  const mk = (char, label, title, cls) => {
+    const d = document.createElement('div');
+    d.className = `sw${char === state.penChar ? ' sel' : ''}${cls || ''}`;
+    d.textContent = label;
+    d.title = title;
+    d.onclick = () => { state.penChar = char; renderPalette(); };
+    wrap.appendChild(d);
+  };
+  mk('.', '·', '透明（橡皮）', ' transparent');
+  for (const p of state.parsed.palette) {
+    const d = document.createElement('div');
+    d.className = `sw${p.char === state.penChar ? ' sel' : ''}`;
+    d.style.background = cssColor(p);
+    d.textContent = p.char;
+    d.title = `${p.char} = ${p.hex}`;
+    d.onclick = () => { state.penChar = p.char; renderPalette(); };
+    wrap.appendChild(d);
+  }
+}
+
+/* ================= 绘制交互 ================= */
+const cellFromEvent = (e) => {
+  const rect = $('canvas').getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / state.zoom);
+  const y = Math.floor((e.clientY - rect.top) / state.zoom);
+  if (x < 0 || y < 0 || x >= state.parsed.width || y >= state.parsed.height) return null;
+  return { x, y };
+};
+const setCell = (x, y, ch) => {
+  const row = state.parsed.rows[y];
+  if (row[x] === ch) return;
+  state.parsed.rows[y] = row.slice(0, x) + ch + row.slice(x + 1);
+};
+const bresenham = (x0, y0, x1, y1) => {
+  const cells = [];
+  let dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    cells.push([x0, y0]);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+  return cells;
+};
+const rectOutline = (x0, y0, x1, y1) => {
+  const cells = [];
+  const ax = Math.min(x0, x1), bx = Math.max(x0, x1);
+  const ay = Math.min(y0, y1), by = Math.max(y0, y1);
+  for (let x = ax; x <= bx; x++) { cells.push([x, ay]); if (by !== ay) cells.push([x, by]); }
+  for (let y = ay + 1; y < by; y++) { cells.push([ax, y]); if (bx !== ax) cells.push([bx, y]); }
+  return cells;
+};
+function floodFill(x, y, ch) {
+  const { rows, width: w, height: h } = state.parsed;
+  const target = rows[y][x];
+  if (target === ch) return false;
+  const stack = [[x, y]];
+  while (stack.length) {
+    const [cx, cy] = stack.pop();
+    if (cx < 0 || cy < 0 || cx >= w || cy >= h || rows[cy][cx] !== target) continue;
+    setCell(cx, cy, ch);
+    stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+  }
+  return true;
+}
+function applyCells(cells) {
+  let changed = false;
+  for (const [x, y] of cells) {
+    const before = state.parsed.rows[y][x];
+    setCell(x, y, state.penChar);
+    if (state.parsed.rows[y][x] !== before) changed = true;
+  }
+  if (changed) { markDirty(); render(); }
+}
+
+$('canvas').addEventListener('pointerdown', (e) => {
+  if (!state.parsed) return;
+  const c = cellFromEvent(e);
+  if (!c) return;
+  $('canvas').setPointerCapture(e.pointerId);
+  const t = state.tool;
+  if (t === 'picker') {
+    const ch = state.parsed.rows[c.y][c.x];
+    if (ch !== '.' && paletteMap().has(ch)) { state.penChar = ch; renderPalette(); }
+    return;
+  }
+  if (t === 'fill') {
+    pushUndo();
+    if (floodFill(c.x, c.y, state.penChar)) { markDirty(); render(); }
+    else { state.undo.pop(); refreshHistoryButtons(); }
+    return;
+  }
+  if (t === 'pencil' || t === 'eraser') {
+    pushUndo();
+    const ch = t === 'eraser' ? '.' : state.penChar;
+    state.dragging = { ch };
+    setCell(c.x, c.y, ch);
+    markDirty(); render();
+    return;
+  }
+  if (t === 'line' || t === 'rect') {
+    state.dragging = { x0: c.x, y0: c.y, mode: t };
+    state.previewCells = [[c.x, c.y]];
+    render();
+  }
+});
+$('canvas').addEventListener('pointermove', (e) => {
+  if (!state.parsed) return;
+  const c = cellFromEvent(e);
+  $('stCursor').textContent = c ? `(${c.x},${c.y}) ${state.parsed.rows[c.y][c.x]}` : '—';
+  if (!state.dragging || !c) return;
+  const d = state.dragging;
+  if (d.ch !== undefined) {
+    setCell(c.x, c.y, d.ch);
+    markDirty(); render();
+  } else {
+    state.previewCells = d.mode === 'line'
+      ? bresenham(d.x0, d.y0, c.x, c.y)
+      : rectOutline(d.x0, d.y0, c.x, c.y);
+    render();
+  }
+});
+$('canvas').addEventListener('pointerup', () => {
+  if (!state.dragging) return;
+  const d = state.dragging;
+  state.dragging = null;
+  if (d.ch === undefined) {
+    const cells = state.previewCells || [];
+    state.previewCells = null;
+    pushUndo();
+    applyCells(cells);
+  }
+});
+
+/* ================= 工具栏 / 缩放 ================= */
+document.querySelectorAll('#tools button').forEach((b) => {
+  b.onclick = () => {
+    state.tool = b.dataset.tool;
+    document.querySelectorAll('#tools button').forEach((x) => x.classList.toggle('active', x === b));
+  };
+});
+const setZoom = (z) => {
+  state.zoom = Math.max(4, Math.min(32, z));
+  $('zoomVal').textContent = state.zoom;
+  render();
+};
+$('zoomIn').onclick = () => setZoom(state.zoom + 4);
+$('zoomOut').onclick = () => setZoom(state.zoom - 4);
+$('showGrid').onchange = render;
+
+/* ================= 撤销 / 重做 ================= */
+function undo() {
+  if (!state.undo.length || !state.parsed) return;
+  state.redo.push(snapshot());
+  const s = state.undo.pop();
+  state.parsed.rows = s.rows; state.parsed.palette = s.palette;
+  markDirty(); render(); renderPalette(); refreshHistoryButtons();
+}
+function redo() {
+  if (!state.redo.length || !state.parsed) return;
+  state.undo.push(snapshot());
+  const s = state.redo.pop();
+  state.parsed.rows = s.rows; state.parsed.palette = s.palette;
+  markDirty(); render(); renderPalette(); refreshHistoryButtons();
+}
+$('btnUndo').onclick = undo;
+$('btnRedo').onclick = redo;
+
+/* ================= 调色板 ================= */
+$('btnAddColor').onclick = () => {
+  if (!state.parsed) return alert('先打开一个文件');
+  if (state.parsed.palette.length >= 64) return alert('调色板已满（64 色）');
+  const hex = $('colorPicker').value;
+  if (state.parsed.palette.some((p) => p.hex.toLowerCase() === hex.toLowerCase())) {
+    return alert('该颜色已在调色板中');
+  }
+  const entry = paletteEntry(CHARS[state.parsed.palette.length], hex);
+  state.parsed.palette.push(entry);
+  state.penChar = entry.char;
+  pushUndo(); markDirty(); renderPalette(); render();
+};
+
+/* ================= 文件列表 / 打开 / 保存 ================= */
+async function refreshList() {
+  try {
+    const { files } = await api('/api/list');
+    state.files = files;
+    const ul = $('fileList');
+    ul.innerHTML = '';
+    for (const f of files) {
+      const li = document.createElement('li');
+      li.dataset.key = f.key;
+      if (f.key === state.key) li.classList.add('current');
+      const name = document.createElement('span');
+      name.style.overflow = 'hidden'; name.style.textOverflow = 'ellipsis';
+      name.textContent = f.alias || f.key.split('/').pop();
+      name.title = `${f.key}${f.alias ? '（' + f.alias + '）' : ''}${f.source ? ' → ' + f.source : ''}`;
+      li.appendChild(name);
+      if (f.manualOnly) {
+        const b = document.createElement('span');
+        b.className = 'badge warn';
+        b.textContent = '超64色';
+        li.appendChild(b);
+      } else if (f.hasGrid) {
+        const m = document.createElement('span');
+        m.className = 'meta';
+        m.textContent = f.size;
+        li.appendChild(m);
+      }
+      li.onclick = () => openFile(f.key);
+      ul.appendChild(li);
+    }
+    refreshPubList();
+  } catch (e) {
+    console.error(e);
+  }
+}
+async function openFile(key) {
+  const entry = state.files.find((f) => f.key === key);
+  if (state.dirty && !confirm('当前文件未保存，放弃修改并切换？')) return;
+  let text;
+  try {
+    const r = await fetch(`/api/grid?path=${encodeURIComponent(key)}`);
+    if (!r.ok) {
+      const { error } = await r.json();
+      if (entry && entry.manualOnly) {
+        return alert(`${key}\n${error}\n（超 64 色地块图需量化管线，P2 待实施）`);
+      }
+      if (!confirm(`${key} 无网格文件，现在从 PNG 转换？`)) return;
+      await api('/api/convert', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: key }) });
+      return openFile(key);
+    }
+    text = await r.text();
+  } catch (e) {
+    return alert('读取失败：' + e.message);
+  }
+  try {
+    state.parsed = parseGridText(text);
+  } catch (e) {
+    return alert(`网格文件损坏：${e.message}`);
+  }
+  state.key = key;
+  state.undo = []; state.redo = [];
+  state.aiPending = null; hideDiff();
+  clearDirty(); refreshHistoryButtons();
+  $('fileTitle').innerHTML = `<b>${state.parsed.name}</b> · ${key}`;
+  $('btnRename').disabled = false;
+  state.penChar = state.parsed.palette[0]?.char || '.';
+  setZoom(state.parsed.width <= 32 ? 12 : 8);
+  render(); renderPalette();
+  document.querySelectorAll('#fileList li').forEach((li) => li.classList.toggle('current', li.dataset.key === key));
+}
+async function save() {
+  if (!state.parsed || !state.key) return;
+  try {
+    await api('/api/save-grid', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: state.key, gridText: serializeGridText(state.parsed) }),
+    });
+    clearDirty();
+    state.sessionTouched.add(state.key);
+    refreshList();
+  } catch (e) {
+    alert('保存失败：' + e.message);
+  }
+}
+$('btnSave').onclick = save;
+$('btnRefreshList').onclick = refreshList;
+$('btnRename').onclick = async () => {
+  if (!state.key) return;
+  const cur = state.files.find((f) => f.key === state.key)?.alias || '';
+  const alias = prompt('语义别名（供 AI 指令引用，如"剑士"）：', cur);
+  if (alias === null) return;
+  try {
+    await api('/api/manifest', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: state.key, alias }) });
+    refreshList();
+  } catch (e) { alert(e.message); }
+};
+
+/* ================= 新建 / 导入 ================= */
+$('btnNew').onclick = () => $('modalBg').classList.add('show');
+$('btnNewCancel').onclick = () => $('modalBg').classList.remove('show');
+$('btnNewOk').onclick = async () => {
+  const name = $('newName').value.trim() || 'new-sprite';
+  const size = +$('newSize').value;
+  try {
+    const { key } = await api('/api/new-file', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, width: size, height: size }),
+    });
+    $('modalBg').classList.remove('show');
+    await refreshList();
+    openFile(key);
+  } catch (e) { alert(e.message); }
+};
+$('btnImport').onclick = async () => {
+  const source = prompt('Assets 相对路径（文件或目录）：', 'Assets/_Game/Art/Units');
+  if (!source) return;
+  try {
+    const { results } = await api('/api/import', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source }),
+    });
+    const lines = results.map((r) =>
+      `${r.error ? '✗' : r.skipped ? '·已导入' : '✓'} ${r.file}${r.manualOnly ? '（超64色→manualOnly）' : ''}${r.error ? '：' + r.error : ''}`);
+    alert(lines.join('\n') || '无 PNG 可导入');
+    refreshList();
+  } catch (e) { alert(e.message); }
+};
+
+/* ================= AI 编辑 ================= */
+function hideDiff() { $('diffWrap').classList.remove('show'); }
+$('btnAi').onclick = async () => {
+  if (!state.parsed) return alert('先打开一个文件');
+  const instruction = $('aiInstruction').value.trim();
+  if (!instruction) return alert('请填写修改指令');
+  const btn = $('btnAi');
+  btn.disabled = true;
+  const st = $('aiStatus');
+  st.className = '';
+  st.textContent = 'AI 处理中…（单次 10 秒~3 分钟，含格式校验自动重试）';
+  hideDiff();
+  try {
+    const r = await api('/api/ai/edit', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ instruction, gridText: serializeGridText(state.parsed) }),
+    });
+    const newParsed = parseGridText(r.gridText);
+    const diffs = diffGrids(state.parsed, newParsed);
+    state.aiPending = { newParsed, diffs };
+    const dz = Math.max(2, Math.min(6, Math.floor(160 / Math.max(newParsed.width, newParsed.height))));
+    drawGridToCanvas($('diffBefore'), state.parsed, dz);
+    drawGridToCanvas($('diffAfter'), newParsed, dz);
+    drawGridToCanvas($('diffMap'), state.parsed, dz, diffs);
+    $('diffInfo').textContent = `改动 ${diffs.length} 像素 · 调色板 ${state.parsed.palette.length}→${newParsed.palette.length} 色`;
+    $('diffWrap').classList.add('show');
+    st.textContent = `AI 完成（会话 ${r.sessionId.slice(0, 12)}…）。请检查差异后接受或放弃。`;
+  } catch (e) {
+    st.className = 'err';
+    st.textContent = '失败：' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+};
+$('btnAccept').onclick = async () => {
+  if (!state.aiPending || !state.parsed) return;
+  pushUndo();
+  const { newParsed } = state.aiPending;
+  state.parsed.palette = newParsed.palette;
+  state.parsed.rows = newParsed.rows;
+  state.aiPending = null;
+  hideDiff();
+  render(); renderPalette();
+  await save();
+};
+$('btnReject').onclick = () => { state.aiPending = null; hideDiff(); };
+
+/* ================= 发布 ================= */
+function refreshPubList() {
+  const ul = $('pubList');
+  ul.innerHTML = '';
+  const publishable = state.files.filter((f) => f.hasGrid && f.source);
+  for (const f of publishable) {
+    const li = document.createElement('li');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.key = f.key;
+    cb.checked = state.sessionTouched.has(f.key);
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = f.alias || f.key.split('/').pop();
+    name.title = `${f.key} → ${f.source}`;
+    li.appendChild(cb); li.appendChild(name);
+    ul.appendChild(li);
+  }
+}
+const selectedPubKeys = () =>
+  [...document.querySelectorAll('#pubList input:checked')].map((c) => c.dataset.key);
+
+$('btnPubPreview').onclick = async () => {
+  const keys = selectedPubKeys();
+  if (!keys.length) return alert('先勾选要发布的文件');
+  const log = $('pubLog');
+  log.innerHTML = '预检中…';
+  try {
+    const { results } = await api('/api/publish/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ keys }),
+    });
+    log.innerHTML = results.map((r) => {
+      const map = { ok: ['✓ 可覆盖', 'ok'], new: ['✚ 新文件', 'ok'], conflict: ['⚠ 外部已修改（需强制）', 'conflict'], 'no-source': ['✗ 无 Assets 映射', 'err'], 'no-entry': ['✗ 无台账', 'err'] };
+      const [txt, cls] = map[r.status] || ['？' + r.status, 'err'];
+      return `<div class="${cls}">${txt} ${r.key}${r.note ? ' — ' + r.note : ''}</div>`;
+    }).join('');
+  } catch (e) { log.innerHTML = `<div class="err">${e.message}</div>`; }
+};
+$('btnPublish').onclick = async () => {
+  const keys = selectedPubKeys();
+  if (!keys.length) return alert('先勾选要发布的文件');
+  if (!confirm(`确认发布 ${keys.length} 个文件到 Assets？\n（只写 PNG，不碰 .meta）`)) return;
+  const log = $('pubLog');
+  log.innerHTML = '发布中…';
+  try {
+    const { results } = await api('/api/publish', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ keys, force: $('forceOverwrite').checked }),
+    });
+    const lines = results.map((r) => {
+      const map = { published: ['✓ 已覆盖', 'ok'], newfile: ['✚ 新文件已写入', 'ok'], conflict: ['⚠ 冲突跳过（勾强制可覆盖）', 'conflict'], 'no-source': ['✗ 无映射', 'err'], 'bad-source': ['✗ 路径非法', 'err'] };
+      const [txt, cls] = map[r.status] || ['？' + r.status, 'err'];
+      return `<div class="${cls}">${txt} ${r.key}${r.note ? ' — ' + r.note : ''}</div>`;
+    });
+    lines.push('<div style="color:var(--muted);margin-top:6px">回 Unity 等待重导入，检查 Sprite 导入设置（Filter=Point / Compression=None）</div>');
+    log.innerHTML = lines.join('');
+  } catch (e) { log.innerHTML = `<div class="err">${e.message}</div>`; }
+};
+
+/* ================= 健康状态 ================= */
+async function refreshHealth() {
+  try {
+    const h = await api('/api/health');
+    const oc = h.opencode.healthy
+      ? `<span class="dot ok"></span>AI 就绪`
+      : `<span class="dot bad"></span>AI 不可达`;
+    const ur = h.unityRoot.valid ? '' : ` <span class="dot bad"></span>Unity 根无效`;
+    $('health').innerHTML = `${oc}${ur}`;
+  } catch {
+    $('health').innerHTML = `<span class="dot bad"></span>服务断开`;
+  }
+}
+
+/* ================= 快捷键 / 离开保护 ================= */
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    e.shiftKey ? redo() : undo();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
+  const map = { b: 'pencil', e: 'eraser', i: 'picker', g: 'fill', l: 'line', r: 'rect' };
+  const t = map[e.key.toLowerCase()];
+  if (t) document.querySelector(`#tools button[data-tool="${t}"]`)?.click();
+});
+window.addEventListener('beforeunload', (e) => {
+  if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ================= 启动 ================= */
+refreshHealth();
+setInterval(refreshHealth, 30000);
+refreshList();
+</script>
+</body>
+</html>
