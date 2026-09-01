@@ -31,8 +31,6 @@ MonoBehaviour:
       level: 2
     - module: 2
       level: 2
-    - module: 5
-      level: 1
   - castleLevel: 3
     unlocks:
     - module: 0
@@ -47,8 +45,6 @@ MonoBehaviour:
       level: 3
     - module: 2
       level: 3
-    - module: 5
-      level: 2
   - castleLevel: 5
     unlocks:
     - module: 0
@@ -58,6 +54,4 @@ MonoBehaviour:
     - module: 4
       level: 3
   - castleLevel: 6
-    unlocks:
-    - module: 5
-      level: 3
+    unlocks: []

@@ -449,33 +449,6 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
-        // 学院/工坊：研究（QQQ.2 Q4 完整版：单项目队列 + 天数推进 + 完成提升科技研究等级）
-        if (def.id == "Academy" || def.id == "Workshop")
-        {
-            var academy = _target.GetComponent<AcademyBuilding>();
-            if (academy != null)
-            {
-                if (academy.currentResearch != null)
-                    AddFunctionRow("研究中", $"{academy.currentResearch.Value.displayName}（剩 {academy.RemainingDays} 天）");
-                else
-                    AddFunctionRow("研究中", "空闲");
-
-                var available = academy.GetAvailableProjects();
-                foreach (var p in available)
-                {
-                    AddFunctionRow("项目", $"{p.displayName}（{p.durationDays} 天 / 金{p.cost.gold}）");
-                    var prj = p;   // 闭包捕获副本
-                    AddFunctionButton($"研究 {p.displayName}", () => OnResearchProjectClicked(academy, prj));
-                }
-                if (available.Count == 0)
-                    AddFunctionRow("项目", "暂无（需升级主城解锁科技模块 / 已全研究）");
-
-                if (academy.Queue.Count > 0)
-                    AddFunctionRow("队列", $"{academy.Queue.Count} 项");
-                any = true;
-            }
-        }
-
         // 一次性资源点（QQQ.2 T19 / DR-11）：采集入口——显示资源类型 + 预计耗时，确认后发布 Gather 任务
         if (def.isConsumable)
         {
@@ -574,13 +547,6 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_target == null) return;
         _target.StartGather();
         UIManager.Instance?.CloseCurrent();
-    }
-
-    /// <summary>研究按钮（QQQ.2 Q4）：扣金入队/开始研究（资源不足/模块未解锁时 AcademyBuilding 内部拒绝）。</summary>
-    private void OnResearchProjectClicked(AcademyBuilding academy, ResearchProject project)
-    {
-        if (academy == null) return;
-        if (academy.TryEnqueueResearch(project)) Refresh();
     }
 
     private void OnCloseClicked()

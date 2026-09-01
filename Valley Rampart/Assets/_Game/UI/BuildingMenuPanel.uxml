@@ -10,14 +10,13 @@
                 <ui:Button name="menu-close" text="×" class="menu-close" />
             </ui:VisualElement>
 
-            <!-- 模块 Tab 行（3.5 六大经营模块：土木/生产/民生/军事/商业/科技）-->
+            <!-- 模块 Tab 行（3.5 五大经营模块：土木/生产/民生/军事/商业；科技已退役 D461）-->
             <ui:VisualElement name="category-tabs" class="category-tabs">
                 <ui:Button name="tab-civil" text="土木" class="tab-button tab-button--active" />
                 <ui:Button name="tab-production" text="生产" class="tab-button" />
                 <ui:Button name="tab-livelihood" text="民生" class="tab-button" />
                 <ui:Button name="tab-military" text="军事" class="tab-button" />
                 <ui:Button name="tab-commerce" text="商业" class="tab-button" />
-                <ui:Button name="tab-science" text="科技" class="tab-button" />
             </ui:VisualElement>
 
             <!-- 建筑条目容器：ScrollView 保证建筑多时可真正滚动（C# 动态填充 contentContainer）-->

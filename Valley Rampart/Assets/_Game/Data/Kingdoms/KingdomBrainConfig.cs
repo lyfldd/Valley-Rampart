@@ -94,7 +94,7 @@ public class KingdomBrainConfig : ScriptableObject
 
     [Header("⑧科技升级·目标模块（2_17 步骤11 批3b，HH.30 策划 Q1→A 裁）")]
     [Tooltip("AI 科技升级的目标模块（so-data-driven 铁律：禁硬编码）。默认 Civil——须满足 GetModuleLevel(module, castleLevel=1) > 0 才有闭环；"
-           + "Science(5) 在城堡1 无解锁（CastleUnlockTable.asset 实配 module5 首现于 castle2）→ 选 Science 会闭环死路，禁止作默认。")]
+           + "（D461：Science 模块已退役，5 大模块在城堡1 均有解锁 → 无闭环死路。）")]
     public ModuleType techTargetModule = ModuleType.Civil;
 
     [Header("⑩推边界（步骤12 AI 领土推进，D326/D327；HH.32 裁2 欲望与容量分离）")]

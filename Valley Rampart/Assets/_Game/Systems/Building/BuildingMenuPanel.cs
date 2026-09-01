@@ -3,8 +3,8 @@ using UnityEngine;
 using UnityEngine.UIElements;
 
 /// <summary>
-/// 建造菜单面板（3.3 第六节 + 3.5 六模块 + 文档 2.1 流程）。挂 SampleScene 上。
-/// 按 ModuleType（土木/生产/民生/军事/商业/科技）分组列出 isPlayerBuilt=true 的 BuildingDef，
+/// 建造菜单面板（3.3 第六节 + 3.5 五模块 + 文档 2.1 流程）。挂 SampleScene 上。
+/// 按 ModuleType（土木/生产/民生/军事/商业）分组列出 isPlayerBuilt=true 的 BuildingDef，
 /// 显示造价，点"建造"进入建造模式。列表用 ScrollView 支持真正滚动；标题栏可拖动窗口。
 ///
 /// <para>刷新策略：事件驱动（B 键 ToggleBuildMenuPressedEvent）+ 打开时重建（EnsureDefsLoaded）。</para>
@@ -25,7 +25,7 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
     private readonly List<BuildingDef> _allBuildable = new List<BuildingDef>();
     private bool _defLoaded;
 
-    /// <summary>六大模块展示顺序（与 ModuleType 枚举一致）。</summary>
+    /// <summary>五大模块展示顺序（与 ModuleType 枚举一致；Science 已退役 D461）。</summary>
     private static readonly ModuleType[] ModuleOrder =
     {
         ModuleType.Civil,
@@ -33,7 +33,6 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         ModuleType.Livelihood,
         ModuleType.Military,
         ModuleType.Commerce,
-        ModuleType.Science,
     };
 
     // ===== IUIPanel =====
@@ -112,7 +111,6 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         _tabs[ModuleType.Livelihood] = root.Q<Button>("tab-livelihood");
         _tabs[ModuleType.Military] = root.Q<Button>("tab-military");
         _tabs[ModuleType.Commerce] = root.Q<Button>("tab-commerce");
-        _tabs[ModuleType.Science] = root.Q<Button>("tab-science");
 
         foreach (var module in ModuleOrder)
         {
