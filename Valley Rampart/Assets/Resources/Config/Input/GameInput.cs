@@ -138,6 +138,15 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
                     ""initialStateCheck"": false
                 },
                 {
+                    ""name"": ""leftClickRelease"",
+                    ""type"": ""Button"",
+                    ""id"": ""b1c2d3e4-9200-4000-8000-000000000001"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
                     ""name"": ""rightClick"",
                     ""type"": ""Button"",
                     ""id"": ""b1c2d3e4-6666-4000-8000-000000000001"",
@@ -346,6 +355,17 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""b1c2d3e4-9200-4000-8000-000000000002"",
+                    ""path"": ""<Mouse>/leftButton"",
+                    ""interactions"": ""press(behavior=1)"",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""leftClickRelease"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""b1c2d3e4-6666-4000-8000-000000000002"",
                     ""path"": ""<Mouse>/rightButton"",
                     ""interactions"": """",
@@ -499,6 +519,7 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
         m_Player_esc = m_Player.FindAction("esc", throwIfNotFound: true);
         m_Player_togglebuildmenu = m_Player.FindAction("togglebuildmenu", throwIfNotFound: true);
         m_Player_leftClick = m_Player.FindAction("leftClick", throwIfNotFound: true);
+        m_Player_leftClickRelease = m_Player.FindAction("leftClickRelease", throwIfNotFound: true);
         m_Player_rightClick = m_Player.FindAction("rightClick", throwIfNotFound: true);
         m_Player_middleDrag = m_Player.FindAction("middleDrag", throwIfNotFound: true);
         m_Player_scroll = m_Player.FindAction("scroll", throwIfNotFound: true);
@@ -597,6 +618,7 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_esc;
     private readonly InputAction m_Player_togglebuildmenu;
     private readonly InputAction m_Player_leftClick;
+    private readonly InputAction m_Player_leftClickRelease;
     private readonly InputAction m_Player_rightClick;
     private readonly InputAction m_Player_middleDrag;
     private readonly InputAction m_Player_scroll;
@@ -641,6 +663,10 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/leftClick".
         /// </summary>
         public InputAction @leftClick => m_Wrapper.m_Player_leftClick;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/leftClickRelease".
+        /// </summary>
+        public InputAction @leftClickRelease => m_Wrapper.m_Player_leftClickRelease;
         /// <summary>
         /// Provides access to the underlying input action "Player/rightClick".
         /// </summary>
@@ -734,6 +760,9 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
             @leftClick.started += instance.OnLeftClick;
             @leftClick.performed += instance.OnLeftClick;
             @leftClick.canceled += instance.OnLeftClick;
+            @leftClickRelease.started += instance.OnLeftClickRelease;
+            @leftClickRelease.performed += instance.OnLeftClickRelease;
+            @leftClickRelease.canceled += instance.OnLeftClickRelease;
             @rightClick.started += instance.OnRightClick;
             @rightClick.performed += instance.OnRightClick;
             @rightClick.canceled += instance.OnRightClick;
@@ -799,6 +828,9 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
             @leftClick.started -= instance.OnLeftClick;
             @leftClick.performed -= instance.OnLeftClick;
             @leftClick.canceled -= instance.OnLeftClick;
+            @leftClickRelease.started -= instance.OnLeftClickRelease;
+            @leftClickRelease.performed -= instance.OnLeftClickRelease;
+            @leftClickRelease.canceled -= instance.OnLeftClickRelease;
             @rightClick.started -= instance.OnRightClick;
             @rightClick.performed -= instance.OnRightClick;
             @rightClick.canceled -= instance.OnRightClick;
@@ -913,6 +945,13 @@ public partial class @GameInput: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnLeftClick(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "leftClickRelease" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnLeftClickRelease(InputAction.CallbackContext context);
         /// <summary>
         /// Method invoked when associated input action "rightClick" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>

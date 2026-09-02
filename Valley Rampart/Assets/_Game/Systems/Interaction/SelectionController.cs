@@ -5,9 +5,9 @@ using UnityEngine;
 /// 2_13 交互层：上帝视角选择控制器（设计文档 §5.2）。玩家=上帝视角操作整个王国。
 ///
 /// 交互划分（2026-09-01 批B 完善）：
-///   - 左键 down/up 自治轮询（Legacy Input）：down 记框选起点 / up 判定「点选 or 框选」。
-///     保留轮询原因：框选需 down+up 双点时序，Input System Button 仅 performed（按下）无 release
-///     performed，事件化需 inputactions 交互结构扩展——漂移报策划（HH.46 清单）。
+///   - 左键 down/up 事件化（输入1 清障批 2026-09-01，HH.46 §八裁决）：订阅 LeftClickPressedEvent（down 记
+///     框选起点）/ LeftClickReleasedEvent（up 判定「点选 or 框选」，leftClickRelease press(behavior=1)
+///     ReleaseOnly 交互提供 release performed）——legacy Input 轮询退役；右键（批A）不动。
 ///   - 右键：订阅 RightClickPressedEvent（批A InputManager 发布，含屏幕坐标）→ 世界坐标 → 统一指令分派
 ///     （Follow(D2)/PrioritizeHarvest(D115)/DeployGuard(D116)/MoveTo）。
 ///   - 点选：命中己方单位 → Selected；命中建筑 → SelectedBuilding（仅己方 kingdomId==0，2_17 守门员）。
@@ -51,42 +51,38 @@ public class SelectionController : Singleton<SelectionController>
 
     private void OnEnable()
     {
+        EventBus.Subscribe<LeftClickPressedEvent>(OnLeftClickPressed);
+        EventBus.Subscribe<LeftClickReleasedEvent>(OnLeftClickReleased);
         EventBus.Subscribe<RightClickPressedEvent>(OnRightClickPressed);
         EventBus.Subscribe<NumberKeyPressedEvent>(OnNumberKeyPressed);
     }
 
     private void OnDisable()
     {
+        EventBus.Unsubscribe<LeftClickPressedEvent>(OnLeftClickPressed);
+        EventBus.Unsubscribe<LeftClickReleasedEvent>(OnLeftClickReleased);
         EventBus.Unsubscribe<RightClickPressedEvent>(OnRightClickPressed);
         EventBus.Unsubscribe<NumberKeyPressedEvent>(OnNumberKeyPressed);
     }
 
-    private void Update()
+    // 左键 down 事件入口（输入1 清障批）：候选框选起锚（守门=面板开吞事件；模式/Playing 守门由 InputManager 发布侧承担）
+    private void OnLeftClickPressed(LeftClickPressedEvent evt)
     {
-        // Build/Dialog 模式下不响应上帝视角选择
-        if (InputManager.Instance != null && !InputManager.Instance.IsInteractionEnabled)
-            return;
-        if (UIManager.Instance != null && UIManager.Instance.HasPanelOpen)
-            return;
+        if (IsInteractionBlocked()) return;
+        IsDragging = true;
+        _dragStartScreen = evt.screenPos;
+    }
 
-        // 左键 down：候选框选起锚
-        if (Input.GetMouseButtonDown(0))
-        {
-            IsDragging = true;
-            _dragStartScreen = (Vector2)UnityEngine.Input.mousePosition;
-            return;
-        }
-
-        // 左键 up：判定 点选 or 框选
-        if (Input.GetMouseButtonUp(0) && IsDragging)
-        {
-            IsDragging = false;
-            Vector2 upPos = UnityEngine.Input.mousePosition;
-            if (Vector2.Distance(_dragStartScreen, upPos) < DragThresholdPx)
-                ClickSelect(upPos);
-            else
-                BoxSelect(upPos);
-        }
+    // 左键 up 事件入口（输入1 清障批）：判定 点选 or 框选
+    private void OnLeftClickReleased(LeftClickReleasedEvent evt)
+    {
+        if (IsInteractionBlocked()) return;
+        if (!IsDragging) return;
+        IsDragging = false;
+        if (Vector2.Distance(_dragStartScreen, evt.screenPos) < DragThresholdPx)
+            ClickSelect(evt.screenPos);
+        else
+            BoxSelect(evt.screenPos);
     }
 
     /// <summary>右键事件入口（批A InputManager 发布）：屏幕坐标 → 世界坐标 → 统一指令分派。</summary>

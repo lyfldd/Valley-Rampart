@@ -12,6 +12,15 @@ public readonly struct LeftClickPressedEvent
     public LeftClickPressedEvent(Vector2 screen) { screenPos = screen; }
 }
 
+// 玩家左键松开（2_13 输入1 清障批：输入栈统一，HH.46 §八）。由 InputManager 在 Normal 模式（Play 态）发布，
+// 与 LeftClickPressedEvent 构成 down/up 双点时序（框选起锚/收锚）。screenPos 为松开时刻屏幕像素坐标；
+// SelectionController 订阅（点选 or 框选判定）。InteractionManager 保留 down 时序轮询（IInteractable），不涉及。
+public readonly struct LeftClickReleasedEvent
+{
+    public readonly Vector2 screenPos;
+    public LeftClickReleasedEvent(Vector2 screen) { screenPos = screen; }
+}
+
 // 玩家右键指令（2_13 步骤1 God-view）。由 InputManager 发布。
 // worldPos 由订阅者（SelectionController）经屏幕坐标换算；右键=统一指令入口（移动/微操/守卫/跟进，D115/D116/D2）。
 // 仅发布屏幕坐标：实际世界坐标换算统一走 CameraRig.ScreenToGrid/Camera.main.ScreenToWorldPoint（2_10 拾取）。

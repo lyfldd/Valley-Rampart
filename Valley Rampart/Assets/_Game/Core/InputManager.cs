@@ -15,6 +15,8 @@ public enum InputMode
 //   - 旧 WASD 君主移动链退役（PlayerMoveEvent/MoveInput/RunHeld/OnMove/OnFastMove 移除——无君主可操控，
 //     且 2_12/HH.17 君主实体已退役）；其遗留 .inputactions move/fastmove 定义保留待清理（漂移标注，报策划裁决）。
 //   - 新增鼠标上帝视角输入：leftClick → LeftClickPressedEvent、rightClick → RightClickPressedEvent（含屏幕坐标）。
+//     输入1 清障批（2026-09-01）：新增 leftClickRelease（press behavior=1 ReleaseOnly）→ LeftClickReleasedEvent，
+//     与 leftClick 构成 down/up 双点时序（SelectionController 框选事件化，legacy 轮询退役）。
 //   - 中键 pan / 滚轮 zoom 由 CameraRig（2_10）Legacy Input 自理，不重复事件化（漂移标注）；摄像机键盘 WASD 平移
 //     属 CameraRig 输入链路，用户红线=保留不动。
 //   - IsMovementEnabled → IsInteractionEnabled 改名（Q6 C 面注落地：Build/Dialog 禁交互点击）。语义不变。
@@ -53,6 +55,8 @@ public class InputManager : Singleton<InputManager>
 
         // 绑定左键点击回调（performed = 按下；2_13 God-view 点选/框选起锚）
         _inputActions.Player.leftClick.performed += OnLeftClick;
+        // 绑定左键松开回调（performed = 松开；输入1 清障批 down/up 双点时序收锚）
+        _inputActions.Player.leftClickRelease.performed += OnLeftClickRelease;
         // 绑定右键指令回调（performed = 按下；统一指令入口）
         _inputActions.Player.rightClick.performed += OnRightClick;
 
@@ -124,6 +128,16 @@ public class InputManager : Singleton<InputManager>
         if (GameStateManager.Instance == null ||
             GameStateManager.Instance.CurrentState != GameState.Playing) return;
         EventBus.Publish(new LeftClickPressedEvent(Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero));
+    }
+
+    // 左键松开回调：仅 Playing + Normal 模式发布 LeftClickReleasedEvent（输入1 清障批：框选收锚）。
+    private void OnLeftClickRelease(InputAction.CallbackContext ctx)
+    {
+        if (ctx.phase != InputActionPhase.Performed) return;
+        if (!IsInteractionEnabled) return;                      // Build/Dialog 禁交互点击
+        if (GameStateManager.Instance == null ||
+            GameStateManager.Instance.CurrentState != GameState.Playing) return;
+        EventBus.Publish(new LeftClickReleasedEvent(Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero));
     }
 
     // 右键指令回调：仅 Playing + Normal 模式发布 RightClickPressedEvent。
@@ -214,6 +228,7 @@ public class InputManager : Singleton<InputManager>
         if (_inputActions == null) return;
 
         _inputActions.Player.leftClick.performed -= OnLeftClick;
+        _inputActions.Player.leftClickRelease.performed -= OnLeftClickRelease;
         _inputActions.Player.rightClick.performed -= OnRightClick;
         _inputActions.Player.esc.performed -= OnEsc;
         _inputActions.Player.togglebuildmenu.performed -= OnToggleBuildMenu;
