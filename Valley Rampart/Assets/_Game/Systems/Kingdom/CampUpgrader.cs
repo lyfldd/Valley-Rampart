@@ -71,11 +71,27 @@ public static class CampUpgrader
         return (true, "五条件全满足");
     }
 
-    /// <summary>吞并出口B 执行端（D306）：营地中心格有主 → 成员转该国工人 + 移除 Camp 记录。触发端归 2_17 步骤12；本片判定恒假。</summary>
+    /// <summary>吞并出口B 执行端（D306 + D469 修订，HH.51 批B）：营地中心格有主 →
+    /// 同族营：成员转该国工人 + 移除 Camp 记录；异族营：不解散不转化，就地敌对野人营（清剿交现有战斗链或自行逃离，
+    /// 敌对行为由 D468 野性敌意承接——无国×异族无条件攻击）。触发端归 2_17 步骤12；本片判定恒假。</summary>
     static bool TryAnnex(VagrantCampSystem vcs, Camp camp)
     {
         int ownerKingdomId = ResolveOwnerCampCell(camp);   // 真判定（2_17 步骤12）
         if (ownerKingdomId < 0) return false;               // 无主 → 不吞并，走正常立国判定
+
+        // D306 修订（D469）：异族营被圈入 → 不解散不转化（异族流民=永久野人不可回收），就地敌对野人营。
+        bool wildTie;
+        int campRace = KingdomRace.ResolveGroupRace(camp.memberIds, _rng, out wildTie);
+        if (campRace != KingdomRace.GetKingdomRace(ownerKingdomId))
+        {
+            if (!camp.wildAnnexDeclinedFlag)   // 已宣告去重：免日 tick 重复刷日志
+            {
+                camp.wildAnnexDeclinedFlag = true;
+                Debug.Log($"[CampUpgrader] 吞并出口B（D306 修订）：异族营 ({camp.centerCell.x},{camp.centerCell.y}) 被圈入王国 {ownerKingdomId} 领土 → " +
+                          $"不解散不转化，就地敌对野人营（营族={campRace} vs 国族={KingdomRace.GetKingdomRace(ownerKingdomId)}，成员 {camp.memberIds.Count}）。");
+            }
+            return true;   // 吞并流程终止（不转化不移除）；敌对行为由 D468 野性敌意承接
+        }
 
         // 出口B：不插旗不建新国，流民并入该国工人（D306/D283 防飞地）
         KingdomFoundry.ConvertVagrantsToWorkers(camp.memberIds, ownerKingdomId);

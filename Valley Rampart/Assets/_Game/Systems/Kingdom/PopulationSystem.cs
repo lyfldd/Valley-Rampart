@@ -312,7 +312,12 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
                 ? UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Child, birthPos)
                 : null;
             if (childGo != null)
+            {
+                // D467 子女=国族（HH.51 种族1 批A）：Child 生成即抄写所属国族（玩家国=0；helper 挂账 Q10-M2 回填后自动多族）
+                var childUc = childGo.GetComponent<UnitController>();
+                if (childUc != null) childUc.raceId = KingdomRace.GetKingdomRace(0);
                 Debug.Log($"[PopulationSystem] 繁殖：两居民进房表演 → +1 小孩 @ {birthPos}（幸福因子{growthFactor}%；人口 → {PopulationCount}）");
+            }
             else
                 Debug.LogError("[PopulationSystem] 繁殖失败：Child 单位生成失败（缺 Human_Player_Child 资产/Prefab？）");
         }

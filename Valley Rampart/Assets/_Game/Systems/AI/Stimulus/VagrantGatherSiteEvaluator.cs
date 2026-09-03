@@ -22,21 +22,26 @@ using UnityEngine;
 public static class VagrantGatherSiteEvaluator
 {
     /// <summary>
-    /// 综合评分 = 无主×wx + 资源邻近×wy + 食物邻近×wz。
-    /// owner 恒真（2_17 前）→ 在为候选整体提供恒定基线分；资源/食物邻近为距离衰减 0-1。
+    /// 综合评分 = 无主×wx + 资源邻近×wy + 食物邻近×wz + 同族聚集×wSame（D468 同族结伙，HH.51 批C）。
+    /// owner 恒真（2_17 前）→ 在为候选整体提供恒定基线分；资源/食物/同族聚集为距离衰减 0-1。
+    /// sameRaceSites=null 或权重 0 → 同族分数项 0（行为回退步骤10 原口径）。
     /// </summary>
     public static float ScoreSite(Vector2 site, List<Vector2> resourceSites, List<Vector2> foodSites,
-        KingdomFoundingConfig cfg, float cellSize)
+        KingdomFoundingConfig cfg, float cellSize, List<Vector2> sameRaceSites = null)
     {
         float wx = cfg.gatherScoreWeights.x;
         float wy = cfg.gatherScoreWeights.y;
         float wz = cfg.gatherScoreWeights.z;
+        float wSame = cfg.gatherSameRaceWeight;
         float influence = Max1(cfg.gatherInfluenceRadiusCells) * Max1(cellSize);
 
         float owner = 1f;   // 无主：2_17 TerritorySystem 落地前恒真（占位，见跨片注记）
         float resource = NearestProximity(site, resourceSites, influence);
         float food = NearestProximity(site, foodSites, influence);
-        return wx * owner + wy * resource + wz * food;
+        // D468 同族结伙（2_20 §十二矩阵：无国×同族→结伙）：候选点邻近同族流浪汉加聚集分
+        // （异族不加分——野性敌意下异族聚集地不可共处）
+        float sameRace = wSame > 0f ? NearestProximity(site, sameRaceSites, influence) : 0f;
+        return wx * owner + wy * resource + wz * food + wSame * sameRace;
     }
 
     /// <summary>距候选最近的资源/食物点邻近分（距离越近越高，≥influence 为 0）。</summary>
@@ -55,14 +60,14 @@ public static class VagrantGatherSiteEvaluator
 
     /// <summary>按评分加权抽 1 个候选点（权重=评分+0.01 保底，防全零分无法抽）。候选须非空。</summary>
     public static Vector2 PickWeighted(List<Vector2> candidates, List<Vector2> resourceSites,
-        List<Vector2> foodSites, KingdomFoundingConfig cfg, float cellSize)
+        List<Vector2> foodSites, KingdomFoundingConfig cfg, float cellSize, List<Vector2> sameRaceSites = null)
     {
         int n = candidates.Count;
         float total = 0f;
         var cum = new float[n];
         for (int i = 0; i < n; i++)
         {
-            total += ScoreSite(candidates[i], resourceSites, foodSites, cfg, cellSize) + 0.01f;
+            total += ScoreSite(candidates[i], resourceSites, foodSites, cfg, cellSize, sameRaceSites) + 0.01f;
             cum[i] = total;
         }
         float roll = Random.value * total;

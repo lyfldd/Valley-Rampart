@@ -16,6 +16,16 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
     /// <summary>读档流程开始前清零过滤计数（SaveManager.Load 调用）。</summary>
     public static void ResetFilteredSaveUnitCount() => FilteredSaveUnitCount = 0;
 
+    // D467 兜底计数（HH.51 种族1 批A）：旧档单位缺 raceId 字段（saveDataVersion<6）→ 默认 Human 的累计数。
+    // 兜底口径探针面：旧档可载不炸 + 缺省单位全部默认 Human + 计数在场。
+    public static int DefaultedRaceSaveCount { get; private set; }
+
+    /// <summary>读档流程开始前清零兜底计数（SaveManager.Load 调用，对齐 ResetFilteredSaveUnitCount 惯例）。</summary>
+    public static void ResetDefaultedRaceSaveCount() => DefaultedRaceSaveCount = 0;
+
+    /// <summary>递增兜底计数（UnitController.LoadState 旧档缺字段路径调用；日志由调用方携带 SaveId 上下文）。</summary>
+    public static void BumpDefaultedRaceSaveCount() => DefaultedRaceSaveCount++;
+
     // 3.0.1 §7.4 对象池：实例层（按 UnitData 分桶），门面挂在 UnitFactory 现有生成路径
     private readonly UnitInstancePool _instancePool = new UnitInstancePool();
 

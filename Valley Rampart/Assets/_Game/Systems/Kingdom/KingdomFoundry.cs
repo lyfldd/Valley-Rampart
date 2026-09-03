@@ -311,6 +311,15 @@ public static class KingdomFoundry
         // 来源国统计（D295/D308：流民 originKingdomId；全无来源 → 中性基线）
         var source = CollectSourceKingdom(camp, registry);
 
+        // D471 插旗定族（HH.51 批B）：国族=营地成员 raceId 多数派（同族营构造性成立——D468 异族无国者互攻不成营）。
+        // 防御性兜底（非玩法口径，SpawnPosSnapper MaxCellRadius 先例）：混合营若达标插旗 → 多数派定族、平票同 seed 确定随机 + 告警日志。
+        // 定族显式写入挂账：本批无 KingdomState.raceId 字段（Q10-M2 域）——国族=人口种族构造性成立（转化成员 raceId 即国族真源）；
+        // Q10-M2 落 KingdomDef.raceId 后在此单点回填显式写入。
+        bool campRaceTie;
+        int campRace = KingdomRace.ResolveGroupRace(camp.memberIds, rng, out campRaceTie);
+        if (campRaceTie)
+            Debug.LogWarning($"[KingdomFoundry] D471 混合营防御兜底：营地 ({camp.centerCell.x},{camp.centerCell.y}) 种族平票 → 同 seed 确定随机定族 raceId={campRace}（构造性不应存在，非玩法口径）。");
+
         string name = source.Item1 != null
             ? source.Item1.name + "·拓荒新域（D296占位）"
             : "无主拓荒之地";
@@ -347,7 +356,7 @@ public static class KingdomFoundry
         camp.foundedFlag = true;
 
         Debug.Log($"[KingdomFoundry] 动态立国: 「{name}」(id={state.id}) 于营地 ({camp.centerCell.x},{camp.centerCell.y})，" +
-                  $"转化流民 {converted} → 工人, Registry.Count={registry.Count}（含玩家）, 冷却时间戳={currentDay}");
+                  $"转化流民 {converted} → 工人, 定族 raceId={campRace}（D471 国族=营族）, Registry.Count={registry.Count}（含玩家）, 冷却时间戳={currentDay}");
         if (ToastManager.Instance != null)
             ToastManager.Instance.Show($"流民在 ({camp.centerCell.x},{camp.centerCell.y}) 建立新国家「{name}」");
     }
@@ -408,7 +417,14 @@ public static class KingdomFoundry
             if (uc == null || !memberIds.Contains(uc.npcId)) continue;
             var src = uc.originKingdomId >= 0 ? registry.Get(uc.originKingdomId) : null;
             for (int i = 0; i < 5; i++)
-                sums[i] += src != null ? src.GetPersonality(i) : 0.5f;   // 无来源按中性计入
+            {
+                // D475（HH.50 裁决，HH.51 批A）：优先个体五轴快照（流民化打标同管道抄写，零 Registry 依赖，印记死源天然消除）；
+                // 快照缺失 → 回退 Registry 来源国（D295 原语义）；来源也不可得 → 0.5 中性+±10%（复用无来源基线）。
+                if (uc.originPersonality != null && uc.originPersonality.Length == 5)
+                    sums[i] += uc.originPersonality[i];
+                else
+                    sums[i] += src != null ? src.GetPersonality(i) : 0.5f;   // 无来源按中性计入
+            }
             weight++;
         }
         for (int i = 0; i < 5; i++)

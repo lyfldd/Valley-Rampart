@@ -28,6 +28,15 @@ public class WanderStimulusProvider
     /// <summary>池化 WanderStimulus 实例（复用不 new）</summary>
     public WanderStimulus Stimulus => _stimulus;
 
+    /// <summary>
+    /// 自身种族 id（D468 同族结伙，HH.51 批C）：NPCBrain.Init 注入，聚集地评分同族分数项用。
+    /// 不经 FactorContext（防 AI.Core 决策核扩字段触发 sim-sync 义务）。
+    /// </summary>
+    public int SelfRaceId { get; set; } = RaceIds.Human;
+
+    /// <summary>同族流浪汉聚集站点缓冲（RefreshVagrantAnchor 刷新时重扫，防 GC）。</summary>
+    private readonly List<Vector2> _sameRaceSites = new List<Vector2>();
+
     /// <summary>每 tick 更新漫游中心 + 强度，返回池化实例。</summary>
     public WanderStimulus GetOrUpdate(in FactorContext ctx)
     {
@@ -125,11 +134,30 @@ public class WanderStimulusProvider
             candidates.Add(foodSites[i]);
 
         // 评分加权抽点（eval 为纯函数，点位在此传入）
+        // D468 同族结伙（HH.51 批C）：收集同族未招募流浪汉位置作聚集分输入（无国×同族→结伙偏好；
+        // 异族站点不进集合——野性敌意下异族聚集地不可共处）
+        CollectSameRaceVagrantSites();
         Vector2 fallback = new Vector2(ctx.HomePoint.x, ctx.HomePoint.y);
         _currentAnchor = fc != null
-            ? VagrantGatherSiteEvaluator.PickWeighted(candidates, resourceSites, foodSites, fc, cs)
+            ? VagrantGatherSiteEvaluator.PickWeighted(candidates, resourceSites, foodSites, fc, cs, _sameRaceSites)
             : fallback;
         _hasAnchor = fc != null;
+    }
+
+    /// <summary>收集同族未招募流浪汉位置（D468 同族结伙聚集分输入；开关权重 0 时跳过扫描省开销）。</summary>
+    void CollectSameRaceVagrantSites()
+    {
+        _sameRaceSites.Clear();
+        var fc = Resources.Load<KingdomFoundingConfig>("Config/Kingdoms/KingdomFoundingConfig");
+        if (fc == null || fc.gatherSameRaceWeight <= 0f) return;
+        if (UnitRegistry.Instance == null) return;
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (u == null || !u.IsAlive) continue;
+            if (u.EffectiveOccupation != Occupation.Vagrant || u.IsVagrantRecruited) continue;
+            if (u.raceId != SelfRaceId) continue;   // 仅同族（异族聚集地不可共处 D468）
+            _sameRaceSites.Add(u.GetPosition());
+        }
     }
 
     /// <summary>从 BuildingRegistry 分拣资源点（废墟/采集点）与食物点（浆果/农田）世界坐标。</summary>

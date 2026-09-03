@@ -83,23 +83,31 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         int rest = Mathf.Max(0, total - baseline);
 
         int spawned = 0;
-        // 保底 3 人同点（早期必结营）
+        // D308 修订（D469，HH.51 批B）：初始流民按族群投放——保底 baseline 人同点必须同族（D468 野性敌意下混合群开局互杀）、
+        // 余数散投按族成群（按 baseline 大小切块成组，同组同族同锚点落位）。
+        // 族别来源挂账：Q10-M2 接真模板映射前全 Human（结构就位，当前世界全默认 Human，D416 前口径）。
+        int anchorRace = KingdomRace.GetKingdomRace(0);
+        // 保底 baseline 人同点（早期必结营；必须同族）
         var anchor = PickCell(map, rng, 6);
         if (anchor.x >= 0)
         {
             var anchorWorld = CellToWorld(anchor);
             for (int i = 0; i < baseline; i++)
-                if (SpawnVagrantAt(anchorWorld, rng)) spawned++;
+                if (SpawnVagrantAt(anchorWorld, rng, anchorRace)) spawned++;
         }
-        // 余数散投无主地
-        for (int i = 0; i < rest; i++)
+        // 余数散投按族成群：每 baseline 人切一组，组内同族同锚点
+        for (int g = 0; g < rest; g += baseline)
         {
+            int groupSize = Mathf.Min(baseline, rest - g);
             var cell = PickCell(map, rng, 8);
             if (cell.x < 0) continue;
-            if (SpawnVagrantAt(CellToWorld(cell), rng)) spawned++;
+            int groupRace = KingdomRace.GetKingdomRace(0);   // 组族别：同上挂账（Q10-M2 后按地图族分布映射）
+            var anchorWorld = CellToWorld(cell);
+            for (int i = 0; i < groupSize; i++)
+                if (SpawnVagrantAt(anchorWorld, rng, groupRace)) spawned++;
         }
 
-        Debug.Log($"[VagrantCampSystem] D308 初始流民预置: {spawned}/{total}（保底同点 {baseline} + 散投 {rest}）seed={seed}");
+        Debug.Log($"[VagrantCampSystem] D308 初始流民预置（按族投放 D469 修订）: {spawned}/{total}（保底同点 {baseline}×raceId={anchorRace} + 散投按族成群 {rest}）seed={seed}");
     }
 
     /// <summary>每日补员（DayCycleSettlement 调）：不满营地补 campDailyRefill，刷满 campMaxVagrants 停。</summary>
@@ -142,6 +150,14 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         var cfg = GetCfg();
         if (unit == null || cfg == null) return false;
         if (!unit.IsAlive || unit.EffectiveOccupation != Occupation.Vagrant) return false;
+
+        // D469 招募限同族（HH.51 批B）：异族流民=永久野人不可招募/不可转化/不可回收——拒绝+日志（玩家侧）。
+        // 粮扣除之前拒绝，零资源损耗。
+        if (unit.raceId != KingdomRace.GetKingdomRace(0))
+        {
+            Debug.LogWarning($"[VagrantCampSystem] 招募拒绝：异族流民#{unit.npcId}（raceId={unit.raceId} vs 玩家国族={KingdomRace.GetKingdomRace(0)}）——同族锁定 D469，异族=永久野人。");
+            return false;
+        }
 
         var ruler = RulerController.Instance;
         if (ruler == null || ruler.Food < cfg.recruitFoodCost)
@@ -265,14 +281,22 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
 
         // QQQ.2 T11 / DR-7：记录出生营地坐标（未招募流浪汉 HomePoint = 本值，在营地游荡不朝王国走）
         var uc = go.GetComponent<UnitController>();
-        if (uc != null) uc.BirthCampPos = campPos;
+        if (uc != null)
+        {
+            uc.BirthCampPos = campPos;
+            // D308/D468 构造性同族营（HH.51 批B）：补员按营族投放（成员 raceId 多数派；异族补员会被野性敌意互攻拆营）。
+            // 空营/不可考 → Human 兜底（D467 兜底口径）。
+            bool campRaceTie;
+            uc.raceId = KingdomRace.ResolveGroupRace(CollectMembers(campPos, cfg), rng, out campRaceTie);
+        }
         return true;
     }
 
     // ===== D308 初始流民（地图级预置，确定性派生自世界种子）=====
 
-    /// <summary>在指定世界点生成 1 名流浪汉（带微小抖动避免完全叠位；滞留该处游荡——BirthCampPos=落点）。</summary>
-    bool SpawnVagrantAt(Vector2 worldPos, System.Random rng)
+    /// <summary>在指定世界点生成 1 名流浪汉（带微小抖动避免完全叠位；滞留该处游荡——BirthCampPos=落点）。
+    /// race=所属族群（D308 修订按族投放，HH.51 批B；组内同族保证）。</summary>
+    bool SpawnVagrantAt(Vector2 worldPos, System.Random rng, int race)
     {
         if (UnitFactory.Instance == null) return false;
         var grid = GridSystem.Instance;
@@ -284,7 +308,11 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
             Faction.PlayerCamp, Occupation.Vagrant, spawnPos);
         if (go == null) return false;
         var uc = go.GetComponent<UnitController>();
-        if (uc != null) uc.BirthCampPos = spawnPos;   // 滞留该处游荡（HomePoint=落点，不朝王国走）
+        if (uc != null)
+        {
+            uc.BirthCampPos = spawnPos;   // 滞留该处游荡（HomePoint=落点，不朝王国走）
+            uc.raceId = race;             // D467：流民个体种族=投放族群（终身字段）
+        }
         return true;
     }
 

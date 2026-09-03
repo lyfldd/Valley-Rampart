@@ -7,7 +7,7 @@ using UnityEngine;
 //  每 AI 王国（id>0）一个实例；玩家(id=0)无 Brain（D338，工厂/注册表双短路）。
 //  纯数据容器 + 逻辑，不挂 MonoBehaviour（单例经由 KingdomBrainRegistry 持有）。
 //
-//  tick 顺序：SimMode 挂 Fine（P0 恒 Fine）→ 采集探针快照 → ScriptStageMachine 推进
+//  tick 顺序：同步 simMode（D476 Abstract 期脑照跑，仅经济执行分叉）→ 采集探针快照 → ScriptStageMachine 推进
 //  （单向+最小停留+每日最多升荤级）→ 同步 KingdomState.scriptPhase → FocusController 刷新国策焦点。
 //  国库口径 = 【昨日结存】（HH.24 裁决① A 准：植入五步②、日结入账之前，花昨日余额，
 //  契合 15_账本「一·补二」1 日滞后登记；不含在途储仓产出）。
@@ -73,18 +73,23 @@ public class KingdomBrain
     {
         var kingdom = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
         if (kingdom == null || kingdom.IsPlayer) return;   // 玩家无脑（D338）
-        if (SimModeManager.Instance != null && SimModeManager.Instance.GetMode(kingdomId) != SimMode.Fine)
-            return;   // 抽象粒度不在细模拟 tick（P1 步骤14 交给 AbstractEconomySettler）
+
+        // D476（HH.50 裁决，HH.51 种族1 批A 对拍后小改）：Abstract 期王国脑照跑（决策/剧本/宣战判定照常，
+        // 防抽象国冻结+D361 有效性+外交先例同构）——仅经济执行分叉（D459：Abstract 由 AbstractEconomySettler
+        // 公式镜像结算，AIEconomySettlement 防双写已跳过；本处焦点下发实体经济指令跳过）。
+        // 原实现=整 tick 短路（互斥），对拍不符 D476 → 改为脑照跑+经济执行分叉。
+        var mode = SimModeManager.Instance != null ? SimModeManager.Instance.GetMode(kingdomId) : SimMode.Fine;
 
         var cfg = KingdomBrain.LoadConfig();
         var ucfg = UtilityActionConfig.LoadConfig();
-        kingdom.simMode = SimMode.Fine;
+        kingdom.simMode = mode;   // 同步真实模式（原恒写 Fine 会覆写 Abstract 态；GetMode 读同字段=幂等）
 
         var ctx = BuildContext(kingdom, cfg);
         bool upgraded = StageMachine.Tick(ctx, cfg);
         kingdom.scriptPhase = StageMachine.Stage;   // 双向：升级同步 + 保持同步
         Focus.Update(kingdom, cfg, ucfg, day);      // D322 焦点模型（底线→评分→防抖切换）→ kingdom.focus=行动id
-        ExecuteFocus(kingdom, cfg);                 // 焦点下发真实执行（完整局批次接通）
+        if (mode == SimMode.Fine)
+            ExecuteFocus(kingdom, cfg);             // 焦点下发真实执行（完整局批次接通）；Abstract 期=经济执行分叉跳过
 
         if (upgraded)
             Debug.Log($"[KingdomBrain] k{kingdomId} 剧本阶段 → {ScriptStageMachine.Name(StageMachine.Stage)} (Day {day})");
@@ -303,8 +308,8 @@ public class KingdomBrain
         Debug.Log($"[KingdomBrain] k{kingdomId} 焦点⑩推边界 下发（实际扩张=DayCycle 步骤3 ExpandTick 日 tick；非初始占区={nonInitial}）");
     }
 
-    /// <summary>找一个可招募流浪汉（活体、Vagrant、未被招募、未入籍 kingdomId&lt;0）。固定遍历序=确定性。</summary>
-    private static UnitController FindRecruitableVagrant()
+    /// <summary>找一个可招募流浪汉（活体、Vagrant、未被招募、未入籍 kingdomId&lt;0、同族 D469）。固定遍历序=确定性。</summary>
+    private UnitController FindRecruitableVagrant()
     {
         if (UnitRegistry.Instance == null || UnitRegistry.Instance.GetAllUnits() == null) return null;
         foreach (var u in UnitRegistry.Instance.GetAllUnits())
@@ -313,6 +318,9 @@ public class KingdomBrain
             if (u.kingdomId >= 0) continue;                       // 已入籍者不重复招
             if (u.EffectiveOccupation != Occupation.Vagrant) continue;
             if (u.IsVagrantRecruited) continue;
+            // D469 招募限同族（HH.51 批B）：异族流民=永久野人不可回收。
+            // 濒死 AI 自救窗口不破（D322）：流民池主体=本国自身流失人口（同族），走查确认当前世界全 Human。
+            if (u.raceId != KingdomRace.GetKingdomRace(kingdomId)) continue;
             return u;
         }
         return null;

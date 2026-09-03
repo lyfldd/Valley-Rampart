@@ -48,6 +48,34 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>来源王国 id（默认 -1=无来源：预置者/玩家招募者皆此；2_19 灭亡流民带原国 id，供动态立国性格混合）。不入 UnitSaveData（2_19 供给侧落地前占位）。</summary>
     public int originKingdomId = -1;
 
+    // ===== 种族=人口属性（D467，HH.51 种族1 批A）：个体终身字段，不随国家变化 =====
+    /// <summary>
+    /// 个体种族 id（终身字段，流民化时从来源国抄写/子女=国族；转化后保留）。
+    /// 兜底口径（D467）：来源不可考/旧档缺字段 → 默认 Human（RaceIds.Human=0，JsonUtility 缺省同值）。
+    /// 序号空间=RaceIds（对齐 2_13 M10 选族约定）；Q10-M2 定型前以 RaceIds 常量为真源。
+    /// </summary>
+    public int raceId = RaceIds.Human;
+
+    /// <summary>
+    /// 来源国性格五轴快照（D475，HH.50 裁决）：流民化打标时与 raceId 同管道抄写（零 Registry 依赖，印记死源天然消除）。
+    /// null=无快照（预置/未打标个体）→ 消费侧回退 0.5 中性+±10%（复用无来源基线）。长度恒 5（D311 五轴）。
+    /// </summary>
+    public float[] originPersonality;
+
+    /// <summary>
+    /// 流民化打标（2_19 流民化管线调用点，本批先落管道——供给侧外溢/灭亡/溃散事件随 2_19 实施批接线，挂账）：
+    /// 抄写来源国印记（originKingdomId，D389 语义）+ 个体种族（raceId，D467 终身字段）+ 来源国五轴快照（originPersonality，D475）。
+    /// 与 raceId 同管道、零 Registry 依赖；快照缺失由消费侧回退 0.5 中性。
+    /// </summary>
+    public void ApplyVagrantization(int originKingdom, int race, float[] fiveAxisSnapshot)
+    {
+        originKingdomId = originKingdom;
+        raceId = race;
+        originPersonality = (fiveAxisSnapshot != null && fiveAxisSnapshot.Length == 5)
+            ? (float[])fiveAxisSnapshot.Clone()
+            : null;
+    }
+
     // ===== 3.5 P0 步骤4：运行时职业覆盖（转职用，不污染共享 UnitData SO）=====
     private int _runtimeOccupation = -1;   // -1 = 未设置，回退 Data.occupation
     /// <summary>有效职业（优先运行时覆盖，否则 Data.occupation）。</summary>
@@ -267,6 +295,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         ChildGrowthDays = 0;            // 成长计数清零
         IsVagrantRecruited = false;     // 招募标记清零
         BirthCampPos = Vector2.zero;    // QQQ.2 T11：出生营地坐标清零（池化复用防串）
+        originKingdomId = -1;           // 来源印记复位（池化复用=新个体，防上辈子印记泄漏）
+        raceId = RaceIds.Human;         // D467 终身字段：新个体回默认 Human（个体生命周期随池化重生重新开始）
+        originPersonality = null;       // D475 五轴快照复位（同上，新个体无快照）
         ChargeState = 0;                // 冲锋态复位
         ChargeTarget = null;
         ChargeReadyTime = 0f;
@@ -384,7 +415,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         var inv = GetOrAddInventory();   // QQQ.4 T8 兜底：Worker prefab 未挂组件则补挂
         var data = new UnitSaveData
         {
-            saveDataVersion = 5,
+            saveDataVersion = 6,
             faction = (int)Data.faction,
             occupation = (int)EffectiveOccupation,
             currentHp = CurrentHp,
@@ -409,13 +440,16 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             carriedType = (int)inv.carriedType,
             carriedAmount = inv.carriedAmount,
             // v6：王国归属（2_16 步骤2，D329 门面）
-            kingdomId = kingdomId
+            kingdomId = kingdomId,
+            // v6（续）：种族=人口属性（D467 终身字段）+ 来源国五轴快照（D475）——HH.51 种族1 批A
+            raceId = raceId,
+            personalitySnapshot = originPersonality
         };
         return new SavePayload
         {
             typeName = typeof(UnitSaveData).AssemblyQualifiedName,
             json = JsonUtility.ToJson(data),
-            version = 5
+            version = 6
         };
     }
 
@@ -459,6 +493,23 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             var inv = GetOrAddInventory();
             inv.carriedType = (ResourceType)data.carriedType;
             inv.carriedAmount = Mathf.Max(0, data.carriedAmount);
+        }
+
+        // v6 兼容：种族=人口属性（D467）+ 来源国五轴快照（D475）——HH.51 种族1 批A。
+        // 兜底口径（D467）：旧档缺字段（saveDataVersion<6）→ 默认 Human + 日志计数（现行世界全默认 Human，D416 前口径）；
+        // 快照缺失 → null（消费侧回退 0.5 中性+±10%，D475）。附加字段+缺省解析=零迁移器改动（2_11 纪律评估）。
+        if (data.saveDataVersion >= 6)
+        {
+            raceId = data.raceId;
+            originPersonality = (data.personalitySnapshot != null && data.personalitySnapshot.Length == 5)
+                ? data.personalitySnapshot : null;
+        }
+        else
+        {
+            raceId = RaceIds.Human;
+            originPersonality = null;
+            UnitFactory.BumpDefaultedRaceSaveCount();
+            Debug.Log($"[UnitController] 旧档单位缺 raceId 字段（v{data.saveDataVersion}<6）→ 兜底默认 Human，累计第 {UnitFactory.DefaultedRaceSaveCount} 个（D467 兜底口径，saveId={SaveId}）。");
         }
     }
 
@@ -1586,4 +1637,8 @@ public class UnitSaveData
     public int carriedAmount;
     // ===== v6（2_16 步骤2）：王国归属（D329 门面）。旧档缺字段→默认 0（玩家），向后兼容。=====
     public int kingdomId;
+    // ===== v6（续，HH.51 种族1 批A）：种族=人口属性（D467 终身字段）+ 来源国五轴快照（D475）=====
+    // 旧档缺字段 → raceId 默认 0=Human + LoadState 日志计数（D467 兜底口径）；personalitySnapshot 缺失 → null（消费侧 0.5 中性回退）。
+    public int raceId;
+    public float[] personalitySnapshot;
 }

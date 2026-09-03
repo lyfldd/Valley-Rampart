@@ -87,6 +87,8 @@ public class KingdomFoundingConfig : ScriptableObject
     public float gatherCandidateRefreshSeconds = 15f;
     [Tooltip("聚集地评分影响半径（格）：资源/食物邻近分衰减到 0 的半径上限，距离越近分越高")]
     public float gatherInfluenceRadiusCells = 8f;
+    [Tooltip("D468 同族结伙分数项权重（HH.51 批C）：候选点邻近同族流浪汉的聚集分（0=关闭结伙偏好）")]
+    public float gatherSameRaceWeight = 0.8f;
 
     /// <summary>按地图档位取 AI 数量区间（D288；worldSize 转档）。</summary>
     public Vector2Int GetAiCountRange(WorldSize size)

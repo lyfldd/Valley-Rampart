@@ -651,4 +651,46 @@ public class AIDebugSpawnController : MonoBehaviour
 
     // ===== 段①+段② 怪物流冒烟：请直接发布 PortalDisasterTriggeredEvent 走正式链路 =====
     // （WaveDirector.SpawnPortalDisasterWaves 已接管传送门生成 + 6:3:1 波次；本调试类不再内置手动放置脚手架）
+
+    // ===== D468 种族域调试钩子（HH.51 种族1 批C）：行为级探针①~④ 异族个体构造用 =====
+    // 纪律（HH.51 §三.1）：生产链路仍默认 Human（D416 前口径），本组 API 仅调试/冒烟路径调用。
+
+    /// <summary>在指定世界点生成指定种族的未招募流浪汉（探针①野性攻击正/负、④招募拒绝构造用）。
+    /// BirthCampPos=落点（HomePoint 滞留该处，对齐 SpawnVagrantAt 语义）。返回 UnitController（失败 null）。</summary>
+    public UnitController SpawnVagrantWithRace(int raceId, Vector2 worldPos)
+    {
+        if (UnitFactory.Instance == null) return null;
+        var go = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Vagrant, worldPos);
+        if (go == null) return null;
+        var uc = go.GetComponent<UnitController>();
+        if (uc != null)
+        {
+            uc.BirthCampPos = worldPos;
+            uc.raceId = raceId;
+        }
+        Debug.Log($"[AIDebugSpawn] 种族域调试钩子：生成流浪汉 raceId={raceId}（{RaceName(raceId)}）@ {worldPos}");
+        return uc;
+    }
+
+    /// <summary>把指定在世单位种族改为 raceId（调试改标，仅 Play 调试/冒烟路径）。返回是否成功。</summary>
+    public static bool DebugSetRace(UnitController unit, int raceId)
+    {
+        if (unit == null || !unit.IsAlive) return false;
+        unit.raceId = raceId;
+        Debug.Log($"[AIDebugSpawn] 种族域调试钩子：单位#{unit.npcId} raceId → {raceId}（{RaceName(raceId)}）");
+        return true;
+    }
+
+    /// <summary>种族 id 显示名（RaceIds 空间；未知值回退原样数字）。</summary>
+    public static string RaceName(int raceId)
+    {
+        switch (raceId)
+        {
+            case RaceIds.Human: return "Human";
+            case RaceIds.Elf: return "Elf";
+            case RaceIds.Dwarf: return "Dwarf";
+            case RaceIds.Orc: return "Orc";
+            default: return raceId.ToString();
+        }
+    }
 }

@@ -29,6 +29,12 @@ public class Camp
     /// <summary>占位：是否已触发建国（本步骤恒 false；步骤11 CampUpgrader 置 true）。</summary>
     public bool foundedFlag;
 
+    /// <summary>
+    /// D306 修订（D469，HH.51 批B）：营地被领土圈入但为异族营 → 不解散不转化，就地敌对野人营。
+    /// 本旗只作"已宣告"去重（免日 tick 重复日志），运行期态不入档（读档后由 ScanCamps 自愈重建，重建后如仍异族会再宣告一次）。
+    /// </summary>
+    public bool wildAnnexDeclinedFlag;
+
     public Camp(GridCoord cell, int buildingId)
     {
         centerCell = cell;

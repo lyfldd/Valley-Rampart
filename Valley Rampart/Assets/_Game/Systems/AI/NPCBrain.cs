@@ -274,6 +274,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             _controller.HvDefenseGate = _config.hvDefenseGate;
             _controller.HvCrowdGate = _config.hvCrowdGate;
             _controller.AmmoConserveRatio = _config.ammoConserveRatio;
+            // D468 同族结伙（HH.51 批C）：聚集地评分同族分数项需要自身 raceId（不经 FactorContext，防决策核扩字段）
+            _wanderProvider.SelfRaceId = _controller.raceId;
         }
 
         // 初始化记忆组件群（M1 决策核提取：组件吃 TuningSnapshot 快照，接缝 4）
@@ -328,8 +330,19 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // 3.0.1_4 §2.3 受击溯源（聚合 O(1)）：
         // 敌对攻击者 -> 记录最近攻击者 + 计数 + 时间；环境伤害/误伤 -> 只计数不记攻击者
         if (evt.Source == null) return;
-        if (evt.Source.GetFaction() == Faction.None || evt.Source.GetFaction() == _self.GetFaction())
-            return;  // 环境伤害/友军误伤不溯源
+        // 环境伤害不溯源。
+        if (evt.Source.GetFaction() == Faction.None) return;
+        // 友军误伤（同阵营）不溯源；D485 唯一放行：无国野人异族袭击国民（自卫还击对等）
+        // ——攻击者为无国野人（Vagrant && !IsVagrantRecruited && 非 Monster）且 raceId≠自身才溯源。
+        var srcUnit = evt.Source as UnitController;
+        var selfUnit = _self as UnitController;
+        bool isWildAttacker = srcUnit != null
+            && srcUnit.EffectiveOccupation == Occupation.Vagrant
+            && !srcUnit.IsVagrantRecruited
+            && srcUnit.GetFaction() != Faction.Monster;
+        if (evt.Source.GetFaction() == _self.GetFaction()
+            && !(isWildAttacker && selfUnit != null && srcUnit.raceId != selfUnit.raceId))
+            return;
         _lastAggressor = evt.Source;
         _recentHitCount++;
         _lastHitTime = Time.time;
@@ -539,14 +552,29 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 _config.traceBaseIntensity + (_recentHitCount - 1) * _config.traceStepIntensity);
             float intensity = Mathf.Max(1f, baseIntensity * Mathf.Exp(-delta / _config.traceDecayTime));
 
-            var trace = new ThreatStimulus(
-                _lastAggressor as IUnitHandle,
-                threatLevel: Mathf.Max((int)_threatHysteresis.CurrentLevel, 1),  // 受击至少警戒
-                intensity: intensity,
-                expiry: currentTime + _config.traceExpiry
-            );
-            _attention.AddStimulus(trace);
+            // D486 受击不追抑制：主动战斗（当前焦点是 ThreatStimulus 威胁刺激）→ 保留 Trace（继续战斗）；
+            // 其余（驻守 Position/HomePosition、移动 Wander/Anchor、无焦点）→ 抑制 Trace（受击不追出，
+            // 自卫交火层 UpdateCombatRegistration 用 _lastAggressor 原地还击）。注：ThreatStimulus.FocusType
+            // 也是 Position，判定必须按焦点对象类型（is ThreatStimulus）而非 FocusType——否则主动战斗单位
+            // 受击反被抑制，且 Wander/Anchor 移动焦点漏抑制（②d 实测：移动焦点受击后追踪攻击者）。
+            bool activeCombat = _attention.CurrentFocus.IsValid
+                && _attention.CurrentFocus.Source is ThreatStimulus;
+            if (activeCombat)
+            {
+                var trace = new ThreatStimulus(
+                    _lastAggressor as IUnitHandle,
+                    threatLevel: Mathf.Max((int)_threatHysteresis.CurrentLevel, 1),  // 受击至少警戒
+                    intensity: intensity,
+                    expiry: currentTime + _config.traceExpiry
+                );
+                _attention.AddStimulus(trace);
+            }
         }
+
+        // ===== D468 野性敌意（2_20 §十二，HH.51 批C）：无国流浪汉 × 异族（含国民）→ 无条件攻击 =====
+        // 矩阵：无国×异族=威胁刺激（战斗链承接）；无国×同族=结伙偏好（WanderGather 同族分数项，不在此）；
+        // 有国=压制（国民不发起种族攻击，被攻击由上方受击溯源链还手）；Monster 不进矩阵（2_14 现行）。
+        UpdateWildnessThreats(currentTime);
 
         // 3.0.1_LOD §3.1 第二层：感知范围外但区块有战斗热点 -> 朝热点移动支援（危险传开的位置载体）
         // 用 TaskStimulus（第 3 层，与 Safety 同层竞争）：引导支援移动、不推高威胁评定（避免误触发撤退谱系）
@@ -568,6 +596,92 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         }
 
         if (_nearbyEnemies.Count == 0) _nearestDist = float.MaxValue;
+    }
+
+    // ===== D468 野性敌意（2_20 §十二，HH.51 批C）=====
+
+    /// <summary>野性敌意复用扫描缓冲（填充式，防 GC）。</summary>
+    private readonly List<UnitController> _wildScan = new List<UnitController>();
+
+    /// <summary>
+    /// 无国流浪汉野性敌意扫描：wildAggroRadiusCells（格单位，D477 禁微格域）内异族（含国民）→ 威胁刺激
+    /// （战斗链承接=无条件攻击）。同族跳过（结伙偏好走聚集地评分同族分数项）；
+    /// Faction.Monster 跳过（2_14 现行不进种族矩阵，D428）；有国者不进本扫描（压制：国民不发起种族攻击，
+    /// 被攻击走上方受击溯源链还手）。开关关闭/资产缺失 → 零野性攻击（探针⑤负向）。
+    /// </summary>
+    private void UpdateWildnessThreats(float currentTime)
+    {
+        var wild = WildnessConfig.Cached;
+        if (wild == null || !wild.enabled) return;
+        var self = SelfUnit;
+        if (self == null || !self.IsAlive) return;
+        // 仅"无国者"（未招募流浪汉）；Monster 阵营自身也不发起种族敌意（不进矩阵）
+        if (self.EffectiveOccupation != Occupation.Vagrant || self.IsVagrantRecruited) return;
+        if (self.GetFaction() == Faction.Monster) return;
+
+        float radiusWorld = Mathf.Max(1f, wild.wildAggroRadiusCells) * GetCellSize();
+        Vector2 myPos = _self.GetPosition();
+        int myRace = self.raceId;
+        float maxIntensity = _config != null ? _config.threatIntensityMax : 60f;
+
+        _wildScan.Clear();
+        if (UnitRegistry.Instance == null) return;
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (u == null || !u.IsAlive || ReferenceEquals(u, self)) continue;
+            if (u.GetFaction() == Faction.Monster) continue;   // D428/2_14：传送门怪物不进种族矩阵
+            if (u.raceId == myRace) continue;                  // 同族：结伙偏好（不攻击）
+            if (Vector2.Distance(myPos, u.GetPosition()) > radiusWorld) continue;
+            _wildScan.Add(u);
+        }
+
+        for (int i = 0; i < _wildScan.Count; i++)
+        {
+            var enemy = _wildScan[i];
+            float dist = Vector2.Distance(myPos, enemy.GetPosition());
+            // 强度标定对齐感知（贴脸满、随距离衰减）；威胁等级 1（警戒）足以压过 Wander/Task 浮出攻击焦点
+            float intensity = Mathf.Max(1f, maxIntensity * (1f - dist / radiusWorld));
+            _attention.AddStimulus(new ThreatStimulus(
+                enemy as IUnitHandle,
+                threatLevel: 1,
+                intensity: intensity,
+                expiry: currentTime + (_config != null ? _config.threatDecayTime : 3f),
+                source: this
+            ));
+        }
+    }
+
+    /// <summary>
+    /// 野性攻击面（D468/D472）：无国流浪汉野性生效时，战力=同职工人基线 × wildStrengthRatio（占位 0.6），
+    /// 射程/冷却/弹道镜像 Worker 基线（近战）。Worker 基线查表失败/开关关 → 全零=无野性攻击。
+    /// </summary>
+    private bool TryGetWildCombatOverride(out int attack, out float range, out float cd, out bool isRanged)
+    {
+        attack = 0; range = 0f; cd = 0f; isRanged = false;
+        var wild = WildnessConfig.Cached;
+        if (wild == null || !wild.enabled) return false;
+        var self = SelfUnit;
+        if (self == null || self.EffectiveOccupation != Occupation.Vagrant || self.IsVagrantRecruited) return false;
+        var worker = WildnessConfig.ResolveWorkerBaseline();
+        // 实盘缺口注（HH.51 验收）：Worker 资产 attack/attackRange/attackCD=0（和平职业正常值）→
+        // 「60%×基线」公式退化为 0；行为硬规则（D468 无条件攻击）必须落地 → 守卫只挡查表失败，
+        // 数值走下方 Max 下限兜底（attack≥1/range≥1/cd≥0.5），占位待策划端 Play 回调。
+        if (worker == null) return false;
+        attack = Mathf.Max(1, Mathf.RoundToInt(worker.attack * wild.wildStrengthRatio));
+        range = Mathf.Max(1f, worker.attackRange);
+        cd = Mathf.Max(0.5f, worker.attackCD);
+        isRanged = worker.isRanged;
+        return true;
+    }
+
+    /// <summary>野性攻击射程注入判定（BuildBaseContext 用）：野性生效 → out=Worker 基线射程（随 useGridUnits 量纲）。</summary>
+    private bool UseWildAttackRange(out float rangeWorld)
+    {
+        rangeWorld = 0f;
+        if (!TryGetWildCombatOverride(out _, out float range, out _, out _)) return false;
+        bool useGrid = AIDistConfig.Instance != null && AIDistConfig.Instance.useGridUnits;
+        rangeWorld = useGrid ? range : range * GetCellSize();
+        return true;
     }
 
     // ===== Think（三层裁决管线，先记忆后管线）=====
@@ -815,7 +929,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
              // 2_7 步骤2 方向因子输入（sim 无新输入，供 Unity 逃逸点/撤退采样；默认朝向忽略）
              NearestEnemyDir = Vector2XUnity.FromUnity(enemyDirUnit),
              PerceptionWorldRadius = useGrid ? _profession.perceptionRadius : _profession.perceptionRadius * cs,
-             AttackWorldRange = useGrid ? _profession.attackRange : _profession.attackRange * cs,
+             // D468 野性攻击面（HH.51 批C）：无国流浪汉野性生效 → 攻击射程镜像 Worker 基线
+             // （流浪汉资产 attackRange=0 → AttackWorldRange=0 → 威胁焦点永不进入攻击射程；野性射程在此注入）
+             AttackWorldRange = UseWildAttackRange(out var wildRangeWorld)
+                 ? wildRangeWorld
+                 : (useGrid ? _profession.attackRange : _profession.attackRange * cs),
              CellSize = cs,
              UseGridUnits = useGrid,
             CurrentTime = Time.time,
@@ -1012,12 +1130,32 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // 骑兵冲锋（3.6 §5.3 三态）：独立于射程攻击，扫感知列表触发（目标在 chargeRange 内即可）
         TryStartChargeFromPerception(ctx.CellSize);
 
+        // D468 野性攻击面（HH.51 批C）：无国流浪汉野性生效 → 战力=Worker 基线×wildStrengthRatio（射程/CD/弹道镜像 Worker）
+        bool wildOverride = TryGetWildCombatOverride(out int wildAttack, out float wildRange, out float wildCd, out bool wildRanged);
+        int effectiveAttack = wildOverride ? wildAttack : _profession.attack;
+        float effectiveRange = wildOverride ? wildRange : _profession.attackRange;
+        float effectiveCd = wildOverride ? wildCd : _profession.attackCD;
+        bool effectiveRanged = wildOverride ? wildRanged : _profession.isRanged;
+
         FocusDecision focus = ctx.FocusDecision;
         bool shouldAttack = false;
         IDamageable targetEnemy = null;
+        // D486：移动/漫游焦点（Anchor 跟随/Wander 漫游）视为移动中——自卫交火层不打断移动（②d 负探针）
+        bool focusIsMoving = focus.IsValid && (focus.Focus.FocusType == FocusType.Anchor || focus.Focus.FocusType == FocusType.Wander);
 
-        if (_profession.attack > 0)  // 战斗单位才攻击
+        // [wildDiag 临时诊断（HH.51 验收，跑完删除）] 无条件进入日志：区分"方法未调用"vs"effectiveAttack=0"
+        if (SelfUnit != null && SelfUnit.raceId != RaceIds.Human)
+            Debug.Log($"[wildDiag] 战斗登记 u{SelfUnit.npcId}(r{SelfUnit.raceId}) 进入 wild={wildOverride} effAtk={effectiveAttack} focusValid={focus.IsValid}");
+
+        if (effectiveAttack > 0)  // 战斗单位才攻击（含野性流浪汉 D468）
         {
+            // [wildDiag 临时诊断（HH.51 验收，跑完删除）]
+            if (SelfUnit != null && SelfUnit.raceId != RaceIds.Human)
+            {
+                Debug.Log($"[wildDiag] 判定 u{SelfUnit.npcId}(r{SelfUnit.raceId}) wild={wildOverride} " +
+                          $"focusValid={focus.IsValid} isThreatTs={focus.Focus is ThreatStimulus} " +
+                          $"nearEnemies={_nearbyEnemies.Count} range={ctx.AttackWorldRange:F2}");
+            }
             // 改动③「懵」：被骑兵撞飞期间（1.2s）禁攻击（对齐 sim UpdateCombatRegistration：IsKnockedBack -> StopAttacking + return）
             if (SelfUnit != null && SelfUnit.IsKnockedBack)
             {
@@ -1091,6 +1229,22 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                     targetEnemy = nearest;
                 }
             }
+
+            // D486 自卫交火层（常设）：受击溯源攻击者（D485 ① 放行的无国野人异族）在射程内、
+            // 焦点未攻击该目标（去重）、非移动/漫游焦点（Anchor/Wander 不打断移动）、无禁火（白名单空集）
+            // → 原地还击、不打断焦点、不追击。壳层实现，不触 AI.Core/Decision。
+            if (!shouldAttack && _lastAggressor != null && !IsDestroyed(_lastAggressor)
+                && _lastAggressor is UnitController aggUc && aggUc != null && aggUc.IsAlive
+                && !focusIsMoving
+                && Vector2X.Distance(ctx.SelfPos, Vector2XUnity.FromUnity(_lastAggressor.GetPosition())) <= ctx.AttackWorldRange)
+            {
+                bool focusAlreadyOnIt = focus.Focus is ThreatStimulus tsCur && tsCur.Enemy == _lastAggressor;
+                if (!focusAlreadyOnIt)
+                {
+                    shouldAttack = true;
+                    targetEnemy = _lastAggressor;
+                }
+            }
         }
 
         // B1 弹药评估（对齐 sim SimBrain.SelectAmmo）：战争机器耗尽停火 / 惜用省弹 / 昂贵弹只对高价值目标。
@@ -1111,10 +1265,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 var ammo = _profession.ammo;
                 var profile = new AttackProfile
                 {
-                    attack = _profession.attack,
-                    range = _profession.attackRange,
-                    cd = _profession.attackCD,
-                    isRanged = _profession.isRanged,
+                    // D468 野性攻击面：野性流浪汉用 Worker 基线×ratio 覆盖（职业原值=0）
+                    attack = effectiveAttack,
+                    range = effectiveRange,
+                    cd = effectiveCd,
+                    isRanged = effectiveRanged,
                     projectileSpeed = _profession.projectileSpeed,
                     // 弹药（3.6 §三：AmmoDef 拉平；B1 弹型 = SelectAmmo 选中值）
                     projectileType = ammoType,
@@ -1141,6 +1296,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                 {
                     _currentAttackTarget = targetEnemy;
                     if (selfUnit != null) selfUnit.ConsumeAmmo(ammoType);   // B1：发射扣弹（对齐 sim）
+                    // [wildDiag 临时诊断（HH.51 验收，跑完删除）]
+                    var tuc = targetEnemy as UnitController;
+                    Debug.Log($"[wildDiag] 开火 u{(selfUnit != null ? selfUnit.npcId : -1)}(r{(selfUnit != null ? selfUnit.raceId : -1)}) → 目标#{(tuc != null ? tuc.npcId : -1)}(r{(tuc != null ? tuc.raceId : -1)}) 伤害={effectiveAttack} 射程={ctx.AttackWorldRange:F2}");
                 }
             }
         }

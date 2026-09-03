@@ -327,6 +327,9 @@ public class SaveManager : Singleton<SaveManager>
             // P5.3 D432：读档开始前清零旧档过滤计数（UnitFactory.SpawnFromSave 丢弃废弃阵营/职业单位时递增）
             UnitFactory.ResetFilteredSaveUnitCount();
 
+            // D467 兜底口径：读档开始前清零旧档缺 raceId 字段默认 Human 计数（UnitController.LoadState 递增）
+            UnitFactory.ResetDefaultedRaceSaveCount();
+
             // 阶段 1: 全局模块恢复
             DistributePayloads(root.modules, SaveLoadPhase.Global);
 

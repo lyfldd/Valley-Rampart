@@ -77,3 +77,4 @@ MonoBehaviour:
   gatherScoreWeights: {x: 1, y: 1, z: 1}
   gatherCandidateRefreshSeconds: 15
   gatherInfluenceRadiusCells: 8
+  gatherSameRaceWeight: 0.8
