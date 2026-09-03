@@ -5,12 +5,18 @@ using UnityEngine;
 //  占位数值全落 SO（so-data-driven 铁律），禁硬编码。
 // ============================================================================
 
-/// <summary>王国模板偏好特征物（D316 占位枚举：ForestDense 只建枚举不实现；本片仅按气候带放置）。</summary>
+/// <summary>
+/// 王国模板偏好特征物（D316 占位枚举：ForestDense 只建枚举不实现；本片仅按气候带放置）。
+/// 2_20 M4 扩展（D429 载体重定义）：MineralRich=矮人偏好矿区密度高区 / BarrenRich=兽人偏好贫瘠开阔区（军训成本减成载体）；
+/// 人类无偏好=None。真实特征物匹配仍归 2_16 D316（P2 步骤12），本批只扩枚举+配置挂接（2_20 实施清单 M4）。
+/// </summary>
 public enum KingdomPreferredFeature
 {
-    None,           // 无特征偏好（按气候带即可）
+    None,           // 无特征偏好（按气候带即可；2_20 §五.3 人类 Any 语义由 None 承载）
     RiverAdjacent,  // 河湾国：偏好落点邻河（P2 步骤12 实现）
-    ForestDense     // 密林国：偏好高森林密度（P2 步骤12 实现，本片不实现）
+    ForestDense,    // 密林国：偏好高森林密度（P2 步骤12 实现，本片不实现；精灵 preferredFeature）
+    MineralRich,    // 2_20 M4/D429：矿区密度高区（矮人偏好；产出加成=采矿+，P2 步骤12 实现匹配）
+    BarrenRich      // 2_20 M4/D429：贫瘠开阔区（兽人偏好；加成载体=军训成本-，P2 步骤12 实现匹配）
 }
 
 /// <summary>

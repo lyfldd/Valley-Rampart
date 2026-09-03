@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d369edf64534f84cb029394b0db61e8, type: 3}
+  m_Name: Race_Elf
+  m_EditorClassIdentifier: 
+  raceId: 1
+  raceName: "\u7CBE\u7075"
+  militant: 0.3
+  economic: 0.5
+  defensive: 0.4
+  expansionist: 0.4
+  diplomatic: 0.7
+  trainCostMul: 1
+  trainSpeedMul: 1
+  meleeAtkMul: 1
+  rangedAtkMul: 1
+  moveSpeedMul: 1
+  mineMul: 1
+  lumberMul: 1
+  farmMul: 1
+  buildSpeedMul: 1
+  buildingHpMul: 1
+  carryCapMul: 1
+  preferredFeature: 2
+  gatherBonusOnPreferred: 0
+  exclusiveBuildingDef: {fileID: 0}
+  exclusiveUnitDefs: []
