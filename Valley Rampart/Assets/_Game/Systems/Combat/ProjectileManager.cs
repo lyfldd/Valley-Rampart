@@ -101,6 +101,12 @@ public class ProjectileManager : Singleton<ProjectileManager>
         float distance = Vector2.Distance(startPos, targetPos);
         float duration = distance / Mathf.Max(0.1f, profile.projectileSpeed);
 
+        // [projDiag 临时诊断（HH.51 验收，跑完删除）] 弹道发射：确认 Instance 非 null + 落点/误差
+        var atkUc = attacker as UnitController;
+        var tgtUc = target as UnitController;
+        Debug.Log($"[projDiag] Spawn atk={(atkUc != null ? atkUc.npcId : -1)} tgt={(tgtUc != null ? tgtUc.npcId : -1)} " +
+                  $"dist={distance:F2} err={_config.projectileErrorRadius} dur={duration:F2} start=({startPos.x:F1},{startPos.y:F1}) land=({targetPos.x:F1},{targetPos.y:F1})");
+
         GameObject visual = GetFromPool();
         visual.transform.position = startPos;
         visual.SetActive(true);
@@ -183,6 +189,17 @@ public class ProjectileManager : Singleton<ProjectileManager>
         // 查 GridSystem 附近微格的单位（doc1 微格主表 D70，2_5 步骤3）
         List<UnitController> candidates = QueryNearbyUnits(p.targetPos, hitRadiusCells);
 
+        // [projDiag 临时诊断（HH.51 验收，跑完删除）] 弹道到达：候选明细（定位弹道 miss：注册表 vs 阵营过滤）
+        {
+            var diag = new System.Text.StringBuilder();
+            var atkUc = p.attacker as UnitController;
+            diag.Append($"[projDiag] 到达 atk={(atkUc != null ? atkUc.npcId : -1)} land=({p.targetPos.x:F1},{p.targetPos.y:F1}) " +
+                        $"hitR={hitRadiusCells} cand={candidates.Count}");
+            foreach (var u in candidates)
+                diag.Append($" | u{u.npcId}(occ{u.EffectiveOccupation},f{u.GetFaction()},rec{u.IsVagrantRecruited},hp{u.CurrentHp},pos=({u.transform.position.x:F1},{u.transform.position.y:F1}))");
+            Debug.Log(diag.ToString());
+        }
+
         if (candidates.Count == 0) return; // miss
 
         // Faction 二元判定：过滤非己方单位
@@ -193,8 +210,18 @@ public class ProjectileManager : Singleton<ProjectileManager>
         foreach (var unit in candidates)
         {
             if (unit == null || unit.CurrentHp <= 0) continue;
-            if (unit.GetFaction() == attackerFaction) continue; // 己方跳过
-            if (unit.GetFaction() == Faction.None) continue;    // 无阵营跳过
+            // D486 弹道命中放行（对齐 D485 ① 受击溯源通道）：未招募野人异族（raceId≠射手）视为敌对可命中。
+            // 野人 EffectiveFaction 可能 = 射手阵营（PlayerCamp 可招募人口）→ 原"己方跳过"把野性敌人从弹道漏网；
+            // 人口维度（raceId）判敌我，与野性敌意矩阵一致（防御塔/远程国民可射杀入侵野人）。
+            var attackerUc = p.attacker as UnitController;
+            bool hostileVagrant = unit.EffectiveOccupation == Occupation.Vagrant
+                && !unit.IsVagrantRecruited
+                && (attackerUc == null || attackerUc.raceId != unit.raceId);
+            if (!hostileVagrant)
+            {
+                if (unit.GetFaction() == attackerFaction) continue; // 己方跳过
+                if (unit.GetFaction() == Faction.None) continue;    // 无阵营跳过
+            }
 
             float dist = GridMath.DistCells(p.targetPos, unit.GetPosition());
             if (dist <= hitRadiusCells && dist < bestDist)
