@@ -60,3 +60,41 @@
 ## 四、流程
 
 开工回执（HH.64 回写：段A 数值转正确认+段B 可行性+段C 口径锚定与 sim 评估）→ 实施 → 交付报告（段A/B 可并入 HH.65 或分段）→ 策划端验收 → commit 代执 → 批5 解锁。
+
+执行端回执后开工，交付 HH.65 报告回来验收。届时段A/B/C 全清 + 批5（M10）解锁。策划端 2_22 P0 清单签发窗口我这边随时可启动——那是我下一件文档活。
+
+---
+
+## 五、执行端开工回执（2026-09-04，TraeCode）
+
+- **状态**：✅ 已接单开工（三段一次接单，按 §二 顺序执行；HH.63 已交验、批3+冒烟自动批验收成立 D521/D522 前提确认）
+- **本会话拟改文件声明**（单写者纪律）：`WildnessConfig.cs`/`.asset`、`NPCBrain.cs`（仅 TryGetWildCombatOverride 消费点）、`Valley2_17_Smoke_12.cs`、`KingdomFoundry.cs`（仅 personality 生成点）、冒烟容器（新建/改）、`SaveSlotPanel.cs`（如需探针日志）、2_20 实施清单 M8/M9 行回执区、本文件回执区、`_交接索引.md`
+
+### 段A 数值转正确认
+
+- `wildBaseAttack`（int，默认 **1**）=attack 绝对基线转正；**range≥1/cd≥0.5 两下限一并 SO 化**（`wildBaseRange` float 默认 1.0 / `wildBaseCd` float 默认 0.5）——依据 §段A.2 括号"现硬编码 attack≥1/range≥1/cd≥0.5 转正为可调初值"三项并提 + so-data-driven 铁律；数值默认全部原样转正**零行为变化**（Max 兜底公式镜像）。若策划端认为只应 attack 单字段，验收时驳回即可回退（range/cd 两字段属可拆增量）。
+- 2_20 冒烟头部「实盘缺口注」随批销注（WildnessConfig.cs L45-47 + NPCBrain.cs L666-668 双处）。
+- AI.Core/训练仓零触碰 ✓；`wildBaseAttack` 入 factor_registry = sim 批义务（HH.65 列报，不动训练仓）。
+
+### 段B 可行性回执
+
+| # | 可行性 | 方案 |
+|---|---|---|
+| 1 | ✅ 可行 | Smoke_12（领土接线）现为"先 Play 再点"半自动——改挂 SmokeApi：自动进局（真实开局链，替代其 EnsurePlayerRegistered 兜底）→跑 P1~P10→`SmokeApi.QuitSmoke`；D500 受击不追回归面载体实盘=2_20_Smoke_Race ②c（D486 位移<0.5 格判据，上批已挂 SmokeApi）→同会话一并复跑取回归证据 |
+| 2 | ✅ 可行 | Valley2_16_SmokeVerify（含 ResetWorld+GenerateMapForPreview×18=禁活局正主）→专用会话自动跑（无用户活局时执行，铁律=HH.57 §五 审计通过后方可触发）；P-A6 明细重建=本轮完整逐组合 PASS/FAIL 落盘日志 |
+| 3 | ✅ 环境可铺 | 删除按钮代码已在场（SaveSlotPanel L69-75 OnDeleteClicked）；卡点=UI Toolkit 动态按钮虚拟设备不触发（HH.49 §五-3）。铺法=主菜单 Play+SaveSlots 面板打开+日志探针就位，请用户物理鼠标点一次"删除"；用户不在/不配合→如实挂账 |
+| 4 | ✅ 顺带 | 会话开始即验证 unity_scene 保存行为（.scene 重复文件是否复发，HH.46 §三-3/4）；不阻塞 |
+
+### 段C 口径锚定与 sim 评估（三点边界逐条回应）
+
+1. **口径锚定**：采纳实施清单 M8/M9 行+总纲 §六 为准（2_20.1 §四为数值/公式权威）。HH.61 尾句「M8 分权语义/M9 王国扩张」措辞与清单不符——**不据此扩展**，该句按任务书裁定视为笔误级措辞漂移。总纲 §六「策略倾向」行与清单 M8 口径一致（消费逻辑不变、只改五轴来源），**无另立口径 → 无待决策项**。
+2. **实施点收敛（禁动骨架兑现）**：唯一改动点=`KingdomFoundry` 第一代立国 personality 生成（现 L58 `Perturb(tpl.GetPersonalityArray())` 模板终值）→ RaceDef 基准合并。**消费链零改动**（UtilityScorer L82-83 五轴线性乘入现成，2_20.1 §四"只改来源"）。动态立国 BlendPersonality 混合源=已含基准的来源国 personality，逻辑零改动自动继承。D515/态势层/建军链/姿态档全不碰。
+   - **合并公式呈报**（文档未给显式公式，执行端按 D426"扰动在基准上偏离"语义取加性方案）：`final[i] = RaceDef.baseline[i] + (KingdomDef.axis[i] − 0.5) + rng(±firstGenPerturbation)`，第一代不 clamp（D474 勘定；消费侧 UtilityScorer 既有 Clamp01 保护）。**良性质**：人类族基准全 0.5 → 人类模板国 personality 与现状完全等价（零回归）；兽人铁蹄好战=0.80+0.35=1.15→消费 1.0（好战拉满，占位基准画像表语义）。若策划端另有乘性公式口径（"×"字面），验收时驳回切换成本单点。
+3. **sim 义务评估（对照 sim-sync §六分级）**：M8 改 KingdomFoundry（Unity 侧 Systems/Kingdom，非 AI.Core 镜像区）+M9 纯验证——**预期零 T 级直改、零 F 级**：不触双端镜像文件、不扩 FactorContext/TuningSnapshot、不动 champion/harness。sim 侧关联义务=①"五轴来源改造→sim 王国生成器同构合并逻辑"（2_20.1 §五行在场，**随 HH.65 列报最终公式实值**供 sim 批对齐）②段A wildBaseAttack 入 factor_registry（归 sim 批）。15_差距账本登记随策划端/sim 批，本批不直改训练仓。
+   - **M9 落点**：共通 5 职业资产走查（Warrior/Archer/Mage/Healer/General SO 三方值）+四族共用冒烟挂 2_20B 六轮框架+**Cavalry 负探针**（TrainingConfig.raceId 门禁：断言骑兵训练条目仅 raceId=0 人类在场、 Elf/Dwarf/Orc 过滤列表无骑兵——批3 已落，本批纯验证）。
+
+### 下一步
+
+按段A→段B→段C 顺序实施；段A 完成可单独 commit（待验收后执行）；交付 HH.65（段A/B/C 合并一次性）。
+
+— 执行端 TraeCode · 2026-09-04

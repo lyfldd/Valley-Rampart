@@ -7,6 +7,8 @@ using UnityEditor;
 // ============================================================================
 //  2_17 步骤12 批A·营地与立国侧 冒烟（HH.32 §六 裁决批A：吞并真判定 + 缺口①动态立国圈入 + DZ-008）
 //  用法：菜单「Valley/验证/2_17_步骤12_领土接线」——须 GameScene Play（先 Play 再点）。
+//  自动跑（HH.64 段B#1，D522）：菜单「Valley/验证/2_17_步骤12_领土接线_自动跑(D522)」——Play 后调用，
+//  等单例→自含跑 P1~P10→自动退 Play（本容器无世界依赖设计，不挂 EnterGame，理由见 RunAuto 注释）。
 //  自含断言（不依赖世界生成/NewGame 引导链，对齐 Smoke_11 哲学——MCP/菜单 NewGame 引导链已知缺世界生成）：
 //    P1 吞并真判定：注入账本有主中区块 → ResolveOwnerCampCell 解析出 owner id；无主（极大坐标）→ -1。
 //    P2 缺口① ClaimInitial：注入最小 Building（新王国 id=88）→ ClaimInitial 写入 3×3 初始圈 + 广播事件（坐标序确定性）；
@@ -38,6 +40,37 @@ public static class Valley2_17_Smoke_12
     {
         if (!Application.isPlaying) { Debug.LogError("[2_17_12冒烟] 须在 Play 上下文执行。"); return; }
         new GameObject("2_17_12_SmokeRunner").AddComponent<RunHost>().Host(RunCoroutine());
+    }
+
+    // ===== D522 自动跑门面（HH.64 段B#1）=====
+    // 本容器=自含断言设计（合成王国 id=99/远域坐标/裸 Play 无地形时 Initialize 全 Plain）——
+    // **不进真实局**：EnterGame 真实世界会使 fixture 坐标假设失效（(25,25)/(31,31) 有真实归属/地形）且
+    // ExpandTick 触碰真国领土。自动化=D522 红利正确形态：Play 后自动驱动+跑完自动退，零手动。
+    // D500 受击不追回归面证据=Valley2_20_Smoke_Race ②c（真实进局段，同会话一并复跑）。
+    [MenuItem("Valley/验证/2_17_步骤12_领土接线_自动跑(D522)")]
+    public static void RunAuto()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[2_17_12冒烟] 自动跑须先进入 Play（MCP enterPlaymode 后二次调用本菜单）。"); return; }
+        new GameObject("2_17_12_AutoHost").AddComponent<RunHost>().Host(AutoRoutine());
+    }
+
+    private static IEnumerator AutoRoutine()
+    {
+        float t0 = Time.realtimeSinceStartup;
+        while (TerritorySystem.Instance == null || KingdomRegistry.Instance == null
+               || VagrantCampSystem.Instance == null || GridSystem.Instance == null || BuildingRegistry.Instance == null)
+        {
+            yield return null;
+            if (Time.realtimeSinceStartup - t0 > 60f)
+            {
+                Debug.LogError("[2_17_12冒烟] 自动跑等单例超时(60s)，退出 Play。");
+                EditorApplication.ExitPlaymode();
+                yield break;
+            }
+        }
+        yield return RunCoroutine();
+        Debug.Log("[2_17_12冒烟] 自动跑完成 → 退出 Play（D522）");
+        EditorApplication.ExitPlaymode();
     }
 
     public static IEnumerator RunCoroutine()

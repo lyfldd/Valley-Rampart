@@ -27,14 +27,26 @@ public static class Valley2_16SmokeVerify
     [MenuItem("Valley/验证/2_16 P0冒烟取证(单组合 Medium/Normal)")]
     static void RunSmoke_Single() => Run(full: false);
 
+    // D522 自动跑（HH.64 段B#2）：MCP 无人点对话框 → 无模态版；活局守卫=HH.57 §五 铁律代码化——
+    // 本工具含 ResetWorld+GenerateMapForPreview×18（世界副作用），禁止在任何已进局世界执行。
+    [MenuItem("Valley/验证/2_16 P0冒烟取证_自动跑(无框·禁活局)")]
+    static void RunSmoke_Auto() => Run(full: true, showDialog: false);
+
     private readonly struct ComboResult { public readonly bool ok; public readonly string detail; public ComboResult(bool ok, string detail) { this.ok = ok; this.detail = detail; } }
 
-    static void Run(bool full)
+    static void Run(bool full, bool showDialog = true)
     {
         var wm = Object.FindAnyObjectByType<WorldManager>();
         if (wm == null)
         {
             Debug.LogError("[2_16冒烟] WorldManager 未找到，无法取证。");
+            return;
+        }
+        // 活局守卫（HH.57 事故铁律）：ActiveMap 在场=已进局（正式进局链写入）——拒绝执行，防重置用户世界。
+        if (WorldManager.Instance != null && WorldManager.Instance.ActiveMap != null)
+        {
+            Debug.LogError("[2_16冒烟] 活局守卫：ActiveMap 在场（已进局世界）——本工具含 ResetWorld 禁在活局执行（HH.57 §五）。请裸 Play（不进局）重试。");
+            if (showDialog) EditorUtility.DisplayDialog("2_16 P0 冒烟取证", "活局守卫：已进局世界禁执行（HH.57 铁律），请裸 Play 重试", "确定");
             return;
         }
 
@@ -51,7 +63,8 @@ public static class Valley2_16SmokeVerify
             Debug.Log($"[2_16冒烟] size={size} diff={diff} => {(r.ok ? "PASS" : "FAIL")} | {r.detail}");
         }
         Debug.Log($"[2_16冒烟] ===== {(full ? "9组合×2局" : "单组合")} 总体: {(allPass ? "ALL PASS" : "HAS FAIL")} =====");
-        EditorUtility.DisplayDialog("2_16 P0 冒烟取证", allPass ? "全部 PASS" : "存在 FAIL，见 Console 明细", "确定");
+        if (showDialog)
+            EditorUtility.DisplayDialog("2_16 P0 冒烟取证", allPass ? "全部 PASS" : "存在 FAIL，见 Console 明细", "确定");
     }
 
     static ComboResult VerifyCombo(WorldManager wm, WorldSize size, int difficulty, int seed)
@@ -115,11 +128,21 @@ public static class Valley2_16SmokeVerify
         return aiCount >= 4 && aiCount <= 6;   // Large
     }
 
-    /// <summary>跨次生成重置：清注册表（重置 id）+ 清建筑实体（防多次生成累加）。须在 Play 上下文调用。</summary>
+    /// <summary>跨次生成重置：清注册表（重置 id）+ 清建筑实体 + 清单位实体（防多次生成累加）。须在 Play 上下文调用。
+    /// HH.64 段B#2 适配（2_17 步骤4 台账转派生）：workerCount/warriorCount 现由存活实体按 kingdomId 派生
+    /// （KingdomState ①真源演进），本工具旧版只清王国/建筑不清单位 → 前遍工人实体残留 → 跨遍累加 →
+    /// determinism 假红（9/9 FAIL，工人 4→8 膨胀实录）。取证确定性断言必须实体级清场。</summary>
     static void ResetWorld()
     {
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
         if (BuildingFactory.Instance != null) BuildingFactory.Instance.ClearAllBuildings();
+        // 单位实体清算：注册表内单位 GameObject 即时销毁（同步取证循环需立即反映，不用帧末 Destroy）+ 注册表清空
+        if (UnitRegistry.Instance != null)
+        {
+            foreach (var u in UnitRegistry.Instance.GetAllUnits())
+                if (u != null) Object.DestroyImmediate(u.gameObject);
+            UnitRegistry.Instance.Clear();
+        }
     }
 
     /// <summary>业务数据规范化 dump（Newline 分隔，去除排序噪声/对象哈希）。</summary>

@@ -54,9 +54,12 @@ public static class KingdomFoundry
             // 分配策略（保底席/随机池 D430）归 M3，本处只做字段接通——GetKingdomRace 消费真字段。
             state.raceId = tpl.raceId;
 
-            // 四维性格 ±第一代扰动 → clamp（D290/D311）
-            state.personality = Perturb(rng, tpl.GetPersonalityArray(),
-                cfg.firstGenPerturbation, cfg.personalityClampMin, cfg.personalityClampMax);
+            // 2_20 M8/D426 五轴来源改造：种族出厂基准（RaceDef）×王国模板扰动（KingdomDef 轴对中性 0.5 的偏离）
+            // +第一代随机扰动 → 合并值，**不 clamp**（D474 勘定：clamp 仅限动态立国混合路径；极端模板自担 D311，
+            // 消费侧 UtilityScorer 已有 Clamp01 保护）。原口径=模板终值±扰动±clamp（2_16 步骤4）退役。
+            // 人类基准全轴 0.5 → 人类模板国 personality 与改造前分布等价（零回归性质）。
+            state.personality = MergeFirstGenPersonality(rng, tpl,
+                KingdomRace.GetKingdomRaceDef(state.id), cfg.firstGenPerturbation);
 
             // 2_17 步骤3 实体化（裁①）+ 步骤4 台账转派生（①真源演进）：
             // 工人/战士直出实体，workerCount/warriorCount 不再手写台账——由 KingdomState 属性对实体按 kingdomId 派生
@@ -283,16 +286,22 @@ public static class KingdomFoundry
         return pool[rng.Next(0, pool.Length)];
     }
 
-    /// <summary>四维性格 ±perturbation 扰动后 clamp 到 [min,max]（D290/D311 独立不归一化）。</summary>
-    private static float[] Perturb(System.Random rng, float[] baseVals, float perturbation,
-                                   float clampMin, float clampMax)
+    /// <summary>
+    /// 2_20 M8/D426 第一代五轴合并（2_20.1 §四）：final[i] = RaceDef 种族基准[i] + (KingdomDef 模板轴[i] − 0.5)
+    /// + rng(±perturbation)——模板字段=对中性 0.5 的 per-kingdom 偏离（扰动语义），加性叠加到种族出厂基准；
+    /// 第一代**不 clamp**（D474 勘定，clamp 仅动态立国混合路径；消费侧 UtilityScorer Clamp01 保护）。
+    /// race=null（RaceDef 资产缺失）→ 基准中性 0.5 回退（personality=模板终值±扰动，退化为改造前分布）。
+    /// </summary>
+    private static float[] MergeFirstGenPersonality(System.Random rng, KingdomDef tpl, RaceDef race, float perturbation)
     {
+        var tplVals = tpl != null ? tpl.GetPersonalityArray() : null;
+        var baseVals = race != null ? race.GetBaselinePersonalityArray() : null;
         var result = new float[5];
         for (int i = 0; i < 5; i++)
         {
-            float b = i < baseVals.Length ? baseVals[i] : 0.5f;
-            float n = b + (float)((rng.NextDouble() * 2.0 - 1.0) * perturbation);
-            result[i] = Mathf.Clamp(n, clampMin, clampMax);
+            float deviation = (tplVals != null && i < tplVals.Length ? tplVals[i] : 0.5f) - 0.5f;
+            float b = baseVals != null && i < baseVals.Length ? baseVals[i] : 0.5f;
+            result[i] = b + deviation + (float)((rng.NextDouble() * 2.0 - 1.0) * perturbation);
         }
         return result;
     }
