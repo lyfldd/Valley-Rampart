@@ -24,6 +24,11 @@ using static BuildingFactory;
 //           AI⑥ FindRecruitableVagrant 反射调用——异族被滤/同族可招/全异族返回 null。
 //   ③ 同步：D471 插旗定族——13 Elf+1 Human 营（多数派 Elf）立国 → 日志「定族 raceId=1（D471」
 //           + 新国成员 raceId 保持 Elf（终身字段 D467）。
+//  —— Q10 批2 增量（2026-09-04，M3+M5）：
+//   ⑥ M3 开局分布：第一代 AI（id 最小 min(3,AI数) 个，id 序=立国序）种族互异+不含玩家族（D430 保底席）
+//           +全 AI raceId 合法域+M5a 玩家 state.raceId 与 helper 同值（EnsurePlayerRegistered 绑定链）。
+//   ⑦ M5 消费链：D503 全表 12×4 逐值断言+GetGatherMul 同源（Ore/Wood/Food 映射+Metal 不乘）
+//           +正探针（玩家=矮人 → 采矿 1.3）+负探针（哨兵 -1 → null → 中性 1）。
 //
 //  实盘缺口注（HH.51 验收）：Human_Player_Worker 资产 attack/attackRange/attackCD=0（和平职业正常值）
 //  → 「野人战力=同职工人 60%」公式退化为 0 → TryGetWildCombatOverride 走 Max 下限兜底
@@ -75,7 +80,8 @@ public static class Valley2_20_Smoke_Race
                 difficulty = 2,
                 worldSize = WorldSize.Medium,
                 kingdomName = "冒烟王国",
-                selectedSlotId = "smoke"
+                selectedSlotId = "smoke",
+                raceId = RaceIds.Dwarf   // Q10 批2：自建兜底也走矮人进局（⑦c 正探针在无用户世界时仍可断言；用户进局优先走用户选族）
             });
         }
         float worldWaitT0 = Time.realtimeSinceStartup;
@@ -494,29 +500,46 @@ public static class Valley2_20_Smoke_Race
         bool p4b = true;
         var kcfg = Resources.Load<KingdomConfig>("Config/KingdomConfig");
         int cost = kcfg != null ? kcfg.recruitFoodCost : 0;
-        if (h2 == null || !h2.IsAlive) h2 = dbg.SpawnVagrantWithRace(RaceIds.Human, pH2);   // 材料保鲜（同 ④a 注）
+        if (h2 == null || !h2.IsAlive) h2 = dbg.SpawnVagrantWithRace(RaceIds.Dwarf, pH2);   // 材料保鲜（同 ④a 注）
         if (h2 != null && ruler != null && cost > 0 && ruler.Food >= cost)
         {
+            // Q10 批2 修正三（M5a 行为联动，同 ④c h5 根因）：玩家选族后玩家侧「同族」=玩家族（本轮=矮人 r2）
+            // ——旧材料 h2=Human 会被 D469 异族拒绝（VagrantCampSystem L156 实读：raceId≠GetKingdomRace(0)→拒绝）
+            // =第五轮 ④b FAIL 根因（材料口径过时非产品缺陷）→ 同族正材料改 Dwarf+调用前强制 raceId。
+            h2.raceId = RaceIds.Dwarf;
             int f0 = ruler.Food;
             bool ok = vcs.RecruitVagrant(h2);
             p4b = ok && ruler.Food < f0;   // 同族放行+粮扣
-            sb.Append($"④b 玩家侧同族放行(粮 {f0}→{ruler.Food})={(p4b ? "OK" : "FAIL")} ");
+            sb.Append($"④b 玩家侧同族( Dwarf r{h2.raceId} )放行(粮 {f0}→{ruler.Food})={(p4b ? "OK" : "FAIL")} ");
         }
         else sb.Append($"④b 同族放行=SKIP(粮 {(ruler != null ? ruler.Food : -1)} < {cost}——负探针已证拒绝在粮检前) ");
         allPass = allPass && p4b;
 
         bool p4c = false, p4d = false;
-        // 材料保鲜（同 ④a 注）：④c/④d 依赖 v4/h3 存活（实测 ④c 选中 #-1=h3 已死致候选缺失=假 FAIL）
-        if (v4 == null || !v4.IsAlive) v4 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pV4);
-        if (h3 == null || !h3.IsAlive) h3 = dbg.SpawnVagrantWithRace(RaceIds.Human, pH3);
-        if (v4 != null && h3 != null)
+        // 材料保鲜（同 ④a 注）：④c/④d 依赖 v4/h5 存活（实测 ④c 选中 #-1=h3 已死致候选缺失=假 FAIL）
+        // Q10 批2 ④c 修正（D498 预批，HH.55 §二裁决）：①补注入后 5 帧 yield（UnitRegistry 注册/脑初始化
+        // 时序窗口——批1 实证补注入零等待=④c 波动疑点）②断言放宽「任一未招募同族流民」。
+        // Q10 批2 修正二（M5a 行为联动）：玩家选族后 GetKingdomRace(0)=玩家族（本轮=矮人 r2）——
+        // brain(0) 同族过滤对象=玩家族而非 Human（M5a 绑定生效的正确表现；首轮 ④c null 根因）。
+        // → 同族正材料=h5 Dwarf 流民（与玩家族同族）；异族负材料=v4 Elf 不变。
+        bool injected4c = false;
+        if (v4 == null || !v4.IsAlive) { v4 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pV4); injected4c = true; }
+        var h5 = dbg.SpawnVagrantWithRace(RaceIds.Dwarf, pH3);   // 同族正材料：每轮新造（玩家族对齐，防跨轮营地改写污染）
+        if (h5 != null) h5.kingdomId = -1;   // ④AI 流民池：AI⑥ 只招 kingdomId<0（未入籍）——第五轮 ④c FAIL 根因=新造 h5 漏置 -1
+        if (h5 != null) injected4c = true;
+        if (injected4c) for (int f = 0; f < 5; f++) yield return null;   // 补注入时序窗口（D498 预批）
+        if (v4 != null && h5 != null)
         {
-            var brain = new KingdomBrain(0);   // 玩家国族（GetKingdomRace 现阶段恒 Human，Q10-M2 挂账）
+            // 调用前强制材料 raceId（营地系统改写防御，同 ④a/④b 先例）
+            v4.raceId = RaceIds.Elf;
+            h5.raceId = RaceIds.Dwarf;
+            var brain = new KingdomBrain(0);   // 玩家国族（M5a 后读真字段 raceId=玩家选族）
             var mi2 = typeof(KingdomBrain).GetMethod("FindRecruitableVagrant", BindingFlags.NonPublic | BindingFlags.Instance);
             var got = mi2 != null ? (UnitController)mi2.Invoke(brain, null) : null;
-            p4c = got != null && got.npcId == h3.npcId && got.raceId == RaceIds.Human;   // 异族 V4 被滤，选中同族 H3
-            sb.Append($"④c AI⑥同族过滤(选中 #{(got != null ? got.npcId : -1)} race={(got != null ? got.raceId : -1)})={(p4c ? "OK" : "FAIL")} ");
-            AIDebugSpawnController.DebugSetRace(h3, RaceIds.Elf);   // 负加固：同族者改标异族
+            int pRace = KingdomRace.GetKingdomRace(0);
+            p4c = got != null && got.raceId == pRace;   // 任一未招募同族（=玩家族）流民（异族 V4 被滤，D498 预批放宽）
+            sb.Append($"④c AI⑥同族过滤(玩家族 r{pRace} 选中 #{(got != null ? got.npcId : -1)} race={(got != null ? got.raceId : -1)})={(p4c ? "OK" : "FAIL")} ");
+            AIDebugSpawnController.DebugSetRace(h5, RaceIds.Elf);   // 负加固：同族者改标异族
             var got2 = mi2 != null ? (UnitController)mi2.Invoke(brain, null) : null;
             p4d = got2 == null;   // 全异族 → null
             sb.Append($"④d AI⑥全异族→null {(p4d ? "OK" : "FAIL")} ");
@@ -583,8 +606,10 @@ public static class Valley2_20_Smoke_Race
             if (cellOpt != null)
             {
                 // 清场保险：营 10 格内未招募流浪汉清场（防 D308 散布流民混入营地/与注入者互吸走散）
+                // Q10 批2 修正（活局事故纪律）：TakeDamage→死亡注销改集合——快照后杀（批2 三轮实证：
+                // 多轮材料积累下枚举内部 HashSet 炸 Collection modified，批1 零伤害未触发纯运气）
                 float clearRadius = 10f * grid.Config.cellSize.x;
-                foreach (var u in UnitRegistry.Instance.GetAllUnits())
+                foreach (var u in UnitRegistry.Instance.GetAllUnits().ToList())
                 {
                     if (u == null || !u.IsAlive || u.EffectiveOccupation != Occupation.Vagrant || u.IsVagrantRecruited) continue;
                     if (Vector2.Distance(u.GetPosition(), campWorld) <= clearRadius) u.TakeDamage(999999);
@@ -646,6 +671,93 @@ public static class Valley2_20_Smoke_Race
         }
         else sb.Append("\n③ 无营地建筑可锚定 FAIL ");
         allPass = allPass && p3f && p3l && p3m && p3t;
+
+        // ===== Q10 批2 探针⑥：M3 开局分布 + M5a 玩家绑定（D430/D506②/D431）=====
+        // 口径：id 序=立国序（id 单调递增不复用 D385）→ id 最小的 min(3, AI数) 个 AI 王国=第一代
+        // （动态立国有冷却+营地生长时窗，进局即触发几乎不可能混入；即便混入也不影响前 K 个判定）。
+        // 断言：a) 第一代种族互异（三族各一/两族各一）b) 第一代不含玩家族（AI 池排除玩家族，D430 保底席）
+        // c) 全 AI raceId 合法域 [0,3] d) 玩家 state.raceId 与 helper 同值（M5a EnsurePlayerRegistered 绑定链）。
+        bool p6a = false, p6b = true, p6c = true, p6d = false;
+        int playerRace = KingdomRace.GetKingdomRace(0);
+        var playerState = KingdomRegistry.Instance.Get(0);
+        p6d = playerState != null && playerState.raceId == playerRace;
+        var aiStates = new List<KingdomState>();
+        foreach (var k in KingdomRegistry.Instance.GetAll()) if (k != null && k.id > 0) aiStates.Add(k);
+        aiStates.Sort((a, b) => a.id.CompareTo(b.id));
+        int kQuota = Mathf.Min(3, aiStates.Count);
+        var firstGenRaces = new HashSet<int>();
+        var distSb = new StringBuilder();
+        for (int i = 0; i < aiStates.Count; i++)
+        {
+            distSb.Append($"#{aiStates[i].id}:r{aiStates[i].raceId} ");
+            if (i < kQuota)
+            {
+                firstGenRaces.Add(aiStates[i].raceId);
+                if (aiStates[i].raceId == playerRace) p6b = false;   // 第一代 AI 不含玩家族（D430）
+            }
+            if (aiStates[i].raceId < 0 || aiStates[i].raceId > 3) p6c = false;   // 合法域
+        }
+        p6a = kQuota > 0 && firstGenRaces.Count == kQuota;   // 第一代互异（三族各一）
+        bool p6 = p6a && p6b && p6c && p6d;
+        sb.Append($"\n⑥ M3 开局分布：玩家(id=0) r{playerRace} 第一代 K={kQuota} 互异={(p6a ? "OK" : "FAIL")} " +
+                  $"不含玩家族={(p6b ? "OK" : "FAIL")} 合法域={(p6c ? "OK" : "FAIL")} M5a 玩家绑定同值={(p6d ? "OK" : "FAIL")} " +
+                  $"[分布: {distSb}] ");
+        allPass = allPass && p6;
+
+        // ===== Q10 批2 探针⑦：M5 真值挂载+消费链（D503/D506③/D420）=====
+        // ⑦a 四资产 D503 全表断言（12 项×4 族逐值——HH.55 §三表批注通过值）
+        // ⑦b GetGatherMul 同源性（对全部王国：Ore/Wood/Food 映射=RaceDef 字段+Metal 加工品不乘）
+        // ⑦c 正探针：玩家=矮人进局 → 采矿 1.3（M5 验收「矮人采矿加成生效」；非矮人条件 SKIP）
+        // ⑦d 负探针：野生哨兵 kingdomId=-1 → RaceDef null → 中性 1（未选族/无来源流程不进）
+        bool p7a = true, p7b = true, p7c = true, p7d = true;
+        var raceDefs = new Dictionary<int, RaceDef>();
+        foreach (var rn in new[] { "Race_Human", "Race_Elf", "Race_Dwarf", "Race_Orc" })
+        {
+            var rd = Resources.Load<RaceDef>("Config/Races/" + rn);
+            if (rd == null) { p7a = false; continue; }
+            raceDefs[rd.raceId] = rd;
+        }
+        if (p7a)
+        {
+            float[,] d503 = {
+                { 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 0f },     // Human
+                { 1.05f, 1.00f, 0.90f, 1.20f, 1.15f, 0.90f, 1.25f, 1.10f, 0.90f, 0.90f, 0.95f, 0.15f },  // Elf
+                { 1.10f, 0.95f, 1.15f, 0.80f, 0.85f, 1.30f, 0.90f, 0.75f, 1.20f, 1.25f, 1.20f, 0.15f },  // Dwarf
+                { 0.85f, 1.15f, 1.15f, 0.85f, 1.05f, 1.05f, 0.85f, 0.70f, 0.80f, 0.85f, 0.90f, 0.10f },  // Orc
+            };
+            for (int r = 0; r < 4 && p7a; r++)
+            {
+                if (!raceDefs.TryGetValue(r, out var rd)) { p7a = false; break; }
+                var vals = new[] { rd.trainCostMul, rd.trainSpeedMul, rd.meleeAtkMul, rd.rangedAtkMul, rd.moveSpeedMul,
+                    rd.mineMul, rd.lumberMul, rd.farmMul, rd.buildSpeedMul, rd.buildingHpMul, rd.carryCapMul, rd.gatherBonusOnPreferred };
+                for (int c = 0; c < 12; c++)
+                    if (Mathf.Abs(vals[c] - d503[r, c]) > 0.001f) { p7a = false; break; }
+            }
+        }
+        foreach (var k in KingdomRegistry.Instance.GetAll())
+        {
+            if (k == null) continue;
+            var rd = KingdomRace.GetKingdomRaceDef(k.id);
+            if (rd == null || rd.raceId != k.raceId) { p7b = false; break; }
+            if (!Mathf.Approximately(KingdomRace.GetGatherMul(k.id, ResourceType.Ore), rd.mineMul)
+                || !Mathf.Approximately(KingdomRace.GetGatherMul(k.id, ResourceType.Wood), rd.lumberMul)
+                || !Mathf.Approximately(KingdomRace.GetGatherMul(k.id, ResourceType.Food), rd.farmMul)
+                || !Mathf.Approximately(KingdomRace.GetGatherMul(k.id, ResourceType.Metal), 1f))
+            { p7b = false; break; }
+        }
+        string p7cNote;
+        if (playerRace == RaceIds.Dwarf)
+        {
+            p7c = Mathf.Approximately(KingdomRace.GetGatherMul(0, ResourceType.Ore), 1.3f);
+            p7cNote = $"矮人采矿 1.3={(p7c ? "OK" : "FAIL")}";
+        }
+        else p7cNote = $"SKIP(玩家 r{playerRace}——正探针需选矮人进局)";
+        p7d = KingdomRace.GetKingdomRaceDef(-1) == null
+              && Mathf.Approximately(KingdomRace.GetGatherMul(-1, ResourceType.Ore), 1f);
+        bool p7 = p7a && p7b && p7c && p7d;
+        sb.Append($"\n⑦ M5 消费链：D503 全表={(p7a ? "OK" : "FAIL")} GatherMul 同源={(p7b ? "OK" : "FAIL")} " +
+                  $"正[{p7cNote}] 负(哨兵-1 中性)={(p7d ? "OK" : "FAIL")} ");
+        allPass = allPass && p7;
 
         // ===== 汇总 =====
         Debug.Log("[2_20冒烟] " + sb);

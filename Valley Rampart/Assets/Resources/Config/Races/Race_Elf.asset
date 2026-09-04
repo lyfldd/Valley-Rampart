@@ -19,18 +19,18 @@ MonoBehaviour:
   defensive: 0.4
   expansionist: 0.4
   diplomatic: 0.7
-  trainCostMul: 1
+  trainCostMul: 1.05
   trainSpeedMul: 1
-  meleeAtkMul: 1
-  rangedAtkMul: 1
-  moveSpeedMul: 1
-  mineMul: 1
-  lumberMul: 1
-  farmMul: 1
-  buildSpeedMul: 1
-  buildingHpMul: 1
-  carryCapMul: 1
+  meleeAtkMul: 0.9
+  rangedAtkMul: 1.2
+  moveSpeedMul: 1.15
+  mineMul: 0.9
+  lumberMul: 1.25
+  farmMul: 1.1
+  buildSpeedMul: 0.9
+  buildingHpMul: 0.9
+  carryCapMul: 0.95
   preferredFeature: 2
-  gatherBonusOnPreferred: 0
+  gatherBonusOnPreferred: 0.15
   exclusiveBuildingDef: {fileID: 0}
   exclusiveUnitDefs: []

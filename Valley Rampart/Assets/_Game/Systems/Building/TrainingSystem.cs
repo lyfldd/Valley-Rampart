@@ -35,6 +35,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         public int startDay;      // 开始训练的游戏天数（仅训练中条目有效）
         public bool inTraining;   // true=占用槽位训练中；false=排队等待空槽
         public int kingdomId;     // 2_17 步骤5：所属王国（0=玩家，>0=AI）——队列 per-kingdom 记账（D345 招募入口）
+        public int effCostDays;   // 2_20 M5/D420：种族训练时长修正后的实际天数（trainSpeedMul；入队时定档为副本，不改 SO——排队期国族不变）
     }
 
     private void Update()
@@ -53,7 +54,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
             {
                 var e = q.Entries[i];
                 if (!e.inTraining || e.unit == null) continue;
-                if (day - e.startDay >= e.def.costDays)
+                if (day - e.startDay >= e.effCostDays)
                 {
                     CompleteTraining(q, e);
                 }
@@ -183,14 +184,26 @@ public class TrainingSystem : Singleton<TrainingSystem>
             Debug.Log($"[TrainingSystem] 转职失败：{cur} ≠ 起始职业 {def.fromOccupation}");
             return false;
         }
-        if (!CanPayRecruit(effKingdom, def)) return false;
+
+        // 2_20 M5/D420：种族军训成本/时长修正（D503 表 trainCostMul/trainSpeedMul）：
+        // 成本=effective 值 ceil 取整（防零成本白嫖）；时长=entry 存 effCostDays 副本（排队期国族不变，不改 SO）。
+        // 确定用建筑国族（effKingdom=招募归属，同族镜像语义）。战争学院全局-25% 未来在同点叠乘（M6 挂账）。
+        var raceDef = KingdomRace.GetKingdomRaceDef(effKingdom);
+        float costMul = raceDef != null ? raceDef.trainCostMul : 1f;
+        float speedMul = raceDef != null ? raceDef.trainSpeedMul : 1f;
+        int effGold = Mathf.CeilToInt(def.costGold * costMul);
+        int effCrystal = Mathf.CeilToInt(def.costCrystal * costMul);
+        int effMetal = Mathf.CeilToInt(def.costMetal * costMul);
+        int effDays = Mathf.Max(1, Mathf.CeilToInt(def.costDays / Mathf.Max(0.01f, speedMul)));
+
+        if (!CanPayRecruit(effKingdom, effGold, effCrystal, effMetal)) return false;
 
         // P2：将军训练限量（KingdomConfig.generalLimit，§10 将军限量 2 可配置）
         if (def.toOccupation == Occupation.General && !CanTrainGeneral())
             return false;
 
         // 扣费（训练中断不退还，故入队即扣；按王国国库抽象扣）
-        PayRecruit(effKingdom, def);
+        PayRecruit(effKingdom, effGold, effCrystal, effMetal);
 
         // 入队列（P1-10）：有空槽立即开始训练，否则排队
         if (!_queues.TryGetValue(building, out var q))
@@ -198,7 +211,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
             q = new TrainingQueue();
             _queues[building] = q;
         }
-        var entry = new TrainingQueueEntry { unit = unit, def = def, inTraining = false, kingdomId = effKingdom };
+        var entry = new TrainingQueueEntry { unit = unit, def = def, inTraining = false, kingdomId = effKingdom, effCostDays = effDays };
         q.Entries.Add(entry);
         if (q.ActiveCount < SlotCount(building))
         {
@@ -214,38 +227,40 @@ public class TrainingSystem : Singleton<TrainingSystem>
         return true;
     }
 
-    /// <summary>招募国库抽象校验（2_17 步骤5 per-kingdom）：玩家(0)走 RulerController；AI 走自身 KingdomState 五经济资源。</summary>
-    private bool CanPayRecruit(int kingdomId, TrainingDef def)
+    /// <summary>招募国库抽象校验（2_17 步骤5 per-kingdom）：玩家(0)走 RulerController；AI 走自身 KingdomState 五经济资源。
+    /// 2_20 M5：金/水晶/铁传种族修正后 effective 值（trainCostMul ceil，TryTrain 计算）。</summary>
+    private bool CanPayRecruit(int kingdomId, int gold, int crystal, int metal)
     {
         if (kingdomId <= 0)
         {
             if (RulerController.Instance == null) return false;
-            if (RulerController.Instance.Gold < def.costGold) { Debug.Log("[TrainingSystem] 转职失败：金币不足"); return false; }
-            if (def.costCrystal > 0 && RulerController.Instance.GetResource(ResourceType.Crystal) < def.costCrystal) { Debug.Log("[TrainingSystem] 转职失败：水晶不足"); return false; }
-            if (def.costMetal > 0 && RulerController.Instance.GetResource(ResourceType.Metal) < def.costMetal) { Debug.Log("[TrainingSystem] 转职失败：铁不足"); return false; }
+            if (RulerController.Instance.Gold < gold) { Debug.Log("[TrainingSystem] 转职失败：金币不足"); return false; }
+            if (crystal > 0 && RulerController.Instance.GetResource(ResourceType.Crystal) < crystal) { Debug.Log("[TrainingSystem] 转职失败：水晶不足"); return false; }
+            if (metal > 0 && RulerController.Instance.GetResource(ResourceType.Metal) < metal) { Debug.Log("[TrainingSystem] 转职失败：铁不足"); return false; }
             return true;
         }
         var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
         if (ks == null) return false;
-        if (ks.resources.gold < def.costGold) return false;
-        if (def.costMetal > 0 && ks.resources.metal < def.costMetal) return false;
-        if (def.costCrystal > 0) { Debug.Log("[TrainingSystem] AI 国库仅五经济资源无水晶，魔法训练不可行"); return false; }
+        if (ks.resources.gold < gold) return false;
+        if (metal > 0 && ks.resources.metal < metal) return false;
+        if (crystal > 0) { Debug.Log("[TrainingSystem] AI 国库仅五经济资源无水晶，魔法训练不可行"); return false; }
         return true;
     }
 
-    /// <summary>招募扣费（2_17 步骤5 per-kingdom）：玩家走 RulerController；AI 走 KingdomState.Spend（台账制，无事件）。</summary>
-    private void PayRecruit(int kingdomId, TrainingDef def)
+    /// <summary>招募扣费（2_17 步骤5 per-kingdom）：玩家走 RulerController；AI 走 KingdomState.Spend（台账制，无事件）。
+    /// 2_20 M5：传种族修正后 effective 值（与 CanPayRecruit 同一 effective 三元组，防校验/扣费漂移）。</summary>
+    private void PayRecruit(int kingdomId, int gold, int crystal, int metal)
     {
         if (kingdomId <= 0)
         {
-            RulerController.Instance.ModifyResource(ResourceType.Gold, false, def.costGold);
-            if (def.costCrystal > 0) RulerController.Instance.ModifyResource(ResourceType.Crystal, false, def.costCrystal);
-            if (def.costMetal > 0) RulerController.Instance.ModifyResource(ResourceType.Metal, false, def.costMetal);
+            RulerController.Instance.ModifyResource(ResourceType.Gold, false, gold);
+            if (crystal > 0) RulerController.Instance.ModifyResource(ResourceType.Crystal, false, crystal);
+            if (metal > 0) RulerController.Instance.ModifyResource(ResourceType.Metal, false, metal);
         }
         else
         {
             var ks = KingdomRegistry.Instance.Get(kingdomId);
-            ks.Spend(new ResourcePack { gold = def.costGold, metal = def.costMetal });
+            ks.Spend(new ResourcePack { gold = gold, metal = metal });
         }
     }
 

@@ -57,8 +57,10 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
 
         // 0. 王国名（存 KingdomManager，落王国存档）+ 玩家王国 id=0 注册（2_16 步骤1，D303）
         //    玩家注册须在 ApplyConfig（地图生成末尾 Foundry 立 AI 国）之前，保证玩家占 id=0。
+        //    2_20 M5a/D431：传 newConfig.raceId（2_13 选族 UI 暂存）——玩家 KingdomState.raceId 绑定
+        //    （M3 保底席排除玩家族+消费点 mul 全链由此生效）。
         KingdomManager.Instance.KingdomName = newConfig.kingdomName;
-        KingdomRegistry.Instance.EnsurePlayerRegistered();
+        KingdomRegistry.Instance.EnsurePlayerRegistered(newConfig.raceId);
 
         // 1. 世界管理器（世界种子 + 地图大小 + 难度）
         WorldManager.Instance.ApplyConfig(newConfig.worldSeed, newConfig.worldSize, newConfig.difficulty);

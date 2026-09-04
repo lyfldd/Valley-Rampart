@@ -249,6 +249,13 @@ public class DamageSystem : Singleton<DamageSystem>
             return;
         }
 
+        // 2_20 M5/D420：攻方种族 ATK 修正（meleeAtkMul/rangedAtkMul 近战远程分离，D503 表值）。
+        // AttackProfile=struct：reg.profile 读出即本地副本，此处乘改不回写注册表（L266 回写仅 nextAttackTime）防复合乘；
+        // 怪物/中立不吃；远程=发射前乘入 profile.attack（投射物携伤飞行，到达 ApplyDamage）。
+        float atkMul = ResolveAtkMul(attacker, profile.isRanged);
+        if (atkMul != 1f)
+            profile.attack = Mathf.Max(1, Mathf.RoundToInt(profile.attack * atkMul));
+
         // 分流（决策 9+12）
         if (profile.isRanged)
         {
@@ -265,6 +272,30 @@ public class DamageSystem : Singleton<DamageSystem>
         // 更新下次攻击时间
         reg.nextAttackTime = Time.time + reg.cd;
         _registrations[attacker] = reg;
+    }
+
+    /// <summary>
+    /// 攻方种族 ATK 乘数解析（2_20 M5/D420）：单位按 faction 过滤怪物（无国族不吃修正）；
+    /// 建筑攻方（塔）按 kingdomId 国族吃修正（faction Monster/None 过滤）；其他来源中性 1。
+    /// 近战/远程分离纪律（D420 近战远程分离；D503 表 meleeAtkMul/rangedAtkMul）。
+    /// </summary>
+    private static float ResolveAtkMul(IDamageable attacker, bool isRanged)
+    {
+        if (attacker is UnitController uc)
+        {
+            if (uc.GetFaction() == Faction.Monster) return 1f;
+            var rd = KingdomRace.GetKingdomRaceDef(uc.kingdomId);
+            if (rd == null) return 1f;
+            return isRanged ? rd.rangedAtkMul : rd.meleeAtkMul;
+        }
+        if (attacker is Building b)
+        {
+            if (b.faction == Faction.Monster || b.faction == Faction.None) return 1f;
+            var rd = KingdomRace.GetKingdomRaceDef(b.kingdomId);
+            if (rd == null) return 1f;
+            return isRanged ? rd.rangedAtkMul : rd.meleeAtkMul;
+        }
+        return 1f;
     }
 
     // ===== 伤害计算 + 应用（近战/投射物到达共用）=====

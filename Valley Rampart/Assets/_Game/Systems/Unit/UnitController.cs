@@ -177,7 +177,15 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
     private float EffectiveSpeed(float baseSpeed)
     {
-        return Time.time < _slowUntil ? baseSpeed * (1f - _slowFactor) : baseSpeed;
+        // 2_20 M5/D420：种族移速修正（moveSpeedMul 单点——普通/追击/override 全过此口；D503 表值）。
+        // 怪物不吃（无国族语义）；查无 RaceDef/野生哨兵 → 中性 1。
+        float raceMul = 1f;
+        if (GetFaction() != Faction.Monster)
+        {
+            var rd = KingdomRace.GetKingdomRaceDef(kingdomId);
+            if (rd != null) raceMul = rd.moveSpeedMul;
+        }
+        return Time.time < _slowUntil ? baseSpeed * (1f - _slowFactor) * raceMul : baseSpeed * raceMul;
     }
 
     // ===== 骑兵冲锋（3.6 §5.3 状态：0=None 1=准备 2=突进① 3=停顿 4=突进②；双连击）=====

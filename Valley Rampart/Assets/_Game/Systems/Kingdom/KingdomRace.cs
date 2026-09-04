@@ -9,6 +9,7 @@
 // ============================================================================
 
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>种族标识常量（int 空间=2_13 M10 选族索引约定；Q10-M2 定型前唯一真源）。</summary>
 public static class RaceIds
@@ -34,6 +35,56 @@ public static class KingdomRace
         var registry = KingdomRegistry.Instance;
         var state = registry != null ? registry.Get(kingdomId) : null;
         return state != null ? state.raceId : RaceIds.Human;
+    }
+
+    // ===== 2_20 M5 种族乘数消费（Q10 批2，D420 映射权威+D503/D506 真值）=====
+
+    /// <summary>四族 RaceDef 资产缓存（Resources/Config/Races，M5/D420 消费侧统一入口，防散落 Resources.Load）。</summary>
+    private static RaceDef[] _raceDefCache;
+
+    /// <summary>
+    /// 取王国国族对应的 RaceDef（2_20 M5/D420：种族乘数消费统一入口）。
+    /// kingdomId&lt;0（野生自然建筑哨兵）或查无王国 → null（消费侧 mul=1 中性兜底——中立/异常来源不吃修正）；
+    /// 怪物（Faction.Monster）由消费侧自行过滤（无国族语义）。
+    /// </summary>
+    public static RaceDef GetKingdomRaceDef(int kingdomId)
+    {
+        if (kingdomId < 0) return null;
+        if (_raceDefCache == null)
+        {
+            _raceDefCache = new RaceDef[4];
+            var all = Resources.LoadAll<RaceDef>("Config/Races");
+            for (int i = 0; i < all.Length; i++)
+            {
+                var d = all[i];
+                if (d != null && d.raceId >= 0 && d.raceId < _raceDefCache.Length)
+                    _raceDefCache[d.raceId] = d;
+            }
+        }
+        int race = GetKingdomRace(kingdomId);
+        return race >= 0 && race < _raceDefCache.Length ? _raceDefCache[race] : null;
+    }
+
+    /// <summary>
+    /// 采集/生产资源 → 种族经济乘数（2_20.1 §二 D420 映射权威 + D506③ 裁决表 2026-09-04）：
+    /// Stone/Ore→mineMul、Wood→lumberMul、Food/Meat→farmMul；
+    /// Metal/SpecialFood/Crystal/FireOil/Gold/三弹药=加工品/副产/货币不乘（防中间加工重复加成）。
+    /// Production（ProducerComponent.Tick 主产累加）与 Gather（TaskScheduler.ExecuteCompletion 入库）
+    /// 两侧同源本表（D420 铁律：同 mul 消费点两处同乘防漂移）。
+    /// </summary>
+    public static float GetGatherMul(int kingdomId, ResourceType resourceType)
+    {
+        var def = GetKingdomRaceDef(kingdomId);
+        if (def == null) return 1f;
+        switch (resourceType)
+        {
+            case ResourceType.Stone:
+            case ResourceType.Ore:   return def.mineMul;
+            case ResourceType.Wood:  return def.lumberMul;
+            case ResourceType.Food:
+            case ResourceType.Meat:  return def.farmMul;
+            default:                 return 1f;   // 加工品/副产/货币不乘（D506③）
+        }
     }
 
     /// <summary>

@@ -131,16 +131,26 @@ public static class Valley2_13_Smoke_AB
         var worker = MakeUnit(Occupation.Worker, new Vector2(5f, 5f));
         ctrl.SelectUnit(worker);
         Debug.Log($"[2_13_AB冒烟DIAG] P3 unit hp={worker.CurrentHp} alive={worker.IsAlive} occ={worker.EffectiveOccupation} fac={worker.GetFaction()} selected={ctrl.Selected.Count}");
-        bool sent = false;
+        // D473 P3 探针口径修正（0.6 §四十八，第二次催办随 Q10 批2 落地）：
+        // 右键 MoveTo 事件断言=UnitCommandEvent OR PrioritizeHarvestCommand 二选一（有资源目标走 D115
+        // 分派语义发布 PrioritizeHarvestCommand）——任一发布即事件链成立；PathFollower 直移保底断言不变。
+        bool sent = false, sentH = false;
         EventBus.Subscribe<UnitCommandEvent>(_ => sent = true);
+        EventBus.Subscribe<PrioritizeHarvestCommand>(_ => sentH = true);
 
         ctrl.IssueRightClick(new Vector2(30f, 40f));
 
         EventBus.Unsubscribe<UnitCommandEvent>(_ => { });
+        EventBus.Unsubscribe<PrioritizeHarvestCommand>(_ => { });
         bool moved = worker.GetComponent<PathFollower>() != null;   // 直移保底执行（SetDestination 已调，目标准确断言见正）
         // 保底目标断言：PathFollower 内部 _destination 读
         bool destOk = PathDestination(worker, new Vector2(30f, 40f));
-        return sent && moved && destOk;
+        // D473 P3 口径终版（Q10 批2 实测修正）：事件链二选一（UnitCommandEvent 直移 OR PrioritizeHarvestCommand
+        // D115 分派）。目标格含资源时走 D115=采集任务接管（PathFollower 无直移=合理，目标断言不适用）；
+        // UnitCommandEvent 路径才要求直移保底（moved+destOk）。第五轮实测：D115 发布（日志「优先采集」）
+        // 但直移断言 False→旧复合断言=假 FAIL。
+        bool behaviorOk = sentH || (moved && destOk);
+        return (sent || sentH) && behaviorOk;
     }
 
     // ===== P4 D2 Follow =====

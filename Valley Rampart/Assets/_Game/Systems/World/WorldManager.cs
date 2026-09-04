@@ -169,8 +169,11 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         MapGenRules.FillFeatures(rng, map);                                     // 步骤4
         int aiCount = _mapSizeConfig != null ? _mapSizeConfig.GetEnemyMapBase(size, difficulty, rng) : 2;   // 步骤6（2_16 重锚 D288 档位）
         // 2_16 步骤3↔4联动：同 rng 链绘制 AI 王国模板，写入 map.kingdomTemplates 供步骤5 Foundry 消费（保证放置/立国同模板+确定性）
+        // 2_20 M3/D430：抽取升级为种族配额分配——玩家族占保底席（AI 池排除玩家族）+AI 保底其余三族各一（D506② min(AI,3) 降级）+余者随机。
+        // 玩家已注册（WorldSystem.InitializeWorld 先 EnsurePlayerRegistered 后 ApplyConfig），raceId 从 Registry 读真字段。
         var tplLib = Resources.Load<KingdomTemplateLibrary>("Config/Kingdoms/KingdomTemplateLibrary");
-        var templates = tplLib != null ? tplLib.DrawWithoutReplacement(rng, aiCount) : new List<KingdomDef>();
+        int playerRaceId = KingdomRace.GetKingdomRace(0);
+        var templates = tplLib != null ? tplLib.DrawAiTemplates(rng, aiCount, playerRaceId) : new List<KingdomDef>();
         MapGenRules.PlaceKingdomSpawns(rng, map, _mapGenRulesConfig, size, aiCount, templates);   // 步骤6
         MapGenRules.EnsureNearbyResources(rng, map, _mapGenRulesConfig);        // 步骤7
         MapValidator.ValidateConnectivity(map);                                  // 步骤8

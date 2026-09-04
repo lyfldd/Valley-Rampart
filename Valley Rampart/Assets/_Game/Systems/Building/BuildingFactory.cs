@@ -206,6 +206,9 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             b.kingdomId = kingdomId;   // 2_16 步骤2：王国归属（默认 0=玩家）
 
             // HP：统一入口 = def.maxHp（3.5.1 E-S10）× gradeScale
+            // 2_20 M5/D420：×buildingHpMul（双路同乘之二——内联路径不经 ApplyDef；kingdomId 上方 L206 已赋值先于 HP 计算）
+            var raceDef = KingdomRace.GetKingdomRaceDef(kingdomId);
+            float hpMul = raceDef != null ? raceDef.buildingHpMul : 1f;
             int baseHp = def.maxHp > 0 ? def.maxHp : 100;
             try
             {
@@ -216,6 +219,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             {
                 Debug.LogWarning($"[BuildingFactory] HP计算降级为 def.maxHp 无缩放（def={def.id}, grade={grade}）: {ex.Message}");
             }
+            baseHp = Mathf.Max(1, Mathf.RoundToInt(baseHp * hpMul));
             b.maxHp = baseHp;
             b.hp = baseHp;
             b.state = initialState;

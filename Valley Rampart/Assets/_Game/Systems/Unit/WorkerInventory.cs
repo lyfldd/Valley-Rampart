@@ -20,11 +20,19 @@ public class WorkerInventory : MonoBehaviour, IWarehouse
     /// <summary>背包是否已满（按当前资源类型容量）。</summary>
     public bool IsFull => carriedAmount >= GetCarryCapacity();
 
-    /// <summary>当前携带容量（按背包资源类型查 ResourceCarryConfig；空背包用默认 10）。</summary>
+    /// <summary>当前携带容量（按背包资源类型查 ResourceCarryConfig；空背包用默认 10）。
+    /// 2_20 M5/D420：×种族负重修正 carryCapMul（归属国从 UnitController 读；非单位载体/查无 → 中性）。</summary>
     public int GetCarryCapacity()
     {
         var cfg = Resources.Load<ResourceCarryConfig>("Config/ResourceCarryConfig");
-        return cfg != null ? cfg.GetCarryAmount(carriedType) : 10;
+        int cap = cfg != null ? cfg.GetCarryAmount(carriedType) : 10;
+        var uc = GetComponent<UnitController>();
+        if (uc != null)
+        {
+            var rd = KingdomRace.GetKingdomRaceDef(uc.kingdomId);
+            if (rd != null) cap = Mathf.Max(1, Mathf.RoundToInt(cap * rd.carryCapMul));
+        }
+        return cap;
     }
 
     /// <summary>

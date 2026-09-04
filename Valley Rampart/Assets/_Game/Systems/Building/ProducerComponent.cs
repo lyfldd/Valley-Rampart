@@ -143,7 +143,10 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         // 主产（QQQ.3 B8-7 / LC-B9：用累计器，低速率也产出）
         if (_storage != null && !_storage.IsFull)
         {
-            _mainAccumulator += _rate;
+            // 2_20 M5/D420：种族生产乘数（Production 侧主产累加；资源→mul 映射 D506③，
+            // 与 TaskScheduler Gather 入库侧同源 KingdomRace.GetGatherMul 防漂移；副产 Crystal/FireOil 不乘）
+            float gatherMul = _building != null ? KingdomRace.GetGatherMul(_building.kingdomId, _resourceType) : 1f;
+            _mainAccumulator += _rate * gatherMul;
             int produce = Mathf.FloorToInt(_mainAccumulator);
             if (produce > 0)
             {

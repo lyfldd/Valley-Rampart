@@ -49,8 +49,11 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
     /// <summary>
     /// 确保玩家王国 id=0 已注册（D303）。须在 AI 第一代立国（ApplyConfig→Foundry）之前调用，
     /// 保证玩家占 id=0；name 接 KingdomManager.KingdomName（2_13 已由 WorldSystem 写入）。
+    /// 2_20 M5a/D431：玩家选族绑定——playerRaceId 消费 NewGameConfig.raceId（WorldSystem 传入），
+    /// 写入 KingdomState.raceId 真字段（GetKingdomRace/M3 保底席/消费点 mul 全链由此生效）；
+    /// 缺省 Human 兜底旧路径（读档恢复走 LoadState 不经本口）。
     /// </summary>
-    public void EnsurePlayerRegistered()
+    public void EnsurePlayerRegistered(int playerRaceId = RaceIds.Human)
     {
         if (_playerRegistered) return;
         _playerRegistered = true;
@@ -62,13 +65,14 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
             name = km != null ? km.KingdomName : "河谷王国",
             bannerColor = new Color(0.20f, 0.38f, 0.75f),   // 玩家默认王旗色（占位，染色归 2_10）
             foundedDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1,
-            templateSourceId = -1
+            templateSourceId = -1,
+            raceId = playerRaceId   // 2_20 M5a/D431：玩家选族绑定（0=Human 缺省兜底）
         };
         // 2_17 步骤11 批2：玩家立国时由 KingdomManager 当前值填入解锁态（castleLevel/moduleLevels 镜像，见 KingdomManager.SyncPlayerUnlockToState）
         if (km != null) km.SyncPlayerUnlockToState(state);
         _kingdoms.Add(state);
         PublishFounded(state);
-        Debug.Log($"[KingdomRegistry] 玩家王国开局注册: id=0, name={state.name}, foundedDay={state.foundedDay}");
+        Debug.Log($"[KingdomRegistry] 玩家王国开局注册: id=0, name={state.name}, raceId={state.raceId}, foundedDay={state.foundedDay}");
     }
 
     /// <summary>注册一个新王国（第一代/动态立国共用），分配单调递增 id 并发布事件。</summary>

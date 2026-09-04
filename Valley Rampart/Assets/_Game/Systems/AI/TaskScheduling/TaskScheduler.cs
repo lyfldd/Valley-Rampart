@@ -583,18 +583,23 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 var ga = task.args as GatherTaskArgs;
                 if (ga != null)
                 {
+                    // 2_20 M5/D420：种族采集乘数（Gather 入库侧；与 ProducerComponent.Tick 主产累加
+                    // 同源 KingdomRace.GetGatherMul 映射表（D506③）两处同乘防漂移；Max(1) 防低 mul 白干）
+                    var guc = brain != null ? brain.GetComponent<UnitController>() : null;
+                    float gmul = guc != null ? KingdomRace.GetGatherMul(guc.kingdomId, ga.resourceType) : 1f;
+                    int gain = Mathf.Max(1, Mathf.RoundToInt(ga.amount * gmul));
                     // QQQ.4 T10：采集入工人背包（资源生命周期：采集→背包→搬运→仓库）；背包满余量直接入国库兜底
                     var inv = GetInventory(brain);
                     if (inv != null)
                     {
-                        int stored = inv.TryStore(ga.resourceType, ga.amount);
-                        int overflow = ga.amount - stored;
+                        int stored = inv.TryStore(ga.resourceType, gain);
+                        int overflow = gain - stored;
                         if (overflow > 0 && RulerController.Instance != null)
                             RulerController.Instance.ModifyResource(ga.resourceType, true, overflow);
                     }
                     else if (RulerController.Instance != null)
                     {
-                        RulerController.Instance.ModifyResource(ga.resourceType, true, ga.amount);
+                        RulerController.Instance.ModifyResource(ga.resourceType, true, gain);
                     }
                 }
                 // QQQ.2 T19：采集完成 → 资源点销毁三步（①GridSystem.Free ②BuildingRegistry移除 ③对象池Despawn）
