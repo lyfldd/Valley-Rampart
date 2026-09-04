@@ -71,19 +71,18 @@ public static class Valley2_20_Smoke_Race
             }
         }
         yield return null; yield return null;   // 阶段1 收尾余量
-        if (WorldManager.Instance.ActiveMap == null)
+        // D520 冒烟自动化（HH.62）：SmokeApi.EnterGame 无条件建局（等价用户进局真实链路），
+        // 不再「ActiveMap 空才自建、否则走用户世界」——自动化接管，真机世界不跑冒烟菜单。
+        SmokeApi.EnterGame(new NewGameConfig
         {
-            lm.InitializeNewGame(new NewGameConfig
-            {
-                mapSeed = SEED,
-                worldSeed = SEED,
-                difficulty = 2,
-                worldSize = WorldSize.Medium,
-                kingdomName = "冒烟王国",
-                selectedSlotId = "smoke",
-                raceId = RaceIds.Dwarf   // Q10 批2：自建兜底也走矮人进局（⑦c 正探针在无用户世界时仍可断言；用户进局优先走用户选族）
-            });
-        }
+            mapSeed = SEED,
+            worldSeed = SEED,
+            difficulty = 2,
+            worldSize = WorldSize.Medium,
+            kingdomName = "冒烟王国",
+            selectedSlotId = "smoke",
+            raceId = RaceIds.Dwarf   // 2_20 探针以矮人为正例（⑦c 采矿 1.3 断言；换族无意义）
+        });
         float worldWaitT0 = Time.realtimeSinceStartup;
         while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null)
         {
@@ -770,6 +769,10 @@ public static class Valley2_20_Smoke_Race
 
         var runner = Object.FindAnyObjectByType<RaceSmokeHost>();
         if (runner != null) Object.Destroy(runner.gameObject);
+
+        // D520 冒烟自动化（HH.62）：清场（WorldLifecycle 同场景重建编排）+ 退出 Play（点一次菜单全程自动化闭环）
+        SmokeApi.ResetWorldForNext();
+        SmokeApi.QuitSmoke();
     }
 
     // ===== helpers =====

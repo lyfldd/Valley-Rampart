@@ -68,3 +68,62 @@
 ## 六、流程
 
 开工回执（HH.62 回写，含 seed 清单确认与散点清场序列过目）→ 实施 → 多轮冒烟 → 完成报告（HH.63，含四族 4 轮+换 seed 证据+陷阱五条对照结论）→ 策划端验收 → commit 代执 → **批4（M8+M9）解锁**。
+
+---
+
+## 执行端开工回执（TraeCode，2026-09-04）
+
+**状态**：✅ 已回执开工（范围+锚点确认，下随实施）
+
+**一、范围确认（三件套全收）**
+1. `WorldLifecycle`（运行时，`Assets/_Game/Systems/Loading/WorldLifecycle.cs`，静态类约 70 行）——`ResetWorldForNext()` 同场景清场→重建编排，不 LoadScene。
+2. `SmokeApi`（Editor-only，`Assets/Editor/Smoke/SmokeApi.cs`，约 45 行）——`EnterGame(config)`/`ResetWorldForNext()`/`QuitSmoke()` 薄封装。
+3. 冒烟容器改造——2_20B 改四族固定 seed 4 轮+换 seed 2 轮（点一次菜单全自动）；2_20 改接门面（单局矮人 22360）。
+
+**二、seed 清单确认（建议值，实施按此，策划有异议中途拦）**
+
+| 轮 | 族 | raceId | seed | 说明 |
+|---|---|---|---|---|
+| 1 | 人类 | 0 | 22360 | 主 seed（与 2_20 一致，已知稳定世界） |
+| 2 | 精灵 | 1 | 22360 | 主 seed |
+| 3 | 矮人 | 2 | 22360 | 主 seed |
+| 4 | 兽人 | 3 | 22360 | 主 seed |
+| 5 | 矮人 | 2 | 7841 | 换 seed（周批回归防单 seed 缺陷面压缩） |
+| 6 | 兽人 | 3 | 31337 | 换 seed（周批回归） |
+
+**三、散点清场序列过目（任务书 §一.1 逐条对齐，含实读核对）**
+
+```
+ResetWorldForNext 序列（WorldLifecycle）：
+① InputManager.DisableInput + Time.timeScale=1（停输入+恢复缩放，防销毁中误触/暂停残留）
+② GameStateManager.SetState(Loading)   ← 陷阱1：从 Playing 拉出，关只在 Playing 跑的 Update（ThroneAnchor 轮询窗等）
+③ TeardownScene()（Level 1：销毁全部单位+清君主引用+CleanupDestroyedSaveables）
+④ 业务 Manager ResetState 全家（Time/Difficulty/Ruler/KingdomManager/PopulationSystem/RanchSystem/SiegeProductionSystem）
+⑤ 散点清场（Level 2 靠 LoadScene 兜底、同场景必须显式清）：
+   GridSystem.ClearAll / BuildingFactory.ClearAllBuildings / ChestManager.ClearAll
+   / KingdomRegistry.ResetState / MapRenderService.ClearAllTiles / AttentionSystem.ClearAll
+⑥ UnitRegistry.Clear → WorldManager.ResetState（清 ActiveMap，解锁二次建局）
+⑦ SaveManager.ResetSessionState（槽位/自动存档计数，不清存档文件）
+```
+
+**四、陷阱五条逐条核对（实读磁盘当前代码）**
+
+| # | 陷阱 | 核对结论 |
+|---|------|---------|
+| 1 | GameStateManager 覆盖 | ✅ 确认需覆盖：无 ResetState（Singleton），编排层用 `SetState(Loading)` 从 Playing 拉出 |
+| 2 | 一帧空窗 | ✅ 注意：`BuildingFactory.ClearAllBuildings` 用 `Destroy`（延迟帧末）→ 冒烟容器每轮 `ResetWorldForNext` 后 `yield return null` 一帧（Loading 态下安全）再 `EnterGame`，让 Destroy 落地、避免旧 GameObject 与新世界共存 |
+| 3 | TimeManager._dayTimer 残量 | ⚠️ 实读 [TimeManager.ResetState](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Time/TimeManager.cs#L271-L289) **当前已重置 `_dayTimer`**（L277 重新按起始时刻算）——无需编排层补偿；若策划端有历史版本顾虑请指明 |
+| 4 | Save 前夜态 ±1 | ✅ 本批探针不断言存档内容，无影响；报告注明口径 |
+| 5 | SetState 转换日志 | ✅ 编排层主动 SetState(Loading) 会产生正常转换日志（前缀 [GameStateManager]/[WorldLifecycle]），不干扰探针 console 定位 |
+
+**五、设计决策声明（实施按此，属任务书红线内编排）**
+1. `SmokeApi.EnterGame` 复现 GameBootstrap.StartNewGame 完整链路：`InitializeNewGame + ResetAutoSaveCounter + SpawnInitialEntities + VagrantCampSystem.OnNewGameMapReady + 初始存档守卫`——真正"等价用户进局"。
+2. `EnterGame` 幂等守卫：若 `ActiveMap != null` 先 `ResetWorldForNext` 再建（任何状态进局都得干净世界，防"二次初始化卡死"）。
+3. `QuitSmoke`：`ResetWorldForNext` + `EditorApplication.ExitPlaymode()`（跑完自动退出 Play，点一次菜单全程自动化闭环）。
+4. **2_20 容器语义变更**：原"ActiveMap 空才自建、否则走用户世界"→ 改接门面后**总是自建**（自动化接管，真机世界不跑冒烟菜单；真机保留每批最终验收=直接 Play+手玩）。
+5. **跨轮污染负探针**（验收标准4，行为级）：每轮 EnterGame 后断言「ActiveMap 为新引用（≠上轮）」「UnitRegistry 空」「上轮探针单位/建筑引用 == null（已销毁）」——不依赖结构性计数。
+
+**六、挂账项（本批不处理，随报告申报）**
+- `VagrantCampSystem` 无 Reset/Clear 接口（Level 2 清单未含）→ 多轮营地数据残留。本批无影响：2_20B 四族循环不依赖营地、2_20 单局无跨轮。建议后续补 ResetState（挂 QQQ/后续批）。
+
+**七、下一步**：实施三件套 → 编译 0 error → 编辑器实跑多轮（零手动进局）→ HH.63 完成报告交策划端验收。

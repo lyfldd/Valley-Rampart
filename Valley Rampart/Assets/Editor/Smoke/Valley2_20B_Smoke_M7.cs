@@ -41,18 +41,7 @@ public static class Valley2_20B_Smoke_M7
 
     private static IEnumerator RunCoroutine()
     {
-        var sb = new StringBuilder();
-        bool allPass = true;
-        var cleanup = new List<Object>();
-
-        void Check(bool ok, string name, string detail)
-        {
-            allPass &= ok;
-            sb.Append(ok ? "PASS" : "FAIL").Append(" ").Append(name).Append(" :: ").Append(detail).Append('\n');
-            Debug.Log((ok ? "[2_20B][PASS] " : "[2_20B][FAIL] ") + name + " :: " + detail);
-        }
-
-        // 等 Ready（同批2：直接 Play GameScene → GameBootstrap Ready，核心单例就绪）
+        // ===== 等 Ready（阶段1 完成，第一轮 EnterGame 前；后续轮次阶段1 已完成）=====
         var lm = LoadManager.Instance;
         float readyT0 = Time.realtimeSinceStartup;
         while (lm == null || lm.CurrentPhase == LoadPhase.Booting
@@ -67,9 +56,77 @@ public static class Valley2_20B_Smoke_M7
         }
         yield return new WaitForSeconds(0.2f);
 
-        int playerRace = KingdomRace.GetKingdomRace(0);
-        var uf = UnitFactory.Instance;
-        var ds = DamageSystem.Instance;
+        // ===== D520 多轮自动跑：四族固定 seed 各 1 局（4 轮）+ 换 seed 2 轮（周批回归）=====
+        // 每轮=SmokeApi.EnterGame（等价用户进局真实链路）→ P1~P13 探针（自适应国族）→ SmokeApi.ResetWorldForNext（同场景清场）
+        var rounds = new[] {
+            (raceId: RaceIds.Human, seed: 22360, raceName: "人类"),
+            (raceId: RaceIds.Elf,   seed: 22360, raceName: "精灵"),
+            (raceId: RaceIds.Dwarf, seed: 22360, raceName: "矮人"),
+            (raceId: RaceIds.Orc,   seed: 22360, raceName: "兽人"),
+            (raceId: RaceIds.Dwarf, seed: 7841,  raceName: "矮人·换seed"),
+            (raceId: RaceIds.Orc,   seed: 31337, raceName: "兽人·换seed"),
+        };
+
+        MapData lastMap = null;               // 上轮 ActiveMap 引用（跨轮「新实例」断言基准）
+        List<Object> prevCleanup = null;      // 上轮探针实体引用（跨轮「无残留」断言基准）
+
+        for (int i = 0; i < rounds.Length; i++)
+        {
+            var round = rounds[i];
+            var sb = new StringBuilder();
+            bool allPass = true;
+            var cleanup = new List<Object>();
+
+            void Check(bool ok, string name, string detail)
+            {
+                allPass &= ok;
+                sb.Append(ok ? "PASS" : "FAIL").Append(" ").Append(name).Append(" :: ").Append(detail).Append('\n');
+                Debug.Log((ok ? "[2_20B][PASS] " : "[2_20B][FAIL] ") + name + " :: " + detail);
+            }
+
+            Debug.Log($"[2_20B冒烟] ============ 第 {i + 1}/{rounds.Length} 轮 族={round.raceName}(raceId={round.raceId}) seed={round.seed} ============");
+
+            // 进局（SmokeApi：等价用户进局真实链路 + ActiveMap 幂等守卫）
+            SmokeApi.EnterGame(new NewGameConfig
+            {
+                raceId = round.raceId,
+                worldSeed = round.seed,
+                mapSeed = round.seed,
+                difficulty = 2,
+                worldSize = WorldSize.Medium,
+                kingdomName = "冒烟王国" + (i + 1),
+                selectedSlotId = "smoke_" + (i + 1),
+            });
+
+            // 等 ActiveMap 就绪
+            float worldT0 = Time.realtimeSinceStartup;
+            while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null)
+            {
+                yield return null;
+                if (Time.realtimeSinceStartup - worldT0 > 120f)
+                {
+                    Debug.LogError("[2_20B冒烟] 等待世界就绪超时(120s)。"); yield break;
+                }
+            }
+            yield return null; yield return null;   // 网格/AI 系统起跑余量
+
+            // ===== 跨轮污染负探针（验收标准4，行为级：ActiveMap 新实例 + 上轮探针实体无残留）=====
+            if (lastMap != null)
+                Check(WorldManager.Instance.ActiveMap != lastMap, "R" + (i + 1) + " 跨轮 ActiveMap 新实例",
+                    "旧引用=" + lastMap + " 新=" + WorldManager.Instance.ActiveMap);
+            if (prevCleanup != null)
+            {
+                bool oldGone = true;
+                foreach (var r in prevCleanup)
+                    if (r != null) { oldGone = false; break; }
+                Check(oldGone, "R" + (i + 1) + " 上轮探针实体无残留", "旧单位/建筑引用 " + (oldGone ? "全已销毁" : "仍有存活"));
+            }
+            lastMap = WorldManager.Instance.ActiveMap;
+            prevCleanup = cleanup;
+
+            int playerRace = KingdomRace.GetKingdomRace(0);
+            var uf = UnitFactory.Instance;
+            var ds = DamageSystem.Instance;
 
         // ===== P1 数据域：Occ 尾插 + 资产可载 =====
         Check((int)Occupation.Berserker == 28 && (int)Occupation.WolfRider == 29
@@ -305,8 +362,23 @@ public static class Valley2_20B_Smoke_M7
         // 清理残留（防污染下一轮）
         foreach (var o in cleanup) if (o != null) Object.DestroyImmediate(o);
 
-        // ===== 汇总 =====
-        Debug.Log("[2_20B冒烟] ===== 汇总 " + (allPass ? "ALL PASS" : "有 FAIL") + " =====\n" + sb);
+        // ===== 本轮汇总 =====
+        Debug.Log("[2_20B冒烟] ==== 第 " + (i + 1) + " 轮汇总 " + (allPass ? "ALL PASS" : "有 FAIL") + " ====\n" + sb);
+
+        // ===== 清场（WorldLifecycle 同场景重建编排，无 LoadScene 兜底）=====
+        SmokeApi.ResetWorldForNext();
+
+        // 清场后负探针（验收标准4，行为级：世界已清空 + 单位注册表真空）
+        Check(WorldManager.Instance.ActiveMap == null, "R" + (i + 1) + " 清场 ActiveMap 空",
+            "WorldManager.ResetState 清 _world 生效");
+        Check(UnitRegistry.Instance.Count == 0, "R" + (i + 1) + " 清场 UnitRegistry 真空",
+            "count=" + UnitRegistry.Instance.Count);
+
+        yield return null;   // 陷阱2：留一帧让 Destroy 落地（GameState=Loading 下安全），再进下一轮
+        }
+
+        // ===== 全部轮次完成 =====
+        SmokeApi.QuitSmoke();
     }
 
     // ===== 辅助 =====
