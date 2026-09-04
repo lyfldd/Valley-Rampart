@@ -13,7 +13,8 @@ using static BuildingFactory;
 //
 //  探针清单（正/负对照，行为级优先；异族个体用 AIDebugSpawnController 种族域调试钩子构造）：
 //   ⑤ 静态：WildnessConfig 路径探针(Resources.Load) + IsActive 开关正负（关→零野性）
-//           + 反射 TryGetWildCombatOverride 下限兜底数值（Worker 基线=0 → attack≥1/range≥1/cd≥0.5）。
+//           + 反射 TryGetWildCombatOverride 下限兜底走 SO 绝对基线（D498=C 转正：wildBaseAttack/Range/Cd，
+//             Worker 基线=0 → 输出=SO 字段值；HH.64 段A）。
 //   ① 行为：异族(Elf)流民贴脸站桩 Worker → 6s 内 Worker 掉血（正）；
 //           同族(Human)流民贴脸对照 Worker → 血不变（负）。组距 14 格 > 野性 8 格防串扰。
 //   ② 行为：a) 压制负探针：Archer 贴脸 brain-off 异族流民（流民不动手）→ 10s 流民血不变
@@ -30,9 +31,9 @@ using static BuildingFactory;
 //   ⑦ M5 消费链：D503 全表 12×4 逐值断言+GetGatherMul 同源（Ore/Wood/Food 映射+Metal 不乘）
 //           +正探针（玩家=矮人 → 采矿 1.3）+负探针（哨兵 -1 → null → 中性 1）。
 //
-//  实盘缺口注（HH.51 验收）：Human_Player_Worker 资产 attack/attackRange/attackCD=0（和平职业正常值）
-//  → 「野人战力=同职工人 60%」公式退化为 0 → TryGetWildCombatOverride 走 Max 下限兜底
-//  （attack≥1/range≥1/cd≥0.5，D468 无条件攻击行为硬规则落地优先）——数值占位待策划端 Play 回调。
+//  缺口注销（HH.64 段A，D498=C 转正 2026-09-04）：原「Worker 资产 attack/range/cd=0 → 公式退化 →
+//  硬编码 Max 下限兜底（attack≥1/range≥1/cd≥0.5）」缺口已销——下限转正为 WildnessConfig 绝对基线字段
+//  （wildBaseAttack=1/wildBaseRange=1/wildBaseCd=0.5，默认=原硬编码值零行为变化），Play 回调直接改 SO 资产。
 //
 //  布局注：全单位组 y=12 行向 x 展开，x 间距 14 格（等轴 x 步长 1.28 → 17.9 世界单位
 //  > 野性 8 格半径 10.24）；等轴 y 向步长减半（0.64）故不向 y 展开组距。营地锚 (9,40) 独立。
@@ -193,7 +194,7 @@ public static class Valley2_20_Smoke_Race
         sb.Append($"\n布置：Worker hp0={hpA0}/{hpB0} Archer={((archerA2 != null && archerB2 != null) ? "在" : "缺(②将FAIL)")} " +
                   $"E4/E2 hp0={hpE4_0}/{hpE2_0} E.race={(eVagrant != null ? eVagrant.raceId.ToString() : "null")} ");
 
-        // ===== 探针⑤d：反射 TryGetWildCombatOverride（下限兜底数值——Worker 基线=0 实盘缺口）=====
+        // ===== 探针⑤d：反射 TryGetWildCombatOverride（下限兜底走 SO 绝对基线值——D498=C 转正，HH.64 段A）=====
         bool p5d = false;
         if (eVagrant != null)
         {
@@ -205,9 +206,13 @@ public static class Valley2_20_Smoke_Race
                 p5d = (bool)mi.Invoke(eb, oa);
                 if (p5d)
                 {
+                    // 判据=SO 值在场（Worker 基线=0 → 输出必等于 wildBaseAttack/wildBaseRange/wildBaseCd，
+                    // 改资产即可验"探针走 SO 值"——不再断言硬编码 1/1/0.5）
                     int wa = (int)oa[0]; float wr = (float)oa[1]; float wc = (float)oa[2];
-                    p5d = wa >= 1 && wr >= 1f && wc >= 0.5f;
-                    sb.Append($"⑤d 下限兜底 attack={wa}/range={wr:F1}/cd={wc:F1}（Worker 基线=0→下限）{(p5d ? "OK" : "FAIL")} ");
+                    var wcfg = WildnessConfig.Cached;
+                    p5d = wcfg != null && wa >= wcfg.wildBaseAttack && wr >= wcfg.wildBaseRange && wc >= wcfg.wildBaseCd;
+                    sb.Append($"⑤d SO 下限兜底 attack={wa}/range={wr:F1}/cd={wc:F1}" +
+                              $"（SO 基线={wcfg?.wildBaseAttack}/{wcfg?.wildBaseRange:F1}/{wcfg?.wildBaseCd:F1}，Worker 基线=0→SO 值）{(p5d ? "OK" : "FAIL")} ");
                 }
                 else sb.Append("⑤d TryGetWildCombatOverride=false FAIL ");
             }

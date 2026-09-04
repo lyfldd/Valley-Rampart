@@ -15,3 +15,6 @@ MonoBehaviour:
   enabled: 1
   wildAggroRadiusCells: 8
   wildStrengthRatio: 0.6
+  wildBaseAttack: 1
+  wildBaseRange: 1
+  wildBaseCd: 0.5

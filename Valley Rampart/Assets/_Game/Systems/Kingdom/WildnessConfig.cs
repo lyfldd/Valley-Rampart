@@ -20,6 +20,14 @@ public class WildnessConfig : ScriptableObject
     [Range(0.1f, 1f)]
     public float wildStrengthRatio = 0.6f;
 
+    [Header("野性绝对基线下限（D498=C 转正 2026-09-04，HH.64 段A）：原硬编码 attack≥1/range≥1/cd≥0.5 转正为可调初值，默认=原硬编码值零行为变化")]
+    [Tooltip("攻击力绝对基线（Worker 和平职业 attack=0 时「×系数」公式退化的兜底下限；消费=NPCBrain.TryGetWildCombatOverride）")]
+    public int wildBaseAttack = 1;
+    [Tooltip("射程绝对基线（格单位，镜像 Worker 射程的下限兜底）")]
+    public float wildBaseRange = 1f;
+    [Tooltip("攻击冷却绝对下限（秒，防 0 值攻速异常）")]
+    public float wildBaseCd = 0.5f;
+
     /// <summary>加载（Resources.Load 路径=探针⑤；缺资产 → 调用方按"关闭"处理，不产生野性攻击）。</summary>
     public static WildnessConfig Load() => Resources.Load<WildnessConfig>("Config/WildnessConfig");
 
@@ -42,9 +50,9 @@ public class WildnessConfig : ScriptableObject
     /// <summary>
     /// Worker 战力基线（野人战力标定基准=同职工人）：运行时查 PlayerCamp_Worker 职业资产。
     /// 查表失败返回 null（调用方回退：不产生野性攻击）。
-    /// 实盘缺口注（HH.51 验收）：Worker 资产 attack/attackRange/attackCD=0（和平职业正常值），
-    /// 「×60%」公式退化 → 调用方按 Max 下限兜底（attack≥1/range≥1/cd≥0.5，行为硬规则 D468 落地优先）；
-    /// 数值待 Play 回调——改 Worker 资产 or 本 SO 增绝对基线字段，策划端拍板。
+    /// 缺口注销（HH.64 段A，D498=C 转正 2026-09-04）：原「Worker 资产 attack/range/cd=0 → 公式退化 →
+    /// 硬编码 Max 下限兜底」的缺口已销——下限转正为本 SO 绝对基线字段
+    /// （wildBaseAttack=1/wildBaseRange=1/wildBaseCd=0.5，默认=原硬编码值零行为变化），Play 回调改 SO 即可。
     /// </summary>
     public static NpcProfessionDef ResolveWorkerBaseline()
     {

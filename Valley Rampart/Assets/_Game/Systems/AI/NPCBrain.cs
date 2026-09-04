@@ -663,13 +663,12 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         var self = SelfUnit;
         if (self == null || self.EffectiveOccupation != Occupation.Vagrant || self.IsVagrantRecruited) return false;
         var worker = WildnessConfig.ResolveWorkerBaseline();
-        // 实盘缺口注（HH.51 验收）：Worker 资产 attack/attackRange/attackCD=0（和平职业正常值）→
-        // 「60%×基线」公式退化为 0；行为硬规则（D468 无条件攻击）必须落地 → 守卫只挡查表失败，
-        // 数值走下方 Max 下限兜底（attack≥1/range≥1/cd≥0.5），占位待策划端 Play 回调。
+        // Worker 资产 attack/range/cd=0（和平职业正常值）→「×系数」公式退化时走 SO 绝对基线下限
+        // （D498=C 转正，HH.64 段A：wildBaseAttack/wildBaseRange/wildBaseCd，Play 回调改 WildnessConfig 资产即可）。
         if (worker == null) return false;
-        attack = Mathf.Max(1, Mathf.RoundToInt(worker.attack * wild.wildStrengthRatio));
-        range = Mathf.Max(1f, worker.attackRange);
-        cd = Mathf.Max(0.5f, worker.attackCD);
+        attack = Mathf.Max(wild.wildBaseAttack, Mathf.RoundToInt(worker.attack * wild.wildStrengthRatio));
+        range = Mathf.Max(wild.wildBaseRange, worker.attackRange);
+        cd = Mathf.Max(wild.wildBaseCd, worker.attackCD);
         isRanged = worker.isRanged;
         return true;
     }
