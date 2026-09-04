@@ -13,8 +13,16 @@ public class SiegeProductionConfig : ScriptableObject
     public int siegeMachineLimitPerLevel = 2;  // 每级 +2
 
     [Header("战争机器造价（占位可调）")]
-    public ResourcePack catapultCost;   // 投掷机造价
-    public ResourcePack ballistaCost;   // 弩炮造价
+    public ResourcePack catapultCost;   // 投掷机造价（共通槽，D496 退役后仅占位留存）
+    public ResourcePack ballistaCost;   // 弩炮造价（D496 收编人类重弩炮沿用）
+
+    [Header("2_20 M7 四族专属机器造价（D496/D497，占位）")]
+    [Tooltip("矮人·臼炮（机器最强=最贵，梯度矮＞人＞精＞兽；2_20.1 §8.1/§8.2）")]
+    public ResourcePack mortarCost;        // 臼炮造价
+    [Tooltip("精灵·藤蔓弹射器造价")]
+    public ResourcePack vineCatapultCost;  // 藤蔓弹射器造价
+    [Tooltip("兽人·攻城槌造价（功能单一=最便宜档）")]
+    public ResourcePack ramCost;           // 攻城槌造价
 
     [Header("弹药造价（§13.4/§10：普通石×1/燃烧火油×1/魔法水晶×1）")]
     public int stoneAmmoCost = 1;       // 普通弹耗石

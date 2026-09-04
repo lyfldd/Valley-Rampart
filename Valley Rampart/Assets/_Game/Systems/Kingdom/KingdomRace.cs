@@ -79,12 +79,34 @@ public static class KingdomRace
         switch (resourceType)
         {
             case ResourceType.Stone:
-            case ResourceType.Ore:   return def.mineMul;
+            case ResourceType.Ore:
+            {
+                // 2_20 M6 地脉熔炉：采矿产量全局+40%（2_20.1 §三，同 mineMul 消费点叠乘；乘算口径 1.3×1.4=1.82 HH.60 §三.2）
+                float leyMul = HasExclusiveBuilding(kingdomId, "LeyForge") ? 1.4f : 1f;
+                return def.mineMul * leyMul;
+            }
             case ResourceType.Wood:  return def.lumberMul;
             case ResourceType.Food:
             case ResourceType.Meat:  return def.farmMul;
             default:                 return 1f;   // 加工品/副产/货币不乘（D506③）
         }
+    }
+
+    /// <summary>
+    /// 王国是否已建某专属建筑（2_20 M6：每族限建 1，全局效果/训练入口叠加都按此查重）。
+    /// 玩家=kingdomId 0；AI=自身王国。BuildingRegistry 缺失 → false（防御兜底）。
+    /// </summary>
+    public static bool HasExclusiveBuilding(int kingdomId, string buildingId)
+    {
+        if (string.IsNullOrEmpty(buildingId) || BuildingRegistry.Instance == null) return false;
+        var all = BuildingRegistry.Instance.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b != null && b.def != null && b.def.id == buildingId && b.kingdomId == kingdomId && b.IsActive)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -185,7 +185,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             var rd = KingdomRace.GetKingdomRaceDef(kingdomId);
             if (rd != null) raceMul = rd.moveSpeedMul;
         }
-        return Time.time < _slowUntil ? baseSpeed * (1f - _slowFactor) * raceMul : baseSpeed * raceMul;
+        // 2_20 M7 狂战士狂暴（D490）：移速+20%/层（NPCBrain 攻速在 AttackProfile 处乘 CdMul）
+        float frenzyMul = Frenzy != null ? Frenzy.SpeedMul() : 1f;
+        float mul = raceMul * frenzyMul;
+        return Time.time < _slowUntil ? baseSpeed * (1f - _slowFactor) * mul : baseSpeed * mul;
     }
 
     // ===== 骑兵冲锋（3.6 §5.3 状态：0=None 1=准备 2=突进① 3=停顿 4=突进②；双连击）=====
@@ -222,6 +225,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public int Defense { get; private set; }
     public float WalkSpeed { get; private set; }
     public float RunSpeed { get; private set; }
+
+    /// <summary>狂战士狂暴组件（2_20 M7 D490：occupation==Berserker 时由 Initialize 挂载；移速/攻速钩子查询口）。</summary>
+    public BerserkerFrenzy Frenzy { get; private set; }
 
     public bool IsAlive => CurrentHp > 0;
 
@@ -364,6 +370,15 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (profession != null && profession.fortification != null)
         {
             fortification = profession.fortification;
+        }
+
+        // 2_20 M7 狂战士狂暴组件挂载（D490：击杀触发 buff；出池复用前旧组件由 ResetForReuse 清理防堆叠）
+        Frenzy = null;
+        if (data != null && data.occupation == Occupation.Berserker)
+        {
+            var f = GetComponent<BerserkerFrenzy>();
+            if (f == null) f = gameObject.AddComponent<BerserkerFrenzy>();
+            Frenzy = f;
         }
 
         // 3.5 P1：初始化生活状态（饱食起始默认；幸福起始 50；无装备）

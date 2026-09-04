@@ -133,6 +133,20 @@ public class NpcProfessionDef : UnitData
     [Tooltip("角色族（Tank 顶住/Sniper 点杀/Aoe 密度/Support 治疗/Mobility 冲锋/Machine 重火力）。目标选择/治疗按族走，不按职业名硬编码")]
     public RoleFamily roleFamily = RoleFamily.None;
 
+    [Header("专属兵种钩子（2_20 M7，D490~D497）")]
+    [Tooltip("远程伤害减免 0-1（矮人磐石卫士 45%，D494）：受方修正家族——对远程单体直伤乘 (1-值)。不进快照（AI.Core 零直改，sim 对拍=账本登记）")]
+    public float rangedDamageReduce = 0f;
+    [Tooltip("庇护转移概率 0-1（人类盾卫 30%，D492）：1 宏格内友军受远程单体直伤时按此概率转移给本盾卫。最近 1 个盾卫承接防叠加；AOE 不转")]
+    public float shelterChance = 0f;
+    [Tooltip("庇护半径（宏格，盾卫 1）：本盾卫庇护 1 格内友军的判定半径")]
+    public float shelterRadiusCells = 1f;
+    [Tooltip("对建筑伤害倍率（臼炮/攻城槌×2=2、重弩炮×1.5=1.5、其余 1）：攻方单位对 Building 目标结算乘此倍率")]
+    public float buildingDamageMul = 1f;
+    [Tooltip("对单位伤害倍率（攻城槌 0=对单位零伤害纯拆墙 D497、其余 1）：攻方单位对 UnitController 目标结算乘此倍率")]
+    public float unitDamageMul = 1f;
+    [Tooltip("贯穿额外目标数（矮人火枪手 1，D494）：弹道命中主目标后继续贯穿后 N 个目标（60% 传递伤害）")]
+    public int pierceThroughCount = 0;
+
     /// <summary>
     /// 生成核内快照（M1 决策核提取，接缝 4）。
     /// 核内（AI.Core）只吃 ProfessionSnapshot，不引用本 SO。字段机械拷贝，改字段需同步 ProfessionSnapshot。

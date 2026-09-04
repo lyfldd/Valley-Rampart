@@ -32,5 +32,8 @@ MonoBehaviour:
   carryCapMul: 0.95
   preferredFeature: 2
   gatherBonusOnPreferred: 0.15
-  exclusiveBuildingDef: {fileID: 0}
-  exclusiveUnitDefs: []
+  exclusiveBuildingDef: {fileID: 11400000, guid: 2570674046f77e74e81bc9929cadcb78, type: 2}
+  exclusiveUnitDefs:
+  - {fileID: 11400000, guid: d23c950cbeb670f48965bbbc23fc3ba6, type: 2}
+  - {fileID: 11400000, guid: ee9cb99d5afc92d429b1a8d4d12a14ad, type: 2}
+  - {fileID: 11400000, guid: f39f6de056d89b44296f39ffdf3b86e1, type: 2}

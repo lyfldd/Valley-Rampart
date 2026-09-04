@@ -97,6 +97,12 @@ public class BuildingDef : ScriptableObject
     [Tooltip("高价值标志（主城/矿洞/仓库/铁匠铺等高价值目标；配合价值分决定怪物目标优先级）")]
     public bool monsterIsHighValue = false;
 
+    [Header("专属种族（2_20 M6 四族专属建筑）")]
+    [Tooltip("专属种族（RaceIds：0=Human 1=Elf 2=Dwarf 3=Orc）。-1=共通建筑（全族可建）。玩家建造门面/菜单按国族过滤；AI 同规则（D419 专属建筑每族 1 栋）")]
+    public int raceId = -1;
+    [Tooltip("每族限建 1（2_20.1 §三：全局效果防叠乘失控，Registry 查重）。true=同王国同 id 已建则拒建")]
+    public bool uniquePerKingdom = false;
+
     /// <summary>按资源等级获取缩放系数。</summary>
     public float GetGradeScale(ResourceGrade grade)
     {

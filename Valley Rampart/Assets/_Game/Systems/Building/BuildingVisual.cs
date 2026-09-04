@@ -9,8 +9,19 @@ using UnityEngine;
 public static class BuildingVisual
 {
     /// <summary>按 BuildingType + BuildingRole 取占位 sprite key。</summary>
-    public static string GetPlaceholderKey(BuildingType type, BuildingRole role)
+    public static string GetPlaceholderKey(BuildingType type, BuildingRole role, string buildingId = "")
     {
+        // 0. 四族专属建筑专属色块（2_20 M6，按 def.id 区分——role 撞色防混）
+        if (!string.IsNullOrEmpty(buildingId))
+        {
+            switch (buildingId)
+            {
+                case "WarAcademy":   return "war_academy";
+                case "WarCamp":      return "war_camp";
+                case "LeyForge":     return "ley_forge";
+                case "ArcheryRange": return "archery_range";
+            }
+        }
         // 1. 地图预置建筑按 BuildingType 选
         switch (type)
         {
@@ -38,12 +49,12 @@ public static class BuildingVisual
     }
 
     /// <summary>给 go 挂/取占位 SpriteRenderer（sortingOrder=1 建筑层）。返回该 SpriteRenderer。</summary>
-    public static SpriteRenderer ApplyPlaceholder(GameObject go, BuildingType type, BuildingRole role)
+    public static SpriteRenderer ApplyPlaceholder(GameObject go, BuildingType type, BuildingRole role, string buildingId = "")
     {
         if (go == null) return null;
         var sr = go.GetComponent<SpriteRenderer>();
         if (sr == null) sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = PlaceholderSprites.Get(GetPlaceholderKey(type, role));
+        sr.sprite = PlaceholderSprites.Get(GetPlaceholderKey(type, role, buildingId));
         sr.sortingOrder = 1; // 建筑层（Region:0, Building:1, Baseline:2）
         return sr;
     }

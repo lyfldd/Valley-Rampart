@@ -246,6 +246,8 @@ public class FormationController : MonoBehaviour
             case Occupation.Ruler:         // 君主：玩家控制
             case Occupation.SiegeMachine:  // 静态机器/工事：不参与编队移动
             case Occupation.Ballista:
+            case Occupation.Mortar:        // 2_20 M7 静态机器（臼炮/藤蔓站桩）同不编；攻城槌可移动默认可编
+            case Occupation.VineCatapult:
             case Occupation.ArrowTower:
             case Occupation.CrossbowTower:
             case Occupation.MagicTower:
@@ -264,17 +266,24 @@ public class FormationController : MonoBehaviour
             case Occupation.ShieldGuard:
             case Occupation.HeavyWarrior:
             case Occupation.Warrior:
+            case Occupation.Berserker:     // 2_20 M7 狂战士=正面强攻（D490）
+            case Occupation.Bedrock:       // 2_20 M7 磐石卫士=超重抗线（D494）
                 return 0;   // 抗线
             case Occupation.Archer:
             case Occupation.Crossbowman:
             case Occupation.Mage:
             case Occupation.Archmage:
+            case Occupation.Musqueteer:    // 2_20 M7 火枪手中程高伤（D494）
+            case Occupation.Ranger:        // 2_20 M7 游侠远程特化（D495）
                 return 1;   // 输出
             case Occupation.Healer:
             case Occupation.Bishop:
                 return 2;   // 辅助
             case Occupation.Cavalry:
             case Occupation.General:
+            case Occupation.WolfRider:     // 2_20 M7 狼骑兵骑射（D491）
+            case Occupation.Windwalker:    // 2_20 M7 风行者侦察（D495）
+            case Occupation.DeerRider:     // 2_20 M7 鹿骑轻骑拦截（D495）
                 return 3;   // 机动/统帅
             default: return 4;
         }

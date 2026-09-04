@@ -20,6 +20,10 @@ public class TrainingSystem : Singleton<TrainingSystem>
     // 训练中建筑被摧毁 → 不退款、居民存活回退无职业居民（OnBuildingDestroyed）。
     private readonly Dictionary<Building, TrainingQueue> _queues = new Dictionary<Building, TrainingQueue>();
 
+    // 2_20 M6 战争学院「溃败补充」：战斗单位阵亡 30s 内该兵种补训成本-50%（一次性窗口，2_20.1 §三）。
+    // 记录职业 → 最近阵亡世界时间；TryTrain 命中后消费即清除（一次性）。
+    private readonly Dictionary<Occupation, float> _recentDeaths = new Dictionary<Occupation, float>();
+
     /// <summary>单训练建筑队列（排队 + 训练中）。</summary>
     private class TrainingQueue
     {
@@ -122,6 +126,57 @@ public class TrainingSystem : Singleton<TrainingSystem>
         if (_instance != this) return;
         _config = Resources.Load<TrainingConfig>("Config/TrainingConfig");
         BuildLookup();
+        // 2_20 M6 战争学院「溃败补充」：订阅阵亡事件记录战斗职业最近阵亡时间（TryTrain 消费一次性窗口）
+        EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
+    }
+
+    protected override void OnDestroy()
+    {
+        if (_instance != this) return;
+        base.OnDestroy();
+        EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
+    }
+
+    /// <summary>战争学院「溃败补充」记录：战斗单位被击杀（Cause==Killed）→ 该职业 30s 补训窗口开启。</summary>
+    private void OnUnitDied(UnitDiedEvent evt)
+    {
+        if (evt.Cause != DeathCause.Killed) return;
+        if (!(evt.Unit is UnitController uc) || uc == null) return;
+        var occ = uc.EffectiveOccupation;
+        if (IsCombatOccupation(occ)) _recentDeaths[occ] = Time.time;
+    }
+
+    /// <summary>是否战斗职业（溃败补充只认战斗单位；生活/建筑类不触发）。</summary>
+    private static bool IsCombatOccupation(Occupation occ)
+    {
+        switch (occ)
+        {
+            case Occupation.General:
+            case Occupation.Archer:
+            case Occupation.Warrior:
+            case Occupation.Mage:
+            case Occupation.Healer:
+            case Occupation.Crossbowman:
+            case Occupation.ShieldGuard:
+            case Occupation.Archmage:
+            case Occupation.Cavalry:
+            case Occupation.SiegeMachine:
+            case Occupation.Ballista:
+            // 2_20 M7 专属兵种+机器（D490~D497：全为战斗单位，阵亡触发溃败补充窗口）
+            case Occupation.Berserker:
+            case Occupation.WolfRider:
+            case Occupation.Musqueteer:
+            case Occupation.Bedrock:
+            case Occupation.Ranger:
+            case Occupation.Windwalker:
+            case Occupation.DeerRider:
+            case Occupation.Mortar:
+            case Occupation.VineCatapult:
+            case Occupation.Ram:
+                return true;
+            default:
+                return false;
+        }
     }
 
     private void BuildLookup()
@@ -147,6 +202,28 @@ public class TrainingSystem : Singleton<TrainingSystem>
         return _byBuilding.TryGetValue(buildingId ?? "", out var list) ? list : s_empty;
     }
     private static readonly List<TrainingDef> s_empty = new List<TrainingDef>();
+
+    /// <summary>
+    /// 某训练建筑可提供的训练项（2_20 M7：按建筑实例过滤专属兵门禁）。
+    /// 过滤 = 建筑国族 raceId 匹配（跨族不可训练 D419）+ 建筑等级 ≥ minBuildingLevel（练兵场 Lv2 门槛）。
+    /// </summary>
+    public IReadOnlyList<TrainingDef> GetTrainings(Building building)
+    {
+        if (building == null || building.def == null) return s_empty;
+        var all = GetTrainings(building.def.id);
+        if (all == null || all.Count == 0) return all;
+        int race = KingdomRace.GetKingdomRace(building.kingdomId);
+        List<TrainingDef> list = null;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var t = all[i];
+            if (t.raceId >= 0 && t.raceId != race) continue;
+            if (t.minBuildingLevel > 0 && building.level < t.minBuildingLevel) continue;
+            if (list == null) list = new List<TrainingDef>();
+            list.Add(t);
+        }
+        return list ?? (IReadOnlyList<TrainingDef>)s_empty;
+    }
 
     /// <summary>
     /// 训练请求（P1-10 队列管理）。校验起职 + 资源 → 扣费 → 入队列（有空槽立即开始，否则排队）。
@@ -185,16 +262,36 @@ public class TrainingSystem : Singleton<TrainingSystem>
             return false;
         }
 
+        // 2_20 M7 专属兵训练门禁（D419 唯一入口 + D490 共通槽退役）：跨族不可训练 + 建筑等级门槛（练兵场 Lv2）
+        if (def.raceId >= 0 && KingdomRace.GetKingdomRace(effKingdom) != def.raceId)
+        {
+            Debug.Log($"[TrainingSystem] 转职失败：{def.toOccupation} 为种族 {def.raceId} 专属训练，本国族不可训（D419 唯一入口）");
+            return false;
+        }
+        if (def.minBuildingLevel > 0 && building.level < def.minBuildingLevel)
+        {
+            Debug.Log($"[TrainingSystem] 转职失败：{def.toOccupation} 需 {def.buildingId} Lv{def.minBuildingLevel}，当前 Lv{building.level}");
+            return false;
+        }
+
         // 2_20 M5/D420：种族军训成本/时长修正（D503 表 trainCostMul/trainSpeedMul）：
         // 成本=effective 值 ceil 取整（防零成本白嫖）；时长=entry 存 effCostDays 副本（排队期国族不变，不改 SO）。
-        // 确定用建筑国族（effKingdom=招募归属，同族镜像语义）。战争学院全局-25% 未来在同点叠乘（M6 挂账）。
+        // 确定用建筑国族（effKingdom=招募归属，同族镜像语义）。
+        // 2_20 M6 战争学院：训练时长全局-25% 在此叠乘（HH.59 疑点④挂账清偿）；溃败补充窗口成本-50%（一次性）。
         var raceDef = KingdomRace.GetKingdomRaceDef(effKingdom);
         float costMul = raceDef != null ? raceDef.trainCostMul : 1f;
         float speedMul = raceDef != null ? raceDef.trainSpeedMul : 1f;
-        int effGold = Mathf.CeilToInt(def.costGold * costMul);
-        int effCrystal = Mathf.CeilToInt(def.costCrystal * costMul);
-        int effMetal = Mathf.CeilToInt(def.costMetal * costMul);
-        int effDays = Mathf.Max(1, Mathf.CeilToInt(def.costDays / Mathf.Max(0.01f, speedMul)));
+        float academyMul = KingdomRace.HasExclusiveBuilding(effKingdom, "WarAcademy") ? 0.75f : 1f;
+        float rallyMul = 1f;   // 战争学院「溃败补充」：本职业 30s 内阵亡 → 本次补训成本-50%（一次性窗口）
+        if (_recentDeaths.TryGetValue(def.toOccupation, out float dt) && Time.time - dt <= 30f)
+        {
+            rallyMul = 0.5f;
+            _recentDeaths.Remove(def.toOccupation);   // 一次性窗口已消费
+        }
+        int effGold = Mathf.CeilToInt(def.costGold * costMul * rallyMul);
+        int effCrystal = Mathf.CeilToInt(def.costCrystal * costMul * rallyMul);
+        int effMetal = Mathf.CeilToInt(def.costMetal * costMul * rallyMul);
+        int effDays = Mathf.Max(1, Mathf.CeilToInt(def.costDays / Mathf.Max(0.01f, speedMul) * academyMul));
 
         if (!CanPayRecruit(effKingdom, effGold, effCrystal, effMetal)) return false;
 
@@ -391,8 +488,8 @@ public class TrainingSystem : Singleton<TrainingSystem>
         if (building != null && building.def != null && _config != null && _config.supportedOccupations != null
             && _config.supportedOccupations.Length > 0)
             return _config.supportedOccupations;
-        // 回退：该设施可训项的目标职业
-        var trainings = building != null && building.def != null ? GetTrainings(building.def.id) : null;
+        // 回退：该设施可训项的目标职业（2_20 M7：按建筑实例过滤专属兵门禁）
+        var trainings = building != null && building.def != null ? GetTrainings(building) : null;
         if (trainings == null || trainings.Count == 0) return new Occupation[0];
         var set = new List<Occupation>();
         var seen = new HashSet<Occupation>();

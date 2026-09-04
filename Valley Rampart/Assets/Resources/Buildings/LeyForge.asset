@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf73852eae6637c43832f1c2d3591ea8, type: 3}
+  m_Name: LeyForge
+  m_EditorClassIdentifier: 
+  id: LeyForge
+  displayName: "\u5730\u8109\u7194\u7089"
+  description: "\u77EE\u4EBA\u4E13\u5C5E\xB7\u7EAF\u7ECF\u6D4E\uFF1A\u91C7\u77FF\u4EA7\u91CF\u5168\u5C40+40%\uFF08\u4E0E\u77EE\u4EBA
+    mineMul+30% \u4E58\u7B97 1.3\xD71.4=1.82\uFF09"
+  faction: 1
+  role: 2
+  cost:
+    gold: 25
+    stone: 30
+    wood: 0
+    food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
+  footprint: {x: 2, y: 2}
+  allowedTerrain: 
+  heightLayer: 0
+  canPlaceOnWater: 0
+  isBridge: 0
+  isGate: 0
+  rotatable: 0
+  moduleType: 1
+  isObstacle: 1
+  producer:
+    kind: 0
+    rate: 0
+    capacity: 0
+  combat:
+    attack: 0
+    defense: 0
+    maxHp: 0
+    range: 0
+    damageType: 0
+    attackCooldown: 0
+  levels: []
+  crewRequired: 0
+  crewRadiusCells: 0
+  outputResource: 0
+  isResourceNode: 0
+  isBlacksmith: 0
+  isSiegeWorkshop: 0
+  concurrentWorkers: 0
+  trainingSlots: 0
+  unlockLevel: 1
+  interactableType: 0
+  isPlayerBuilt: 1
+  isDestructible: 1
+  maxHp: 200
+  sourceType: 0
+  isConsumable: 0
+  gatherSeconds: 2
+  gradeScale:
+  - 0.7
+  - 1
+  - 1.5
+  prefab: {fileID: 0}
+  monsterTargetValue: 1
+  monsterIsHighValue: 0
+  raceId: 2
+  uniquePerKingdom: 1

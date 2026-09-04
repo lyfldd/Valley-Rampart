@@ -20,6 +20,8 @@ MonoBehaviour:
     costCrystal: 0
     costMetal: 0
     costDays: 1
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: TrainingGround
     fromOccupation: 22
     toOccupation: 24
@@ -27,6 +29,8 @@ MonoBehaviour:
     costCrystal: 0
     costMetal: 0
     costDays: 1
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 3
@@ -34,6 +38,8 @@ MonoBehaviour:
     costCrystal: 0
     costMetal: 0
     costDays: 2
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 2
@@ -41,6 +47,8 @@ MonoBehaviour:
     costCrystal: 0
     costMetal: 0
     costDays: 2
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 5
@@ -48,6 +56,8 @@ MonoBehaviour:
     costCrystal: 1
     costMetal: 0
     costDays: 3
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: TrainingCamp
     fromOccupation: 22
     toOccupation: 6
@@ -55,6 +65,8 @@ MonoBehaviour:
     costCrystal: 1
     costMetal: 0
     costDays: 3
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: Barracks
     fromOccupation: 22
     toOccupation: 1
@@ -62,26 +74,97 @@ MonoBehaviour:
     costCrystal: 0
     costMetal: 0
     costDays: 5
-  - buildingId: Barracks
-    fromOccupation: 3
-    toOccupation: 8
-    costGold: 3
-    costCrystal: 0
-    costMetal: 5
-    costDays: 4
-  - buildingId: Barracks
-    fromOccupation: 3
-    toOccupation: 10
-    costGold: 3
-    costCrystal: 0
-    costMetal: 5
-    costDays: 4
+    raceId: -1
+    minBuildingLevel: 0
   - buildingId: Barracks
     fromOccupation: 3
     toOccupation: 12
+    costGold: 5
+    costCrystal: 0
+    costMetal: 0
+    costDays: 2
+    raceId: 0
+    minBuildingLevel: 0
+  - buildingId: TrainingCamp
+    fromOccupation: 22
+    toOccupation: 7
+    costGold: 5
+    costCrystal: 1
+    costMetal: 0
+    costDays: 3
+    raceId: 0
+    minBuildingLevel: 2
+  - buildingId: TrainingCamp
+    fromOccupation: 22
+    toOccupation: 10
+    costGold: 4
+    costCrystal: 1
+    costMetal: 0
+    costDays: 3
+    raceId: 0
+    minBuildingLevel: 2
+  - buildingId: TrainingCamp
+    fromOccupation: 22
+    toOccupation: 30
+    costGold: 5
+    costCrystal: 1
+    costMetal: 0
+    costDays: 3
+    raceId: 2
+    minBuildingLevel: 2
+  - buildingId: TrainingCamp
+    fromOccupation: 22
+    toOccupation: 31
+    costGold: 4
+    costCrystal: 1
+    costMetal: 0
+    costDays: 3
+    raceId: 2
+    minBuildingLevel: 2
+  - buildingId: WarCamp
+    fromOccupation: 22
+    toOccupation: 28
     costGold: 3
     costCrystal: 0
-    costMetal: 8
-    costDays: 5
+    costMetal: 0
+    costDays: 1
+    raceId: 3
+    minBuildingLevel: 0
+  - buildingId: WarCamp
+    fromOccupation: 22
+    toOccupation: 29
+    costGold: 4
+    costCrystal: 0
+    costMetal: 0
+    costDays: 2
+    raceId: 3
+    minBuildingLevel: 0
+  - buildingId: ArcheryRange
+    fromOccupation: 22
+    toOccupation: 32
+    costGold: 5
+    costCrystal: 1
+    costMetal: 0
+    costDays: 3
+    raceId: 1
+    minBuildingLevel: 0
+  - buildingId: ArcheryRange
+    fromOccupation: 22
+    toOccupation: 33
+    costGold: 3
+    costCrystal: 0
+    costMetal: 0
+    costDays: 2
+    raceId: 1
+    minBuildingLevel: 0
+  - buildingId: ArcheryRange
+    fromOccupation: 22
+    toOccupation: 34
+    costGold: 4
+    costCrystal: 0
+    costMetal: 0
+    costDays: 2
+    raceId: 1
+    minBuildingLevel: 0
   supportedOccupations: 
   trainDurationDays: []

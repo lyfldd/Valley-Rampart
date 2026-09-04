@@ -213,6 +213,30 @@ public class BuildController : Singleton<BuildController>
         if (def == null || GridSystem.Instance == null) return false;
         var grid = GridSystem.Instance;
 
+        // 2_20 M6 专属建筑门禁：种族匹配 + 每族限建 1（D419 专属建筑每族 1 栋，防全局效果叠乘失控）
+        if (def.raceId >= 0)
+        {
+            int race = KingdomRace.GetKingdomRace(kingdomId);
+            if (race != def.raceId)
+            {
+                Debug.Log($"[BuildController] 建造失败：{def.id} 为种族 {def.raceId} 专属建筑，本国族 {race} 不可建（M6 种族门禁）");
+                return false;
+            }
+        }
+        if (def.uniquePerKingdom && BuildingRegistry.Instance != null)
+        {
+            var all = BuildingRegistry.Instance.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var bl = all[i];
+                if (bl != null && bl.def != null && bl.def.id == def.id && bl.kingdomId == kingdomId && bl.IsActive)
+                {
+                    Debug.Log($"[BuildController] 建造失败：{def.id} 每族限建 1，本国已建（M6）");
+                    return false;
+                }
+            }
+        }
+
         var check = PlacementValidator.ValidatePlacement(def, sub, orient, kingdomId);
         if (!check.ok)
         {
@@ -245,7 +269,7 @@ public class BuildController : Singleton<BuildController>
             // 无 prefab 时创建空壳 + 占位视觉（3.3.4 问题12）
             go = new GameObject($"Building_{def.id}_{coord.x}_{coord.y}");
             go.transform.position = worldPos;
-            BuildingVisual.ApplyPlaceholder(go, BuildingType.None, def.role);
+            BuildingVisual.ApplyPlaceholder(go, BuildingType.None, def.role, def.id);
         }
 
         var b = go.GetComponent<Building>();
@@ -354,7 +378,7 @@ public class BuildController : Singleton<BuildController>
         {
             // 无 prefab 时用占位视觉（3.3.4 问题12）
             _ghost = new GameObject("BuildGhost");
-            _ghostRenderer = BuildingVisual.ApplyPlaceholder(_ghost, BuildingType.None, def.role);
+            _ghostRenderer = BuildingVisual.ApplyPlaceholder(_ghost, BuildingType.None, def.role, def.id);
             // 多格占地视觉（3.3.4 批次8 + 2_2：按当前朝向 footprint 缩放）
             var fp = OrientedFootprint(_playerOrientation);
             float cellW = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 1.28f;

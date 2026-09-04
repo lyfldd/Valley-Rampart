@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -305,21 +305,53 @@ public class DamageSystem : Singleton<DamageSystem>
     /// 百分比减伤：伤害 = 攻击力 × (1 - 护甲/(护甲+K))，RoundToInt + 保底 1。
     /// 免伤：final × (1 - Σ 目标免伤因子)，clamp 到上限。
     /// 节流：同一 victim 每 EventThrottle 秒最多发一次 UnitDamagedEvent。
+    /// 2_20 M7 钩子（isRanged=true 时生效）：磐石远程减伤（D494 受方修正）+ 盾卫庇护重定向（D492，AOE 不转）；
+    /// 对建筑倍率（D497 臼炮/攻城槌×2 重弩×1.5）恒生效。
     /// </summary>
-    public int ApplyDamage(IDamageable source, IDamageable target, int attack, float extraDamageReduce = 0f)
+    public int ApplyDamage(IDamageable source, IDamageable target, int attack, float extraDamageReduce = 0f, bool isRanged = false)
     {
         if (target == null || target.CurrentHp <= 0) return 0;
 
         // 伤害计算（float 内部运算，对外 int，决策 21）
         int finalDamage = CalculateDamage(attack, target.Defense);
 
+        // 对建筑倍率（2_20 M7 D497）：攻方专属机器对 Building 目标 ×2/×1.5（近战/远程/AOE 统一在此乘）
+        if (target is Building && source is UnitController srcUc && srcUc.Data is NpcProfessionDef srcNd && srcNd.buildingDamageMul != 1f)
+            finalDamage = Mathf.Max(1, Mathf.RoundToInt(finalDamage * srcNd.buildingDamageMul));
+        // 对单位倍率（2_20 M7 D497：攻城槌对单位零伤害纯拆墙=0，其余 1）
+        if (target is UnitController && source is UnitController srcUc2 && srcUc2.Data is NpcProfessionDef srcNd2)
+        {
+            if (srcNd2.unitDamageMul == 0f) return 0;   // 攻城槌：对单位零伤害（纯拆墙，数值特性非剧本）
+            if (srcNd2.unitDamageMul != 1f)
+                finalDamage = Mathf.Max(1, Mathf.RoundToInt(finalDamage * srcNd2.unitDamageMul));
+        }
+
         // 免伤词条（3.6 §5.2）：目标基础免伤 + 外部因子（如冲锋免伤）
         float reduce = Mathf.Clamp01(extraDamageReduce + GetTargetBaseReduce(target));
+        // 磐石远程减伤（2_20 M7 D494：大盾格挡，仅单体远程直伤；AOE 不减免）
+        if (isRanged && target is UnitController targetUc && targetUc.Data is NpcProfessionDef targetNd)
+            reduce = Mathf.Clamp01(reduce + targetNd.rangedDamageReduce);
         // 冲锋中免伤（3.6 §5.3：突进态 70%）
         if (target is UnitController charging && charging.IsCharging && charging.Data is NpcProfessionDef cnd)
             reduce = Mathf.Clamp01(reduce + cnd.chargeDamageReduce);
         if (reduce > 0f)
             finalDamage = Mathf.Max(1, Mathf.RoundToInt(finalDamage * (1f - reduce)));
+
+        // 盾卫庇护（2_20 M7 D492）：受方修正家族重定向——单体远程直伤按概率转移给 1 宏格内最近友军盾卫；
+        // 最近 1 个盾卫承接防叠加；AOE 不转（isRanged=false 不进入）；转移伤害直接扣盾卫（不递归减伤/庇护）
+        if (isRanged && target is UnitController victimUc)
+        {
+            var shield = FindShelterShield(victimUc);
+            if (shield != null && shield.Data is NpcProfessionDef snd && snd.shelterChance > 0f)
+            {
+                int transferred = Mathf.RoundToInt(finalDamage * snd.shelterChance);
+                if (transferred > 0)
+                {
+                    finalDamage = Mathf.Max(1, finalDamage - transferred);
+                    shield.TakeDamage(Mathf.Max(1, transferred));
+                }
+            }
+        }
 
         // 扣血（TakeDamage 只扣血，公式已在此算好）
         target.TakeDamage(finalDamage);
@@ -327,6 +359,29 @@ public class DamageSystem : Singleton<DamageSystem>
         // 发布受击事件（节流，决策 7）
         PublishDamagedEvent(target, source, finalDamage);
         return finalDamage;
+    }
+
+    /// <summary>
+    /// 查庇护盾卫（2_20 M7 D492）：victim 周围各候选盾卫 shelterRadiusCells（1 宏格）内、同阵营、
+    /// shelterChance&gt;0 的友军盾卫，取最近 1 个（防多盾卫叠加）。无则 null。
+    /// </summary>
+    private UnitController FindShelterShield(UnitController victim)
+    {
+        if (victim == null || victim.GetFaction() == Faction.None) return null;
+        UnitController best = null;
+        float bestDist = float.MaxValue;
+        var candidates = QueryUnitsInRadius(victim.GetPosition(), 2f);   // 上限 2 格扫描，逐个按自身半径判定
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            if (c == null || c == victim || !c.IsAlive) continue;
+            if (c.GetFaction() != victim.GetFaction()) continue;
+            if (!(c.Data is NpcProfessionDef nd) || nd.shelterChance <= 0f) continue;
+            float dist = GridMath.DistCells(victim.GetPosition(), c.GetPosition());
+            if (dist > nd.shelterRadiusCells) continue;
+            if (dist < bestDist) { bestDist = dist; best = c; }
+        }
+        return best;
     }
 
     /// <summary>目标职业基础免伤（3.6 §5.2：NpcProfessionDef.baseDamageReduce）。</summary>
@@ -469,6 +524,32 @@ public class DamageSystem : Singleton<DamageSystem>
 
         // 4. 清理节流字典（防字典累积死者条目；对象池回池重置时 ClearThrottleForVictim 再保险）
         _lastEventTime.Remove(victim);
+
+        // 5. 兽人族级战利品（2_20 M7 D493）：兽人单位战斗击杀（Killer.raceId==Orc && Cause==Killed）
+        //    → 尸体处掉资源箱（金 0.5~1 占位，D142 箱子落地同构）；谁拾取归谁（涌现不判归属）；AI 镜像同享（D399）。
+        //    兽人战营效果②「战利品价值+50%」（D493）在此结算乘算。
+        TrySpawnOrcLoot(evt);
+    }
+
+    /// <summary>兽人战利品掉落（D493，见 OnUnitDied 注）。击杀者为建筑/非兽人/拆除/饿死不触发。</summary>
+    private void TrySpawnOrcLoot(UnitDiedEvent evt)
+    {
+        if (evt.Cause != DeathCause.Killed) return;
+        if (!(evt.Killer is UnitController killer) || killer == null) return;
+        if (killer.raceId != RaceIds.Orc) return;
+        if (evt.Unit is Building) return;                 // 拆建筑不算战利品（战斗击杀=单位阵亡）
+        if (ChestManager.Instance == null || GridSystem.Instance == null) return;
+
+        float value = Random.Range(0.5f, 1f);              // 金 0.5~1 占位（§6.1 P0 调优）
+        // 战营效果②：战利品价值+50%（2_20.1 §三，挂点=战利品掉落结算处）
+        if (KingdomRace.HasExclusiveBuilding(killer.kingdomId, "WarCamp"))
+            value *= 1.5f;
+        int gold = Mathf.Max(1, Mathf.RoundToInt(value));
+
+        var cellOpt = GridSystem.Instance.WorldToCoord(evt.Position);
+        if (!cellOpt.HasValue) return;
+        var chest = ChestManager.Instance.SpawnChest(cellOpt.Value, new ResourcePack { gold = gold }, Faction.None);
+        Debug.Log($"[OrcLoot] 兽人 {killer.npcId} 击杀 {evt.Unit} @ {evt.Position} → 战利品箱 金{gold}（战营{(value > 1.49f ? "×1.5" : "无")}）{(chest != null ? "落地" : "落箱失败")}");
     }
 
     // ===== 公开查询（供 NPCBrain 选目标用）=====

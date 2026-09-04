@@ -106,8 +106,8 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
     private void RebuildSummary()
     {
         var ts = TrainingSystem.Instance;
-        bool hasConfig = ts != null && ts.GetTrainings(_building.def.id) != null
-                         && ts.GetTrainings(_building.def.id).Count > 0;
+        bool hasConfig = ts != null && ts.GetTrainings(_building) != null
+                         && ts.GetTrainings(_building).Count > 0;
 
         if (!hasConfig)
         {
@@ -282,6 +282,17 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
             case Occupation.ShieldGuard: return "盾卫";
             case Occupation.Archmage: return "大法师";
             case Occupation.Cavalry: return "骑兵";
+            // ===== 2_20 M7 专属兵种+机器（D490~D497）=====
+            case Occupation.Berserker: return "狂战士";
+            case Occupation.WolfRider: return "狼骑兵";
+            case Occupation.Musqueteer: return "火枪手";
+            case Occupation.Bedrock: return "磐石卫士";
+            case Occupation.Ranger: return "游侠";
+            case Occupation.Windwalker: return "风行者";
+            case Occupation.DeerRider: return "鹿骑";
+            case Occupation.Mortar: return "臼炮";
+            case Occupation.VineCatapult: return "藤蔓弹射器";
+            case Occupation.Ram: return "攻城槌";
             default: return occ.ToString();
         }
     }

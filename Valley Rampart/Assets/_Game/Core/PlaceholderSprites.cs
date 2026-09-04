@@ -81,6 +81,12 @@ public static class PlaceholderSprites
             // ===== 3.3.4 批次3：脚手架（建造中视觉）=====
             case "scaffold":          return SpriteFactory.CreateSquare(48, new Color(0.6f, 0.45f, 0.25f, 0.6f)); // 半透明棕
 
+            // ===== 2_20 M6 四族专属建筑占位色块（3.1.2 各族主题色 D457/D458 近似；美术锚点到位后替换）=====
+            case "war_academy":       return SpriteFactory.CreateSquare(48, new Color(0.95f, 0.8f, 0.2f));      // 人类·金
+            case "war_camp":          return SpriteFactory.CreateSquare(48, new Color(0.6f, 0.1f, 0.1f));       // 兽人·暗红
+            case "ley_forge":         return SpriteFactory.CreateSquare(48, new Color(0.7f, 0.4f, 0.15f));      // 矮人·铜橙
+            case "archery_range":     return SpriteFactory.CreateSquare(48, new Color(0.2f, 0.6f, 0.3f));       // 精灵·翠绿
+
             // ===== 未配置警告 =====
             default:
                 Debug.LogWarning($"[PlaceholderSprites] 未配置 key: {key}，用品红方块占位");

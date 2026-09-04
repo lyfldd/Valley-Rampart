@@ -523,7 +523,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         else
         {
             // 正式占位视觉
-            BuildingVisual.ApplyPlaceholder(gameObject, sourceType, def != null ? def.role : BuildingRole.Special);
+            BuildingVisual.ApplyPlaceholder(gameObject, sourceType, def != null ? def.role : BuildingRole.Special, def != null ? def.id : "");
             _renderer = GetComponent<SpriteRenderer>();
             // Abandoned 态变暗提示废弃
             if (_renderer != null && state == BuildingState.Abandoned)

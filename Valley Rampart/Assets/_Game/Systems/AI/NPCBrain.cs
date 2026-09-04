@@ -1268,7 +1268,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
                     // D468 野性攻击面：野性流浪汉用 Worker 基线×ratio 覆盖（职业原值=0）
                     attack = effectiveAttack,
                     range = effectiveRange,
-                    cd = effectiveCd,
+                    // 2_20 M7 狂战士狂暴攻速（D490）：cd × CdMul（0.7/0.4/0.1 按层）
+                    cd = effectiveCd * (selfUnit != null && selfUnit.Frenzy != null ? selfUnit.Frenzy.CdMul() : 1f),
                     isRanged = effectiveRanged,
                     projectileSpeed = _profession.projectileSpeed,
                     // 弹药（3.6 §三：AmmoDef 拉平；B1 弹型 = SelectAmmo 选中值）

@@ -32,4 +32,10 @@ public struct TrainingDef
     public int costCrystal;             // 训练消耗水晶（§10 法师/治疗师 水晶1；无则0）
     public int costMetal;               // 2_12 步骤8 D132：兵种强化消耗铁（重装战士/盾卫/骑兵 5/5/8 占位；0=无铁消耗）
     public int costDays;                // 训练时长（天，§10 1天）
+
+    // ===== 2_20 M7 专属兵训练门禁（D419 唯一入口 + D490 共通槽退役）=====
+    [Tooltip("可训练种族（RaceIds 0=Human 1=Elf 2=Dwarf 3=Orc）。-1=共通条目（全族可见）。专属兵=各族专属建筑/练兵场按此过滤——跨族不可训练（D419 唯一入口）")]
+    public int raceId;
+    [Tooltip("建筑等级门槛（0=无门槛）。练兵场 Lv2 直接训练=minBuildingLevel 2（QQQ.5 附录A「练兵场 Lv2」落地载体）")]
+    public int minBuildingLevel;
 }

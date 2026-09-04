@@ -76,10 +76,46 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.Data.faction != Faction.PlayerCamp) continue;
-            if (unit.EffectiveOccupation == Occupation.SiegeMachine || unit.EffectiveOccupation == Occupation.Ballista)
+            if (IsMachineOccupation(unit.EffectiveOccupation))
                 count++;
         }
         return count;
+    }
+
+    /// <summary>是否战争机器职业（3.7 投掷机/弩炮 + 2_20 M7 四族专属机器 D497）。</summary>
+    private static bool IsMachineOccupation(Occupation occ)
+    {
+        return occ == Occupation.SiegeMachine || occ == Occupation.Ballista
+            || occ == Occupation.Mortar || occ == Occupation.VineCatapult || occ == Occupation.Ram;
+    }
+
+    /// <summary>四族专属机器白名单（2_20 M7 D496/D497）：投掷机退役共通槽；弩炮收编人类重弩炮；臼炮/藤蔓/攻城槌各族专属。</summary>
+    private static bool IsRaceAllowedMachine(int race, Occupation type)
+    {
+        switch (type)
+        {
+            case Occupation.Ballista:     return race == RaceIds.Human;  // 重弩炮=人类专属（D496 收编）
+            case Occupation.Mortar:       return race == RaceIds.Dwarf;
+            case Occupation.VineCatapult: return race == RaceIds.Elf;
+            case Occupation.Ram:          return race == RaceIds.Orc;
+            case Occupation.SiegeMachine: return false;                  // 投掷机退役共通槽（D496，枚举保留）
+            default: return false;
+        }
+    }
+
+    /// <summary>机器造价查表（2_20 M7：臼炮最贵梯度，其余沿用弩炮/投掷机量级占位，2_20.1 §8.1）。</summary>
+    private ResourcePack GetMachineCost(Occupation type)
+    {
+        var cfg = Cfg();
+        if (cfg == null) return ResourcePack.Zero;
+        switch (type)
+        {
+            case Occupation.Ballista:     return cfg.ballistaCost;
+            case Occupation.Mortar:       return cfg.mortarCost;
+            case Occupation.VineCatapult: return cfg.vineCatapultCost;
+            case Occupation.Ram:          return cfg.ramCost;
+            default: return ResourcePack.Zero;
+        }
     }
 
     /// <summary>
@@ -94,7 +130,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         {
             if (unit == null || unit.Data == null) continue;
             if (unit.kingdomId != kingdomId) continue;
-            if (unit.EffectiveOccupation == Occupation.SiegeMachine || unit.EffectiveOccupation == Occupation.Ballista)
+            if (IsMachineOccupation(unit.EffectiveOccupation))
                 count++;
         }
         return count;
@@ -106,7 +142,13 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
     /// </summary>
     public bool ProduceMachine(Occupation type, Vector2 spawnPos)
     {
-        if (type != Occupation.SiegeMachine && type != Occupation.Ballista) return false;
+        // 2_20 M7 D496/D497：per-race 白名单（投掷机退役共通槽；弩炮收编人类重弩炮；各族专属机器）
+        int playerRace = KingdomRace.GetKingdomRace(0);
+        if (!IsRaceAllowedMachine(playerRace, type))
+        {
+            Debug.Log($"[SiegeProduction] 生产失败：{type} 非种族 {playerRace} 专属机器（M7 白名单）");
+            return false;
+        }
         if (GetPlacedMachineCount() >= GetMachineLimit())
         {
             Debug.Log($"[SiegeProduction] 机器已达上限 {GetMachineLimit()}，需升级投掷机厂");
@@ -114,7 +156,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         }
         var cfg = Cfg();
         if (cfg == null || RulerController.Instance == null) return false;
-        var cost = type == Occupation.SiegeMachine ? cfg.catapultCost : cfg.ballistaCost;
+        var cost = GetMachineCost(type);
         if (!RulerController.Instance.CanAfford(cost)) { Debug.Log("[SiegeProduction] 资源不足，无法生产机器"); return false; }
 
         RulerController.Instance.Spend(cost);
@@ -136,7 +178,13 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
     public bool ProduceMachine(Occupation type, Vector2 spawnPos, int kingdomId)
     {
         if (kingdomId == 0) return ProduceMachine(type, spawnPos);   // 玩家缺省走原路径（Faction.PlayerCamp）
-        if (type != Occupation.SiegeMachine && type != Occupation.Ballista) return false;
+        // 2_20 M7 D496/D497：AI per-race 白名单（与玩家同规则，镜像 D399）
+        int race = KingdomRace.GetKingdomRace(kingdomId);
+        if (!IsRaceAllowedMachine(race, type))
+        {
+            Debug.Log($"[SiegeProduction] k{kingdomId} 生产失败：{type} 非种族 {race} 专属机器（M7 白名单）");
+            return false;
+        }
 
         // per-kingdom 上限（D454：AI 本国战争机器数不超厂上限）
         if (GetPlacedMachineCountByKingdom(kingdomId) >= GetMachineLimit())
@@ -147,7 +195,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         var cfg = Cfg();
         var kingdom = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
         if (cfg == null || kingdom == null) return false;
-        var cost = type == Occupation.SiegeMachine ? cfg.catapultCost : cfg.ballistaCost;
+        var cost = GetMachineCost(type);
         if (!kingdom.CanAfford(cost))
         {
             Debug.Log($"[SiegeProduction] k{kingdomId} 资源不足，无法生产 {type}");

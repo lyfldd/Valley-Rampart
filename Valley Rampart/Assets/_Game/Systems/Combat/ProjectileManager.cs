@@ -60,6 +60,8 @@ public class ProjectileManager : Singleton<ProjectileManager>
         public int effectMaxTargets;
         // 3.7 P1.2 弹药美术占位：弹丸类型（决定出池着色，复用单一 sprite + 色变）
         public ProjectileType projectileType;
+        // 2_20 M7 火枪二段贯穿（D494）：贯穿额外目标数（0=不贯穿）；贯穿目标伤害=攻击×0.6
+        public int pierceThroughCount;
     }
 
     private readonly List<ProjectileData> _active = new();
@@ -132,6 +134,8 @@ public class ProjectileManager : Singleton<ProjectileManager>
             effectMaxTargets = profile.effectMaxTargets,
             // 3.7 P1.2：弹药类型（出池着色用）
             projectileType = profile.projectileType,
+            // 2_20 M7 火枪二段贯穿（D494）：攻方 SO 直接读（不入快照，AI.Core 零改动）
+            pierceThroughCount = attacker is UnitController pmUc && pmUc.Data is NpcProfessionDef pmNd ? pmNd.pierceThroughCount : 0,
         });
     }
 
@@ -217,7 +221,27 @@ public class ProjectileManager : Singleton<ProjectileManager>
         // 命中 -> 走伤害计算（委托 DamageSystem）
         if (bestTarget != null)
         {
-            DamageSystem.Instance?.ApplyDamage(p.attacker, bestTarget, p.attack);
+            // 2_20 M7：远程单体直伤走 isRanged=true（触发磐石远程减伤/盾卫庇护受方修正，D494/D492）
+            DamageSystem.Instance?.ApplyDamage(p.attacker, bestTarget, p.attack, 0f, true);
+
+            // 2_20 M7 火枪二段贯穿（D494）：命中主目标后贯穿额外目标，伤害=攻击×0.6（弹道方向粗略=命中点附近最近后续目标）
+            if (p.pierceThroughCount > 0)
+            {
+                IDamageable throughTarget = null;
+                float throughDist = float.MaxValue;
+                foreach (var unit in candidates)
+                {
+                    if (unit == null || unit == bestTarget || unit.CurrentHp <= 0) continue;
+                    if (unit.GetFaction() == attackerFaction || unit.GetFaction() == Faction.None) continue;
+                    float dist = GridMath.DistCells(p.targetPos, unit.GetPosition());
+                    if (dist <= hitRadiusCells && dist < throughDist) { throughDist = dist; throughTarget = unit; }
+                }
+                if (throughTarget != null)
+                {
+                    int throughDmg = Mathf.Max(1, Mathf.RoundToInt(p.attack * 0.6f));   // 贯穿传递 60%（D494）
+                    DamageSystem.Instance?.ApplyDamage(p.attacker, throughTarget, throughDmg, 0f, true);
+                }
+            }
 
             // 溅射（3.6 §3.3 单段 AOE）：命中点半径内敌对单位
             if (p.aoeRadiusCells > 0f)
@@ -266,7 +290,7 @@ public class ProjectileManager : Singleton<ProjectileManager>
                     if (p.arcHeightCells > fort.heightCells) continue; // 弧高够 → 越过该工事
                     // 被挡：穿透等级决定对墙伤害（3.6 §5.1）
                     if (p.pierceLevel >= fort.defenseLevel)
-                        DamageSystem.Instance?.ApplyDamage(p.attacker, uc, p.attack);
+                        DamageSystem.Instance?.ApplyDamage(p.attacker, uc, p.attack, 0f, true);
                     return true;
                 }
             }

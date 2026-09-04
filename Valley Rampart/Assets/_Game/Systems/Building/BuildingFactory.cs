@@ -176,7 +176,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         {
             go = new GameObject($"Building_{def.id}_{coord.x}_{coord.y}");
             go.transform.position = worldPos;
-            BuildingVisual.ApplyPlaceholder(go, sourceType, def.role);
+            BuildingVisual.ApplyPlaceholder(go, sourceType, def.role, def.id);
         }
 
         var b = go.GetComponent<Building>();

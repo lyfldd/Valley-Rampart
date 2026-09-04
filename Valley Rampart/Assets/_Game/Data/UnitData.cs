@@ -39,6 +39,17 @@ public enum Occupation
     Child,          // 小孩：繁殖产物，吃粮（1/日）不干活；天数事件累积 2 次长成居民
     // ===== 2_14 敌怪（末尾追加保持 int 稳定；怪物运行时 UnitData 不入 UnitDataManager，占格查询走 Undead 阵营）=====
     Monster,        // 敌怪（2_14 传送门灾害）：运行时合成 UnitData（faction=Undead），挂 MonsterController；GetCategory 归 Enemy
+    // ===== 2_20 M7 四族专属兵种+战争机器（尾插保持 int 稳定；D490~D497，编号 28~37——2_20.1 初稿 27~36 系设计占位，Monster=27 已占故偏移）=====
+    Berserker,      // 兽人·狂战士（战营唯一入口；击杀触发狂暴 buff 叠 3 层，D490 范式标杆）
+    WolfRider,      // 兽人·狼骑兵（战营唯一入口；骑射化 D491：移速 1.8 全场第一+射程 3.5+isRanged，无机制钩子）
+    Musqueteer,     // 矮人·火枪手（练兵场 Lv2；中程高伤二段穿透 60%，D494 补档）
+    Bedrock,        // 矮人·磐石卫士（练兵场 Lv2；远程减伤 45%+超重抗线，D483 更名+D494 补档）
+    Ranger,         // 精灵·游侠（射箭场唯一入口；射程 8.5 全场第一）
+    Windwalker,     // 精灵·风行者（射箭场唯一入口；视野 12 全场第一+移速 1.5，D495 侦察特化）
+    DeerRider,      // 精灵·鹿骑（射箭场唯一入口；移速 1.7 轻骑拦截，D495 新增）
+    Mortar,         // 矮人·臼炮（专属机器；射程 9 全场第一+抛物 AOE 3 格+对建筑×2，D497）
+    VineCatapult,   // 精灵·藤蔓弹射器（专属机器；AOE 2 格+命中减速，D497 弩炮魔弹语义转移）
+    Ram             // 兽人·攻城槌（专属机器；对建筑×2/对单位 0，D497）
 }
 
 // 注意：Faction 枚举已迁入 AI.Core/Ports/Faction.cs（M1 决策核提取，asmdef 边界要求），

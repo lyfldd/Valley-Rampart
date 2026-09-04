@@ -224,9 +224,11 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         var ruler = RulerController.Instance;
 
         int count = 0;
+        int playerRace = KingdomRace.GetKingdomRace(0);   // 2_20 M6：菜单按玩家国族过滤专属建筑（raceId>=0 仅本族可见；-1 共通全可见）
         foreach (var def in _allBuildable)
         {
             if (def.moduleType != _currentTab) continue;
+            if (def.raceId >= 0 && def.raceId != playerRace) continue;   // 专属建筑仅本族显示
             // 解锁判定：3.5 改用 KingdomManager 模块级/特殊建筑判定；KingdomManager 为 null 时回退显示全部
             if (KingdomManager.Instance != null && !KingdomManager.Instance.IsBuildingUnlocked(def)) continue;
             BuildCard(def, ruler);
@@ -264,7 +266,8 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         nameLabel.AddToClassList("building-card__name");
         var buildBtn = new Button { name = $"build-{def.id}", text = "建造" };
         buildBtn.AddToClassList("building-card__build-btn");
-        buildBtn.SetEnabled(ruler != null && ruler.CanAfford(def.cost));
+        bool uniqueBuilt = IsUniqueBuilt(def);
+        buildBtn.SetEnabled(ruler != null && ruler.CanAfford(def.cost) && !uniqueBuilt);
         buildBtn.clicked += () => OnBuildClicked(def);
         header.Add(nameLabel);
         header.Add(buildBtn);
@@ -297,6 +300,19 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         card.Add(costRow);
 
         _buildingList.contentContainer.Add(card);
+    }
+
+    /// <summary>每族限建 1 判定（2_20 M6）：同王国（玩家=0）同 id 活跃建筑已存在 → 建造按钮置灰。</summary>
+    private static bool IsUniqueBuilt(BuildingDef def)
+    {
+        if (def == null || !def.uniquePerKingdom || BuildingRegistry.Instance == null) return false;
+        var all = BuildingRegistry.Instance.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b != null && b.def != null && b.def.id == def.id && b.kingdomId == 0 && b.IsActive) return true;
+        }
+        return false;
     }
 
     // ===== 辅助 =====

@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
+  m_Name: Elf_DeerRider
+  m_EditorClassIdentifier: 
+  prefab: {fileID: 0}
+  faction: 1
+  occupation: 34
+  walkSpeed: 1.7
+  runSpeed: 3.4
+  maxHp: 70
+  attack: 9
+  defense: 0
+  attackRange: 1
+  attackCD: 1
+  isRanged: 0
+  projectileSpeed: 25
+  perceptionRadius: 10
+  threatSensitivity: 0.5
+  courage: 60
+  obedience: 60
+  retreatThresholdOffset: 0
+  maxHitCount: 3
+  professionPullScale: 0.2
+  equipmentSlotCount: 0
+  wanderRadiusCells: 2
+  isStatic: 0
+  ammo: {fileID: 0}
+  baseToughness: 5
+  toughnessDefenseScale: 0.2
+  baseDamageReduce: 0
+  protectPower: 0.2
+  isHeavyArmor: 0
+  isCavalry: 0
+  chargeDamage: 80
+  chargeRangeCells: 4
+  chargeSpeed: 25
+  chargePairGap: 0.3
+  chargeGroupCooldown: 20
+  chargeDamageReduce: 0.7
+  fortification: {fileID: 0}
+  ammoMax: 0
+  ammoCostStone: 1
+  ammoCostFireball: 3
+  ammoCostMagic: 5
+  ammoResupplyDelay: 0
+  ammoConservationWeight: 0.5
+  crewRequired: 0
+  crewRadiusCells: 0
+  roleFamily: 5
+  rangedDamageReduce: 0
+  shelterChance: 0
+  shelterRadiusCells: 1
+  buildingDamageMul: 1
+  unitDamageMul: 1
+  pierceThroughCount: 0

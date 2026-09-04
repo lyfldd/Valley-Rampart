@@ -19,11 +19,46 @@ MonoBehaviour:
     stone: 10
     wood: 0
     food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
   ballistaCost:
     gold: 8
     stone: 15
     wood: 0
     food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
+  mortarCost:
+    gold: 15
+    stone: 25
+    wood: 0
+    food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
+  vineCatapultCost:
+    gold: 10
+    stone: 15
+    wood: 0
+    food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
+  ramCost:
+    gold: 5
+    stone: 10
+    wood: 0
+    food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
   stoneAmmoCost: 1
   fireballAmmoCost: 1
   magicAmmoCost: 1
