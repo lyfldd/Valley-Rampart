@@ -1,7 +1,7 @@
 # HH.53 种族人口属性实施批（HH.51 任务书三批）交付报告
 
 > 类型：进度同步（含待决策）
-> 状态：✅**14/14 ALL PASS（D485/D486 已实施落地，②b/②c/②d 全绿）——待策划端终验收（D487）+隔离代执** + sim-sync 义务清单（自卫交火层语义补行）
+> 状态：✅**14/14 ALL PASS（D499/D500 已实施落地，②b/②c/②d 全绿）——待策划端终验收（D501）+隔离代执** + sim-sync 义务清单（自卫交火层语义补行）
 > 日期：2026-09-02 · 发起端：执行端 · 关联清单/文档：HH.51 任务书、2_20 §十一.5/§十二、0.6 §四十七/§四十九
 
 ## 一、做了什么（执行端填，带证据）
@@ -51,15 +51,15 @@
 | ①正 异族→Worker_A | **OK** | 100→76 / 100→65 掉血；wildDiag：Elf 开火 →#34(Worker) 伤害=1 |
 | ①负 同族→Worker_B | OK | 100→100 血不变 |
 | ②a 压制 Archer 不打 E4 | **OK** | E4 100→100（修冒烟容器 2：②b 清场漏排 e4 误杀 → 排除列表加 e4） |
-| ②b 反击→E2 | **FAIL（第二拦截点，D485 ① 已生效）** | 诊断②铁证：agg=#45(E2 溯源成功 ✅) threatN=1(威胁列表有 E2 ✅) focus=Position(Caution 态 HoldPosition 驻留胜出焦点 ❌) → 路径1 要求 ThreatStimulus 焦点不满足 → 射程内持续攻击的异族野人不还手 |
-| ②b2 负 同族野人伤国民→不还手 | **OK** | ②b2 新负探针（D485）：ApplyDamage 强制同族野人袭击 → Archer 不还手（hVagrant 100→100） |
+| ②b 反击→E2 | **FAIL（第二拦截点，D499 ① 已生效）** | 诊断②铁证：agg=#45(E2 溯源成功 ✅) threatN=1(威胁列表有 E2 ✅) focus=Position(Caution 态 HoldPosition 驻留胜出焦点 ❌) → 路径1 要求 ThreatStimulus 焦点不满足 → 射程内持续攻击的异族野人不还手 |
+| ②b2 负 同族野人伤国民→不还手 | **OK** | ②b2 新负探针（D499）：ApplyDamage 强制同族野人袭击 → Archer 不还手（hVagrant 100→100） |
 | ④a 玩家侧异族拒绝 | OK | rej=True 粮 150→150 日志「招募拒绝：异族」在 |
 | ④b 玩家侧同族放行 | OK | 粮 150→149 |
 | ④c AI⑥同族过滤 | OK | 选中 #43 race=0 |
 | ④d AI⑥全异族→null | OK | 负加固（DebugSetRace 改标后）null |
 | ③ D471 插旗定族 | OK | 立国 4→5；定族日志 raceId=1；成员 raceId 保持 Elf |
 
-**13/14 PASS**（②b2 为 D485 新增负探针），唯一 FAIL=②b 的第二拦截点（见 §三.4 更新）——D485 ① 受击溯源已实施生效，但 Caution 态 HoldPosition 焦点（3.0.1 既有谱系）让射程内持续攻击的异族野人不被还手，涉 AI.Core 决策核焦点竞争。
+**13/14 PASS**（②b2 为 D499 新增负探针），唯一 FAIL=②b 的第二拦截点（见 §三.4 更新）——D499 ① 受击溯源已实施生效，但 Caution 态 HoldPosition 焦点（3.0.1 既有谱系）让射程内持续攻击的异族野人不被还手，涉 AI.Core 决策核焦点竞争。
 
 ### 验收 · 关键链路核实（冒烟前置走查，实盘）
 
@@ -68,7 +68,7 @@
 
 ## 二、现状与阻塞
 
-- 三批代码/资产完成+编译 0 error；**行为级冒烟已实跑：13/14 PASS**，唯一 FAIL=②b 第二拦截点（见 §三.4——D485 ① 受击溯源已生效，剩余拦截点在 Caution 态 HoldPosition 焦点竞争，涉决策核）。
+- 三批代码/资产完成+编译 0 error；**行为级冒烟已实跑：13/14 PASS**，唯一 FAIL=②b 第二拦截点（见 §三.4——D499 ① 受击溯源已生效，剩余拦截点在 Caution 态 HoldPosition 焦点竞争，涉决策核）。
 - 冒烟容器磨合记录：① 首跑暴露 GetAllUnits 遍历中杀单位→`Collection was modified` 协程崩（改 `.ToList()` 快照）② 等待世界逻辑三版（2 帧过早→InitializeNewGame 异步未就绪 Spawn 全 null；等 Playing 判定错→直接 GameScene Play 无配置不进 Playing；终版=用户 MainMenu 进局复用世界+幂等跳过，跑通）。
 - 本端未 commit（任务书：commit 随批策划端代执）。
 
@@ -82,25 +82,25 @@
    - sim 侧对等实现野性敌意行为 + L1 AI.Core/sim 双份登记（15_账本）
    - factor_registry 草案 4 参数：wildAggroRadius（8 格）/ wildStrengthRatio（0.6）/ D470 跨族敌意减成 / 宣战门槛系数
    - WildnessConfig/ gatherSameRaceWeight SO 参数入 sim 三源同步（champion/factor_registry/Unity SO）
-   - **D485 ① 国民自卫溯源语义（壳层已落地）**：NPCBrain.OnDamaged 对「无国野人异族（raceId≠自身）」放行受击溯源——Unity 壳层已实施并验证（诊断 agg=#45 溯源成功），sim 侧需对等登记「国民被异族野人攻击可自卫还手」语义
+   - **D499 ① 国民自卫溯源语义（壳层已落地）**：NPCBrain.OnDamaged 对「无国野人异族（raceId≠自身）」放行受击溯源——Unity 壳层已实施并验证（诊断 agg=#45 溯源成功），sim 侧需对等登记「国民被异族野人攻击可自卫还手」语义
    - **②b 第二拦截点（若选 §三.4-B）**：Caution 态 Trace 威胁优先级调整涉 AI.Core（AttentionSystem 排序）→ sim 双份登记追加
    - 排期归策划端（属 2_18 外交批/sim 批内容，本批未做）。
 3. **Q10-M2 挂账确认**：GetKingdomRace 恒 Human、KingdomState.raceId 字段未落（D471 定族显式写入挂账 KingdomFoundry L316-317 单点回填注）——待 Q10-M2 批接真模板映射后回填，本批口径已全走统一 helper 防散落。
-4. **②b 第二拦截点：国民受击溯源已通（D485 ① 生效），但 Caution 态 HoldPosition 焦点挡还手**——D485 ① 已按裁决落地 [NPCBrain.cs](Valley Rampart/Assets/_Game/Systems/AI/NPCBrain.cs) OnDamaged：同阵营但「无国野人异族（raceId≠自身）」放行溯源。**重跑诊断②铁证**：`agg=#45(E2)` 溯源成功 ✅ + `threatN=1`（Trace 威胁已入列表 ✅）+ `focus=Position`（Caution 态 HoldPosition 驻留胜出焦点 ❌）→ NPCBrain.UpdateCombatRegistration 路径1 要求 `focus.Focus is ThreatStimulus` 不满足 → 射程内持续攻击的异族野人不还手。这是 **3.0.1 既有「受击→Caution→HoldPosition 驻留防追击」谱系**，非 D485 ① 可覆盖，**涉 AI.Core 决策核焦点/威胁优先级 → 触碰 sim-sync 义务**。执行端未擅改（按纪律上报）：
+4. **②b 第二拦截点：国民受击溯源已通（D499 ① 生效），但 Caution 态 HoldPosition 焦点挡还手**——D499 ① 已按裁决落地 [NPCBrain.cs](Valley Rampart/Assets/_Game/Systems/AI/NPCBrain.cs) OnDamaged：同阵营但「无国野人异族（raceId≠自身）」放行溯源。**重跑诊断②铁证**：`agg=#45(E2)` 溯源成功 ✅ + `threatN=1`（Trace 威胁已入列表 ✅）+ `focus=Position`（Caution 态 HoldPosition 驻留胜出焦点 ❌）→ NPCBrain.UpdateCombatRegistration 路径1 要求 `focus.Focus is ThreatStimulus` 不满足 → 射程内持续攻击的异族野人不还手。这是 **3.0.1 既有「受击→Caution→HoldPosition 驻留防追击」谱系**，非 D499 ① 可覆盖，**涉 AI.Core 决策核焦点/威胁优先级 → 触碰 sim-sync 义务**。执行端未擅改（按纪律上报）：
    - A：**Caution 驻留但射程内高威胁可还手**——UpdateCombatRegistration 路径1 放宽：威胁列表（threatN>0）中最近威胁在射程内时，即使焦点=Position 也攻击。壳层改动（不触 AI.Core）；但改变「驻留 vs 还手」行为语义，需策划确认。
    - B：**提高 Trace 威胁优先级**——Caution 态下让受击溯源 ThreatStimulus 优先于 HoldPosition。涉 AI.Core（AttentionSystem 排序）→ sim-sync 义务。
    - C：**维持现状（驻留不还手）**——②b 判 FAIL 验收，异族野人可持续白嫖国民，对等性缺失，不推荐。
    - 影响：A 壳层最小、不触 AI.Core，但属行为语义变更；B 涉决策核需 sim 双份；C 验收留 FAIL。
 
-### D485 ③ 守卫走查结论（登记，不扩大）
+### D499 ③ 守卫走查结论（登记，不扩大）
 
-- 走查对象：GuardDeploymentSystem（守卫部署，D116=玩家选中士兵右键高价值点派兵守卫）。**结论：同因**——守卫/国民单位受击溯源已随 D485 ① 修复（OnDamaged 种族维度放行，诊断 agg 生效）；守卫驻守/还手是否响应野人袭击，同受 ②b 第二拦截点影响（Caution 态 HoldPosition 焦点竞争），**随 §三.4 裁决一并处理**。
+- 走查对象：GuardDeploymentSystem（守卫部署，D116=玩家选中士兵右键高价值点派兵守卫）。**结论：同因**——守卫/国民单位受击溯源已随 D499 ① 修复（OnDamaged 种族维度放行，诊断 agg 生效）；守卫驻守/还手是否响应野人袭击，同受 ②b 第二拦截点影响（Caution 态 HoldPosition 焦点竞争），**随 §三.4 裁决一并处理**。
 - 守卫部署是玩家主动指令链路（非自动告警链），野人袭击不被守卫「主动拦截」属同阵营不视为敌人的既有语义；若策划要求「守卫点自动拦截野人」，属新行为需求，另立决策，本批不扩大。
 
 ## 四、下一步建议（恢复执行入口）
 
-1. 策划端裁决 §三.4（②b 第二拦截点 A/B/C）——D485 ① 已落地生效（agg 溯源成功），剩余拦截点在 Caution 态 HoldPosition 焦点；选 A 本端落 UpdateCombatRegistration 壳层放宽+重跑②b；选 B 涉 AI.Core（sim-sync）；选 C 按裁决验收口径。
-2. 裁决 §三.1（Worker 基线缺口）→ D484=A 已记录，Play 回调批合流 C（wildBaseAttack）。
+1. 策划端裁决 §三.4（②b 第二拦截点 A/B/C）——D499 ① 已落地生效（agg 溯源成功），剩余拦截点在 Caution 态 HoldPosition 焦点；选 A 本端落 UpdateCombatRegistration 壳层放宽+重跑②b；选 B 涉 AI.Core（sim-sync）；选 C 按裁决验收口径。
+2. 裁决 §三.1（Worker 基线缺口）→ D498=A 已记录，Play 回调批合流 C（wildBaseAttack）。
 3. 冒烟 13/14 PASS 基线 + ②b 裁决后 → 策划端验收+随批 commit（三批+SO 资产+冒烟，共 12 文件+2 资产）。
 4. sim-sync 义务（§三.2）排期进 sim 批/2_18 批。
 
@@ -130,14 +130,14 @@
 
 ---
 
-## 策划裁决（2026-09-03 策划端，终验收成立 · D484~D487）
+## 策划裁决（2026-09-03 策划端，终验收成立 · D498~D501）
 
 | 决策点 | 裁决 | 理由 |
 |--------|------|------|
-| §三.1 Worker 基线缺口 | **D484=A 落地确认** | Max 下限兜底（attack≥1/range≥1/cd≥0.5）保留、不改工人资产；Play 回调批合流 C（WildnessConfig 增 wildBaseAttack 绝对基线字段，下限值转正初始参数） |
-| §三.2 sim-sync 排期 | **D486 附带确认** | 义务清单（野性敌意+自卫交火层语义+wildAggroRadius/wildStrengthRatio/D470 减成/宣战系数 4 参数）归 sim 批/2_18 P2；本批零 AI.Core 触碰、零 FactorContext 扩字段，执行端只列清单合规 |
-| §三.4 ②b 第二拦截点 | **D486=A+ 常设自卫交火层，落地实锤** | 焦点层与被动自卫解耦=根修（驻留防追击与还手不冲突——HoldPosition 本意是不追出去，不是站着挨打）；受击不追抑制（驻守/移动受击追出 11.34 格→0.0）=真实功能缺口修复嘉奖；守卫同因自动受益 |
-| 三批验收 + commit | **D487 终验收成立** | 静态 8/8 关键声明实锤+raceId 写入点全线合法（D467 红线安全：声明默认/池复位/ApplyVagrantization/出生投放/存档读取/调试钩，无改写存活个体路径）+14/14 ALL PASS 三轮一致+编译 0 error；commit 隔离代执（排除 D483 美术更名批 8 文档+图片资源，另挂账 0.6 补登） |
+| §三.1 Worker 基线缺口 | **D498=A 落地确认** | Max 下限兜底（attack≥1/range≥1/cd≥0.5）保留、不改工人资产；Play 回调批合流 C（WildnessConfig 增 wildBaseAttack 绝对基线字段，下限值转正初始参数） |
+| §三.2 sim-sync 排期 | **D500 附带确认** | 义务清单（野性敌意+自卫交火层语义+wildAggroRadius/wildStrengthRatio/D470 减成/宣战系数 4 参数）归 sim 批/2_18 P2；本批零 AI.Core 触碰、零 FactorContext 扩字段，执行端只列清单合规 |
+| §三.4 ②b 第二拦截点 | **D500=A+ 常设自卫交火层，落地实锤** | 焦点层与被动自卫解耦=根修（驻留防追击与还手不冲突——HoldPosition 本意是不追出去，不是站着挨打）；受击不追抑制（驻守/移动受击追出 11.34 格→0.0）=真实功能缺口修复嘉奖；守卫同因自动受益 |
+| 三批验收 + commit | **D501 终验收成立** | 静态 8/8 关键声明实锤+raceId 写入点全线合法（D467 红线安全：声明默认/池复位/ApplyVagrantization/出生投放/存档读取/调试钩，无改写存活个体路径）+14/14 ALL PASS 三轮一致+编译 0 error；commit 隔离代执（排除 D483 美术更名批 8 文档+图片资源，另挂账 0.6 补登） |
 
 容器附带登记三项确认（探针基建怪癖，不影响验收）：②c 受击单位行为不稳定=换 Worker+钳制；④a e3 raceId 改写=对象池复用怪癖（写入点核查全线合法，低危挂账确认机制）；②a 偶发开火=射程外未打属实。
 
