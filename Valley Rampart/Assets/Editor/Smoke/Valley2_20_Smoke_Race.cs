@@ -466,6 +466,9 @@ public static class Valley2_20_Smoke_Race
         var ruler = RulerController.Instance;
         int food0 = ruler != null ? ruler.Food : 0;
         bool p4a = false;
+        // Q10 批1 材料保鲜（2026-09-04 第2轮实证）：用户真实世界野性敌意可致死探针材料（实测 e3 alive=False
+        // → RecruitVagrant 走死亡拒绝分支而非异族拒绝分支=④a 假 FAIL 环境波动）——死亡即原坐标补注。
+        if (e3 == null || !e3.IsAlive) e3 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pE3);
         if (e3 != null && ruler != null)
         {
             // ④a 构造修正（D486 不稳定定位）：e3 spawn 时 Elf(1)，但流民营地系统（VagrantCampSystem 每日补员
@@ -491,6 +494,7 @@ public static class Valley2_20_Smoke_Race
         bool p4b = true;
         var kcfg = Resources.Load<KingdomConfig>("Config/KingdomConfig");
         int cost = kcfg != null ? kcfg.recruitFoodCost : 0;
+        if (h2 == null || !h2.IsAlive) h2 = dbg.SpawnVagrantWithRace(RaceIds.Human, pH2);   // 材料保鲜（同 ④a 注）
         if (h2 != null && ruler != null && cost > 0 && ruler.Food >= cost)
         {
             int f0 = ruler.Food;
@@ -502,6 +506,9 @@ public static class Valley2_20_Smoke_Race
         allPass = allPass && p4b;
 
         bool p4c = false, p4d = false;
+        // 材料保鲜（同 ④a 注）：④c/④d 依赖 v4/h3 存活（实测 ④c 选中 #-1=h3 已死致候选缺失=假 FAIL）
+        if (v4 == null || !v4.IsAlive) v4 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pV4);
+        if (h3 == null || !h3.IsAlive) h3 = dbg.SpawnVagrantWithRace(RaceIds.Human, pH3);
         if (v4 != null && h3 != null)
         {
             var brain = new KingdomBrain(0);   // 玩家国族（GetKingdomRace 现阶段恒 Human，Q10-M2 挂账）
@@ -518,23 +525,60 @@ public static class Valley2_20_Smoke_Race
         allPass = allPass && p4c && p4d;
 
         // ===== 探针③：D471 插旗定族（13 Elf+1 Human 多数派营立国 → 定族 raceId=1 + 终身字段保持）=====
-        bool p3f = false, p3l = false, p3m = false;
+        bool p3f = false, p3l = false, p3m = false, p3t = false;
         var campDef = FindDefById("VagrantCamp");
-        var camps = vcs.FindCamps();
-        Building campB = (camps != null && camps.Count > 0) ? camps[0] : null;
-        if (campB == null && campDef != null)
+        // Q10 批1 容器修正（2026-09-04，HH.55）：旧版直接复用 FindCamps()[0]——用户真实世界的既有营地
+        // 可能 foundedFlag 已置位（曾立国）或中心格有主，TickAll 的 TryAnnex 会静默吞并移除（实测 camps 5→0），
+        // FoundFromCamp 根本不执行 → ③ 假 FAIL（HH.53 ②b 先例：容器缺陷≠玩法缺陷）。
+        // 修正=只复用"未立国+中心格无主"营地（campUsable 反射自证）；无合格候选 → 自建营地步进找格+建后自证。
+        var miOwner = typeof(CampUpgrader).GetMethod("ResolveOwnerCampCell", BindingFlags.NonPublic | BindingFlags.Static);
+        System.Func<Camp, bool> campUsable = c =>
         {
-            var anyCoord = new GridCoord(9, 40);
-            var fp = new Vector2Int(Mathf.Max(1, campDef.footprint.x), Mathf.Max(1, campDef.footprint.y));
-            BuildingFactory.Instance.CreateBuildingInstance(campDef, campDef.sourceType, anyCoord, fp,
-                grid.CoordToWorld(anyCoord), isPlayerBuilt: false, grade: ResourceGrade.Normal,
-                isConsumable: false, initialState: BuildingState.Active, kingdomId: 0);
-            camps = vcs.FindCamps();
-            campB = (camps != null && camps.Count > 0) ? camps[0] : null;
+            if (c == null) return false;
+            c.foundedFlag = false;   // 冒烟强制复位（测试锚点；不改玩法默认行为）
+            return miOwner == null || (int)miOwner.Invoke(null, new object[] { c }) < 0;
+        };
+        bool hasCampSpot = false;
+        Vector2 campSpotWorld = Vector2.zero;
+        var campsList = vcs.FindCamps();
+        if (campsList != null)
+        {
+            foreach (var b in campsList)
+            {
+                var cellOpt0 = grid.WorldToCoord(b.GetPosition());
+                if (cellOpt0 == null) continue;
+                if (campUsable(FindCampAt(vcs, cellOpt0.Value)))
+                { hasCampSpot = true; campSpotWorld = b.GetPosition(); break; }
+            }
         }
-        if (campB != null)
+        if (!hasCampSpot && campDef != null)
         {
-            var campWorld = campB.GetPosition();
+            var fp = new Vector2Int(Mathf.Max(1, campDef.footprint.x), Mathf.Max(1, campDef.footprint.y));
+            var ts0 = TerritorySystem.Instance;
+            for (int gx = 9; gx <= 45 && !hasCampSpot; gx += 6)
+            {
+                for (int gy = 8; gy <= 56 && !hasCampSpot; gy += 6)
+                {
+                    var anyCoord = new GridCoord(gx, gy);
+                    // 无主预检（仿 CampUpgrader.ResolveOwnerCampCell 账本反查 D306）：有主格建营必被 TryAnnex 静默吞并
+                    if (ts0 != null)
+                    {
+                        var mid0 = grid.CellToMidChunk(anyCoord);
+                        if (ts0.Ledger.TryGetValue(mid0, out int k0) && k0 >= 0) continue;
+                    }
+                    var built = BuildingFactory.Instance.CreateBuildingInstance(campDef, campDef.sourceType, anyCoord, fp,
+                        grid.CoordToWorld(anyCoord), isPlayerBuilt: false, grade: ResourceGrade.Normal,
+                        isConsumable: false, initialState: BuildingState.Active, kingdomId: 0);
+                    if (built == null) continue;   // 放不下（占用/不可走/放置拒）→ 下一格
+                    hasCampSpot = true; campSpotWorld = grid.CoordToWorld(anyCoord);
+                }
+            }
+            // 成营时序注记：此处不成营（营地范围内尚无流民）——Camp 记录由主流程注入 14 人后 ForceCampScan 生成
+            if (!hasCampSpot) Debug.Log("[2_20冒烟·诊断③] 自建营地全部候选格失败（有主/占用/放置拒）");
+        }
+        if (hasCampSpot)
+        {
+            var campWorld = campSpotWorld;
             var cellOpt = grid.WorldToCoord(campWorld);
             if (cellOpt != null)
             {
@@ -560,11 +604,16 @@ public static class Valley2_20_Smoke_Race
                 var camp = FindCampAt(vcs, cellOpt.Value);
                 if (camp != null)
                 {
+                    // 诊断（Q10 批1）：营地可用自证（复位 foundedFlag+中心格无主）——TickAll TryAnnex 真判定前置提示
+                    if (!campUsable(camp))
+                        Debug.Log("[2_20冒烟·诊断③] 营地可用校验未过（复位 foundedFlag 后中心格仍有主）——TickAll 可能走吞并路径");
                     camp.persistenceDays = 5;
                     camp.memberIds.Clear();
                     foreach (var uc2 in injectedUc) camp.memberIds.Add(uc2.npcId);
 
                     int beforeCount = KingdomRegistry.Instance.Count;
+                    var beforeIds = new HashSet<int>();
+                    foreach (var k in KingdomRegistry.Instance.GetAll()) beforeIds.Add(k.id);
                     string raceLog = null;
                     Application.LogCallback cb2 = (cond, st, type) =>
                     { if (raceLog == null && cond != null && cond.Contains("定族 raceId=")) raceLog = cond; };
@@ -577,21 +626,35 @@ public static class Valley2_20_Smoke_Race
                     p3l = raceLog != null && raceLog.Contains("定族 raceId=1（");   // Elf 多数派 → 1
                     var first = injectedUc.Count > 0 ? injectedUc[0] : null;
                     p3m = first != null && first.raceId == RaceIds.Elf;   // 终身字段：转化国民后 raceId 保持
+                    // Q10-M2 真字段断言（2026-09-03）：新国 KingdomState.raceId 读 D471 显式写入值=Elf=1
+                    // （GetKingdomRace 单点回填后，国族消费面从人口构造升级为真字段直读）
+                    int newKingdomId = -1;
+                    foreach (var k in KingdomRegistry.Instance.GetAll())
+                        if (!beforeIds.Contains(k.id)) newKingdomId = k.id;
+                    p3t = newKingdomId >= 0
+                        && KingdomRegistry.Instance.Get(newKingdomId) != null
+                        && KingdomRegistry.Instance.Get(newKingdomId).raceId == RaceIds.Elf
+                        && KingdomRace.GetKingdomRace(newKingdomId) == RaceIds.Elf;   // helper 单点回填同值
                     sb.Append($"\n③ D471 插旗定族：立国 {beforeCount}→{afterCount}={(p3f ? "OK" : "FAIL")} " +
                               $"定族日志={(raceLog != null ? "在" : "缺")}(raceId=1)={(p3l ? "OK" : "FAIL")} " +
-                              $"成员 raceId 保持(Elf)={(p3m ? "OK" : "FAIL")} ");
+                              $"成员 raceId 保持(Elf)={(p3m ? "OK" : "FAIL")} " +
+                              $"真字段 state.raceId/helper(Elf)={(p3t ? "OK" : "FAIL")}(id={newKingdomId}) ");
                 }
                 else sb.Append($"\n③ 营地未建立（清场后流浪汉计数见 Console）FAIL ");
             }
             else sb.Append("\n③ 营地坐标无法映射格子 FAIL ");
         }
         else sb.Append("\n③ 无营地建筑可锚定 FAIL ");
-        allPass = allPass && p3f && p3l && p3m;
+        allPass = allPass && p3f && p3l && p3m && p3t;
 
         // ===== 汇总 =====
         Debug.Log("[2_20冒烟] " + sb);
         Debug.Log($"[2_20冒烟] ===== {(allPass ? "ALL PASS" : "HAS FAIL")}（种族域 D467~D472 行为级探针）=====");
-        EditorUtility.DisplayDialog("2_20 种族域 Play 冒烟", allPass ? "全部 PASS" : "存在 FAIL，见 Console 明细", "确定");
+        // 静默开关（Q10 批1 自动化跑批 2026-09-03）：MCP 无头跑批时模态弹窗会阻塞主线程——
+        // 自动化跑批保持 true（结果以 Console 汇总为准）；手工跑想看弹窗改 false。
+        const bool SuppressDialog = true;
+        if (!SuppressDialog)
+            EditorUtility.DisplayDialog("2_20 种族域 Play 冒烟", allPass ? "全部 PASS" : "存在 FAIL，见 Console 明细", "确定");
 
         var runner = Object.FindAnyObjectByType<RaceSmokeHost>();
         if (runner != null) Object.Destroy(runner.gameObject);

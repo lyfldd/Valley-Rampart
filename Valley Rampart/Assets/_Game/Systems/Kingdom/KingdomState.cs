@@ -32,6 +32,13 @@ public class KingdomState
     /// <summary>模板来源：第一代=KingdomDef id；-1=无来源（玩家 / 全无来源流民占位基线）；动态=来源国混合。</summary>
     public int templateSourceId = -1;
 
+    /// <summary>
+    /// 国族（2_20 M2/D467 国家种族=其人口种族，构造性不变）：AI 第一代=KingdomDef.raceId 模板映射；
+    /// 动态立国=D471 插旗定族（营地成员多数派）；玩家=选族暂存 NewGameConfig.raceId（M5 绑定，本批默认 Human）。
+    /// 入档=KingdomEntryData.raceId；旧档缺字段 → JsonUtility 缺省解析=0=Human（旧档全 Human 世界语义正确，零迁移器改动）。
+    /// </summary>
+    public int raceId = RaceIds.Human;
+
     /// <summary>是否为玩家王国（id=0，D303）。</summary>
     public bool IsPlayer => id == 0;
 

@@ -1,12 +1,11 @@
 // ============================================================================
-//  种族=人口属性 · 数据层地基（2_20 §十二 D467~D472 / D475，HH.51 种族1 批A）
-//  RaceIds：种族标识常量（当前世界全默认 Human，D416 前口径）。
+//  种族=人口属性 · 数据层地基（2_20 §十二 D467~D472 / D475，HH.51 种族1 批A；Q10-M2 回填 2026-09-03）
+//  RaceIds：种族标识常量。
 //    序号对齐 2_13 M10 选族 UI 既有约定（NewGameConfig.raceId：0=人类,1=精灵,2=矮人,3=兽人），
-//    防选族索引与种族 id 两套空间错位；Q10-M2 落 RaceDef/KingdomDef.raceId 后统一定型（挂账）。
+//    RaceDef/KingdomDef.raceId 均按本 int 空间定型（M1 四资产/M2 模板映射同空间）。
 //  KingdomRace.GetKingdomRace：国族解析唯一入口（防散落硬编码）——
-//    KingdomDef.raceId 字段属 Q10-M2 域（2_20 实施清单 M2），本批不加字段；
-//    helper 现阶段恒返回 Human 默认+挂账注记，Q10-M2 落字段后在此单点回填
-//    （届时 KingdomDef.raceId=模板映射 / 动态立国=营地成员多数派 / 玩家=选族暂存 NewGameConfig.raceId）。
+//    M2 回填：读 KingdomState.raceId 真字段（AI=模板映射 Foundry 写入 / 动态=D471 插旗定族 /
+//    玩家=选族暂存 M5 绑定，暂默认 Human）；Registry 缺失/查无王国 → Human 兜底（旧档兼容语义）。
 // ============================================================================
 
 using System.Collections.Generic;
@@ -24,15 +23,17 @@ public static class RaceIds
 public static class KingdomRace
 {
     /// <summary>
-    /// 解析王国种族（国族）。当前恒返回 Human 默认（挂账 Q10-M2：KingdomDef.raceId 字段落库后单点回填本方法）。
-    /// 语义=D467"国家种族=其人口种族（构造性不变）"——本批人口侧已全 Human，两口径暂等价。
+    /// 解析王国种族（国族）。M2 回填（2026-09-03）：读 KingdomState.raceId 真字段——
+    /// AI 第一代=KingdomDef.raceId 模板映射（KingdomFoundry 建国写入）；
+    /// 动态立国=D471 插旗定族（FoundFromCamp 显式写入）；玩家=选族暂存（M5 绑定，暂默认 Human）。
+    /// 语义=D467"国家种族=其人口种族（构造性不变）"。
+    /// Registry 缺失/查无王国 → Human 兜底（旧档/边界兼容，与字段默认一致）。
     /// </summary>
     public static int GetKingdomRace(int kingdomId)
     {
-        // 挂账注记（Q10-M2 回填点）：
-        //  - kingdomId=0 玩家 → 选族暂存 NewGameConfig.raceId（2_13 M10 已暂存）
-        //  - kingdomId>0 AI/动态 → KingdomDef.raceId（模板映射，2_20 M2）/ 动态立国=插旗定族（D471）
-        return RaceIds.Human;
+        var registry = KingdomRegistry.Instance;
+        var state = registry != null ? registry.Get(kingdomId) : null;
+        return state != null ? state.raceId : RaceIds.Human;
     }
 
     /// <summary>

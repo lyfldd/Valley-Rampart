@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Kingdom_IronHoof
   m_EditorClassIdentifier: 
   templateName: IronHoof
+  raceId: 3
   namePool:
   - "\u94C1\u8E44\u738B\u56FD"
   - "\u77F3\u57CE\u56FD"

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Kingdom_RiverBay
   m_EditorClassIdentifier: 
   templateName: RiverBay
+  raceId: 0
   namePool:
   - "\u6CB3\u6E7E\u738B\u56FD"
   - "\u6C5F\u7554\u56FD"

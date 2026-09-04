@@ -32,6 +32,8 @@ public class KingdomDef : ScriptableObject
     [Header("身份")]
     [Tooltip("模板唯一 id（KingdomState.templateSourceId 关联；Registry 内唯一）")]
     public string templateName;
+    [Tooltip("种族 id（2_20 M2/D467 国家同族锁定：AI 王国出生定族=本字段；D488 确认映射=雪岩+基岩=矮人/密林=精灵/金穗+河湾=人族/铁蹄=兽人。int 空间对齐 RaceIds=2_13 M10 选族索引）")]
+    public int raceId = RaceIds.Human;
     [Tooltip("国名池（第一代从此抽取显示名；动态立国=来源国名+新词组合占位，D296）")]
     public string[] namePool;
     [Tooltip("王旗底色（染色数据，渲染归 2_10）")]

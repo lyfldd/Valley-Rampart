@@ -140,6 +140,7 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
                 foundedDay = k.foundedDay,
                 personality = k.personality != null ? k.personality : new float[5],
                 templateSourceId = k.templateSourceId,
+                raceId = k.raceId,   // 2_20 M2/D467：国族入档（附加字段，旧档缺省解析=Human 兜底）
                 resources = k.resources,
                 workerCount = k.workerCount,
                 warriorCount = k.warriorCount
@@ -182,6 +183,7 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
                     personality = (e.personality != null && e.personality.Length == 5)
                         ? e.personality : new float[5],
                     templateSourceId = e.templateSourceId,
+                    raceId = e.raceId,   // 2_20 M2/D467：国族恢复；旧档 JSON 缺字段 → 默认 0=Human（全 Human 世界语义正确）
                     resources = e.resources
                     // 2_17 步骤4 台账转派生：workerCount/warriorCount 为实体派生只读属性，不再从存档恢复
                     // （读档单位 SpawnFromSave 回笼，王国派生统计自动重建）
@@ -223,6 +225,7 @@ public struct KingdomEntryData
     public int foundedDay;
     public float[] personality;          // 五轴（0好战/1经济/2防守/3扩张/4外交），读档缺省兜底中性
     public int templateSourceId;          // -1=无来源（玩家/占位）
+    public int raceId;                    // 2_20 M2/D467：国族（附加字段；旧档缺省解析=0=Human 兜底，零迁移器改动）
     public ResourcePack resources;        // 起始过渡账本
     public int workerCount;
     public int warriorCount;

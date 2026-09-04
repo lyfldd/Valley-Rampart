@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Kingdom_Bedrock
   m_EditorClassIdentifier: 
   templateName: Bedrock
+  raceId: 2
   namePool:
   - "\u78D0\u77F3\u738B\u56FD"
   - "\u5C71\u5792\u56FD"

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Kingdom_DenseForest
   m_EditorClassIdentifier: 
   templateName: DenseForest
+  raceId: 1
   namePool:
   - "\u5BC6\u6797\u738B\u56FD"
   - "\u68EE\u8BED\u56FD"

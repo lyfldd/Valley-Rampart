@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Kingdom_SnowRock
   m_EditorClassIdentifier: 
   templateName: SnowRock
+  raceId: 2
   namePool:
   - "\u96EA\u5CA9\u738B\u56FD"
   - "\u971C\u5CA9\u56FD"

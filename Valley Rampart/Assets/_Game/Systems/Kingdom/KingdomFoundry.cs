@@ -50,6 +50,10 @@ public static class KingdomFoundry
             var state = registry.RegisterNewKingdom(
                 PickName(rng, tpl), tpl.bannerColor, foundedDay, templateSourceId: -1);
 
+            // 2_20 M2/D467：AI 王国出生定族=模板映射（KingdomDef.raceId，D488 确认映射）。
+            // 分配策略（保底席/随机池 D430）归 M3，本处只做字段接通——GetKingdomRace 消费真字段。
+            state.raceId = tpl.raceId;
+
             // 四维性格 ±第一代扰动 → clamp（D290/D311）
             state.personality = Perturb(rng, tpl.GetPersonalityArray(),
                 cfg.firstGenPerturbation, cfg.personalityClampMin, cfg.personalityClampMax);
@@ -313,8 +317,7 @@ public static class KingdomFoundry
 
         // D471 插旗定族（HH.51 批B）：国族=营地成员 raceId 多数派（同族营构造性成立——D468 异族无国者互攻不成营）。
         // 防御性兜底（非玩法口径，SpawnPosSnapper MaxCellRadius 先例）：混合营若达标插旗 → 多数派定族、平票同 seed 确定随机 + 告警日志。
-        // 定族显式写入挂账：本批无 KingdomState.raceId 字段（Q10-M2 域）——国族=人口种族构造性成立（转化成员 raceId 即国族真源）；
-        // Q10-M2 落 KingdomDef.raceId 后在此单点回填显式写入。
+        // 定族显式写入（Q10-M2 回填 2026-09-03，HH.53 §三.3 挂账清偿）：state.raceId = campRace（见下）。
         bool campRaceTie;
         int campRace = KingdomRace.ResolveGroupRace(camp.memberIds, rng, out campRaceTie);
         if (campRaceTie)
@@ -332,6 +335,10 @@ public static class KingdomFoundry
         float perturbation = cfg != null ? cfg.dynamicPerturbation : 0.10f;
         state.personality = BlendPersonality(camp.memberIds, registry, perturbation,
             cfg != null ? cfg.personalityClampMin : 0.05f, cfg != null ? cfg.personalityClampMax : 0.95f, rng);
+
+        // D471 定族显式写入（Q10-M2 回填，HH.53 §三.3 挂账清偿）：国族=营族（多数派），
+        // GetKingdomRace/同族锁定消费面从此读真字段（D467 国家种族=人口种族构造性成立）。
+        state.raceId = campRace;
 
         // 转化：流民→工人（人口守恒 D306 出口A，实体还是那批人）
         int converted = ConvertVagrantsToWorkers(camp.memberIds, state.id);
