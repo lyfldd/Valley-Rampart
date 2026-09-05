@@ -138,6 +138,8 @@ public class SatietySystem : Singleton<SatietySystem>
 
         // 唤醒拉平（D335/D460）：AI 王国刚从 Abstract 切回 Fine（lastAbstractAvgSatiety>=0）→
         // 首次日结把实体饱食统一拉平到抽象结算均值（确定性无跳变），然后重置标记。
+        // HH.76/D539：遍历走快照副本（GetAllUnits 返回内部 List 引用——防御同模式枚举失效，
+        // 与下方主结算遍历一致；本遍历只写 Satiety 无增删，快照为纯防御）。
         foreach (var kv in modes)
         {
             if (kv.Key == 0 || kv.Value != SimMode.Fine) continue;
@@ -145,7 +147,8 @@ public class SatietySystem : Singleton<SatietySystem>
             if (k == null || k.lastAbstractAvgSatiety < 0f) continue;
             float target = k.lastAbstractAvgSatiety;
             k.lastAbstractAvgSatiety = -1f;
-            foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+            var snapUnits = new List<UnitController>(UnitRegistry.Instance.GetAllUnits());
+            foreach (var unit in snapUnits)
             {
                 if (unit == null || !unit.IsAlive || unit.kingdomId != kv.Key) continue;
                 if (!IsNpc(unit.EffectiveOccupation)) continue;
@@ -154,7 +157,13 @@ public class SatietySystem : Singleton<SatietySystem>
             Debug.Log($"[SatietySystem] k{kv.Key} 唤醒拉平：实体饱食 ← 抽象均值 {target}（D335/D460）");
         }
 
-        foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+        // HH.76/D539：主结算遍历改快照副本——根因实锤：GetAllUnits() 返回内部 _aliveUnits 引用
+        // （UnitRegistry L47-50），SettleUnit 饥饿扣血 → TakeDamage → Die → UnitRegistry.Unregister
+        // （UnitController L672）移除同一 List → foreach 枚举失效抛
+        // 「InvalidOperationException: Collection was modified」（P1_run2 D27/D36/D38/D39 ×4，与 k2 饿死时点吻合）。
+        // 快照副本下死亡移除不影响遍历，快照中已死元素由下方 IsAlive 守卫跳过，零行为变更。
+        var settleUnits = new List<UnitController>(UnitRegistry.Instance.GetAllUnits());
+        foreach (var unit in settleUnits)
         {
             if (unit == null || unit.Data == null) continue;
             // 关账扫描（2_17 步骤4 + 步骤14 批B 修正）：PlayerCamp=玩家、AiKingdom=AI 王国两类受治平民
