@@ -44,6 +44,7 @@ public static class WorldLifecycle
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
         if (VagrantCampSystem.Instance != null) VagrantCampSystem.Instance.ResetState();   // HH.66 段B#3（D522 挂账）：跨轮营地记录残留清偿
         if (MapRenderService.Instance != null) MapRenderService.Instance.ClearAllTiles();
+        if (TerritoryOverlay.Instance != null) TerritoryOverlay.Instance.ClearOverlay();   // 2_10 步骤13：清场同步清染色层（跨轮零残留）
         // AttentionSystem 非全局单例（每 NPCBrain 私有成员 _attention，无 Instance）——
         // 随 TeardownScene 销毁全部单位自动清空（ClearAll/ClearThreats 仅 NPCBrain 内部用），无需显式清。
 

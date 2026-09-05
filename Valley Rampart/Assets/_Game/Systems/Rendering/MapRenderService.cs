@@ -212,6 +212,12 @@ public class MapRenderService : Singleton<MapRenderService>
         return (long)cx * 100000 + cy;
     }
 
+    /// <summary>chunkSize 公共只读（2_10 步骤13 TerritoryOverlay chunk→中区块范围换算用；实例字段经 Instance 读取，缺省 24）。</summary>
+    public static int ChunkSize => Instance != null ? Instance.chunkSize : 24;
+
+    /// <summary>chunk 铺设完成钩子（2_10 步骤13 D445②）：TerritoryOverlay 订阅→查 Ledger 补染（防「事件早于 chunk 加载」竞态）。</summary>
+    public static event System.Action<int, int> OnChunkRendered;
+
     /// <summary>把指定 chunk 范围（逻辑格矩形）全部铺格并登记 loaded。</summary>
     private void RenderChunk(int cx, int cy)
     {
@@ -225,6 +231,7 @@ public class MapRenderService : Singleton<MapRenderService>
             for (int x = x0; x < x1; x++)
                 SetCell(x, y, _map.features[y * _map.width + x]);
         _loadedChunks.Add(key);
+        OnChunkRendered?.Invoke(cx, cy);   // 铺设完成钩子（D445②）
     }
 
     /// <summary>当前摄像机所在 chunk 及周边 lookahead 环形 chunk。摄像机用 CameraRig 世界坐标→IsoToCell→chunk。</summary>
@@ -320,8 +327,9 @@ public class MapRenderService : Singleton<MapRenderService>
         return tile;
     }
 
-    /// <summary>生成 128×64 等轴菱形占位 sprite（PPU100 → 世界 1.28×0.64，与 cellSize 对齐）。pivot=底面中心。</summary>
-    private static Sprite CreateIsoDiamondSprite(Color color)
+    /// <summary>生成 128×64 等轴菱形占位 sprite（PPU100 → 世界 1.28×0.64，与 cellSize 对齐）。pivot=底面中心。
+    /// public：2_10 步骤13 TerritoryOverlay 复用同款白菱形做染色 tile（纯可见性放开，行为不变）。</summary>
+    public static Sprite CreateIsoDiamondSprite(Color color)
     {
         const int w = 128, h = 64;
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);

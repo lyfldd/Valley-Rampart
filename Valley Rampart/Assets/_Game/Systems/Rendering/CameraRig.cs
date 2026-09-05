@@ -26,6 +26,9 @@ public class CameraRig : Singleton<CameraRig>
     private bool _mapReady;
     private bool _focusedOnce;
 
+    /// <summary>当前档位下标（2_10 步骤13 染色视口分级轮询读点，D448；只读零行为变更）。</summary>
+    public int ZoomIndex => _zoomIndex;
+
     /// <summary>是否已收到地图与网格可用信号（初始 Focus 主城锚点）。</summary>
     public bool MapReady => _mapReady;
 
