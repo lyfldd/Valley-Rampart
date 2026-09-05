@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   raceId: 1
   raceName: "\u7CBE\u7075"
+  raceDescription: "\u64C5\u957F\u5916\u4EA4\u4E0E\u5C04\u672F\u7684\u68EE\u6797\u4E4B\u6C11\u2014\u2014\u72EC\u4EAB\u5C04\u7BAD\u573A\u8BAD\u7EC3\u8FDC\u7A0B\u7CBE\u9510"
+  bannerColor: {r: 0.2, g: 0.6, b: 0.3, a: 1}
   militant: 0.3
   economic: 0.5
   defensive: 0.4

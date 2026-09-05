@@ -6,11 +6,33 @@
             <ui:Label text="创建角色" class="creation-title" />
 
             <ui:VisualElement class="creation-form">
-                <!-- 开局选族（2_13 M10 / D431 UI 侧：与王国名/地图档位同屏；RaceDef SO 未建=四族占位，2_20 Q10-M1 让渡） -->
+                <!-- 开局选族（2_20 M10 / D431 UI 侧：四族真数据选族卡，HH.66 段A 接 RaceDef 资产；
+                     静态结构优先（SaveSlots 教训：动态创建按钮虚拟设备点击不触发），运行时只填数据+绑点击；
+                     与王国名/地图档位同屏（2_13 §5.4B） -->
                 <ui:VisualElement class="form-row">
                     <ui:Label text="种族" class="form-label" />
-                    <ui:DropdownField name="race-select" label="" class="form-select"
-                                      choices="人类,精灵,矮人,兽人" value="人类" />
+                    <ui:VisualElement name="race-card-row" class="race-card-row">
+                        <ui:Button name="race-card-0" class="race-card" text="">
+                            <ui:VisualElement name="race-banner-0" class="race-banner" />
+                            <ui:Label name="race-name-0" text="人类" class="race-name" />
+                            <ui:Label name="race-desc-0" text="" class="race-desc" />
+                        </ui:Button>
+                        <ui:Button name="race-card-1" class="race-card" text="">
+                            <ui:VisualElement name="race-banner-1" class="race-banner" />
+                            <ui:Label name="race-name-1" text="精灵" class="race-name" />
+                            <ui:Label name="race-desc-1" text="" class="race-desc" />
+                        </ui:Button>
+                        <ui:Button name="race-card-2" class="race-card" text="">
+                            <ui:VisualElement name="race-banner-2" class="race-banner" />
+                            <ui:Label name="race-name-2" text="矮人" class="race-name" />
+                            <ui:Label name="race-desc-2" text="" class="race-desc" />
+                        </ui:Button>
+                        <ui:Button name="race-card-3" class="race-card" text="">
+                            <ui:VisualElement name="race-banner-3" class="race-banner" />
+                            <ui:Label name="race-name-3" text="兽人" class="race-name" />
+                            <ui:Label name="race-desc-3" text="" class="race-desc" />
+                        </ui:Button>
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <!-- 王国名 -->

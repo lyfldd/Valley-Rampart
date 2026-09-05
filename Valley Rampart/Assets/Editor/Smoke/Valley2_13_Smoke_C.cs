@@ -14,7 +14,8 @@ using UnityEditor;
 //    P3 D118 数据源链路：GuardDeploymentSystem.IsGuarded / LODSystem.GetHeatAt 可调 + HeatLabel 分档
 //    P4 控制组：NumberKeyPressedEvent(Ctrl+N) 保存 → 清选 → (N) 调用恢复（真响应）
 //    P5 R 训练菜单：ToggleTrainingMenuPressedEvent → BuildingMenuPanel 打开 + _currentTab==Military
-//    P6 M10 选族暂存：NewGameConfig.raceId 字段在场（默认 0）+ CharacterCreationPanel 映射逻辑在场（静态）
+//    P6 M10 选族真数据（HH.66 段A 升级）：NewGameConfig.raceId 字段在场（默认 0）+ UXML 静态四卡结构在场
+//       + 选族卡渲染逻辑（SelectRaceCard）在场 + KingdomRace.GetRaceDef 入口在场（静态）
 //    P7 SettingsPanel 场景挂载在场（GameScene 实测 + MainMenuScene 场景文件含 SettingsUI/SettingsPanel 静态）
 // ============================================================================
 public static class Valley2_13_Smoke_C
@@ -58,9 +59,9 @@ public static class Valley2_13_Smoke_C
             bool p5 = ProbeTrainingMenu();
             results.Add($"P5 R 训练菜单（事件 → BuildingMenuPanel 打开 + 军事页） = {p5}");
 
-            // ===== P6 M10 选族暂存 =====
+            // ===== P6 M10 选族真数据 =====
             bool p6 = ProbeRaceId();
-            results.Add($"P6 M10 选族暂存（NewGameConfig.raceId 在场+默认0 + 映射逻辑在场） = {p6}");
+            results.Add($"P6 M10 选族真数据（raceId 字段+默认0 + UXML 静态四卡 + 渲染逻辑/GetRaceDef 在场） = {p6}");
 
             // ===== P7 场景挂载 =====
             bool p7 = ProbeSceneMount();
@@ -225,20 +226,27 @@ public static class Valley2_13_Smoke_C
         var cfg = new NewGameConfig();
         bool defOk = (int)f.GetValue(cfg) == 0;
 
-        // 映射逻辑在场（RaceTextToValue 私有方法反射断言：人类0/精灵1/矮人2/兽人3）
-        var mi = typeof(CharacterCreationPanel).GetMethod("RaceTextToValue", BindingFlags.NonPublic | BindingFlags.Instance);
-        bool mapOk = mi != null;
-        if (mapOk)
-        {
-            var host = new GameObject("s213c_ccp_host");
-            s_gos.Add(host);
-            var ccp = host.AddComponent<CharacterCreationPanel>();
-            mapOk = (int)mi.Invoke(ccp, new object[] { "人类" }) == 0
-                 && (int)mi.Invoke(ccp, new object[] { "精灵" }) == 1
-                 && (int)mi.Invoke(ccp, new object[] { "矮人" }) == 2
-                 && (int)mi.Invoke(ccp, new object[] { "兽人" }) == 3;
-        }
-        return defOk && mapOk;
+        // UXML 静态四卡结构在场（HH.66 段A：race-card-0~3 写死 UXML，SaveSlots 教训=静态结构优先）
+        string uxmlPath = System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName,
+            "Assets/_Game/UI/CharacterCreationPanel.uxml");
+        string uxml = System.IO.File.Exists(uxmlPath) ? System.IO.File.ReadAllText(uxmlPath) : "";
+        bool cardsOk = !string.IsNullOrEmpty(uxml);
+        for (int i = 0; i < 4 && cardsOk; i++)
+            cardsOk = uxml.Contains($"race-card-{i}") && uxml.Contains($"race-banner-{i}")
+                   && uxml.Contains($"race-name-{i}") && uxml.Contains($"race-desc-{i}");
+
+        // 渲染逻辑在场：SelectRaceCard（选中态+raceId 记录）+ KingdomRace.GetRaceDef（D420 统一入口）
+        var sel = typeof(CharacterCreationPanel).GetMethod("SelectRaceCard",
+            BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(int) }, null);
+        var getDef = typeof(KingdomRace).GetMethod("GetRaceDef",
+            BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(int) }, null);
+        bool logicOk = sel != null && getDef != null;
+
+        // RaceTextToValue 已退役（选族卡直存 raceId，文字映射不再需要）
+        bool legacyGone = typeof(CharacterCreationPanel).GetMethod("RaceTextToValue",
+            BindingFlags.NonPublic | BindingFlags.Instance) == null;
+
+        return defOk && cardsOk && logicOk && legacyGone;
     }
 
     // ===== P7 =====

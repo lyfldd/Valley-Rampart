@@ -302,6 +302,54 @@
     color: var(--color-bg-dark);
 }
 
+/* 选族卡（2_20 M10 / D431，HH.66 段A）：静态四卡横排，点击选中态高亮 */
+.race-card-row {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.race-card {
+    flex-grow: 1;
+    margin: 0 4px;
+    padding: 8px 6px;
+    align-items: center;
+    background-color: var(--color-bg-panel);
+    border-width: 1px;
+    border-color: rgb(70, 70, 90);
+    border-radius: 6px;
+}
+
+.race-card:hover {
+    border-color: var(--color-accent);
+}
+
+.race-card--selected {
+    border-color: var(--color-accent);
+    border-width: 2px;
+    background-color: var(--color-button-hover);
+}
+
+.race-banner {
+    width: 100%;
+    height: 14px;
+    border-radius: 3px;
+    margin-bottom: 6px;
+}
+
+.race-name {
+    font-size: var(--font-size-label);
+    color: var(--color-text-primary);
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.race-desc {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    white-space: normal;
+    text-anchor: upper-center;
+}
+
 .form-actions {
     flex-direction: row;
     justify-content: space-between;

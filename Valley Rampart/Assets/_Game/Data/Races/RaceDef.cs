@@ -26,6 +26,13 @@ public class RaceDef : ScriptableObject
     [Tooltip("种族显示名（调试/日志用，勿作逻辑分支依据）")]
     public string raceName;
 
+    // ===== 展示（2_20 M10 选族 UI / D431 UI 侧，HH.66 段A）：纯展示字段，非决策输入不入快照 =====
+    [Header("展示（M10 选族卡渲染源；纯展示不入决策快照）")]
+    [Tooltip("种族一句话描述（选族卡副文本；当前为执行端占位文案，真文案待策划端回填）")]
+    public string raceDescription;
+    [Tooltip("族主色（选族卡色带；对齐 3.1.2 D457/D458 四族主题色占位）")]
+    public Color bannerColor = new Color(0.5f, 0.5f, 0.5f);
+
     // ===== 性格五轴出厂基准（D426：0~1 相互独立不归一化；KingdomDef per-kingdom 扰动在其上偏离）=====
     [Header("性格五轴出厂基准（索引 0=好战 1=经济 2=防守 3=扩张 4=外交；D426）")]
     [Tooltip("好战基准 0~1（消费=M8 王国脑策略倾向；玩家 Kingdom 五轴不参与 AI 消费，纯数据）")]

@@ -66,6 +66,18 @@ public static class KingdomRace
     }
 
     /// <summary>
+    /// 按 raceId 直取 RaceDef（2_20 M10 选族 UI / D431，HH.66 段A）：选族卡渲染数据源。
+    /// 与 GetKingdomRaceDef 共享缓存（D420 铁律：UI 侧禁散落 Resources.Load，统一本入口）；
+    /// 越界/未建 → null（消费侧兜底）。
+    /// </summary>
+    public static RaceDef GetRaceDef(int raceId)
+    {
+        if (raceId < 0 || raceId >= 4) return null;
+        if (_raceDefCache == null) GetKingdomRaceDef(RaceIds.Human);   // 惰性建缓存（复用既有加载路径）
+        return _raceDefCache[raceId];
+    }
+
+    /// <summary>
     /// 采集/生产资源 → 种族经济乘数（2_20.1 §二 D420 映射权威 + D506③ 裁决表 2026-09-04）：
     /// Stone/Ore→mineMul、Wood→lumberMul、Food/Meat→farmMul；
     /// Metal/SpecialFood/Crystal/FireOil/Gold/三弹药=加工品/副产/货币不乘（防中间加工重复加成）。
