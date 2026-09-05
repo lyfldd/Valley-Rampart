@@ -359,11 +359,41 @@ public static class Valley2_20B_Smoke_M7
         }
         else Check(false, "P13 建造", "BuildController/WarAcademy 不可用");
 
+        // ===== 段B#3 判别力注入：清场前最后一刻经正规链路造真营地（VagrantCamp 建筑+3 注册流浪汉+强制扫描）=====
+        // 窗口极短（注入→扫描→捕获→销毁 同帧），游走无法破坏；清场前≥1 才使清场后零残留断言有判别力。
+        var vcSys = VagrantCampSystem.Instance;
+        var campDef = Resources.Load<BuildingDef>("Buildings/VagrantCamp");
+        int campsBefore = -1;
+        if (vcSys != null && campDef != null && GridSystem.Instance != null && BuildingFactory.Instance != null && UnitFactory.Instance != null)
+        {
+            var campSpot = FindFreeSpot();
+            var campWorld = GridSystem.Instance.CoordToWorld(campSpot);
+            bool built = BuildingFactory.Instance.CreateBuildingInstance(campDef, BuildingType.None, campSpot,
+                new Vector2Int(1, 1), campWorld, false, ResourceGrade.Normal, false, BuildingState.Active, 0);
+            var campB = built && BuildingRegistry.Instance != null ? BuildingRegistry.Instance.GetAt(campSpot) : null;
+            int spawned = 0;
+            if (campB != null)
+            {
+                cleanup.Add(campB.gameObject);
+                for (int k = 0; k < 3; k++)
+                {
+                    var vgo = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Vagrant, campWorld + new Vector2(k * 0.15f, 0f));
+                    if (vgo != null) { cleanup.Add(vgo); spawned++; }
+                }
+                vcSys.ForceCampScan();   // 立即结营扫描（3 未招募流浪汉在半径内 → 结营）
+            }
+            campsBefore = (campB != null && spawned >= 3) ? vcSys.CampCount : -1;
+            if (campsBefore < 1)
+                Debug.LogWarning("[2_20B冒烟] 营地注入未结营（built=" + (campB != null) + " spawned=" + spawned + "/3 CampCount=" + vcSys.CampCount + "）——本轮零残留断言降级为平凡通过");
+        }
+        else Debug.LogWarning("[2_20B冒烟] 营地注入前置不可用（vcSys/campDef/Grid/Factory）——本轮零残留断言降级为平凡通过");
+
         // 清理残留（防污染下一轮）
         foreach (var o in cleanup) if (o != null) Object.DestroyImmediate(o);
 
-        // ===== 本轮汇总 =====
-        Debug.Log("[2_20B冒烟] ==== 第 " + (i + 1) + " 轮汇总 " + (allPass ? "ALL PASS" : "有 FAIL") + " ====\n" + sb);
+        // ===== 本轮汇总（含营地基线：>0 才判别力成立）=====
+        Debug.Log("[2_20B冒烟] ==== 第 " + (i + 1) + " 轮汇总 " + (allPass ? "ALL PASS" : "有 FAIL")
+            + " | 清场前营地数=" + campsBefore + " ====\n" + sb);
 
         // ===== 清场（WorldLifecycle 同场景重建编排，无 LoadScene 兜底）=====
         SmokeApi.ResetWorldForNext();
@@ -373,6 +403,17 @@ public static class Valley2_20B_Smoke_M7
             "WorldManager.ResetState 清 _world 生效");
         Check(UnitRegistry.Instance.Count == 0, "R" + (i + 1) + " 清场 UnitRegistry 真空",
             "count=" + UnitRegistry.Instance.Count);
+        // HH.66 段B#3（D522 挂账清偿探针）：营地记录跨轮残留负探针——ResetState 编排进 WorldLifecycle ⑤ 序
+        if (VagrantCampSystem.Instance != null)
+        {
+            if (campsBefore >= 1)
+                Check(VagrantCampSystem.Instance.CampCount == 0, "R" + (i + 1) + " 清场 VagrantCamp 零残留",
+                    "清场前=" + campsBefore + " → 清场后=" + VagrantCampSystem.Instance.CampCount + "（ResetState 清 _camps/_restoredCampSeeds/_mapReady，判别力成立）");
+            else
+                Debug.LogWarning("[2_20B冒烟] R" + (i + 1) + " 清场 VagrantCamp 零残留：本轮注入未结营，断言平凡通过（判别力降级，如实记报）");
+        }
+        else
+            Check(false, "R" + (i + 1) + " 清场 VagrantCamp 零残留", "Instance 随清场销毁（ResetState 编排不可达，需复核）");
 
         yield return null;   // 陷阱2：留一帧让 Destroy 落地（GameState=Loading 下安全），再进下一轮
         }

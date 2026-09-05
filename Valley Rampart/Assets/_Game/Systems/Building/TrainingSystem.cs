@@ -278,6 +278,8 @@ public class TrainingSystem : Singleton<TrainingSystem>
         // 成本=effective 值 ceil 取整（防零成本白嫖）；时长=entry 存 effCostDays 副本（排队期国族不变，不改 SO）。
         // 确定用建筑国族（effKingdom=招募归属，同族镜像语义）。
         // 2_20 M6 战争学院：训练时长全局-25% 在此叠乘（HH.59 疑点④挂账清偿）；溃败补充窗口成本-50%（一次性）。
+        // HH.66 段B#1 终核（D521 挂账）：trainSpeedMul 语义=训练时长%（<1 加速，2_20.1 §二 唯一映射权威）
+        // → 乘法（原除法与权威口径方向反转：0.9 会算成 1.11× 变慢；占位全 1.0 期零行为差异，真值回填前修正）。
         var raceDef = KingdomRace.GetKingdomRaceDef(effKingdom);
         float costMul = raceDef != null ? raceDef.trainCostMul : 1f;
         float speedMul = raceDef != null ? raceDef.trainSpeedMul : 1f;
@@ -291,7 +293,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         int effGold = Mathf.CeilToInt(def.costGold * costMul * rallyMul);
         int effCrystal = Mathf.CeilToInt(def.costCrystal * costMul * rallyMul);
         int effMetal = Mathf.CeilToInt(def.costMetal * costMul * rallyMul);
-        int effDays = Mathf.Max(1, Mathf.CeilToInt(def.costDays / Mathf.Max(0.01f, speedMul) * academyMul));
+        int effDays = Mathf.Max(1, Mathf.CeilToInt(def.costDays * Mathf.Max(0.01f, speedMul) * academyMul));
 
         if (!CanPayRecruit(effKingdom, effGold, effCrystal, effMetal)) return false;
 

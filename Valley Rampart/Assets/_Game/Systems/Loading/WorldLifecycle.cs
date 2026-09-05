@@ -42,6 +42,7 @@ public static class WorldLifecycle
         if (BuildingFactory.Instance != null) BuildingFactory.Instance.ClearAllBuildings();
         if (ChestManager.Instance != null) ChestManager.Instance.ClearAll();
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
+        if (VagrantCampSystem.Instance != null) VagrantCampSystem.Instance.ResetState();   // HH.66 段B#3（D522 挂账）：跨轮营地记录残留清偿
         if (MapRenderService.Instance != null) MapRenderService.Instance.ClearAllTiles();
         // AttentionSystem 非全局单例（每 NPCBrain 私有成员 _attention，无 Instance）——
         // 随 TeardownScene 销毁全部单位自动清空（ClearAll/ClearThreats 仅 NPCBrain 内部用），无需显式清。

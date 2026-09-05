@@ -81,7 +81,7 @@ public static class Valley2_20_Smoke_Race
             difficulty = 2,
             worldSize = WorldSize.Medium,
             kingdomName = "冒烟王国",
-            selectedSlotId = "smoke",
+            selectedSlotId = "smoke_r20",   // HH.66 段B#2：对齐 smoke_ 前缀规范（QuitSmoke 自愈覆盖面=smoke_*，裸"smoke"清不到）
             raceId = RaceIds.Dwarf   // 2_20 探针以矮人为正例（⑦c 采矿 1.3 断言；换族无意义）
         });
         float worldWaitT0 = Time.realtimeSinceStartup;

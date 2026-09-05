@@ -405,6 +405,32 @@ public class SaveManager : Singleton<SaveManager>
 
     public bool HasSave(string slotId) => File.Exists(GetSavePath(slotId));
 
+    /// <summary>
+    /// 按前缀清理槽位存档（HH.66 段B#2 / D521 后续：冒烟收尾自愈）。
+    /// 消费方=SmokeApi.QuitSmoke（Editor-only），清 smoke_ 前缀槽位防堆积复发；
+    /// 走 SaveManager 单一口径（SaveFolderName/扩展名常量真源，Editor 侧禁散落拼路径）。
+    /// 返回清理条数；目录缺失/异常返回 0（收尾自愈不炸）。
+    /// </summary>
+    public int DeleteSlotsWithPrefix(string prefix)
+    {
+        string folder = Path.Combine(Application.persistentDataPath, SaveFolderName);
+        if (!Directory.Exists(folder)) return 0;
+        int n = 0;
+        try
+        {
+            foreach (var f in Directory.GetFiles(folder, prefix + "*" + SaveFileExtension))
+            {
+                File.Delete(f);
+                n++;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[SaveManager] 按前缀清理存档失败（prefix={prefix}）: {e}");
+        }
+        return n;
+    }
+
     /// <summary>检查任意槽位是否有存档（主菜单"继续游戏"按钮启用判断）。</summary>
     public bool HasAnySave(params string[] slotIds)
     {

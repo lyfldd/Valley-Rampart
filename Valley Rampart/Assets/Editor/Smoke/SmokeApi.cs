@@ -41,10 +41,17 @@ public static class SmokeApi
     /// <summary>同场景清场→重建（冒烟轮次间调用，无 LoadScene 兜底）。</summary>
     public static void ResetWorldForNext() => WorldLifecycle.ResetWorldForNext();
 
-    /// <summary>收尾：清场 + 退出 Play 模式（点一次菜单全程自动化的闭环出口）。</summary>
+    /// <summary>收尾：清场 + 冒烟槽位存档自愈清理 + 退出 Play 模式（点一次菜单全程自动化的闭环出口）。</summary>
     public static void QuitSmoke()
     {
         WorldLifecycle.ResetWorldForNext();
+        // HH.66 段B#2（HH.65 §六.4 挂账清偿）：smoke_ 前缀槽位自动清（防堆积复发）；
+        // 走 SaveManager 单一口径（D520 接口纪律：门面方法暴露能力，Editor 侧禁散落拼路径）
+        if (SaveManager.Instance != null)
+        {
+            int n = SaveManager.Instance.DeleteSlotsWithPrefix("smoke_");
+            if (n > 0) Debug.Log($"[SmokeApi] QuitSmoke: 清理冒烟槽位存档 smoke_*.json ×{n}（防堆积自愈）");
+        }
         Debug.Log("[SmokeApi] QuitSmoke: 冒烟全部完成，退出 Play 模式。");
         EditorApplication.ExitPlaymode();
     }

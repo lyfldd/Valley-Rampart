@@ -465,6 +465,18 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
     /// <summary>移除一条营地记录（2_16 步骤11：动态立国/吞并出口B 后移除，营地建筑保留可再结营）。</summary>
     public void RemoveCamp(Camp camp) => _camps.Remove(camp);
 
+    /// <summary>
+    /// 跨轮清场（HH.66 段B#3，D522 挂账清偿）：营地记录/读档种子/地图就绪态清空。
+    /// 消费方=WorldLifecycle.ResetWorldForNext ⑤ 散点（同场景重建时 _camps 记录的旧世界营地坐标
+    /// 与新地图格子不对应，残留会让 ScanCamps/补员行为错乱）；营地建筑实体随 BuildingFactory 清场走。
+    /// </summary>
+    public void ResetState()
+    {
+        _camps.Clear();
+        _restoredCampSeeds = null;
+        _mapReady = false;
+    }
+
     /// <summary>强制立即营地扫描（冒烟验收钩子，确定性地驱动结营/散营，避免依赖 Update 节流时序）。</summary>
     public void ForceCampScan() => ScanCamps();
 
