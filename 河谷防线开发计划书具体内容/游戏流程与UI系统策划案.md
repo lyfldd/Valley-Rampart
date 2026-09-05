@@ -3,6 +3,8 @@
 > 版本：v1.1 · 2026-07-21
 > 状态：已确认，待实施
 >
+> **⚠️ 过时警示（2026-09-04 策划端核对注记）：** 本案任务清单状态列（全部 ⬜）严重滞后——所列任务实际均已在代码落地（CoreBootstrap/GameSceneEntrance/NewGameConfig 已存在；GameState 已扩 10 态；ISaveable 存档已演进至 v3；UI 面板已全量迁移 UI Toolkit；CharacterCreation 已并入 M10 选族）。另有关键设计已被后续裁决改写：**君主实体退役**（HH.17，君主名→王国名，GameOver=工人全灭由 ThroneAnchor 驱动）、**加载改 LoadManager 三阶段**（ConfigsLoadedEvent 取代 UnitDataLoadedEvent）。设计层叙述仍有参考价值，**实施状态与调用链细节以代码 + [启动流程开发手册 v2.0](../游戏框架/启动流程开发手册.md)（2026-09-04 全量重写）为准**；本案全量对账修订待另立批次。
+>
 > **v1.1 修订（2026-07-21）：** 同步 v2 ISaveable 存档架构。任务 #6 #9 更新；CharacterCreation 流程改为先选存档槽；NewGame 分支加 WorldManager + 自动存初始档；ContinueGame 分支改 v2 三阶段；暂停保存默认选当前槽位；退出回菜单前自动存档；GameOver 不删存档；自动存档设置改为全局。响应评审意见 P0/P1。
 
 ---
