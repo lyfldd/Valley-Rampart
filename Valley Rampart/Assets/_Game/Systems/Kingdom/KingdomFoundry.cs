@@ -356,6 +356,11 @@ public static class KingdomFoundry
         // 营地中心插旗（castle 建筑带 kingdomId；ThroneAnchor 全局单例约束见上方注释）
         PlaceCampCastle(camp, state.id);
 
+        // HH.73/D535 动态立国同批补井：动态立国走独立预置（仅 castle，非 baseBuildingDefIds 链），
+        // 供水链语义对动态国同样成立（AI 井产水入 AI 桶）；farm 由王国脑建造清单自建后粮链即通
+        // （动态国 farm 预置缺口=既有面，HH.74 列报）。
+        PlaceCampWell(camp, state.id);
+
         // 2_17 步骤12 缺口① 补：动态立国新王国初始领土圈入（3×3 中区块并集 + 广播事件，
         // 吞并判定/染色据此对动态立国生效）
         if (TerritorySystem.Instance != null)
@@ -471,5 +476,34 @@ public static class KingdomFoundry
             isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
             initialState: BuildingState.Active, kingdomId: kingdomId);
         Debug.Log($"[KingdomFoundry] 营地 ({coord.x},{coord.y}) 插铁旗 castle 建筑（动态王国 id={kingdomId}）。");
+    }
+
+    /// <summary>
+    /// 动态立国补井（HH.73/D535）：castle 邻位找可走格生成 Well（资产 id 大小写敏感实锤），
+    /// 让动态国 AI 桶有水（供水链语义对动态国成立）；取点失败仅告警不阻断立国。
+    /// </summary>
+    static void PlaceCampWell(Camp camp, int kingdomId)
+    {
+        if (camp == null || BuildingFactory.Instance == null) return;
+        var def = BuildingFactory.FindDefById("Well");   // 资产 id=Well（大写 W），FindDefById 逐字比较
+        if (def == null) { Debug.LogWarning("[KingdomFoundry] Well def 未找到，跳过动态立国补井。"); return; }
+        var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
+        if (map == null) { Debug.LogWarning("[KingdomFoundry] ActiveMap 未就绪，跳过动态立国补井。"); return; }
+        var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1,
+                               def.footprint.y > 0 ? def.footprint.y : 1);
+        // castle 东邻取点（与第一代工人同环带取点语义），不可走则 NearestWalkable 收敛；全失败跳过
+        var cell = MapGenRules.NearestWalkable(map, camp.centerCell.x + 1, camp.centerCell.y);
+        if (cell.x < 0) { Debug.LogWarning($"[KingdomFoundry] 动态立国补井取点失败（castle 旁无可走格），跳过（id={kingdomId}）。"); return; }
+        var coord = new GridCoord(cell.x, cell.y);
+        var grid = GridSystem.Instance;
+        Vector3 world = grid != null && grid.Config != null
+            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
+                                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
+            : new Vector3(coord.x, coord.y, 0f);
+        if (BuildingFactory.Instance.CreateBuildingInstance(
+                def, def.sourceType, coord, fp, world,
+                isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
+                initialState: BuildingState.Active, kingdomId: kingdomId))
+            Debug.Log($"[KingdomFoundry] 动态立国补井：Well @ ({cell.x},{cell.y})（动态王国 id={kingdomId}，D535）。");
     }
 }

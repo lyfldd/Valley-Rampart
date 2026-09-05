@@ -33,7 +33,7 @@ MonoBehaviour:
     scale: 0.6
     workerCount: 4
     warriorCount: 0
-    buildingCount: 3
+    buildingCount: 4
     hasWallRing: 0
     stockpile:
       gold: 0
@@ -48,7 +48,7 @@ MonoBehaviour:
     scale: 1
     workerCount: 6
     warriorCount: 2
-    buildingCount: 4
+    buildingCount: 5
     hasWallRing: 0
     stockpile:
       gold: 0
@@ -63,7 +63,7 @@ MonoBehaviour:
     scale: 1.6
     workerCount: 8
     warriorCount: 4
-    buildingCount: 5
+    buildingCount: 6
     hasWallRing: 1
     stockpile:
       gold: 0

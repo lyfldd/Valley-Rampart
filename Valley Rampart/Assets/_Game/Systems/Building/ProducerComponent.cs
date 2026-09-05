@@ -119,10 +119,10 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         // QQQ.2 T15：水井产水入网（DR-14：rate=4 水/秒；水为隐藏资源不占存储，UI 不显示）
         if (_isWell)
         {
-            // 2_17 步骤3：水井路径守卫（补丁 D 同模式）——AI 建筑（kingdomId>0）产水不得充入玩家级 WaterNetwork，
-            // 防王国脑/模板池/动态立国 castle 复用 Well def 时把 AI 产出泄入玩家供水网。
-            if (_building.kingdomId > 0) return;
-            TickWaterToNetwork();
+            // D535（HH.73 供水修复批）：原 2_17 批3a「AI 井恒不产水」拦截解除，改按归属路由——
+            // AI 井(kingdomId>0) 产水入本国 AI 桶（WaterNetwork.AddWater 重载），玩家井(kingdomId=0)
+            // 逐位走原玩家桶路径（HH.30 零回归）；AI 桶满停产对齐玩家 IsFull 语义。
+            TickWaterToNetwork(_building.kingdomId);
             return;
         }
 
@@ -186,18 +186,18 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
 
     /// <summary>
     /// 水井产水入网（QQQ.2 T15 / DR-14：rate=4 水/秒）。水为隐藏资源不占 Storage，
-    /// 直接充入 WaterNetwork；水网满（容量 100）时停产避免浪费（DR-8）。
+    /// 按归属入桶（D535：kingdomId=0 玩家桶逐位原逻辑；>0 入 AI 桶），桶满停产避免浪费（DR-8）。
     /// </summary>
-    private void TickWaterToNetwork()
+    private void TickWaterToNetwork(int kingdomId)
     {
         if (WaterNetwork.Instance == null) return;
-        if (WaterNetwork.Instance.IsFull) return;   // 水网满 → 停产
+        if (WaterNetwork.Instance.IsBucketFull(kingdomId)) return;   // 桶满 → 停产（玩家/AI 同语义，D535）
         _mainAccumulator += _rate;
         int water = Mathf.FloorToInt(_mainAccumulator);
         if (water > 0)
         {
             _mainAccumulator -= water;
-            WaterNetwork.Instance.AddWater(water);
+            WaterNetwork.Instance.AddWater(water, kingdomId);   // =0 走玩家桶（原单参重载逐位等价），>0 入 AI 桶
         }
     }
 

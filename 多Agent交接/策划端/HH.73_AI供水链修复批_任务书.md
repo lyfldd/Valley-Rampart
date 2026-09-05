@@ -91,3 +91,45 @@ P5 对照跑过关后按用户拍板换 1~2 个新 seed 复跑防单 seed 压缩
 | 实施方案与范围 | | |
 | 冒烟与对照跑结果 | | |
 | 项4 两笔列报处置 | | |
+
+## 七、执行端开工回执（HH.73 锚点实读+施工清单+两笔实值对齐声明）
+
+> 2026-09-05 执行端 · 恢复四连完成（工作日志最新行=本批/队列 AI供水修复批行/任务书全文/开工）
+
+### 7.1 锚点实读（全数与任务书一致）
+
+| 锚点 | 实读结论 |
+|---|---|
+| ProducerComponent L114-127 | 水井分支 `_isWell`→D454 拦截 `if (_building.kingdomId > 0) return;`（L124）→TickWaterToNetwork 玩家桶（L191-202：IsFull 停产+AddWater 单参=玩家桶） |
+| ProducerComponent L141/L208-217 | 农场产粮前置 TryConsumeFarmWater→ConsumeWater(2f, kingdomId)（L213 已按归属路由——批3a 消费端就位，只缺供端） |
+| WaterNetwork L48-60 | `AddWater(float, int kingdomId)` 重载在（批3a 备好）；L71-86 ConsumeWater AI 分支 L80-81 注释自认「AI 桶恒 0…桶结构保留供未来 AI 供水链」 |
+| WaterNetwork L90-108/116-123 | SaveData 仅 stored/capacity（AI 桶不入档实锤）；ResetState 仅清 _stored（AI 桶不清——本批顺手补完整性） |
+| KingdomFoundry L143-182 | 预置=baseBuildingDefIds 取前 buildingCount 个（PlaceBuildings L147-152） |
+| KingdomFoundry L317-378/L456-474 | **动态立国走独立清单实锤**：FoundFromCamp→PlaceCampCastle 只建 castle（L459 FindDefById("castle")），无 farm/mine/Warehouse——非 baseBuildingDefIds 链，**按任务书同批补井** |
+| TaskScheduler L577-580 | WaterHaul→AddWater(单参=玩家桶)，玩家链本批不动 |
+
+### 7.2 施工清单（六件）
+
+1. ProducerComponent：D454 拦截改路由+TickWaterToNetwork(kingdomId)+AI 桶满停产（对齐玩家 IsFull 语义）
+2. WaterNetwork：+IsBucketFull(int)/+GetAiStored(int)（AI 桶公开读口，供水链语义面）/SaveData 补 AI 桶（additive+saveDataVersion 2 版本判据）/ResetState 补 AI 桶 Clear/三处注释更新（语义①解除注 D535、语义②保留）
+3. 三族 KingdomDef.asset（DenseForest/Bedrock/IronHoof）：baseBuildingDefIds farm 后插井（castle,farm,**Well**,mine,Warehouse,quarry）
+4. KingdomFoundingConfig.asset：staggerTiers buildingCount 3/4/5→4/5/6
+5. KingdomFoundry：FoundFromCamp 补建 Well（PlaceCampWell，动态立国同批补井——新建国 AI 桶有水，farm 由 AI 脑建造清单自建后粮链即通；动态国无 farm 期间粮 0 属既有缺口列报）
+6. 观察器白名单+[WaterNetwork]/[AIEconomySettlement]（Editor-only）
+
+### 7.3 实值对齐声明两笔（非设计分叉，资产实值客观）
+
+1. **任务书插序「well」小写 vs 资产 id 实值 `Well` 大写**：well.asset（实为 Well.asset）`id: Well`（L15）；BuildingFactory.FindDefById L42 逐字 `==` **大小写敏感**——若照任务书原文写小写 `well`，预置查找返回 null→KingdomFoundry L157 LogWarning「未找到，跳过」静默跳过→修复整体失效。按资产实值落 `Well`（与同清单 Warehouse 大写先例一致），冒烟 P1 结构探针兜底。
+2. **动态立国 farm 缺失列报**：动态国预置仅 castle——井补入后仍无田可灌（AI 脑自建 farm 前），且动态国粮 0 期间⑥招工同锁死。farm 预置缺口超出本批授权（供水链），列报归 2_22/资源 P0 或另单。
+
+### 7.4 项4 sim 排查结论（先行列报，HH.74 正式列报）
+
+**sim 侧农田产粮完全不耗水实锤**：训练仓 `harness/Economy/SimEconomy.cs` L133-137 农田分支产出公式 `FarmDaily(6)×等级系数×WorkersAssigned/divisor`，唯一 gate=WorkersAssigned>0（L104）；资源池 7 种（L42）无水字段；全训练仓 grep water/耗水零经济路径命中（仅「水晶」误命中+「水面」视野）。→HH.74 登记 15_账本「Unity 农田耗水闸门（DR-9/DR-18 每次 2 水）vs sim 无此语义」事实注记，无 T/F 级义务。
+
+### 7.5 探针计划
+
+冒烟容器 Valley_HH73_Smoke_Water（2_17_12 模式）：P1 结构（AI 国预置含 Well+AI 桶有水，GetAiStored 公开口）/P2 行为正（AI farm Storage 增长+AI 桶被消耗，双证产粮链通）/P3 玩家桶零泄漏（AI farm 产粮期间玩家桶无 AI 归因变化+AI 桶独立波动）/P4 存档（AI 桶存读保持）。P5=同 seed 22360 对照跑（观察器+HH.71 协议，粮曲线 D2~D10 段「-6 耗零入账」→有入账即通）。
+
+### 7.6 红线确认
+
+玩家水链逐位不动（TickWaterToNetwork 玩家路径/AddWater(0)/ConsumeWater(0)/玩家 IsFull 全保留）/AI.Core·sim·champion·RulerController 零触碰/冒烟 P1~P5 全绿才 commit/git diff HEAD 自查交付前置。
