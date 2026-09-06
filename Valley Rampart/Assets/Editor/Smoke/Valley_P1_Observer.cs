@@ -24,6 +24,7 @@ using UnityEngine;
 public static class P1Observer
 {
     private const string LogDir = "Logs/P1";
+    private const string MainSlot = "p1_run3";      // HH.80 三考：独立命名（p1_dayXXX 系列一二轮共用已不可区分轮次；复核包 p1_run2/p1_final 系列原封勿覆盖）
     private const int CheckpointIntervalDays = 5;   // 每 5 游戏日一检查点（HH.71 §三）
     private const int ExtinctStreakDays = 3;        // 灭绝监测连续零人口天数
 
@@ -134,6 +135,12 @@ public static class P1Observer
                 Debug.LogWarning("[P1观察] ⚑⚑ 军事期达标 k" + kid + "（累计 " + _militaryReached.Count + " 个 AI 国）——「" + condition.Trim() + "」");
             }
         }
+
+        // HH.80 三考核心验证面高亮：人口再生全链（AI 生育/成长）+⑥招工（流浪→工 8 门活体指标）
+        if (condition != null && (condition.Contains("AI生育：") || condition.Contains("AI小孩长大") || condition.Contains("⑥招工人落地")))
+        {
+            Debug.LogWarning("[P1观察] ⚑ 人口再生 " + condition.Trim());
+        }
     }
 
     // ── 日快照 + 检查点（代码化连跑）+ 灭绝监测 ──
@@ -224,9 +231,9 @@ public static class P1Observer
         _lastCheckpointDay = day;
         var sm = SaveManager.Instance;
         if (sm == null) { Debug.LogError("[P1观察] 检查点失败: SaveManager 未就绪（D" + day + "）"); return; }
-        bool a = sm.Save("p1_day" + day.ToString("000"));
-        bool b = sm.Save("p1_main");   // 代码化连跑回正（L232 切槽坑固化，HH.71 裁决纪律①）
-        Debug.Log("[P1观察] 检查点 D" + day + ": p1_day" + day.ToString("000") + "=" + a + " 回存p1_main=" + b);
+        bool a = sm.Save(MainSlot + "_day" + day.ToString("000"));
+        bool b = sm.Save(MainSlot);   // 代码化连跑回正（L232 切槽坑固化，HH.71 裁决纪律①）
+        Debug.Log("[P1观察] 检查点 D" + day + ": " + MainSlot + "_day" + day.ToString("000") + "=" + a + " 回存" + MainSlot + "=" + b);
     }
 
     private static string Csv(string s) => s != null ? s.Replace(",", "，") : "";
