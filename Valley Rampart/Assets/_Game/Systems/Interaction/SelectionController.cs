@@ -145,7 +145,10 @@ public class SelectionController : Singleton<SelectionController>
         // 1) Follow（D2）：右键落在己方单位上（非选中者）
         var hit = Physics2D.OverlapPoint(world, selectableMask);
         var targetUnit = hit != null ? hit.GetComponentInParent<UnitController>() : null;
-        if (targetUnit != null && targetUnit.GetFaction() == Faction.PlayerCamp && targetUnit.kingdomId == 0
+        // HH.81/D542 件1 配套：未入籍流浪（kingdomId=-1）放行——旧流浪挂玩家国(0)可被选中/跟随，
+        // 置 -1 后此门须含 Vagrant，否则玩家招募点击交互（InteractAction）不可达=玩家招募链断。
+        if (targetUnit != null && targetUnit.GetFaction() == Faction.PlayerCamp
+            && (targetUnit.kingdomId == 0 || targetUnit.EffectiveOccupation == Occupation.Vagrant)
             && !alive.Contains(targetUnit))
         {
             EventBus.Publish(new FollowCommand(alive, targetUnit));
@@ -237,8 +240,10 @@ public class SelectionController : Singleton<SelectionController>
             // 己方单位优先（框选/点选仅收己方，R2）
             var unit = hit.GetComponentInParent<UnitController>();
             // 2_17 步骤3 双条件过滤（守门员）：仅玩家王国(kingdomId==0)单位可被选中——AI 工人以外籍身份(kingdomId>0)出场时
-            // 不得被玩家选中下右键指令（GetFaction() 对 AI 工人仍返 PlayerCamp，须以 kingdomId 区分）
-            if (unit != null && unit.GetFaction() == Faction.PlayerCamp && unit.kingdomId == 0)
+            // 不得被玩家选中下右键指令（GetFaction() 对 AI 工人仍返 PlayerCamp，须以 kingdomId 区分）。
+            // HH.81/D542 件1 配套：未入籍流浪(kingdomId=-1)放行（玩家招募点击交互入口；AI 单位仍排除）。
+            if (unit != null && unit.GetFaction() == Faction.PlayerCamp
+                && (unit.kingdomId == 0 || unit.EffectiveOccupation == Occupation.Vagrant))
             {
                 if (shiftHeld)
                 {
@@ -275,8 +280,10 @@ public class SelectionController : Singleton<SelectionController>
         foreach (var c in cols)
         {
             var unit = c.GetComponentInParent<UnitController>();
-            // 2_17 步骤3：框选同做双条件过滤（仅玩家 kingdomId==0 单位，防纳 AI 工人）
-            if (unit != null && unit.GetFaction() == Faction.PlayerCamp && unit.kingdomId == 0 && !Selected.Contains(unit))
+            // 2_17 步骤3：框选同做双条件过滤（仅玩家 kingdomId==0 单位，防纳 AI 工人）——
+            // HH.81/D542 件1 配套：未入籍流浪(kingdomId=-1)放行（同点选门口径）。
+            if (unit != null && unit.GetFaction() == Faction.PlayerCamp
+                && (unit.kingdomId == 0 || unit.EffectiveOccupation == Occupation.Vagrant) && !Selected.Contains(unit))
                 Selected.Add(unit);
         }
         Debug.Log($"[Selection] 框选 {Selected.Count} 个己方单位");

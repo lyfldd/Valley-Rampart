@@ -249,6 +249,8 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         ruler.ModifyResource(ResourceType.Food, false, cfg.recruitFoodCost);
         unit.SetOccupation(Occupation.Resident);
         unit.IsVagrantRecruited = true;
+        unit.kingdomId = 0;   // HH.81/D542 件1 配套：玩家招募=入籍动作（与 ConvertVagrantsToWorkers 的 uc.kingdomId=kingdomId 同构）——
+                              // 流浪生成改 -1 后若不置籍，Resident 挂 -1 将脱离玩家派生统计（CountAliveByKingdom(0)）=玩家轨回归。
 
         // QQQ.2 T9 / DR-4：招募走 = 原任务上下文失效——清调度器指派（流浪汉若被派任务，招募后不再执行）
         if (TaskScheduler.HasInstance && unit.npcId != 0)
@@ -355,8 +357,10 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
 
         // 寻路2（HH.48）：落点不可走→就近可走吸附（BirthCampPos 仍=营地语义点不变）
         Vector2 spawnPos = SpawnPosSnapper.SnapWorld(new Vector2(campPos.x + offsetX, campPos.y), "流民补员");
+        // HH.81/D542 件1：流浪=未入籍（kingdomId=-1，D329 归属门面无主语义，营地建筑=-1 先例）——
+        // 旧默认 0=挂玩家国致 AI ⑥招工守卫（kingdomId<0 才可招）恒拒静默死锁（P1 三考 HH.80 实锤）。
         var go = UnitFactory.Instance.SpawnUnit(
-            Faction.PlayerCamp, Occupation.Vagrant, spawnPos);
+            Faction.PlayerCamp, Occupation.Vagrant, spawnPos, -1);
         if (go == null) return false;
 
         // QQQ.2 T11 / DR-7：记录出生营地坐标（未招募流浪汉 HomePoint = 本值，在营地游荡不朝王国走）
@@ -384,8 +388,10 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         float jx = (float)((rng.NextDouble() * 2.0 - 1.0) * 0.3 * cs);
         // 寻路2（HH.48）：落点不可走→就近可走吸附；BirthCampPos=吸附后实际落点（滞留该处游荡语义对齐实体站位）
         Vector2 spawnPos = SpawnPosSnapper.SnapWorld(new Vector2(worldPos.x + jx, worldPos.y), "初始流民");
+        // HH.81/D542 件1：流浪=未入籍（kingdomId=-1）——覆盖初始预置+自然刷点（TryNaturalRespawn 经本方法生成）两链；
+        // 旧默认 0=挂玩家国致 AI ⑥招工守卫恒拒（HH.80 三考实锤）。
         var go = UnitFactory.Instance.SpawnUnit(
-            Faction.PlayerCamp, Occupation.Vagrant, spawnPos);
+            Faction.PlayerCamp, Occupation.Vagrant, spawnPos, -1);
         if (go == null) return false;
         var uc = go.GetComponent<UnitController>();
         if (uc != null)

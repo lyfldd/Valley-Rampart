@@ -191,6 +191,24 @@ public class KingdomBrain
         if (vagrant == null)
         {
             Bump(kingdomId, train: true, ok: false);
+            // HH.81/D542 件1 静默双坑修（P0 调优观测口）：无候选时打诊断——流浪池活体+守卫拒绝计数。
+            // 口径注记：pool=Vagrant 职业活体总数；拒绝计数按 ⑥守卫序分桶（已入籍/已招募/异族），
+            // 与 FindRecruitableVagrant 的 alive→kingdomId→Vagrant→Recruited→race 过滤序等价自洽（观测非判定）。
+            int pool = 0, dIngrid = 0, dRecruited = 0, dRace = 0;
+            var regUnits = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
+            if (regUnits != null)
+            {
+                foreach (var u in regUnits)
+                {
+                    if (u == null || !u.IsAlive) continue;
+                    if (u.EffectiveOccupation != Occupation.Vagrant) continue;
+                    pool++;
+                    if (u.kingdomId >= 0) dIngrid++;
+                    else if (u.IsVagrantRecruited) dRecruited++;
+                    else if (u.raceId != KingdomRace.GetKingdomRace(kingdomId)) dRace++;
+                }
+            }
+            Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招工无候选：流浪池活体={pool}（已入籍拒{dIngrid}/已招募拒{dRecruited}/异族拒{dRace}）");
             return;   // 无候选（营地无流浪汉）：派遣尝试失败，明日再试（不空转硬造人口）
         }
         if (kingdom.GetResourceValue(ResourceType.Food) < cost)
