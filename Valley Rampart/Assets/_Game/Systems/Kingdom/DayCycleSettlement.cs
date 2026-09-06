@@ -66,6 +66,15 @@ public class DayCycleSettlement : Singleton<DayCycleSettlement>
         if (PopulationSystem.Instance != null)
             PopulationSystem.Instance.OnNewDay();
 
+        // - AI 王国生育（HH.78/D540 混合双通道 AI 轨：per-kingdom 条件+配对+冷却；玩家轨上方 OnNewDay 逐位不动）
+        if (PopulationSystem.Instance != null && KingdomRegistry.Instance != null)
+        {
+            var regAll = KingdomRegistry.Instance.GetAll();
+            for (int i = 0; i < regAll.Count; i++)
+                if (!regAll[i].IsPlayer)
+                    PopulationSystem.Instance.OnNewDayPerKingdom(regAll[i]);
+        }
+
         // - 贸易额度冷却（商人档位刷新）
         if (KingdomManager.Instance != null)
             KingdomManager.Instance.TickTradeCooldowns();

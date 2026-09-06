@@ -85,13 +85,17 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         int spawned = 0;
         // D308 修订（D469，HH.51 批B）：初始流民按族群投放——保底 baseline 人同点必须同族（D468 野性敌意下混合群开局互杀）、
         // 余数散投按族成群（按 baseline 大小切块成组，同组同族同锚点落位）。
-        // 族别来源挂账：Q10-M2 接真模板映射前全 Human（结构就位，当前世界全默认 Human，D416 前口径）。
-        int anchorRace = KingdomRace.GetKingdomRace(0);
+        // HH.78/D540 族别映射回填（Q10-M2 挂账同口清偿）：原硬编码 GetKingdomRace(0)（全 Human）
+        // 改按地图族分布映射——四族池+种子 rng 抽（同 seed 恒复现）；「按族投放」结构（D469 同族成群）不动，只改族值来源。
+        int[] racePool = { 0, 1, 2, 3 };
+        int anchorRace = racePool[rng.Next(racePool.Length)];
         // 保底 baseline 人同点（早期必结营；必须同族）
         var anchor = PickCell(map, rng, 6);
         if (anchor.x >= 0)
         {
             var anchorWorld = CellToWorld(anchor);
+            TryBuildCampAt(anchor);   // HH.78/D540 件3①：营地实体复通（FindCamps 依赖 VagrantCamp 建筑在场——
+                                      // 原 WorldManager.PlaceVagrantCamps=幽灵引用不存在，P1 两跑 FindCamps 永空断补员链）
             for (int i = 0; i < baseline; i++)
                 if (SpawnVagrantAt(anchorWorld, rng, anchorRace)) spawned++;
         }
@@ -101,8 +105,9 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
             int groupSize = Mathf.Min(baseline, rest - g);
             var cell = PickCell(map, rng, 8);
             if (cell.x < 0) continue;
-            int groupRace = KingdomRace.GetKingdomRace(0);   // 组族别：同上挂账（Q10-M2 后按地图族分布映射）
+            int groupRace = racePool[rng.Next(racePool.Length)];   // HH.78/D540：组族别按地图族分布 rng 抽（原硬编码 Human）
             var anchorWorld = CellToWorld(cell);
+            TryBuildCampAt(cell);   // HH.78/D540 件3①：散投组旁同样立营（多补员点）
             for (int i = 0; i < groupSize; i++)
                 if (SpawnVagrantAt(anchorWorld, rng, groupRace)) spawned++;
         }
@@ -130,6 +135,8 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         if (spawned > 0)
             Debug.Log($"[VagrantCampSystem] 每日补员: +{spawned} 流浪汉");
 
+        TryNaturalRespawn(cfg, rng);   // HH.78/D540 件3②：流浪自然增长刷点（混合双通道流浪侧）
+
         TickCampPersistence();   // 2_16 步骤9 D313：营地存续日 +1（驱散/屠杀不清零，干预=拖延）
     }
 
@@ -139,6 +146,79 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         var cfg = GetCfg();
         return cfg != null && RulerController.Instance != null
                && RulerController.Instance.GetResource(ResourceType.Food) >= cfg.recruitFoodCost;
+    }
+
+    // ===== HH.78/D540 流浪侧复通（件3：营地实体+自然增长刷点）=====
+
+    /// <summary>上次自然增长刷点日（跨轮 ResetState 重置；不入档=读档后按当日重算，漂移小列报）。</summary>
+    private int _lastRespawnDay = int.MinValue;
+
+    /// <summary>
+    /// 流浪自然增长刷点（HH.78/D540 件3②）：每 vagrantRespawnIntervalDays 日（SO=5 占位）在无主地按组刷
+    /// respawnGroupSize（SO=2）名流浪——**避开 AI 领土**（无主判定=TerritorySystem 不含该 mid，D540 裁决），
+    /// 组内同族（D469 按族成群纪律，防野性敌意 D468 互杀）；同营旁补建营地实体（补员点随营走）。
+    /// rng 复用 OnNewDay 每日种子流（确定性）；刷点日不入档（读档后按当日重算，漂移可接受列报）。
+    /// </summary>
+    private void TryNaturalRespawn(KingdomConfig cfg, System.Random rng)
+    {
+        if (cfg.vagrantRespawnIntervalDays <= 0) return;
+        var wm = WorldManager.Instance;
+        var map = wm != null ? wm.ActiveMap : null;
+        var ts = TerritorySystem.Instance;
+        var grid = GridSystem.Instance;
+        if (map == null || ts == null || grid == null) return;
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
+        if (_lastRespawnDay > 0 && day - _lastRespawnDay < cfg.vagrantRespawnIntervalDays) return;
+        _lastRespawnDay = day;
+
+        var territory = ts.GetAllTerritory();
+        int group = Mathf.Max(1, cfg.respawnGroupSize);
+        int[] racePool = { 0, 1, 2, 3 };
+        for (int attempt = 0; attempt < 24; attempt++)
+        {
+            int x = rng.Next(4, Mathf.Max(8, map.width - 4));
+            int y = rng.Next(4, Mathf.Max(8, map.height - 4));
+            var cell = MapGenRules.NearestWalkable(map, x, y);
+            if (cell.x < 0) continue;
+            var mid = grid.CellToMidChunk(new GridCoord(cell.x, cell.y));
+            if (territory.ContainsKey(mid)) continue;   // 已被占领（含 AI 领土）→避开（D540）
+            int groupRace = racePool[rng.Next(racePool.Length)];
+            TryBuildCampAt(cell);
+            var world = CellToWorld(cell);
+            int n = 0;
+            for (int i = 0; i < group; i++)
+                if (SpawnVagrantAt(world, rng, groupRace)) n++;
+            if (n > 0)
+            {
+                Debug.Log($"[VagrantCampSystem] 自然增长刷点：无主地 ({cell.x},{cell.y}) +{n} 流浪（族{groupRace}，间隔{cfg.vagrantRespawnIntervalDays}日，D540）");
+                break;   // 每次刷点事件一组一地
+            }
+        }
+    }
+
+    /// <summary>
+    /// HH.78/D540 件3①：在指定格建 VagrantCamp 营地建筑实体（FindCamps 复通=每日补员链激活）。
+    /// kingdomId=-1（无主中立营，与流浪汉未入籍语义一致）；失败仅告警不阻断流民预置。
+    /// 结构照 KingdomFoundry.PlaceCampWell 先例（FindDefById 大小写敏感实锤——CAMP_DEF_ID="VagrantCamp" 谨慎对齐）。
+    /// </summary>
+    void TryBuildCampAt(Vector2Int cell)
+    {
+        if (BuildingFactory.Instance == null) return;
+        var def = BuildingFactory.FindDefById(CAMP_DEF_ID);
+        if (def == null) { Debug.LogWarning("[VagrantCampSystem] VagrantCamp def 未找到，跳过建营。"); return; }
+        var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1,
+                               def.footprint.y > 0 ? def.footprint.y : 1);
+        var coord = new GridCoord(cell.x, cell.y);
+        var grid = GridSystem.Instance;
+        Vector3 world = grid != null && grid.Config != null
+            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
+                                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
+            : new Vector3(coord.x, coord.y, 0f);
+        if (BuildingFactory.Instance.CreateBuildingInstance(
+                def, def.sourceType, coord, fp, world,
+                isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
+                initialState: BuildingState.Active, kingdomId: -1))
+            Debug.Log($"[VagrantCampSystem] 营地实体补建：VagrantCamp @ ({cell.x},{cell.y})（D540 件3①复通 FindCamps/补员链）");
     }
 
     /// <summary>

@@ -324,6 +324,128 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         BirthCooldownDays = pairCooldown;
     }
 
+    // ===== HH.78/D540 AI 生育分支（混合双通道 C：AI 轨 per-kingdom，玩家轨 OnNewDay 逐位不动）=====
+
+    /// <summary>AI 王国生育冷却（per-kingdom 独立倒计时；跨轮 ResetState 清空）。</summary>
+    private readonly Dictionary<int, int> _aiBirthCooldowns = new Dictionary<int, int>();
+
+    /// <summary>
+    /// AI 王国生育分支（HH.78/D540；DayCycleSettlement 人口段对 AI 国逐国调用）。
+    /// 条件输入 per-kingdom：幸福=HappinessSystem.GetKingdomHappiness(k.id)/饱食=SatietySystem.GetAverageSatiety(k.id)/
+    /// 房屋容量=GetHouseCapacityByKingdom(k.id)；阈值复用玩家同表（birthHappinessThreshold=60/birthSatietyThreshold=50，D540 裁决）。
+    /// 配对池=UnitRegistry 按 kingdomId 过滤（Worker/Porter/Resident 均可配对，AI 纯 Worker 结构）——
+    /// **先收集快照再遍历，Spawn 在遍历体外**（HH.76 件2 雷区纪律：GetAllUnits 返回内部 List 引用）；
+    /// 确定性=npcId 固定序+种子 rng（seed^day^k.id，R4 纪律对齐 VagrantCampSystem.NewDayRng）；
+    /// 生成 SpawnUnit(Faction.PlayerCamp, Child, pos, k.id)+raceId=GetKingdomRace(k.id)（Foundry/Siege 现网组合先例，
+    /// D467 挂账 per-kingdom 回填）；Child 日常耗粮走 Satiety per-kingdom 国库路由（D453 已通零新增）。
+    /// </summary>
+    public void OnNewDayPerKingdom(KingdomState k)
+    {
+        var cfg = LifeConfig();
+        if (cfg == null || k == null || k.IsPlayer) return;
+        var sat = SatietySystem.Instance;
+        var hap = HappinessSystem.Instance;
+        if (sat == null || hap == null) return;
+
+        // per-kingdom 冷却倒计时（首见=满冷却）
+        int cd;
+        if (!_aiBirthCooldowns.TryGetValue(k.id, out cd)) cd = cfg.aiBirthIntervalDays;
+        cd--;
+        if (cd > 0) { _aiBirthCooldowns[k.id] = cd; return; }
+
+        // 条件输入 per-kingdom（阈值同玩家表）
+        float happiness = hap.GetKingdomHappiness(k.id);
+        float satiety = sat.GetAverageSatiety(k.id);
+        int houseCapacity = hap.GetHouseCapacityByKingdom(k.id);
+        int population = k.workerCount + k.warriorCount;
+        bool happy = happiness > cfg.birthHappinessThreshold;
+        bool fed = satiety > cfg.birthSatietyThreshold;
+        bool hasHouse = houseCapacity > population;
+        if (!happy || !fed || !hasHouse)
+        {
+            _aiBirthCooldowns[k.id] = cfg.aiBirthIntervalDays;   // 条件不满足重置冷却（对齐玩家 L273 语义）
+            Debug.Log($"[PopulationSystem] AI生育条件未满足 k{k.id}：幸福{happiness:F0}({happy}) 饱食{satiety:F0}({fed}) 房容{houseCapacity} vs 人口{population}({hasHouse}) 工人池={CountEligible(k.id)}");
+            return;
+        }
+
+        // 配对池：按 kingdomId 过滤（Worker/Porter/Resident）——先收集快照，遍历体内零 Spawn（雷区纪律）
+        var candidates = new List<UnitController>();
+        var regUnits = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
+        if (regUnits == null) { _aiBirthCooldowns[k.id] = cfg.aiBirthIntervalDays; return; }
+        foreach (var u in regUnits)
+        {
+            if (u == null || !u.IsAlive || u.kingdomId != k.id) continue;
+            var occ = u.EffectiveOccupation;
+            if (occ != Occupation.Worker && occ != Occupation.Porter && occ != Occupation.Resident) continue;
+            candidates.Add(u);
+        }
+        if (candidates.Count < 2) { _aiBirthCooldowns[k.id] = cfg.aiBirthIntervalDays; return; }
+        // 占位引用防未使用告警（候选池规模诊断随条件日志输出）
+        int CountEligible(int kid)
+        {
+            if (UnitRegistry.Instance == null) return 0;
+            int n = 0;
+            var us = UnitRegistry.Instance.GetAllUnits();
+            foreach (var u in us)
+            {
+                if (u == null || !u.IsAlive || u.kingdomId != kid) continue;
+                var o = u.EffectiveOccupation;
+                if (o == Occupation.Worker || o == Occupation.Porter || o == Occupation.Resident) n++;
+            }
+            return n;
+        }
+
+        // 确定性配对：npcId 固定序 + 种子 rng（R4：同 (seed, day, k.id) 恒复现）
+        candidates.Sort((a, b) => a.npcId.CompareTo(b.npcId));
+        var wm = WorldManager.Instance;
+        var map = wm != null ? wm.ActiveMap : null;
+        int seed = map != null && map.seed != 0 ? map.seed : (wm != null ? wm.MapSeed : 1);
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
+        var rng = new System.Random(seed ^ (day * 7919) ^ (k.id * 104729));
+        int ia = rng.Next(candidates.Count);
+        int ib = rng.Next(candidates.Count);
+        if (ib == ia) ib = (ia + 1) % candidates.Count;
+        var parentA = candidates[ia];
+        var parentB = candidates[ib];
+
+        // 出生落点=该国 House 旁（房条件已过=有房在）
+        Vector2 birthPos = GetKingdomBirthPosition(k.id);
+
+        // Spawn 在配对池遍历之外（雷区纪律）；归属国 kingdomId+国族 raceId 双写
+        GameObject childGo = UnitFactory.Instance != null
+            ? UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Child, birthPos, k.id)
+            : null;
+        if (childGo != null)
+        {
+            var childUc = childGo.GetComponent<UnitController>();
+            if (childUc != null) childUc.raceId = KingdomRace.GetKingdomRace(k.id);
+            int childRace = childUc != null ? childUc.raceId : -1;
+            Debug.Log($"[PopulationSystem] AI生育：k{k.id} 两口进房 → +1 小孩 @ {birthPos}（幸福{happiness:F0}/饱食{satiety:F0}，raceId={childRace}）");
+        }
+        else
+            Debug.LogError($"[PopulationSystem] AI生育失败：k{k.id} Child 单位生成失败（缺 Child 资产/Prefab？）");
+        _aiBirthCooldowns[k.id] = cfg.aiBirthIntervalDays;
+    }
+
+    /// <summary>AI 王国出生落点：该国任一活动 House 旁（无房兜底=全局锚点；此路径极少走——无房=条件已挡）。</summary>
+    private Vector2 GetKingdomBirthPosition(int kingdomId)
+    {
+        if (BuildingRegistry.Instance != null)
+        {
+            var all = BuildingRegistry.Instance.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var b = all[i];
+                if (b == null || b.def == null || !b.IsActive || b.def.id != "House") continue;
+                if (b.kingdomId != kingdomId) continue;
+                return SpawnPosSnapper.SnapWorld(new Vector2(b.transform.position.x + 1f, b.transform.position.y), "AI繁殖Child");
+            }
+        }
+        return WorldManager.Instance != null
+            ? SpawnPosSnapper.SnapWorld(WorldManager.Instance.GetKingdomAnchorWorld(), "AI繁殖Child兜底")
+            : Vector2.zero;
+    }
+
     /// <summary>生育落点：第一栋激活房屋旁（进房表演出口）；无房屋回退王国锚点。落点不可走→就近吸附（寻路2/HH.48）。</summary>
     private Vector2 GetBirthPosition()
     {
@@ -354,12 +476,43 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             var u = _entities[i];
             if (u == null || !u.IsAlive) continue;
             if (u.EffectiveOccupation != Occupation.Child) continue;
+            // HH.78/D540：玩家段只处理玩家 Child（kingdomId=0）——_entities 注册链存在「AI 实体以 kingdomId=0
+            // 时序态入册」的既有面（UnitSpawnedEvent 发布早于 kingdomId 写入，HH.79 列报），此守卫防 AI Child
+            // 被玩家段转 Resident（实测 D23「小孩长大→居民 Human_Player_Child」），AI Child 归下方 AI 段 Worker 直生。
+            if (u.kingdomId > 0) continue;
             u.ChildGrowthDays++;
             if (u.ChildGrowthDays >= need)
             {
                 u.SetOccupation(Occupation.Resident);
                 u.ChildGrowthDays = 0;
                 Debug.Log($"[PopulationSystem] 小孩长大：天数事件累积 {need} 次 → 居民（{u.name}）");
+            }
+        }
+
+        // ===== HH.78/D540 AI Child 成长段（per-kingdom，件2）：AI Child 成长满 → Worker 直生 =====
+        // AI 无 Resident 体系（纯 Worker 结构）→ 直生=绕 ⑥ 不占流浪供给（Gate 面③裁决）；
+        // 先收集快照再遍历（GetAllUnits 返回内部 List 引用，雷区纪律——快照防御 SetOccupation 换职业无增删惯例）；
+        // 成长耗粮走 Satiety per-kingdom 路由（D453 零新增）。
+        if (UnitRegistry.Instance != null && KingdomRegistry.Instance != null)
+        {
+            var aiChildren = new List<UnitController>();
+            var units = UnitRegistry.Instance.GetAllUnits();
+            foreach (var u in units)
+            {
+                if (u == null || !u.IsAlive || u.kingdomId <= 0) continue;   // AI 专属（玩家 Child 走上方 _entities 段）
+                if (u.EffectiveOccupation != Occupation.Child) continue;
+                aiChildren.Add(u);
+            }
+            for (int i = 0; i < aiChildren.Count; i++)
+            {
+                var u = aiChildren[i];
+                u.ChildGrowthDays++;
+                if (u.ChildGrowthDays >= need)
+                {
+                    u.SetOccupation(Occupation.Worker);   // AI 直生 Worker（非 Resident）
+                    u.ChildGrowthDays = 0;
+                    Debug.Log($"[PopulationSystem] AI小孩长大：k{u.kingdomId} Child 天数事件 {need} 次 → Worker 直生（{u.name}）");
+                }
             }
         }
     }
@@ -401,6 +554,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     public void ResetState()
     {
         _entities.Clear();
+        _aiBirthCooldowns.Clear();   // HH.78/D540：AI 生育冷却 per-kingdom 清场（跨轮零残留）
         BirthCooldownDays = LifeConfig() != null ? LifeConfig().birthCooldownDefault : 5;
         AvgSatiety = 50f;
         AvgHappiness = 50f;

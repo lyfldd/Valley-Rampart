@@ -41,8 +41,9 @@ public static class P1Observer
         "[KingdomBrain]", "[TrainingSystem]", "[SiegeProduction]", "[ToastManager]",
         "[KingdomFoundry]", "[TerritorySystem]", "[KingdomRegistry]", "[SaveManager]",
         "[TimeManager]", "[DayCycle", "[KingdomRegistry]", "[PopulationSystem]",
-        "[SmokeApi]", "[WorldLifecycle]", "[VagrantCamp]",
+        "[SmokeApi]", "[WorldLifecycle]", "[VagrantCamp",
         "[WaterNetwork]", "[AIEconomySettlement]"   // HH.73/D535：AI 供水链观测（AI 桶水量+日结入账）
+        // 注：[VagrantCamp 无右括号前缀=[VagrantCampSystem]/[VagrantCamp] 双匹配（HH.78 修正：原 "[VagrantCamp]" 带括号漏 [VagrantCampSystem] 前缀）
     };
 
     // ── 单例读取统一守卫（HH.42 教训：非 Play 态 Singleton<T>.Instance 隐式自建进 DDOL 残留——观察器在

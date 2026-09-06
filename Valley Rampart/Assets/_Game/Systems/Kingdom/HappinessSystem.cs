@@ -44,6 +44,12 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// <summary>整体幸福（0-100，玩家桶0）。由 OnNewDay 每日刷新。玩家调用点读本 getter=桶0（=原全局语义）。</summary>
     public float OverallHappiness => GetOverallHappiness(0);
 
+    /// <summary>
+    /// 读某王国整体幸福（HH.78/D540 人口再生 per-kingdom 读口：AI 生育条件消费；
+    /// 同源 _overallHappiness 桶，与 GetTaxCoefficient(kId)/GetPopulationGrowthFactor(kId) 同源）。
+    /// </summary>
+    public float GetKingdomHappiness(int kingdomId) => GetOverallHappiness(kingdomId);
+
     /// <summary>上一日税负水平（0-1，玩家桶0；由 TaxSystem 每日写入玩家口径）。玩家调用点读本 getter=桶0。</summary>
     public float TaxBurdenLastDay { get => GetTaxBurden(0); set => _taxBurdenLastDay[0] = value; }
 
@@ -258,6 +264,26 @@ public class HappinessSystem : Singleton<HappinessSystem>
 
     /// <summary>房屋 Lv 容量（§13.14：Lv1=3 / Lv2=5 / Lv3=8）。</summary>
     public static int GetHouseCapacity(int level) => level >= 3 ? 8 : level >= 2 ? 5 : 3;
+
+    /// <summary>
+    /// 某王国房屋总容量（HH.78/D540 per-kingdom 生育前置：AI 生育消费；
+    /// 结构与 GetTotalHouseCapacity 一致，仅按 kingdomId 过滤。0=玩家等价 GetTotalHouseCapacity）。
+    /// </summary>
+    public int GetHouseCapacityByKingdom(int kingdomId)
+    {
+        int capacity = 0;
+        if (BuildingRegistry.Instance == null) return 0;
+        var all = BuildingRegistry.Instance.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b == null || b.def == null || !b.IsActive) continue;
+            if (b.def.id != "House") continue;
+            if (b.kingdomId != kingdomId) continue;
+            capacity += GetHouseCapacity(b.level);
+        }
+        return capacity;
+    }
 
     // ===== 三层惩罚接口 =====
 

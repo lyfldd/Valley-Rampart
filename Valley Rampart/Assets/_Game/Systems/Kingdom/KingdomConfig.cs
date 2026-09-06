@@ -115,6 +115,14 @@ public class KingdomConfig : ScriptableObject
     [Tooltip("招募走回抵达半径（格）：到王国锚点此范围内正式纳入人口")]
     public float recruitArriveRadiusCells = 3f;
 
+    [Header("AI 人口再生（HH.78/D540 混合双通道·C 路线）")]
+    [Tooltip("AI 生育冷却（日，per-kingdom 独立倒计时；慢于玩家 birthIntervalDays=5，D540 裁决占位，终值 P0 调优）")]
+    public int aiBirthIntervalDays = 10;
+    [Tooltip("流浪自然增长刷点间隔（日；0=关闭。无主地按组刷流浪，避开 AI 领土维持 D469，D540 占位）")]
+    public int vagrantRespawnIntervalDays = 5;
+    [Tooltip("流浪自然增长每组人数（按族成群，组内同族 D469；D540 占位）")]
+    public int respawnGroupSize = 2;
+
     [Header("医院（§13.3 受伤恢复 + 幸福）")]
     [Tooltip("医院存在时，每日饱食回血额外加成（受伤单位恢复加快）")]
     public int hospitalRecoveryBonus = 5;         // 医院每日额外回血
