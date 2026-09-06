@@ -543,10 +543,25 @@ public static class Valley2_20_Smoke_Race
             int pRace = KingdomRace.GetKingdomRace(0);
             p4c = got != null && got.raceId == pRace;   // 任一未招募同族（=玩家族）流民（异族 V4 被滤，D498 预批放宽）
             sb.Append($"④c AI⑥同族过滤(玩家族 r{pRace} 选中 #{(got != null ? got.npcId : -1)} race={(got != null ? got.raceId : -1)})={(p4c ? "OK" : "FAIL")} ");
+            // HH.86 容器口径修正（HH.81 流浪置 -1 的连带面）：④d 前提「场上除自造材料外无未招募同族 -1 流浪」在
+            // HH.81 件1（自然流浪 kingdomId=-1，族池 {0,1,2,3} 抽取=1/4 概率撞玩家族）后不成立——实测世界 Dwarf
+            // 流浪被 ⑥ 选中=假 FAIL（非产品回归）。清场（测试锚点先例=foundedFlag 强制复位同款，跑完弃局不存档）。
+            var regAll4d = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
+            int cleared4d = 0;
+            if (regAll4d != null)
+            {
+                foreach (var u in regAll4d)
+                {
+                    if (u == null || !u.IsAlive || u == h5 || u == v4) continue;
+                    if (u.kingdomId >= 0 || u.EffectiveOccupation != Occupation.Vagrant || u.IsVagrantRecruited) continue;
+                    if (u.raceId != KingdomRace.GetKingdomRace(0)) continue;
+                    u.IsVagrantRecruited = true; cleared4d++;   // 只读遍历改字段（零结构变更，雷区纪律 ✓）
+                }
+            }
             AIDebugSpawnController.DebugSetRace(h5, RaceIds.Elf);   // 负加固：同族者改标异族
             var got2 = mi2 != null ? (UnitController)mi2.Invoke(brain, null) : null;
             p4d = got2 == null;   // 全异族 → null
-            sb.Append($"④d AI⑥全异族→null {(p4d ? "OK" : "FAIL")} ");
+            sb.Append($"④d AI⑥全异族→null(清场{cleared4d}) {(p4d ? "OK" : "FAIL")} ");
         }
         else sb.Append("④c/d SKIP(无流民) FAIL ");
         allPass = allPass && p4c && p4d;

@@ -31,7 +31,9 @@ MonoBehaviour:
   initialUnlocks: []
   baseBuildingDefIds:
   - castle
+  - House
   - farm
+  - Well
   - mine
   - Warehouse
   - quarry

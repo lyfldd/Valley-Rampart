@@ -277,6 +277,8 @@ public class BuildController : Singleton<BuildController>
         var fp = OrientedFootprint(def, orient);
         b.Init(def, coord, true, fp);
         b.kingdomId = kingdomId;   // 2_17 步骤7：建造门面——AI 建造归属该国（玩家 0）
+        // HH.86/DZ-040 件2a：faction 按 kingdomId 派生（b.Init→ApplyDef 时归属未写入=仍 def.faction，此处补覆写）
+        b.faction = kingdomId > 0 ? Faction.AiKingdom : def.faction;
         b.StartConstructing();     // 建造走 Constructing 进度（玩家手工与 AI 同一条链）
 
         // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）

@@ -31,6 +31,7 @@ MonoBehaviour:
     costStone: 0
     costWood: 4
     costFood: 0
+    buildTargetCap: 0
   - id: 2
     name: "\u5EFA\u4ED3\u5E93"
     minStage: 0
@@ -49,6 +50,7 @@ MonoBehaviour:
     costStone: 4
     costWood: 0
     costFood: 0
+    buildTargetCap: 4
   - id: 3
     name: "\u5EFA\u4EA7\u80FD"
     minStage: 0
@@ -67,6 +69,7 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
+    buildTargetCap: 0
   - id: 4
     name: "\u5F3A\u5316\u91C7\u96C6"
     minStage: 0
@@ -85,6 +88,7 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
+    buildTargetCap: 0
   - id: 5
     name: "\u5C6F\u7CAE"
     minStage: 1
@@ -103,6 +107,7 @@ MonoBehaviour:
     costStone: 0
     costWood: 4
     costFood: 0
+    buildTargetCap: 4
   - id: 6
     name: "\u62DB\u5DE5\u4EBA"
     minStage: 0
@@ -121,16 +126,17 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
-  - id: 13
-    name: "\u91CD\u5EFA"
-    minStage: 0
-    axis: 2
+    buildTargetCap: 0
+  - id: 7
+    name: "\u62DB\u6218\u58EB"
+    minStage: 1
+    axis: 0
     axisWeight: 1
-    need: 6
-    needA: 0
+    need: 8
+    needA: 8
     needB: 0
     stageWeight:
-    - 1
+    - 0.5
     - 1
     - 1
     - 1
@@ -139,16 +145,17 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
-  - id: 14
-    name: "\u9632\u5FA1\u59FF\u6001"
-    minStage: 0
-    axis: 2
+    buildTargetCap: 0
+  - id: 8
+    name: "\u79D1\u6280\u5347\u7EA7"
+    minStage: 1
+    axis: 1
     axisWeight: 1
-    need: 7
-    needA: 0
+    need: 9
+    needA: 300
     needB: 0
     stageWeight:
-    - 1
+    - 0.5
     - 1
     - 1
     - 1
@@ -157,6 +164,26 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
+    buildTargetCap: 0
+  - id: 9
+    name: "\u4FEE\u5DE5\u4E8B\u57CE\u5899"
+    minStage: 2
+    axis: 2
+    axisWeight: 1
+    need: 10
+    needA: 8
+    needB: 0
+    stageWeight:
+    - 0
+    - 0.5
+    - 1
+    - 1
+    buildingId: wall
+    costGold: 0
+    costStone: 2
+    costWood: 2
+    costFood: 0
+    buildTargetCap: 0
   - id: 10
     name: "\u63A8\u8FB9\u754C"
     minStage: 2
@@ -175,3 +202,213 @@ MonoBehaviour:
     costStone: 0
     costWood: 0
     costFood: 0
+    buildTargetCap: 0
+  - id: 11
+    name: "\u7EC4\u5EFA\u51FA\u5F81\u519B"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 11
+    needA: 8
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId:
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 12
+    name: "\u8FB9\u5883\u589E\u63F4"
+    minStage: 3
+    axis: 2
+    axisWeight: 1
+    need: 12
+    needA: 8
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId:
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 15
+    name: "\u5916\u4EA4\u59FF\u6001"
+    minStage: 3
+    axis: 4
+    axisWeight: 1
+    need: 13
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId:
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 13
+    name: "\u91CD\u5EFA"
+    minStage: 0
+    axis: 2
+    axisWeight: 1
+    need: 6
+    needA: 0
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+    buildingId:
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 14
+    name: "\u9632\u5FA1\u59FF\u6001"
+    minStage: 0
+    axis: 2
+    axisWeight: 1
+    need: 7
+    needA: 0
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+    buildingId:
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 16
+    name: "\u5EFA\u6C34\u4E95"
+    minStage: 0
+    axis: 1
+    axisWeight: 1
+    need: 15
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+    buildingId: Well
+    costGold: 0
+    costStone: 6
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 17
+    name: "\u5EFA\u94C1\u5320\u94FA"
+    minStage: 1
+    axis: 1
+    axisWeight: 1
+    need: 16
+    needA: 30
+    needB: 0
+    stageWeight:
+    - 0.5
+    - 1
+    - 1
+    - 1
+    buildingId: Blacksmith
+    costGold: 50
+    costStone: 60
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 18
+    name: "\u5EFA\u6218\u4E89\u5B66\u9662"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId: WarAcademy
+    costGold: 30
+    costStone: 20
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 19
+    name: "\u5EFA\u517D\u4EBA\u6218\u8425"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId: WarCamp
+    costGold: 10
+    costStone: 0
+    costWood: 25
+    costFood: 0
+    buildTargetCap: 0
+  - id: 20
+    name: "\u5EFA\u5730\u8109\u7194\u7089"
+    minStage: 2
+    axis: 1
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0.5
+    - 1
+    - 1
+    buildingId: LeyForge
+    costGold: 25
+    costStone: 30
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 21
+    name: "\u5EFA\u7CBE\u7075\u5C04\u7BAD\u573A"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId: ArcheryRange
+    costGold: 15
+    costStone: 0
+    costWood: 30
+    costFood: 0
+    buildTargetCap: 0

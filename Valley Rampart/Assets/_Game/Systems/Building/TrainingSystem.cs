@@ -298,7 +298,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         if (!CanPayRecruit(effKingdom, effGold, effCrystal, effMetal)) return false;
 
         // P2：将军训练限量（KingdomConfig.generalLimit，§10 将军限量 2 可配置）
-        if (def.toOccupation == Occupation.General && !CanTrainGeneral())
+        if (def.toOccupation == Occupation.General && !CanTrainGeneral(effKingdom))
             return false;
 
         // 扣费（训练中断不退还，故入队即扣；按王国国库抽象扣）
@@ -533,7 +533,9 @@ public class TrainingSystem : Singleton<TrainingSystem>
     /// 将军训练限量校验（3.5 P2，§10 将军限量 2 可配置）。
     /// 统计当前我方将军数（Occupation.General），达到 KingdomConfig.generalLimit 则拒绝。
     /// </summary>
-    private bool CanTrainGeneral()
+    // HH.86/DZ-047 件1c：按国计数（旧=faction==PlayerCamp 全局数，AI 国训将军受玩家将军数干扰；玩家桶 0 行为等价
+    // ——玩家将军恒 kingdomId=0+PlayerCamp，faction 过滤与 kingdomId 过滤对玩家逐位一致）。
+    private bool CanTrainGeneral(int kingdomId)
     {
         var cfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
         int limit = cfg != null && cfg.generalLimit > 0 ? cfg.generalLimit : 2;
@@ -543,13 +545,13 @@ public class TrainingSystem : Singleton<TrainingSystem>
             foreach (var unit in UnitRegistry.Instance.GetAllUnits())
             {
                 if (unit == null || unit.Data == null) continue;
-                if (unit.Data.faction != Faction.PlayerCamp) continue;
+                if (unit.kingdomId != kingdomId) continue;
                 if (unit.EffectiveOccupation == Occupation.General) count++;
             }
         }
         if (count >= limit)
         {
-            Debug.Log($"[TrainingSystem] 转职失败：将军已达上限 {limit}（当前 {count}）");
+            Debug.Log($"[TrainingSystem] 转职失败：将军已达上限 {limit}（当前 {count}，国 {kingdomId}）");
             return false;
         }
         return true;

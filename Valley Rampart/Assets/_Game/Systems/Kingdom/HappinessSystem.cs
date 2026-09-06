@@ -187,19 +187,37 @@ public class HappinessSystem : Singleton<HappinessSystem>
         else
             satietyFactor = Mathf.RoundToInt(cfg.happinessSatietyBonusMax * (cfg.feedSatietyThreshold > 0 ? (float)unit.Satiety / cfg.feedSatietyThreshold : 0f));
 
-        int houseFactor = HasEnoughHousing(cfg) ? Mathf.RoundToInt(cfg.happinessHouseWeight * 100f) : 0;
+        // HH.86/DZ-046 件2b：四因子 per-kingdom 化（税负 L196 原本已按桶）——
+        // houseFactor=本国房容 vs 本国人口（玩家=PopulationCount 桶0 实体数，AI=workerCount+warriorCount）；
+        // church/hospital=per-kingdom 重载（AI 不再反向受益玩家 Church/Hospital；玩家 0 与旧全图值在
+        // 「AI 不建 Church/Hospital」前提下逐位等价=行动池无此二项）；foodQuality=AI 读本国国库，玩家读 Ruler 原逻辑。
+        int houseFactor;
+        int churchFactor;
+        int hospitalFactor;
+        int foodQualityFactor = 0;
+        var kState = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        int popForHouse = kingdomId <= 0
+            ? (PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0)
+            : (kState != null ? kState.workerCount + kState.warriorCount : 0);
+        houseFactor = GetHouseCapacityByKingdom(kingdomId) >= popForHouse
+            ? Mathf.RoundToInt(cfg.happinessHouseWeight * 100f) : 0;
         // 教堂/医院按数量计幸福（3.5 P2：多建多加成，§13.3 教堂/医院幸福加成）
-        int churchFactor = Mathf.Clamp(Mathf.RoundToInt(cfg.happinessChurchWeight * 100f * CountActiveBuildings("Church")), 0, 100);
-        int hospitalFactor = Mathf.Clamp(Mathf.RoundToInt(cfg.happinessHospitalWeight * 100f * CountActiveBuildings("Hospital")), 0, 100);
+        churchFactor = Mathf.Clamp(Mathf.RoundToInt(cfg.happinessChurchWeight * 100f * CountActiveBuildings("Church", kingdomId)), 0, 100);
+        hospitalFactor = Mathf.Clamp(Mathf.RoundToInt(cfg.happinessHospitalWeight * 100f * CountActiveBuildings("Hospital", kingdomId)), 0, 100);
 
         // 税负：税越重幸福越低（0-1 税负 → 0-最高惩罚）
         float taxBurden = Mathf.Clamp01(GetTaxBurden(kingdomId));
         int taxPenalty = Mathf.RoundToInt(cfg.happinessTaxPenaltyMax * taxBurden);
 
-        // 食品品质：王国产出高档食品（特殊食物/肉）时小幅加成
-        int foodQualityFactor = 0;
-        if (RulerController.Instance != null
-            && (RulerController.Instance.GetResource(ResourceType.SpecialFood) > 0 || RulerController.Instance.GetResource(ResourceType.Meat) > 0))
+        // 食品品质：王国产出高档食品（特殊食物/肉）时小幅加成（玩家桶0=Ruler 原逻辑逐位；AI=本国国库）
+        if (kingdomId <= 0)
+        {
+            if (RulerController.Instance != null
+                && (RulerController.Instance.GetResource(ResourceType.SpecialFood) > 0 || RulerController.Instance.GetResource(ResourceType.Meat) > 0))
+                foodQualityFactor = Mathf.RoundToInt(cfg.happinessFoodQualityWeight * 100f);
+        }
+        else if (kState != null
+            && (kState.GetResourceValue(ResourceType.SpecialFood) > 0 || kState.GetResourceValue(ResourceType.Meat) > 0))
             foodQualityFactor = Mathf.RoundToInt(cfg.happinessFoodQualityWeight * 100f);
 
         int h = cfg.happinessBase
@@ -230,16 +248,24 @@ public class HappinessSystem : Singleton<HappinessSystem>
         return count;
     }
 
+    /// <summary>per-kingdom 重载（HH.86/DZ-046 件2b）：只统计本国建筑——旧无过滤签名不动（既有消费者零回归）。</summary>
+    public static int CountActiveBuildings(string buildingId, int kingdomId)
+    {
+        int count = 0;
+        if (BuildingRegistry.Instance == null) return count;
+        var all = BuildingRegistry.Instance.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b == null || b.def == null) continue;
+            if (b.kingdomId != kingdomId) continue;
+            if (b.def.id == buildingId && b.IsActive) count++;
+        }
+        return count;
+    }
+
     /// <summary>是否存在处于 Active 态的指定 id 建筑（教堂/医院等）。</summary>
     public static bool HasBuilding(string buildingId) => CountActiveBuildings(buildingId) > 0;
-
-    /// <summary>房屋容量是否足够容纳当前人口（§五 有房住）。房屋容量 = Σ房屋Lv容量（3/5/8，§13.14）。</summary>
-    private bool HasEnoughHousing(KingdomConfig cfg)
-    {
-        int capacity = GetTotalHouseCapacity();
-        int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
-        return capacity >= population;
-    }
 
     /// <summary>
     /// 王国房屋总容量（Σ活动房屋 Lv 容量 3/5/8，§13.14）。

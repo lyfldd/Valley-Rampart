@@ -333,7 +333,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         if (def == null) return;
 
-        faction = def.faction;
+        // HH.86/DZ-040 件2a：faction 按 kingdomId 派生（照抄 UnitFactory.SpawnUnit 既有先例：仅 >0 覆写 AiKingdom；
+        // 玩家 0/自然 -1 保持 def.faction 原值=玩家与野外逐位不动）——旧=AI 建筑挂 PlayerCamp 全量断层
+        //（塔不还击 AI 国/ catapult 不打本国敌人/玩家可交互开面板）。
+        faction = kingdomId > 0 ? Faction.AiKingdom : def.faction;
         isObstacle = def.isObstacle;
 
         // HP：统一入口 = def.maxHp（3.5.1 E-S10）× gradeScale；防御建筑 combat.maxHp 与主层同值
@@ -963,9 +966,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             return true;
         }
 
-        // ④ 挑水：仅农场（产粮耗水）在水网缺水时发挑水任务（采石/矿洞不耗水，不派）
+        // ④ 挑水：仅农场（产粮耗水）在本国水网缺水时发挑水任务（采石/矿洞不耗水，不派）
+        // HH.86/DZ-044 件2c：旧读全图玩家桶（Stored=0 桶）——AI 农田在玩家桶满时永不发挑水=AI 农田断水；
+        // 改读本国桶 GetStored(kingdomId)（GetStored(0)==Stored 旧语义等价，玩家逐位不动）。
         if (producer != null && producer.OutputResource == ResourceType.Food
-            && WaterNetwork.Instance != null && WaterNetwork.Instance.Stored < waterThreshold)
+            && WaterNetwork.Instance != null && WaterNetwork.Instance.GetStored(kingdomId) < waterThreshold)
         {
             task = new KingdomTask(KingdomTaskType.WaterHaul, this);
             task.destType = KingdomDestType.WaterNetwork;

@@ -31,7 +31,14 @@ public enum UtilityAction : byte
     Reinforce = 12,        // ⑫边境增援（P1）
     Rebuild = 13,          // ⑬重建（D318 全阶段）
     Defense = 14,          // ⑭防御姿态（D318 全阶段 / 常设底线焦点）
-    Diplomacy = 15         // ⑮外交姿态（P1，2_18 接管）
+    Diplomacy = 15,        // ⑮外交姿态（P1，2_18 接管）
+    // ===== HH.86 件3b/3c 供给与铁链补全（尾插保持 int 稳定；参数占位待策划调，报告列报）=====
+    BuildWell = 16,        // ⑯建水井：井损重建通道（DZ-043；WellGap=本国 Active 井数 < 目标）
+    BuildBlacksmith = 17,  // ⑰建铁匠铺：AI 铁链打通（石→Metal；MetalGap=国库 Metal 低于底线）
+    BuildWarAcademy = 18,  // ⑱建战争学院（人类专属；raceId=0）
+    BuildWarCamp = 19,     // ⑲建兽人战营（兽人专属；raceId=3）
+    BuildLeyForge = 20,    // ⑳建地脉熔炉（矮人专属；raceId=2）
+    BuildArcheryRange = 21 // ㉑建精灵射箭场（精灵专属；raceId=1）
 }
 
 /// <summary>需求强度缺口函数类型（D323 单调缺口；参数 needA/needB 语义见各 case）。</summary>
@@ -51,7 +58,11 @@ public enum NeedKind : byte
     ExpeditionNeed,  // 出征军（⑪ 占位可执行）：军事期兵力充裕即想出征（needA=兵力基线）
     ReinforceNeed,   // 边境增援（⑫ 占位）：军事期边境需增强（needA=增援目标；L3 意图接口占位）
     DiplomacyNeed,   // 外交姿态（⑮ 占位可执行）：外交轴意愿（needA=外交基线）
-    TerritoryGap     // 领土缺口（⑩ 推边界）：needA=目标非初始占区数；非初始占区 < 目标越缺越想扩（HH.32 裁2 A′，欲望与容量分离）
+    TerritoryGap,    // 领土缺口（⑩ 推边界）：needA=目标非初始占区数；非初始占区 < 目标越缺越想扩（HH.32 裁2 A′，欲望与容量分离）
+    // ===== HH.86 件3b/3c（尾插）=====
+    WellGap,         // 水井缺口（⑯ 建水井）：needA=目标井数（默认 1）；本国 Active 井 < 目标 → 缺口（井损重建通道 DZ-043）
+    MetalGap,        // 金属缺口（⑰ 建铁匠铺）：needA=国库 Metal 底线（占位 30）；低于则想建铁匠铺打通石→Metal
+    ExclusiveGap     // 专属建筑缺口（⑱~㉑）：本国无族专属建筑 → 占位底分 0.5（军事期军备面；族门禁在 Feasible）
 }
 
 /// <summary>效用评分器（纯函数层，2_17 步骤9）。单入口 ScoreTop。</summary>
@@ -102,8 +113,13 @@ public static class UtilityScorer
 
         switch (d.need)
         {
-            case NeedKind.HouseGap:      // 人口越多越需住房（P0 用人口代理无房）
-                return Mathf.Clamp01(pop / Mathf.Max(1f, d.needA));
+            case NeedKind.HouseGap:      // HH.86 件3a②：本国房容 vs 本国人口（旧=人口/needA 纯代理与房容无关→有房仍建=连轴帮凶之一）；房容≥人口 → 0 不缺
+            {
+                int houseCap = HappinessSystem.Instance != null
+                    ? HappinessSystem.Instance.GetHouseCapacityByKingdom(k.id) : 0;
+                if (houseCap >= pop) return 0f;
+                return Mathf.Clamp01((pop - houseCap) / Mathf.Max(1f, pop));
+            }
             case NeedKind.WarehouseGap:  // 储量越接近容量基线越需加仓
                 float maxRes = Mathf.Max(Mathf.Max(food, k.resources.gold), Mathf.Max(k.resources.stone, Mathf.Max(k.resources.wood, 0f)));
                 return Mathf.Clamp01(maxRes / Mathf.Max(1f, d.needA));
@@ -158,6 +174,16 @@ public static class UtilityScorer
                     ? TerritorySystem.Instance.NonInitialTerritoryCount(k.id) : 0;
                 return d.needA > 0 ? Mathf.Clamp01((d.needA - nonInitial) / d.needA) : 0f;
             }
+            // ===== HH.86 件3b/3c 三缺口 =====
+            case NeedKind.WellGap:       // ⑯ 本国 Active 井数 < 目标（needA，占位 1）→ 缺口（井损重建 DZ-043）
+            {
+                int have = CountActiveDef(k.id, "Well");
+                return have >= (int)Mathf.Max(1, d.needA) ? 0f : Mathf.Clamp01((d.needA - have) / Mathf.Max(1f, d.needA));
+            }
+            case NeedKind.MetalGap:      // ⑰ 国库 Metal 低于底线（needA，占位 30）→ 想建铁匠铺打通石→Metal（DZ-052）
+                return Mathf.Clamp01((d.needA - k.GetResourceValue(ResourceType.Metal)) / Mathf.Max(1f, d.needA));
+            case NeedKind.ExclusiveGap:  // ⑱~㉑ 本国已有族专属建筑 → 0；无 → 占位底分 0.5（族门禁在 Feasible，M6 复用）
+                return KingdomRace.HasExclusiveBuilding(k.id, d.buildingId) ? 0f : 0.5f;
             default: return 0f;
         }
     }
@@ -274,8 +300,26 @@ public static class UtilityScorer
             case UtilityAction.BuildCapacity:
             case UtilityAction.BoostHarvest:
             case UtilityAction.Grain:
+            case UtilityAction.BuildWell:
+            case UtilityAction.BuildBlacksmith:
+            case UtilityAction.BuildWarAcademy:
+            case UtilityAction.BuildWarCamp:
+            case UtilityAction.BuildLeyForge:
+            case UtilityAction.BuildArcheryRange:
             {
                 // 建造类：按 def 成本镜像逐项判国库（选址/前置等硬规则归执行门面二次校验）
+                // HH.86 件3a②/3c 三守卫扩：
+                // ①上限守卫（DZ-041 连轴根治）：d.buildTargetCap>0 时同 def 本国已建须 < 上限（对齐 WallGap 目标座数模式）——
+                //   WarehouseGap/GrainGap 储量驱动纯单调 need 会连轴建满图（HH.85 实锤 79 座），上限封顶；
+                // ②族门禁（M6 复用）：BuildingDef.raceId>=0 时须与本国族匹配（四专属行动）；
+                // ③每族限建 1 镜像（def.uniquePerKingdom）：本国已建 ≥1 → 不可行（防焦点锁定在恒拒行动）。
+                var bdef = BuildingFactory.FindDefById(d.buildingId);
+                if (bdef != null)
+                {
+                    if (bdef.raceId >= 0 && bdef.raceId != KingdomRace.GetKingdomRace(k.id)) return false;
+                    if (bdef.uniquePerKingdom && CountActiveDef(k.id, d.buildingId) >= 1) return false;
+                }
+                if (d.buildTargetCap > 0 && CountActiveDef(k.id, d.buildingId) >= d.buildTargetCap) return false;
                 return k.GetResourceValue(ResourceType.Gold) >= d.costGold
                     && k.GetResourceValue(ResourceType.Stone) >= d.costStone
                     && k.GetResourceValue(ResourceType.Wood) >= d.costWood
@@ -314,6 +358,22 @@ public static class UtilityScorer
         {
             var b = reg.All[i];
             if (b != null && b.kingdomId == kingdomId && b.IsActive && b.IsFortification)
+                n++;
+        }
+        return n;
+    }
+
+    /// <summary>某王国指定 def id 的 Active 建筑数（HH.86 件3b/3c：WellGap 统计+Feasible 限建/上限守卫共用）。</summary>
+    private static int CountActiveDef(int kingdomId, string defId)
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || reg.All == null) return 0;
+        int n = 0;
+        for (int i = 0; i < reg.All.Count; i++)
+        {
+            var b = reg.All[i];
+            if (b != null && b.def != null && b.kingdomId == kingdomId && b.IsActive
+                && b.def.id == defId)
                 n++;
         }
         return n;

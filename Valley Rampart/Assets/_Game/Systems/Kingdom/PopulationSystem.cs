@@ -117,10 +117,15 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         CountAliveByKingdom(kingdomId, Occupation.Worker, Occupation.Porter, Occupation.Civilian);
 
     /// <summary>按国存活战士数（军事职业）。</summary>
+    // HH.86/DZ-057 件1b：追加 2_20 M7 七职业（Berserker/WolfRider/Musqueteer/Bedrock/Ranger/Windwalker/DeerRider，
+    // 枚举实值尾插 28~34 区；HeavyWarrior 保留=枚举位铁律；M9 三机器 Mortar/VineCatapult/Ram 不入=口径对齐 2_20 M7）。
+    // 旧清单缺七职业→AI 战士计数虚低→MilitaryTarget 虚高→⑦连轴耗工人（HH.85 审计实锤）。
     public static int AliveWarriorCount(int kingdomId) =>
         CountAliveByKingdom(kingdomId, Occupation.Warrior, Occupation.Archer, Occupation.Mage,
             Occupation.General, Occupation.Crossbowman, Occupation.HeavyWarrior, Occupation.Bishop,
-            Occupation.ShieldGuard, Occupation.Archmage, Occupation.Cavalry, Occupation.Healer);
+            Occupation.ShieldGuard, Occupation.Archmage, Occupation.Cavalry, Occupation.Healer,
+            Occupation.Berserker, Occupation.WolfRider, Occupation.Musqueteer, Occupation.Bedrock,
+            Occupation.Ranger, Occupation.Windwalker, Occupation.DeerRider);
 
     private static bool MatchAny(Occupation[] arr, Occupation o)
     {
@@ -282,7 +287,8 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         {
             var u = _entities[i];
             if (u == null || !u.IsAlive) continue;
-            if (u.EffectiveOccupation != Occupation.Resident) continue;   // 配对池 = 成年居民
+            if (u.EffectiveOccupation != Occupation.Resident
+                && u.EffectiveOccupation != Occupation.Worker && u.EffectiveOccupation != Occupation.Porter) continue;   // HH.86/DZ-058 件3d：配对池对齐 AI 轨口径（Worker/Porter/Resident——玩家全工人结构下繁殖可发生）
             if (u.LastBirthDay + pairCooldown > currentDay) continue;    // 个体冷却中
             candidates.Add(u);
         }
@@ -292,14 +298,23 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             ? Mathf.RoundToInt(HappinessSystem.Instance.GetPopulationGrowthFactor() * 100f)
             : 100;
 
+        // HH.86/DZ-060 件1f：玩家配对段确定性种子化（旧=Random.value/Random.Range 全局态随机）——
+        // 对齐 AI 轨 R4 纪律（OnNewDayPerKingdom L398-407 同族公式）：种子源=map.seed（AI 轨同源，报备），
+        // 玩家国 k.id=0 故种子=seed^(day*7919)（AI 公式去 k.id 项特例）；同 seed 同 day 恒复现。
+        var wmPlayer = WorldManager.Instance;
+        var mapPlayer = wmPlayer != null ? wmPlayer.ActiveMap : null;
+        int seedPlayer = mapPlayer != null && mapPlayer.seed != 0 ? mapPlayer.seed : (wmPlayer != null ? wmPlayer.MapSeed : 1);
+        int dayPlayer = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        var pairRng = new System.Random(seedPlayer ^ (dayPlayer * 7919));
+
         bool tryBirth = candidates.Count >= 2 && growthFactor >= 1
-            && (growthFactor >= 100 || Random.value * 100f < growthFactor);
+            && (growthFactor >= 100 || pairRng.Next(100) < growthFactor);
 
         if (tryBirth)
         {
-            // 随机抽 2 人（不放回）
-            int a = Random.Range(0, candidates.Count);
-            int b = Random.Range(1, candidates.Count);
+            // 随机抽 2 人（不放回；旧 Unity Random.Range(0,N)/Range(1,N) 语义=System.Random 等价改写）
+            int a = pairRng.Next(candidates.Count);
+            int b = 1 + pairRng.Next(candidates.Count - 1);
             if (b == a) b = 0;
             var parentA = candidates[a];
             var parentB = candidates[b];
@@ -456,6 +471,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
             {
                 var b = all[i];
                 if (b == null || b.def == null || !b.IsActive || b.def.id != "House") continue;
+                if (b.kingdomId != 0) continue;   // HH.86/DZ-059 件1e：只落玩家本国 House（对齐 AI 轨 GetKingdomBirthPosition 的 b.kingdomId != kingdomId 过滤）——旧无过滤时全图首栋 House 可能挂 AI 国
                 return SpawnPosSnapper.SnapWorld(new Vector2(b.transform.position.x + 1f, b.transform.position.y), "繁殖Child");
             }
         }

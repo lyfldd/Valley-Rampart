@@ -158,6 +158,13 @@ public class KingdomBrain
             case UtilityAction.BoostHarvest:
             case UtilityAction.Grain:
             case UtilityAction.BuildWall:
+            // HH.86 件3b/3c 六新建造行动：路由到同一 ExecuteBuildFocus（SO buildingId 通用通道）
+            case UtilityAction.BuildWell:
+            case UtilityAction.BuildBlacksmith:
+            case UtilityAction.BuildWarAcademy:
+            case UtilityAction.BuildWarCamp:
+            case UtilityAction.BuildLeyForge:
+            case UtilityAction.BuildArcheryRange:
                 ExecuteBuildFocus(kingdom, cfg);
                 break;
             case UtilityAction.RecruitWarrior:

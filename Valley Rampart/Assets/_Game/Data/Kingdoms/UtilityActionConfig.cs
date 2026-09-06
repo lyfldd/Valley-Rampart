@@ -22,10 +22,10 @@ public class UtilityActionConfig : ScriptableObject
     public UtilityActionDef[] actions = new UtilityActionDef[]
     {
         new UtilityActionDef { id = UtilityAction.BuildHouse,     name = "建住宅",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.HouseGap,        needA = 10, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "House",     costWood = 4 },
-        new UtilityActionDef { id = UtilityAction.BuildWarehouse, name = "建仓库",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.WarehouseGap,     needA = 250, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "Warehouse", costGold = 4, costStone = 4 },
+        new UtilityActionDef { id = UtilityAction.BuildWarehouse, name = "建仓库",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.WarehouseGap,     needA = 250, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "Warehouse", costGold = 4, costStone = 4, buildTargetCap = 4 },
         new UtilityActionDef { id = UtilityAction.BuildCapacity,  name = "建产能",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.CapacityGap,      needA = 8, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "quarry",    costGold = 50 },
         new UtilityActionDef { id = UtilityAction.BoostHarvest,   name = "强化采集", minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.HarvestGap,       needA = 0, needB = 3, stageWeight = new float[]{1,1,1,1}, buildingId = "farm",      costGold = 50 },
-        new UtilityActionDef { id = UtilityAction.Grain,          name = "屯粮",     minStage = ScriptStage.Develop,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.GrainGap,         needA = 2, needB = 1, stageWeight = new float[]{1,1,1,1}, buildingId = "Granary",   costWood = 4 },
+        new UtilityActionDef { id = UtilityAction.Grain,          name = "屯粮",     minStage = ScriptStage.Develop,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.GrainGap,         needA = 2, needB = 1, stageWeight = new float[]{1,1,1,1}, buildingId = "Granary",   costWood = 4, buildTargetCap = 4 },
         new UtilityActionDef { id = UtilityAction.RecruitWorker,  name = "招工人",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Expansion,   axisWeight = 1f, need = NeedKind.RecruitWorkerGap, needA = 10, needB = 0, stageWeight = new float[]{1,1,1,1} },
         new UtilityActionDef { id = UtilityAction.RecruitWarrior, name = "招战士",   minStage = ScriptStage.Develop,  axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.RecruitWarriorGap, needA = 8, needB = 0, stageWeight = new float[]{0.5f,1,1,1} },
         new UtilityActionDef { id = UtilityAction.Tech,           name = "科技升级", minStage = ScriptStage.Develop,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.TechGap,          needA = 300, needB = 0, stageWeight = new float[]{0.5f,1,1,1} },
@@ -36,6 +36,13 @@ public class UtilityActionConfig : ScriptableObject
         new UtilityActionDef { id = UtilityAction.Diplomacy,      name = "外交姿态", minStage = ScriptStage.Military, axis = (int)PersonalityAxis.Diplomacy,   axisWeight = 1f, need = NeedKind.DiplomacyNeed,   needA = 1, needB = 0, stageWeight = new float[]{0,0,0.5f,1} },
         new UtilityActionDef { id = UtilityAction.Rebuild,        name = "重建",     minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Defense,     axisWeight = 1f, need = NeedKind.RebuildGap,       needA = 0, needB = 0, stageWeight = new float[]{1,1,1,1} },
         new UtilityActionDef { id = UtilityAction.Defense,        name = "防御姿态", minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Defense,     axisWeight = 1f, need = NeedKind.DefenseNeed,      needA = 0, needB = 0, stageWeight = new float[]{1,1,1,1} },
+        // ===== HH.86 件3b/3c 六行动（成本镜像=BuildingDef 资产实值 2026-09-06 实查；参数占位待策划调）=====
+        new UtilityActionDef { id = UtilityAction.BuildWell,        name = "建水井",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.WellGap,      needA = 1,  needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "Well",        costStone = 6 },
+        new UtilityActionDef { id = UtilityAction.BuildBlacksmith,  name = "建铁匠铺", minStage = ScriptStage.Develop,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.MetalGap,     needA = 30, needB = 0, stageWeight = new float[]{0.5f,1,1,1}, buildingId = "Blacksmith", costGold = 50, costStone = 60 },
+        new UtilityActionDef { id = UtilityAction.BuildWarAcademy,  name = "建战争学院", minStage = ScriptStage.Military, axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0,0.5f,1}, buildingId = "WarAcademy",  costGold = 30, costStone = 20 },
+        new UtilityActionDef { id = UtilityAction.BuildWarCamp,     name = "建兽人战营", minStage = ScriptStage.Military, axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0,0.5f,1}, buildingId = "WarCamp",     costGold = 10, costWood = 25 },
+        new UtilityActionDef { id = UtilityAction.BuildLeyForge,    name = "建地脉熔炉", minStage = ScriptStage.Expand,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0.5f,1,1}, buildingId = "LeyForge",    costGold = 25, costStone = 30 },
+        new UtilityActionDef { id = UtilityAction.BuildArcheryRange, name = "建精灵射箭场", minStage = ScriptStage.Military, axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0,0.5f,1}, buildingId = "ArcheryRange", costGold = 15, costWood = 30 },
     };
 
     /// <summary>按 id 查行动定义（无 → null）。</summary>
@@ -96,6 +103,12 @@ public struct UtilityActionDef
 
     /// <summary>建造成本镜像（与 BuildingDef.cost 同步抄录；评分 Feasible 门控用，执行以门面真 def 校验双保险）。</summary>
     public int costGold, costStone, costWood, costFood;
+
+    /// <summary>
+    /// 同 def 本国已建上限（HH.86/DZ-041 件3a② 连轴守卫，对齐 WallGap 目标座数模式；0=不启用）。
+    /// 占位值待策划调（报告列报）：Warehouse=4/Granary=4（HH.85 实锤连轴 79 座）；House 不启用（need 源已改房容缺口）。
+    /// </summary>
+    public int buildTargetCap;
 }
 
 /// <summary>性格五轴索引（D311：0~1 独立不归一化）。</summary>

@@ -15,8 +15,8 @@ using UnityEditor;
 // ============================================================================
 public static class Valley_HH80_Run
 {
-    private const int SEED = 16180;          // 侦察定案：5 国局 4 AI（森语 Elf/磐石 Dwarf/石城 Orc/雪岩 Dwarf），国距 39.5~150 均衡（hh80_scout_result.log 报备）
-    private const string SLOT = "p1_run3";   // 三考独立命名（D541：p1_dayXXX 系一二轮共用不可区分教训）
+    private const int SEED = 31415;          // HH.86 四考新 seed（侦察局：3 AI 三族各异[Elf/Dwarf/Orc]+国距 26.6~53.7 均衡+非历史局 seed，报备）
+    private const string SLOT = "p1_run4";   // 四考独立命名（延续 p1_run3 口径）
     private const int CIRCUIT_BREAK_DAY = 120;
 
     private static readonly List<int> _military = new List<int>();

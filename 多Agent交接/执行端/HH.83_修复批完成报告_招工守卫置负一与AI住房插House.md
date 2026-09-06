@@ -97,5 +97,14 @@
 - **根因**：SearchReplace 回显/Read 视图是会话内视图态，存在与磁盘不同步窗口；同族前六笔（SearchReplace 未落盘、grep 验伪补救等）。
 - **证据纪律（升注册类施工/登记标准动作）**：凡写盘必须 ①pwsh 直写 ②MD5 前后对照 ③`Select-String` 磁盘复验，三步缺一不可；Read 视图与工具回显一律不可当落盘证据。
 - 本笔修复实录：`Logs/P1/hh82_index_append.ps1`（AppendAllText+MD5 DF7F28E8→2C5E0F5B+复验 L99 命中）。
-## 策划裁决（策划端回写，裁决前保持空白）
+## 策划裁决（2026-09-06 策划端回写，D546 随串）
+
+| 决策点 | 裁决 |
+|---|---|
+| 三件施工与冒烟验收 | ✅ 成立（P2a 招工×10+P2b 生育解锁=三考两卡死点行为级根治实证；7/7 三轮+json 补证+影响面 62 处） |
+| 编号勘正 | HH.82→HH.83（既定勘正） |
+| 两配套修追认 | SelectionController 三门放行 Vagrant+RecruitVagrant 置籍 kingdomId=0（必要影响面修复） |
+| RiverBay | 不动确认（归 HH.86 件1a 兜底——已兑现，D546） |
+| HH.42 第 7 笔 | 教训沉淀采信入册（回显+Read 双幻读≠落盘；pwsh+MD5 对照才是磁盘真源） |
+| commit | 验收成立代执（随 HH.86 同串） |
 

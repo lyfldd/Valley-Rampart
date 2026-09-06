@@ -201,9 +201,11 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             b.grade = grade;
             b.footprint = fp;
             b.level = 1;
-            b.faction = def.faction;
             b.isObstacle = def.isObstacle;
             b.kingdomId = kingdomId;   // 2_16 步骤2：王国归属（默认 0=玩家）
+            // HH.86/DZ-040 件2a：faction 按 kingdomId 派生（照抄 UnitFactory.SpawnUnit 先例，仅 >0 覆写；
+            // 须在 kingdomId 赋值后，旧 L204 `b.faction = def.faction` 在归属写入前=AI 国仍挂 def.faction）
+            b.faction = kingdomId > 0 ? Faction.AiKingdom : def.faction;
 
             // HP：统一入口 = def.maxHp（3.5.1 E-S10）× gradeScale
             // 2_20 M5/D420：×buildingHpMul（双路同乘之二——内联路径不经 ApplyDef；kingdomId 上方 L206 已赋值先于 HP 计算）
@@ -278,6 +280,14 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
     public void AttachComponents(Building b, BuildingDef def)
     {
         if (b == null || def == null) return;
+        // HH.86/DZ-041 件3a①：空壳仓储补挂——rate==0 但有容量且 role==Economy（Warehouse/Granary 类）照挂
+        // StorageComponent 入 WarehouseRegistry（旧=不挂→采集/搬运无落点→连轴建 79 座空壳）。
+        bool econStorageOnly = def.producer.rate <= 0f && def.producer.capacity > 0
+            && def.role == BuildingRole.Economy;
+        if (econStorageOnly)
+        {
+            b.gameObject.AddComponent<StorageComponent>()?.Init(b);
+        }
         if (def.producer.rate > 0f && def.producer.kind == ProduceKind.Resource && !def.isResourceNode)
         {
             // 投掷机厂（2_12 步骤9 D207~D212 / HH.19 A×4）：挂专属组件产出弹药（厂级 3 子仓），替代通用 ProducerComponent。

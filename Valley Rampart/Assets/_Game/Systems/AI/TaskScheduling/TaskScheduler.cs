@@ -225,9 +225,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             if (uc == null || uc.npcId == 0) continue;
             // QQQ.4 T3：任务仅派给工人（Worker / Civilian——Civilian 为旧"平民"职业，注释即"从事资源采集/建造"，
             // 可视为工人）——流浪汉/居民/君主/士兵不派任务，修复"流浪汉路过 2 秒抢走玩家采集任务"；
-            // Porter 搬运工职业启用时在此追加放行
+            // HH.86/DZ-064 件1d：Porter 放行（旧白训实锤=可训练不领任务，HH.85 审计）。
             var occ = uc.EffectiveOccupation;
-            if (occ != Occupation.Worker && occ != Occupation.Civilian) continue;
+            if (occ != Occupation.Worker && occ != Occupation.Civilian
+                && occ != Occupation.Porter) continue;
             if (_npcTaskMap.ContainsKey(uc.npcId)) continue;   // 幂等：已占用不重派
             idle.Add(n);
             idleKingdom.Add(uc.kingdomId);
@@ -575,8 +576,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 break;
 
             case KingdomTaskType.WaterHaul:
+                // HH.86/DZ-044 件2c：入工人本国桶（旧恒入 0 桶=AI 工人挑水资玩家桶）——AI 桶上升、玩家桶不变。
                 if (WaterNetwork.Instance != null)
-                    WaterNetwork.Instance.AddWater(waterCarryAmount);
+                {
+                    var wuc = brain != null ? brain.GetComponent<UnitController>() : null;
+                    WaterNetwork.Instance.AddWater(waterCarryAmount, wuc != null ? wuc.kingdomId : 0);
+                }
                 break;
 
             case KingdomTaskType.Gather:
@@ -588,18 +593,17 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     var guc = brain != null ? brain.GetComponent<UnitController>() : null;
                     float gmul = guc != null ? KingdomRace.GetGatherMul(guc.kingdomId, ga.resourceType) : 1f;
                     int gain = Mathf.Max(1, Mathf.RoundToInt(ga.amount * gmul));
-                    // QQQ.4 T10：采集入工人背包（资源生命周期：采集→背包→搬运→仓库）；背包满余量直接入国库兜底
+                    // QQQ.4 T10：采集入工人背包（资源生命周期：采集→背包→搬运→仓库）；背包满余量按国分流（HH.86 件2d）
                     var inv = GetInventory(brain);
                     if (inv != null)
                     {
                         int stored = inv.TryStore(ga.resourceType, gain);
                         int overflow = gain - stored;
-                        if (overflow > 0 && RulerController.Instance != null)
-                            RulerController.Instance.ModifyResource(ga.resourceType, true, overflow);
+                        if (overflow > 0) AddGatherOverflow(guc, ga.resourceType, overflow);
                     }
-                    else if (RulerController.Instance != null)
+                    else
                     {
-                        RulerController.Instance.ModifyResource(ga.resourceType, true, gain);
+                        AddGatherOverflow(guc, ga.resourceType, gain);
                     }
                 }
                 // QQQ.2 T19：采集完成 → 资源点销毁三步（①GridSystem.Free ②BuildingRegistry移除 ③对象池Despawn）
@@ -611,6 +615,40 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     }
 
     // ===== QQQ.4 T11：搬运两段式辅助（建筑存量→工人背包→仓库/国库）=====
+
+    /// <summary>
+    /// HH.86/DZ-045 件2d：采集溢出/无背包入国库按工人国分流——玩家(0)=RulerController 原逻辑逐位；
+    /// AI(>0)=本国 KingdomState.AddResources 台账（旧恒入玩家库=资敌实锤）；国已注销=丢弃+日志（防亡国资源入玩家库）。
+    /// </summary>
+    private void AddGatherOverflow(UnitController uc, ResourceType type, int amount)
+    {
+        if (amount <= 0) return;
+        if (uc == null || uc.kingdomId <= 0)
+        {
+            if (RulerController.Instance != null)
+                RulerController.Instance.ModifyResource(type, true, amount);
+            return;
+        }
+        var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(uc.kingdomId) : null;
+        if (k == null)
+        {
+            Debug.Log($"[TaskScheduler] 采集溢出丢弃：国 {uc.kingdomId} 已注销，{type}×{amount} 不入玩家库（资敌防线）");
+            return;
+        }
+        var pack = new ResourcePack();
+        switch (type)
+        {
+            case ResourceType.Gold: pack.gold = amount; break;
+            case ResourceType.Stone: pack.stone = amount; break;
+            case ResourceType.Wood: pack.wood = amount; break;
+            case ResourceType.Food: pack.food = amount; break;
+            case ResourceType.Metal: pack.metal = amount; break;
+            default:
+                Debug.Log($"[TaskScheduler] 采集溢出丢弃：{type} 非国库五资源（AI 台账无此桶），×{amount}");
+                return;
+        }
+        k.AddResources(pack);
+    }
 
     /// <summary>获取工人背包（prefab 未挂组件则经 UnitController.GetOrAddInventory 补挂，QQQ.4 T8）。</summary>
     private WorkerInventory GetInventory(NPCBrain brain)

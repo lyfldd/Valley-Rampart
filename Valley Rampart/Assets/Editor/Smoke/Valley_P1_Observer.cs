@@ -24,7 +24,7 @@ using UnityEngine;
 public static class P1Observer
 {
     private const string LogDir = "Logs/P1";
-    private const string MainSlot = "p1_run3";      // HH.80 三考：独立命名（p1_dayXXX 系列一二轮共用已不可区分轮次；复核包 p1_run2/p1_final 系列原封勿覆盖）
+    private const string MainSlot = "p1_run4";      // HH.86 四考：独立命名（p1_run3=三考复核包原封勿覆盖；p1_dayXXX 系一二轮共用教训延续）
     private const int CheckpointIntervalDays = 5;   // 每 5 游戏日一检查点（HH.71 §三）
     private const int ExtinctStreakDays = 3;        // 灭绝监测连续零人口天数
 
@@ -43,7 +43,10 @@ public static class P1Observer
         "[KingdomFoundry]", "[TerritorySystem]", "[KingdomRegistry]", "[SaveManager]",
         "[TimeManager]", "[DayCycle", "[KingdomRegistry]", "[PopulationSystem]",
         "[SmokeApi]", "[WorldLifecycle]", "[VagrantCamp",
-        "[WaterNetwork]", "[AIEconomySettlement]"   // HH.73/D535：AI 供水链观测（AI 桶水量+日结入账）
+        "[WaterNetwork]", "[AIEconomySettlement]",  // HH.73/D535：AI 供水链观测（AI 桶水量+日结入账）
+        // HH.86/DZ-065 件1g：派工/生产/资源/时间域补齐（四考全维度观测=L3 盲区治理；6 tag 计划口径中
+        // [PopulationSystem]/[AIEconomySettlement] 已在案上方，实补 4）
+        "[TaskScheduler]", "[ProductionSystem]", "[RulerController]", "[SatietySystem]"
         // 注：[VagrantCamp 无右括号前缀=[VagrantCampSystem]/[VagrantCamp] 双匹配（HH.78 修正：原 "[VagrantCamp]" 带括号漏 [VagrantCampSystem] 前缀）
     };
 
