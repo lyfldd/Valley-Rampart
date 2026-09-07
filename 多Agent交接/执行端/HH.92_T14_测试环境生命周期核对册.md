@@ -79,7 +79,7 @@
   2. **ExecuteAttack 头部 attacker 假 null 防御**（玩家侧拆塔瞬间同源可触发，防御性一行不改变正常路径）。
   3. **HappinessSystem.OnUnitDied 建键防御**（日结前首死 `_overallHappiness[0]` KeyNotFound，v2 每轮 ghost 清玩家实体 8 条；玩家侧开局当日死亡同源隐患）。
   - **方法论教训**：v2 R1/R2 计数=8 全绿假象掩盖了 DamageSystem 漏项（死注册恰在 R2 被 target 双亡自愈路径清偿，R3 才因「死塔+活 target」组合爆量）——跨轮残留类漏项单轮绿不算绿，建拆建第 3 轮才是试金石。
-- 审计交叉收获：底表 E10「ThroneAnchor 待定性」由本批 T0 定性**结案**=活引用（BuildingComponents L152 主城挂载+D249 工人全灭轮询驱动 GameOver），非退役死代码——底表该行建议策划端改「复归」。
+- 审计交叉收获：底表 E10「ThroneAnchor 待定性」由本批 T0 定性**结案**=活引用（BuildingComponents L152 主城挂载+D249 工人全灭轮询驱动 GameOver），非退役死代码——底表该行**已由策划端改「复归」结案（2026-09-07 D552 验收串：E10 两行修订+迁移标记，策划端 grep 复核挂载链后定案）**。
 
 ## 三、结论
 
