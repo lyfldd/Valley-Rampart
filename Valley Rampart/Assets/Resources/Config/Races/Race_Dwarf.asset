@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   raceId: 2
   raceName: "\u77EE\u4EBA"
-  raceDescription: "\u7CBE\u4E8E\u91C7\u77FF\u4E0E\u953B\u9020\u7684\u5C71\u5730\u5DE5\u5320\u2014\u2014\u5730\u8109\u7194\u7089\u5927\u5E45\u63D0\u5347\u77FF\u4EA7"
+  raceDescription: "「听说他们喜欢矿石？」矮人不止喜欢矿石——他们干脆住进了山里，把家修成一圈圈楼梯，炉火千年不熄。磐石卫士站在最前面从不后退，火枪“轰”一声，最厚的盔甲也得开个洞。想攻下矮人的城？山：我先不同意。"
   bannerColor: {r: 0.7, g: 0.4, b: 0.15, a: 1}
   militant: 0.3
   economic: 0.8

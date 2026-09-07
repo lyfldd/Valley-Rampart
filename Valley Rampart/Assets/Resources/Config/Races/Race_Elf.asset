@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   raceId: 1
   raceName: "\u7CBE\u7075"
-  raceDescription: "\u64C5\u957F\u5916\u4EA4\u4E0E\u5C04\u672F\u7684\u68EE\u6797\u4E4B\u6C11\u2014\u2014\u72EC\u4EAB\u5C04\u7BAD\u573A\u8BAD\u7EC3\u8FDC\u7A0B\u7CBE\u9510"
+  raceDescription: "「哇塞！竟然是会动的树！」哦不，那是精灵——月银密林的原住民。他们的箭从你视野的尽头飞来；等你想看清射手，风行者已经消失在林间。在你发现密林之前，密林早就发现了你。"
   bannerColor: {r: 0.2, g: 0.6, b: 0.3, a: 1}
   militant: 0.3
   economic: 0.5

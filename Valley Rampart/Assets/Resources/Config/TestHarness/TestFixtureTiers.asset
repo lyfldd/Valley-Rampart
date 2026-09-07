@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21dd8be2aabce884198f88c05ec4e4da, type: 3}
+  m_Name: TestFixtureTiers
+  m_EditorClassIdentifier: 
+  tiers:
+  - label: "\u5F00\u5C40\u6001"
+    workers: 6
+    warriors: 0
+    houses: 3
+    buildings:
+    - Well
+    - farm
+    gold: 200
+    stone: 200
+    wood: 200
+    food: 300
+    metal: 0
+    warehouseFill: 100
+  - label: "\u4E2D\u671F\u6001"
+    workers: 10
+    warriors: 4
+    houses: 5
+    buildings:
+    - Well
+    - farm
+    - farm
+    - Warehouse
+    - Barracks
+    gold: 800
+    stone: 600
+    wood: 600
+    food: 800
+    metal: 100
+    warehouseFill: 100
+  - label: "\u519B\u4E8B\u671F"
+    workers: 12
+    warriors: 6
+    houses: 8
+    buildings:
+    - Well
+    - farm
+    - farm
+    - Warehouse
+    - Barracks
+    - Barracks
+    - ArcheryRange
+    - arrow_tower
+    gold: 1500
+    stone: 1200
+    wood: 1000
+    food: 1200
+    metal: 300
+    warehouseFill: 100

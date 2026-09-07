@@ -11,41 +11,28 @@ using UnityEditor;
 //  确定性红线（M15）：全链禁 UnityEngine.Random；取点=固定环序；注入定序=注册→实体→建筑→三源。
 //  小世界（M13）：fixture 场景由调用方用 WorldSize.Small 建局，绕开 45 日大读档路径。
 //
-//  ⚠️ T6 档位数值=草案（ Draft 代码表），已列报策划核准——核准后落 SO
-//  （Config/TestHarness/TestFixtureTiers.asset）并删除 Draft 表（禁硬编码清单值是终态要求）。
+//  ⚠️ T6 档位数值：2026-09-07 策划核准（HH.93 §九，gold=1500 维持）→ 已迁 SO
+//  （Resources/Config/TestHarness/TestFixtureTiers.asset，真源=TestFixtureTiersConfig），
+//  代码草案表已删（D552 迁 SO 授权；禁硬编码清单值终态达成）。
 // ============================================================================
 public enum FixtureTier { Opening = 0, Midgame = 1, Military = 2 }
 
 public static class TestFixtureApi
 {
-    // ===== T6 三档草案（报策划核准中；核准前唯一真源=本表，核准后迁 SO） =====
+    // ===== T6 三档档位表（核准版 SO；缓存读档，null 守卫指路资产路径） =====
 
-    private class TierSpec
+    private static TestFixtureTiersConfig _tiers;
+
+    private static TestFixtureTiersConfig LoadTiers()
     {
-        public string label;
-        public int workers;
-        public int warriors;
-        public int houses;
-        public string[] buildings;   // castle 外的建筑清单（Well 在前保供水；farm 保粮链）
-        public int gold, stone, wood, food, metal;
-        public int warehouseFill;    // T8：仓库 StorageComponent 注入量（按其 resourceType）
+        if (_tiers != null) return _tiers;
+        _tiers = Resources.Load<TestFixtureTiersConfig>("Config/TestHarness/TestFixtureTiers");
+        if (_tiers == null)
+            Debug.LogError("[TestFixture] 未找到 TestFixtureTiers.asset（Resources/Config/TestHarness/）——T6 三档档位 SO 缺失，PlaceKingdom 拒执行。");
+        else if (_tiers.tiers == null || _tiers.tiers.Length < 3)
+            Debug.LogError($"[TestFixture] TestFixtureTiers.asset tiers 数量={(_tiers.tiers != null ? _tiers.tiers.Length : 0)}（需 3：开局/中期/军事）——资产配置不完整。");
+        return _tiers;
     }
-
-    private static readonly TierSpec[] Draft =
-    {
-        // v2 修订（THD R1 实测反馈 2026-09-07）：①房容=每 House 3 容（GetHouseCapacity L1 实测），
-        //   houses 按人口×0.4 上取整保证 houseCapacity>population（T9/M8 门槛）；②军事期战士 8→6：
-        //   ⑦招战士缺口 needA=8，起步 8=无缺口→AI 永不扩军（A2 失效），6 起步留 +2 缺口空间。
-        new TierSpec{ label="开局态", workers=6,  warriors=0, houses=3,
-            buildings=new[]{ "Well", "farm" },
-            gold=200,  stone=200,  wood=200,  food=300,  metal=0,   warehouseFill=100 },
-        new TierSpec{ label="中期态", workers=10, warriors=4, houses=5,
-            buildings=new[]{ "Well", "farm", "farm", "Warehouse", "Barracks" },
-            gold=800,  stone=600,  wood=600,  food=800,  metal=100, warehouseFill=100 },
-        new TierSpec{ label="军事期", workers=12, warriors=6, houses=8,
-            buildings=new[]{ "Well", "farm", "farm", "Warehouse", "Barracks", "Barracks", "ArcheryRange", "arrow_tower" },
-            gold=1500, stone=1200, wood=1000, food=1200, metal=300, warehouseFill=100 },
-    };
 
     /// <summary>最近一次 PlaceKingdom 的注入台账（tier→实际落位计数，供探针/报告取证）。</summary>
     public static string LastPlacementLog { get; private set; } = "";
@@ -64,7 +51,10 @@ public static class TestFixtureApi
         if (registry == null || map == null)
         { Debug.LogError("[TestFixture] PlaceKingdom 前置缺失（Registry/ActiveMap）——须先经 EnterGame 建局。"); return null; }
 
-        var spec = Draft[(int)tier];
+        var tiersCfg = LoadTiers();
+        var spec = tiersCfg != null && tiersCfg.tiers != null && (int)tier < tiersCfg.tiers.Length
+            ? tiersCfg.tiers[(int)tier] : null;
+        if (spec == null) return null;   // LoadTiers 已 LogError 指路（资产缺失/配置不完整）
         int foundedDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
 
         // 1) 注册（KingdomFoundry L50 同链：RegisterNewKingdom→raceId→personality）

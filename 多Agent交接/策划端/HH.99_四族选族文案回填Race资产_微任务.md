@@ -33,10 +33,12 @@
 
 ## 四、回执区（执行端填写）
 
-- ⬜ 四资产回填完成（git diff 四文件贴此）
-- ⬜ Play 四卡截图贴此
-- ⬜ 编译状态：
-- 异常/截断列报（若有）：
+- ✅ 四资产回填完成（2026-09-07 执行端）：四文件 git diff 各 2 行（L17 raceDescription 单行替换），UTF-8 中文直书在盘（git diff 可目视），grep 双锚点全绿——四资产各含本族开头钩子句+结尾句逐字命中（人族「哇！人。」/「均衡，是一种朴实无华的阴险」；兽族「奇怪？长着牛角的野人？」/「上三把锁」；矮人「听说他们喜欢矿石？」/「山：我先不同意」；精灵「哇塞！竟然是会动的树！」/「早就发现了你」）。旧值 \uXXXX 转义→新值中文直书（Unity YAML 双引号标量两种形式均合法，运行时读回验证见下）。
+- ✅ Play 渲染截图：`Valley Rampart/screenshots/HH99_race_cards.png`（默认窗）+ `HH99_race_cards_hd.png`（2x 超采样）+ `HH99_race_cards_wide.png`（1920x720 档）。**渲染定性**：运行时数据链全通——GetRaceDef(0~3) 全 OK，raceDescription 长度 96/82/97/83，开头 20 字逐字正确（含「」直角引号与""弯引号）=回填本体验收达标；desc Label 均已渲染（rect 530x38）。
+- ✅ 编译状态：0 新增错误警告（唯一 exception=AssetStoreDownloadManager 编辑器内部存量噪声；VisualScripting 包 node options 缓存警告=存量，均与本批无关）。
+- ⚠️ 异常/截断列报（按任务书 §三 边界如实列报，**未自行改 UI**）：
+  1. **选族卡长文本溢出（存量 UI 排版异常，归 2_13 视觉批）**：race-card 高 69px（name 30px+desc 38px），desc 96 字需 4~5 行仅容 1 行，溢出被裁→卡上仅见族名不可见描述；且四卡 552px×4+gap≈2232px 超出 GameView 宽度（默认窗仅容约 2.5 卡，矮人/兽人卡出窗）。旧占位文案 30 字恰 1 行可容故未暴露，本次 96 字触发显形。USS 修复建议（race-card-row 换行或卡加宽/卡加高+desc white-space normal）归 2_13 视觉批裁决，执行端零触碰。
+  2. GameView set_resolution 1920x720 在 Play 中未生效（截图仍窗尺寸）——工具观察项，无碍取证（数据链日志已足证）。
 
 ---
 
