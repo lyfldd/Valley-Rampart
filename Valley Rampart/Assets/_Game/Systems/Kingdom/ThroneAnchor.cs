@@ -69,6 +69,11 @@ public class ThroneAnchor : MonoBehaviour
 
     void Update()
     {
+        // T10/T0 封死（HH.92/D549）：考跑模式停判 GameOver——D111「玩家灭绝截断」的真实停跑机制
+        // 即本锚点轮询（挂载点=BuildingComponents 主城创建 AddComponent，玩家桶0 工人全灭判定）。
+        var tmGuard = TimeManager.Instance;
+        if (tmGuard != null && tmGuard.TestHarnessMode) return;
+
         _pollTimer -= Time.deltaTime;
         if (_pollTimer > 0f) return;
         _pollTimer = PollInterval;

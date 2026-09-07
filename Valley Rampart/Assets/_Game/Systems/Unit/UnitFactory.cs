@@ -86,8 +86,12 @@ public class UnitFactory : Singleton<UnitFactory>, ISaveableSpawner
         var controller = instance.GetComponent<UnitController>();
         if (controller != null)
         {
+            // T5/D541 时序根治（HH.92）：归属赋值先于 Initialize——Initialize 内发布 UnitSpawnedEvent
+            // （订阅方 PopulationSystem.RegisterEntity 按 kingdomId 判册/EffectiveFaction 按 kingdomId 派生），
+            // 旧序（先 Initialize 后赋值）令订阅方读到 0=时序态错册；且池化复用洗涤不含 kingdomId，
+            // 先赋值同时消除上辈子残留泄漏。读档路径 SpawnFromSave 同经此处，一并根治。
+            controller.kingdomId = kingdomId;
             controller.Initialize(data);
-            controller.kingdomId = kingdomId;   // 2_16 步骤2：Entity 王国归属（默认 0=玩家）
         }
 
         // 3.0.1: 如果有 NPCBrain 且 data 是 NpcProfessionDef，初始化 AI 大脑

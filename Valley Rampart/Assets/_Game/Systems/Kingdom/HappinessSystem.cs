@@ -102,6 +102,7 @@ public class HappinessSystem : Singleton<HappinessSystem>
             if (evt.Faction != Faction.PlayerCamp) return;
             int population = PopulationSystem.Instance != null ? PopulationSystem.Instance.PopulationCount : 0;
             if (population <= 0) return;   // 无人口基数，无从扣减
+            if (!_overallHappiness.ContainsKey(0)) _overallHappiness[0] = 50f;   // HH.92：日结前首死建键（THD ghost 清玩家实体实测 KeyNotFound '0'；玩家侧开局当日死亡同源隐患）
             _overallHappiness[0] *= (1f - k / population);
             _overallHappiness[0] = Mathf.Clamp(_overallHappiness[0], 0f, 100f);
             Debug.Log($"[HappinessSystem] NPC 阵亡，整体幸福 ×= (1 - {k}/{population}) → {OverallHappiness:F1}");

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -105,6 +105,16 @@ public class DamageSystem : Singleton<DamageSystem>
         if (_instance != this) return;
         base.OnDestroy();
         EventBus.Unsubscribe<UnitDiedEvent>(OnUnitDied);
+    }
+
+    /// <summary>HH.92/T13：清场链挂载——攻击注册三表+挂起队列跨轮残留清偿（Singleton 跨 ResetWorldForNext 存活，THD 实证）。</summary>
+    public void ResetState()
+    {
+        _registrations.Clear();
+        _overkillCount.Clear();
+        _lastEventTime.Clear();
+        _pendingAttacks.Clear();
+        _tickTimer = 0f;
     }
 
     private void Update()
@@ -229,6 +239,15 @@ public class DamageSystem : Singleton<DamageSystem>
 
     private void ExecuteAttack(IDamageable attacker)
     {
+        // HH.92/T13 收尾：attacker 已销毁（Unity 假 null，如被拆的箭塔）防御——target 池化存活时
+        // 下方 target 检查失效，attacker.GetPosition() 会 MissingReferenceException 且挂起攻击永清不掉
+        // （THD R3 实测 4586 次/轮；玩家侧拆塔瞬间同样可触发）。
+        if (attacker == null)
+        {
+            _registrations.Remove(attacker);
+            return;
+        }
+
         if (!_registrations.TryGetValue(attacker, out var reg)) return;
 
         var target = reg.target;

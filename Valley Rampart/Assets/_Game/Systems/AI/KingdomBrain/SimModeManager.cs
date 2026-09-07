@@ -70,6 +70,11 @@ public class SimModeManager : Singleton<SimModeManager>
     /// </summary>
     public void EvaluateAllKingdoms()
     {
+        // T12 考跑豁免（HH.92/M9）：考跑模式跳过日判——fixture 王国 simMode 恒默认 Fine，
+        // 防离屏第 8 日切 Abstract 假死。Unity-only 测试钩子（不进 sim 决策语义，15_账本列报）。
+        var tmSim = TimeManager.Instance;
+        if (tmSim != null && tmSim.TestHarnessMode) return;
+
         var reg = KingdomRegistry.Instance;
         var lod = LODSystem.Instance;
         if (reg == null || lod == null) return;

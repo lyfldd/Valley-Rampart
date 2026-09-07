@@ -34,6 +34,7 @@ public static class WorldLifecycle
         if (RulerController.Instance != null) RulerController.Instance.ResetState();
         if (KingdomManager.Instance != null) KingdomManager.Instance.ResetState();
         if (PopulationSystem.Instance != null) PopulationSystem.Instance.ResetState();
+        if (WaterNetwork.Instance != null) WaterNetwork.Instance.ResetState();   // T13/M10（HH.92）：AI 水桶跨轮残留清偿——策划侦察实锤缺口（正式局换局同样受益）
         if (RanchSystem.Instance != null) RanchSystem.Instance.ResetState();
         if (SiegeProductionSystem.Instance != null) SiegeProductionSystem.Instance.ResetState();
 
@@ -42,7 +43,10 @@ public static class WorldLifecycle
         if (BuildingFactory.Instance != null) BuildingFactory.Instance.ClearAllBuildings();
         if (ChestManager.Instance != null) ChestManager.Instance.ClearAll();
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
+        if (KingdomBrainRegistry.Instance != null) KingdomBrainRegistry.Instance.ResetState();   // T13/M10（HH.92）：AI 决策注册跨轮残留清偿（策划侦察实锤缺口）
+        if (OverheadSpeechManager.Instance != null) OverheadSpeechManager.Instance.ResetState(); // T13/M10（HH.92）：表现层气泡残留（低危，同批补齐）
         if (VagrantCampSystem.Instance != null) VagrantCampSystem.Instance.ResetState();   // HH.66 段B#3（D522 挂账）：跨轮营地记录残留清偿
+        if (DamageSystem.Instance != null) DamageSystem.Instance.ResetState();   // T13（HH.92）：攻击注册三表跨轮残留清偿（THD R3 MissingReference 4586 次/轮实证：死塔注册+池化 target 存活）
         if (MapRenderService.Instance != null) MapRenderService.Instance.ClearAllTiles();
         if (TerritoryOverlay.Instance != null) TerritoryOverlay.Instance.ClearOverlay();   // 2_10 步骤13：清场同步清染色层（跨轮零残留）
         // AttentionSystem 非全局单例（每 NPCBrain 私有成员 _attention，无 Instance）——

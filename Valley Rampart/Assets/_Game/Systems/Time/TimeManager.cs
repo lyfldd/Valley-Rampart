@@ -282,6 +282,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         _pendingScale = 1f;
         IsCombatSlowed = false;
         _simLocked1x = false;
+        TestHarnessMode = false;   // HH.92/T1：考跑态随局复原（防跨局残留加速）
         Time.timeScale = 1f;
 
         Debug.Log($"[TimeManager] ResetState: 第{CurrentDay}天 {CurrentTimeOfDay:0.0}点 "
@@ -324,6 +325,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>进入战斗降速（敌人被感知）：强制 1x，后续加速请求被忽略。</summary>
     private void EnterCombatSlow()
     {
+        if (TestHarnessMode) return;   // 考跑守卫（M2）：战斗降速不得打断考跑加速
         if (IsCombatSlowed) return;
         IsCombatSlowed = true;
         CurrentTimeScale = 1f;
@@ -335,6 +337,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>退出战斗降速（敌人清除）：恢复玩家请求倍速（战斗结束恢复 2x）。</summary>
     private void ExitCombatSlow()
     {
+        if (TestHarnessMode) return;   // 考跑守卫（M2）：考跑中战斗降速链整体不启用
         IsCombatSlowed = false;
         CurrentTimeScale = _pendingScale;
         if (!Mathf.Approximately(Time.timeScale, 0f))
@@ -357,6 +360,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>敌人跨区块进入（威胁升整 region）→ 战斗降速。3.5 P0-6。</summary>
     private void OnEnemyEnteredRegion(EnemyEnteredRegionEvent evt)
     {
+        if (TestHarnessMode) return;   // 考跑守卫（清单 §3.1 三方法头部，冗余防线）
         EnterCombatSlow();
     }
 
@@ -435,6 +439,32 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
 
     /// <summary>sim 对拍锁中（倍速强制 1x）。</summary>
     public bool IsSimLocked => _simLocked1x;
+
+    // ===== HH.92 件A/T1：考跑模式（D549；Editor/冒烟专用直通，玩家 UI 倍速链零触碰）=====
+
+    /// <summary>考跑模式中（专用测试环境加速直通：绕过四档吸附 M1、压制战斗降速 M2）。</summary>
+    public bool TestHarnessMode { get; private set; }
+
+    /// <summary>
+    /// 进入考跑模式并直通挂档（D549：15=1 现实秒/1 游戏小时）。
+    /// 直通赋 Time.timeScale（不走 SnapToSpeed 四档吸附）；_pendingScale 不写
+    /// （防退出后战斗降速恢复链读到考跑值）。仅 Editor/冒烟链调用。
+    /// </summary>
+    public void EnableTestHarness(float speed)
+    {
+        TestHarnessMode = true;
+        CurrentTimeScale = Mathf.Max(0.1f, speed);
+        Time.timeScale = CurrentTimeScale;
+        Debug.Log($"[TimeManager] 考跑模式 ON：timeScale 直通 → {CurrentTimeScale}x（maximumDeltaTime 联动由 TestHarnessApi 设置）");
+    }
+
+    /// <summary>退出考跑模式（复原倍速态；timeScale/maximumDeltaTime/渲染减负由 TestHarnessApi.ExitTestRun 全量恢复）。</summary>
+    public void DisableTestHarness()
+    {
+        TestHarnessMode = false;
+        CurrentTimeScale = 1f;
+        Debug.Log("[TimeManager] 考跑模式 OFF");
+    }
 
     // ===== 2_8 步骤8：昼夜双环（TimeConfig SO 消费，D232~D234）=====
 

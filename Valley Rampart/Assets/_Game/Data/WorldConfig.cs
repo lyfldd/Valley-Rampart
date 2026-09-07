@@ -45,6 +45,9 @@ public struct TimeConfigData
 
     [Tooltip("黄昏过渡时长（小时）")]
     public float duskDuration;        // 默认 1
+
+    [Tooltip("考跑模式倍速档（HH.92/DZ-071：15=1 现实秒/1 游戏小时；仅 Editor 测试链 TestHarnessApi 消费，正式局零影响）")]
+    public float testSpeedMultiplier; // 默认 1（代码兜底）；asset 考跑档=15
 }
 
 /// <summary>难度规则配置。</summary>

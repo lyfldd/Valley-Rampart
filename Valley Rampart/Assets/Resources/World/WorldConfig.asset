@@ -19,6 +19,7 @@ MonoBehaviour:
     daysPerSeason: 10
     dawnDuration: 1
     duskDuration: 1
+    testSpeedMultiplier: 15
   difficulty:
     presets:
     - name: Easy

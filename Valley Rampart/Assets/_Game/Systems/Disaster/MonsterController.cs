@@ -140,6 +140,10 @@ public static class MonsterSpawner
 {
     public static MonsterController Spawn(MonsterDef def, Vector2 position)
     {
+        // T11 考跑守卫（HH.92）：全怪物源漏斗（传送门/波次/冬怪统一经 MonsterSpawner）考跑期静默。
+        var tmMon = TimeManager.Instance;
+        if (tmMon != null && tmMon.TestHarnessMode) return null;
+
         if (def == null || def.prefab == null)
         {
             Debug.LogError("[MonsterSpawner] MonsterDef 或其 prefab 为空，无法生成怪物。");

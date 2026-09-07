@@ -118,6 +118,10 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
     /// <summary>每日补员（DayCycleSettlement 调）：不满营地补 campDailyRefill，刷满 campMaxVagrants 停。</summary>
     public void OnNewDay()
     {
+        // T11 考跑守卫（HH.92/M10 同族）：考跑模式补员+自然刷点全静——D541 件3 刷点链不关会复活噪声。
+        var tmNoise = TimeManager.Instance;
+        if (tmNoise != null && tmNoise.TestHarnessMode) return;
+
         var cfg = GetCfg();
         if (cfg == null || !_mapReady) return;
 
