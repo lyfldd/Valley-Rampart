@@ -15,8 +15,8 @@ using UnityEditor;
 // ============================================================================
 public static class Valley_HH80_Run
 {
-    private const int SEED = 31415;          // HH.86 四考新 seed（侦察局：3 AI 三族各异[Elf/Dwarf/Orc]+国距 26.6~53.7 均衡+非历史局 seed，报备）
-    private const string SLOT = "p1_run4";   // 四考独立命名（延续 p1_run3 口径）
+    private const int SEED = 51713;          // HH.88 五考 seed（侦察定案 2026-09-06：4 AI[森语 r1/玄岩 r2/铁蹄 r3/雪岩 r2]+国距 50.7~186.8 均衡无口袋+营地 2+非历史局，报备）
+    private const string SLOT = "p1_run5";   // 五考独立命名（p1_run4=四考复核包原封勿覆盖，HH.87 纪律）
     private const int CIRCUIT_BREAK_DAY = 120;
 
     private static readonly List<int> _military = new List<int>();

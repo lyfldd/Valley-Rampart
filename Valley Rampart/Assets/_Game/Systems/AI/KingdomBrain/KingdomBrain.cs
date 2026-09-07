@@ -371,6 +371,8 @@ public class KingdomBrain
         var spot = FindAIBuildSpot(kingdom.id, bdef, cfg.aiBuildRadius);
         if (!spot.HasValue)
         {
+            // HH.88 件3：选址无落位静默点观测口（HH.87 列报 10）——失败原因+kingdomId
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点选址失败：{bdef.id} 半径 {cfg.aiBuildRadius} 内无合法落位（明日再试）");
             Bump(kingdomId, train: false, ok: false);
             return;   // 半径内无合法落位：明日再试
         }
@@ -381,6 +383,9 @@ public class KingdomBrain
         Bump(kingdomId, train: false, ok: ok);
         if (ok)
             Debug.Log($"[KingdomBrain] k{kingdomId} 建造焦点落地：{def0.Value.buildingId} @ ({spot.Value.x},{spot.Value.y})");
+        else
+            // HH.88 件3：TryBuild=false 静默点观测口（门面校验/扣费未过；细分原因看 [BuildController] 拒绝日志）
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点 TryBuild=false：{def0.Value.buildingId} @ ({spot.Value.x},{spot.Value.y})（门面校验/扣费未过，细分原因见 [BuildController] 拒绝日志）");
     }
 
     /// <summary>

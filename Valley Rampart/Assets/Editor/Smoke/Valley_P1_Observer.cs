@@ -24,7 +24,7 @@ using UnityEngine;
 public static class P1Observer
 {
     private const string LogDir = "Logs/P1";
-    private const string MainSlot = "p1_run4";      // HH.86 四考：独立命名（p1_run3=三考复核包原封勿覆盖；p1_dayXXX 系一二轮共用教训延续）
+    private const string MainSlot = "p1_run5";      // HH.88 五考：独立命名（p1_run4=四考复核包原封勿覆盖；p1_run3=三考复核包原封）
     private const int CheckpointIntervalDays = 5;   // 每 5 游戏日一检查点（HH.71 §三）
     private const int ExtinctStreakDays = 3;        // 灭绝监测连续零人口天数
 

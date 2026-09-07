@@ -12,5 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c0003546ee90704a9ad09d05b8b7d33, type: 3}
   m_Name: SimModeConfig
   m_EditorClassIdentifier: 
-  offscreenDaysToAbstract: 2
+  offscreenDaysToAbstract: 7
   combatHotspotForceFine: 1

@@ -95,15 +95,30 @@ public class SimModeManager : Singleton<SimModeManager>
                 if (forceFine && lod.HasActiveCombatHotspot(mid)) { hotspot = true; break; }
             }
         }
+        // HH.88 件2：切换双向补日志（堵四考「切 Abstract 静默」观测盲区）——只在模式实际变化时打
+        var old = k.simMode;   // 调用方 k.simMode 赋值发生在返回后，此处读到的即旧模式
+        SimMode next;
+        string reason;
         if (covered || hotspot)
         {
             _uncoveredDays[k.id] = 0;   // 覆盖/战斗 → 复位连续未覆盖日数
-            return SimMode.Fine;
+            next = SimMode.Fine;
+            reason = hotspot ? "战斗锁（领土内战斗热点）" : "玩家视野覆盖";
         }
-        int days = (_uncoveredDays.TryGetValue(k.id, out var d) ? d : 0) + 1;
-        _uncoveredDays[k.id] = days;
-        int threshold = _config != null ? Mathf.Max(1, _config.offscreenDaysToAbstract) : 2;
-        return days >= threshold ? SimMode.Abstract : SimMode.Fine;
+        else
+        {
+            int days = (_uncoveredDays.TryGetValue(k.id, out var d) ? d : 0) + 1;
+            _uncoveredDays[k.id] = days;
+            int threshold = _config != null ? Mathf.Max(1, _config.offscreenDaysToAbstract) : 2;
+            next = days >= threshold ? SimMode.Abstract : SimMode.Fine;
+            reason = $"离屏 {days} 日（阈值 {threshold}）";
+        }
+        if (next != old)
+        {
+            int dayNow = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+            Debug.Log($"[SimMode] k{k.id} {old} → {next} (Day {dayNow}, {reason})");
+        }
+        return next;
     }
 
     // ===== 战斗锁（D333）：事件驱动立即切 Fine（军队打到家门口，工人逃跑/救火必须真跑）=====
@@ -137,7 +152,8 @@ public class SimModeManager : Singleton<SimModeManager>
                 {
                     k.simMode = SimMode.Fine;
                     _uncoveredDays[k.id] = 0;
-                    Debug.Log($"[SimModeManager] k{k.id} 领土内战斗热点 → 战斗锁强制 Fine（立即）");
+                    int dayNow = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+                    Debug.Log($"[SimMode] k{k.id} Abstract → Fine (Day {dayNow}, 战斗锁（领土内战斗热点，事件驱动立即））");   // HH.88 件2：与前述日 tick 切换日志同格式
                     break;
                 }
             }

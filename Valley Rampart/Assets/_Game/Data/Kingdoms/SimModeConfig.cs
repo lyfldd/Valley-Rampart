@@ -12,8 +12,8 @@ using UnityEngine;
 public class SimModeConfig : ScriptableObject
 {
     [Header("SimMode 判定（D333）")]
-    [Tooltip("连续 N 日未被 LOD 活跃带覆盖 → 切 Abstract（迟滞防边界抖动，默认 2 日）")]
-    public int offscreenDaysToAbstract = 2;
+    [Tooltip("连续 N 日未被 LOD 活跃带覆盖 → 切 Abstract（迟滞防边界抖动；HH.88 过渡批 2→7，给离屏 AI 拉长 Fine 发展窗口）")]
+    public int offscreenDaysToAbstract = 7;
     [Tooltip("领土内出现战斗热点 → 强制切 Fine（战斗锁：军队打到家门口，工人逃跑/救火必须真跑）")]
     public bool combatHotspotForceFine = true;
 }

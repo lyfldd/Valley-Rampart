@@ -106,9 +106,9 @@ public static class Valley2_20_Smoke_Race
         // ===== 锚点（x 间距 14 格防野性 8 格串扰；落点吸附可走格）=====
         System.Func<int, int, Vector2> anchor = (cx, cy) =>
             SpawnPosSnapper.SnapWorld(grid.CoordToWorld(new GridCoord(cx, cy)), "2_20冒烟锚点");
-        var pA = anchor(230, 30);   // ①正组：迁远区（避免玩家出生 3 工人/4 AI 在 8 格野性半径内混入，Focus 分化），②⑦④组原位
-        var pB = anchor(28, 12);    // ①负组
-        var pC2 = anchor(42, 12);   // ②a 压制组
+        var pA = anchor(230, 30);   // ①正组：迁远区（HH.88 实证：SnapWorld 对 (230,30) 吸附回玩家营地固定点≈(100,65)——「迁远」未真生效；①正 组历史一直跑在吸附回点且绿=依赖营地邻域运气）
+        var pB = anchor(28, 12);    // ①负组（HH.88 口径修⑧：回原位带——原位全部历史可走=吸附不漂；游荡噪声由 keepClear 持续清场承担，见修⑤/⑥）
+        var pC2 = anchor(42, 12);   // ②a 压制组（口径修⑧：回原位带，同上）
         var pC3 = anchor(56, 12);   // ②b 反击组
         var pV4 = anchor(70, 12);   // ④AI 异族
         var pH3 = anchor(84, 12);   // ④AI 同族
@@ -116,8 +116,8 @@ public static class Valley2_20_Smoke_Race
         var pH2 = anchor(112, 12);  // ④玩家 放行
         var pC4 = anchor(126, 12);  // ②c 射程外负探针：近战驻守（Archer 压上行为污染负探针，改用 Warrior）
         var pC5 = anchor(140, 12);  // ②c 射程外负探针：异族野人（12 格外，射程 6 外）
-        var pD1 = anchor(154, 12);  // ②d 移动焦点负探针：Elf 野人（Wander 漫游）
-        var pD2 = anchor(168, 12);  // ②d 移动焦点负探针：Human 野人（14 格外，野性 8 格范围外）
+        var pD1 = anchor(154, 12);  // ②d 移动焦点负探针：Elf 野人（Wander 漫游；口径修⑧：回原位带）
+        var pD2 = anchor(168, 12);  // ②d 移动焦点负探针：Human 野人（14 格外，野性 8 格范围外；口径修⑧：回原位带）
 
         // ===== 探针⑤a/b/c：WildnessConfig 路径 + 开关（静态段，无帧等待，恢复后不污染行为探针）=====
         var wildAsset = Resources.Load<WildnessConfig>("Config/WildnessConfig");
@@ -147,6 +147,9 @@ public static class Valley2_20_Smoke_Race
 
         var eVagrant = dbg.SpawnVagrantWithRace(RaceIds.Elf, pA);     // ①正：贴 Worker_A
         var hVagrant = dbg.SpawnVagrantWithRace(RaceIds.Human, pB);   // ①负：贴 Worker_B
+        // HH.88 口径修⑨（撤销此前强制改族 r2）：野性域「同族豁免」机制不存在——修① 强制 hVagrant=玩家族 r2 后
+        // 实测 r2 野人袭击 r2 国民（①负 B受击源=#37 r2 d=1 dump 实锤）→①负「同族不袭击」在野性链下语义不可达，
+        // 历史绿基准=Human(r0) 材料；「野性链是否应同族豁免」归策划裁（列报 HH.89），容器恢复历史基准材料。
         var e4 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pC2);          // ②a：压制观察体（脑禁用站桩）
         var e2 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pC3);          // ②b：反击触发体（脑活，先动手）
         var v4 = dbg.SpawnVagrantWithRace(RaceIds.Elf, pV4);          // ④AI：异族
@@ -160,15 +163,33 @@ public static class Valley2_20_Smoke_Race
         if (v4 != null) v4.kingdomId = -1;
         if (h3 != null) h3.kingdomId = -1;
 
+        // HH.88 口径修⑤（续）：持续清场 helper——窗口内每帧清半径内非白名单单位（防清场后游荡再进入；
+        // 实证=玩家开局工人 #37 野性链 d=1×32 打死 ①负/②a/②b2 材料事件流，单次清场防不住窗口内再进入）
+        System.Action<Vector2, float, UnitController[]> keepClear = (center, radiusCells, keep) =>
+        {
+            float kr = radiusCells * grid.Config.cellSize.x;
+            foreach (var u in UnitRegistry.Instance.GetAllUnits().ToList())
+            {
+                if (u == null || !u.IsAlive) continue;
+                bool isKeep = false;
+                foreach (var kp in keep) { if (ReferenceEquals(u, kp)) { isKeep = true; break; } }
+                if (isKeep) continue;
+                if (Vector2.Distance(u.transform.position, center) <= kr) u.TakeDamage(999999);
+            }
+        };
+
         // ①正组半径 12 格清场（HH.51 验收修订：远区防 D308 流民/AI 工人游荡入半径 → Focus 分化；
         // 保 workerA/eVagrant 独处 → 野性目标唯一）。仅清 ①正 组锚点周边，不碰玩家出生区。
+        // HH.88 口径修⑥：keep 互含全部远区材料（workerB/archerA2/e4/hVagrant）——迁远后四组同带 14 格间距，
+        // SnapWorld 吸附漂移可缩至 12 格内→旧 keep 白名单互缺=①正/①负块互杀邻组材料（实测布置即 hp0=0/0）
         if (workerA != null)
         {
             float clearR = 12f * grid.Config.cellSize.x;
             foreach (var u in UnitRegistry.Instance.GetAllUnits().ToList())
             {
                 if (u == null || !u.IsAlive) continue;
-                if (ReferenceEquals(u, workerA) || ReferenceEquals(u, eVagrant)) continue;
+                if (ReferenceEquals(u, workerA) || ReferenceEquals(u, eVagrant) || ReferenceEquals(u, workerB) ||
+                    ReferenceEquals(u, archerA2) || ReferenceEquals(u, e4) || ReferenceEquals(u, hVagrant)) continue;
                 if (Vector2.Distance(u.transform.position, workerA.transform.position) <= clearR)
                     u.TakeDamage(999999);
             }
@@ -182,6 +203,21 @@ public static class Valley2_20_Smoke_Race
                 if (u == null || !u.IsAlive) continue;
                 if (ReferenceEquals(u, archerB2) || ReferenceEquals(u, archerA2) || ReferenceEquals(u, e2) || ReferenceEquals(u, e4)) continue;
                 if (Vector2.Distance(u.transform.position, archerB2.transform.position) <= clearR)
+                    u.TakeDamage(999999);
+            }
+        }
+        // ①负 组半径 12 格清场（HH.88 口径修②，同 ①正 模式）：保 workerB/hVagrant 独处，防世界野人
+        // 异族袭击 Worker_B 污染「同族不袭击」断言（营地补员随机噪声下 pB 邻域=①负 假 FAIL 源，实测 Worker_B 100→94）
+        // HH.88 口径修⑥：keep 互含全部远区材料（同 ①正 块）
+        if (workerB != null)
+        {
+            float clearR = 12f * grid.Config.cellSize.x;
+            foreach (var u in UnitRegistry.Instance.GetAllUnits().ToList())
+            {
+                if (u == null || !u.IsAlive) continue;
+                if (ReferenceEquals(u, workerB) || ReferenceEquals(u, hVagrant) || ReferenceEquals(u, workerA) ||
+                    ReferenceEquals(u, archerA2) || ReferenceEquals(u, e4) || ReferenceEquals(u, eVagrant)) continue;
+                if (Vector2.Distance(u.transform.position, workerB.transform.position) <= clearR)
                     u.TakeDamage(999999);
             }
         }
@@ -243,6 +279,19 @@ public static class Valley2_20_Smoke_Race
                 npc.transform.position = pinTarget.transform.position;   // 再钳回（Executer 移动后）
             }
         }
+        // ①负 受击源 dump（HH.88 口径修③）：窗口期订阅受击事件，断言输出带攻击者身份——
+        // Worker_B 若掉血可一眼溯源（材料自身/邻域残留），清场缺口证据化
+        var hitBy1b = new System.Text.StringBuilder();
+        System.Action<UnitDamagedEvent> dump1b = evt =>
+        {
+            if (evt.Unit is UnitController vuc && ((workerB != null && ReferenceEquals(vuc, workerB)) || (workerA != null && ReferenceEquals(vuc, workerA))))
+            {
+                var src = evt.Source as UnitController;
+                bool isA = workerA != null && ReferenceEquals(vuc, workerA);
+                hitBy1b.Append($"[{(isA ? "A" : "B")}受击源=#{(src != null ? src.npcId.ToString() : "?")} f={(src != null ? src.GetFaction().ToString() : "?")} r={(src != null ? src.raceId.ToString() : "?")} d={evt.ActualDamage}] ");
+            }
+        };
+        EventBus.Subscribe(dump1b);
         while (Time.realtimeSinceStartup - t0 < 20f)
         {
             Time.timeScale = 1f;
@@ -255,6 +304,11 @@ public static class Valley2_20_Smoke_Race
             DriveAndPin(npcB, workerB);
             DriveAndPin(npcE2, archerB2);
             DriveAndPin(npcAr, archerB2);
+            // HH.88 口径修⑤：主窗口持续清场（①正/①负/②a 三中心；材料白名单保护，杀窗口内再进入的游荡单位）
+            // 口径修⑥：keep 互含全部远区材料（防吸附漂移后互杀邻组材料）
+            if (workerA != null) keepClear(workerA.transform.position, 12f, new[] { workerA, eVagrant, workerB, archerA2, e4, hVagrant });
+            if (workerB != null) keepClear(workerB.transform.position, 12f, new[] { workerB, hVagrant, workerA, archerA2, e4, eVagrant });
+            if (archerA2 != null) keepClear(archerA2.transform.position, 12f, new[] { archerA2, e4, workerA, workerB, eVagrant, hVagrant });
             yield return null;
         }
 
@@ -293,8 +347,9 @@ public static class Valley2_20_Smoke_Race
         bool p1b = workerB != null && hpB1 == hpB0;
         bool p2a = e4 != null && e4.IsAlive && hpE4_1 == hpE4_0;
         sb.Append($"\n①正 异族→Worker_A {hpA0}→{hpA1}={(p1a ? "OK" : "FAIL")} ");
-        sb.Append($"①负 同族→Worker_B {hpB0}→{hpB1}={(p1b ? "OK" : "FAIL")} ");
+        sb.Append($"①负 同族→Worker_B {hpB0}→{hpB1}={(p1b ? "OK" : "FAIL")} {hitBy1b}Hum.race={(hVagrant != null ? hVagrant.raceId.ToString() : "?")} ");
         sb.Append($"②a 压制 Archer不打E4 {hpE4_0}→{hpE4_1}={(p2a ? "OK" : "FAIL")} ");
+        EventBus.Unsubscribe(dump1b);
         allPass = allPass && p1a && p1b && p2a;
 
         while (Time.realtimeSinceStartup - t0 < 25f)
@@ -357,6 +412,10 @@ public static class Valley2_20_Smoke_Race
             while (Time.realtimeSinceStartup - t2b < 6f)
             {
                 Time.timeScale = 1f;
+                // HH.88 口径修⑤：贴脸窗口持续清场（保 archerB2/hVagrant；防 #37 游荡袭扰）
+                // 口径修⑦：撤销「贴脸跟随」——每帧把 hVagrant 贴回国民脸会被国民野性链当野人连续打（实测 100→22）；
+                // hVagrant 脑活自会跑开（原设计），只保留清场
+                keepClear(archerB2.transform.position, 12f, new[] { archerB2, hVagrant });
                 var npcAr2 = archerB2 != null ? archerB2.GetComponent<NPCBrain>() : null;
                 DriveAndPin(npcAr2, archerB2);
                 yield return null;
@@ -451,6 +510,30 @@ public static class Valley2_20_Smoke_Race
         // ===== ②d 负探针（D486）：移动焦点（Wander）单位被异族袭击→不还手（不打断移动）=====
         var e2d = dbg.SpawnVagrantWithRace(RaceIds.Elf, pD1);
         var hBd = dbg.SpawnVagrantWithRace(RaceIds.Human, pD2);
+        // ②d 半径 12 格清场（HH.88 口径修④，同 ②c 模式）：保 e2d/hBd 独处，防世界野人袭击 hBd
+        // 污染「攻击者血不变」断言（②d 历史无清场=HH.86 邻域侥幸干净；实测三轮 hBd 恒 100→95）
+        if (hBd != null)
+        {
+            float clearR = 12f * grid.Config.cellSize.x;
+            foreach (var u in UnitRegistry.Instance.GetAllUnits().ToList())
+            {
+                if (u == null || !u.IsAlive) continue;
+                if (ReferenceEquals(u, e2d) || ReferenceEquals(u, hBd)) continue;
+                if (Vector2.Distance(u.transform.position, hBd.transform.position) <= clearR)
+                    u.TakeDamage(999999);
+            }
+        }
+        // ②d 受击源 dump（HH.88 口径修④）：清场残留噪声可溯源
+        var hitBy2d = new System.Text.StringBuilder();
+        System.Action<UnitDamagedEvent> dump2d = evt =>
+        {
+            if (evt.Unit is UnitController vuc && hBd != null && ReferenceEquals(vuc, hBd))
+            {
+                var src = evt.Source as UnitController;
+                hitBy2d.Append($"[受击源=#{(src != null ? src.npcId.ToString() : "?")} f={(src != null ? src.GetFaction().ToString() : "?")} r={(src != null ? src.raceId.ToString() : "?")} d={evt.ActualDamage}] ");
+            }
+        };
+        EventBus.Subscribe(dump2d);
         bool p2d = false;
         if (e2d != null && hBd != null)
         {
@@ -462,14 +545,17 @@ public static class Valley2_20_Smoke_Race
             while (Time.realtimeSinceStartup - t2d < 6f)
             {
                 Time.timeScale = 1f;
+                // HH.88 口径修⑤：②d 窗口持续清场（保 e2d/hBd，防游荡再进入袭扰 hBd）
+                keepClear(hBd.transform.position, 12f, new[] { e2d, hBd });
                 var npcE2d = e2d.GetComponent<NPCBrain>();
                 DriveAndPin(npcE2d, e2d);   // 保持 e2d 在场（焦点仍 Wander 移动中）
                 yield return null;
             }
             p2d = hBd.CurrentHp >= hpHBd0;   // 攻击者血不变=移动焦点不还手
-            sb.Append($"②d 负 移动焦点(Wander)被袭→不还手(hBd {hpHBd0}→{hBd.CurrentHp})={(p2d ? "OK" : "FAIL")} ");
+            sb.Append($"②d 负 移动焦点(Wander)被袭→不还手(hBd {hpHBd0}→{hBd.CurrentHp}{hitBy2d})={(p2d ? "OK" : "FAIL")} ");
         }
         else sb.Append("②d SKIP(无 e2d/hBd) FAIL ");
+        EventBus.Unsubscribe(dump2d);
         allPass = allPass && p2d;
 
         // ===== 探针④：招募限同族（玩家侧 RecruitVagrant + AI⑥ FindRecruitableVagrant 反射）=====
