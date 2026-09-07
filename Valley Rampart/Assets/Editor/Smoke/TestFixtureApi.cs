@@ -176,6 +176,10 @@ public static class TestFixtureApi
 
     // ===== 内部：确定性取点与生产链封装 =====
 
+    /// <summary>诊断/单变量组注入用（HH.100 五组跑批）：生产链 SpawnUnit 直呼版（M6 禁裸构同链）。</summary>
+    public static bool SpawnFixtureUnitForDiag(Occupation occ, Vector2Int center, int kingdomId, int idx)
+        => SpawnFixtureUnit(occ, center, kingdomId, idx);
+
     /// <summary>实体注入：生产链 SpawnUnit（Faction 门面；T5 后 kingdomId 先于事件到位）+ 固定环序取点 + 可走吸附。</summary>
     private static bool SpawnFixtureUnit(Occupation occ, Vector2Int center, int kingdomId, int idx)
     {

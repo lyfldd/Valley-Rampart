@@ -43,6 +43,9 @@ public class FocusController
     /// <summary>本次评分顶行动（调试/冒烟断言：对比常设底线是否覆盖评分排序，冒烟#4）。</summary>
     public UtilityAction LastTop { get; private set; } = UtilityAction.None;
 
+    /// <summary>HH.100/P0 件A ④单变量组诊断开关（默认 false=正式行为零变化；跳过被攻击防御窗口强制。跑后复位 false，去留归 A-T2 处方裁决）。</summary>
+    public static bool DiagBypassDefenseWindow = false;
+
     public FocusController(int kingdomId)
     {
         _kingdomId = kingdomId;
@@ -113,7 +116,9 @@ public class FocusController
         }
         _wasPopAlarm = false;
         //  底线第三级「保命」：被攻击 → 强制防御窗口
-        if (day < _defenseEndDay) { SetFocus(kingdom, FocusDefense, day); return; }
+        //  HH.100/P0 诊断开关（M7 可回滚）：DiagBypassDefenseWindow=true 时跳过防御窗口强制，
+        //  用于「14 锁死」归因的④单变量组（默认 false=正式行为零变化；处置归 A-T2 处方裁决）。
+        if (day < _defenseEndDay && !DiagBypassDefenseWindow) { SetFocus(kingdom, FocusDefense, day); return; }
 
         // ---- 效用评分（D322 step2；阶段门控过滤 + 四因子打分）----
         ScriptStage stage = kingdom.scriptPhase ?? ScriptStage.Survive;
