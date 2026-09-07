@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WorldConfig
   m_EditorClassIdentifier: 
   time:
-    secondsPerDay: 480
+    secondsPerDay: 360
     startDay: 1
     startHour: 6
     daysPerSeason: 10
@@ -23,13 +23,10 @@ MonoBehaviour:
     presets:
     - name: Easy
       difficultyValue: 1
-      secondsPerDay: 600
     - name: Normal
       difficultyValue: 2
-      secondsPerDay: 480
     - name: Hard
       difficultyValue: 3
-      secondsPerDay: 360
     baseGold: 200
     baseStone: 200
     baseWood: 200

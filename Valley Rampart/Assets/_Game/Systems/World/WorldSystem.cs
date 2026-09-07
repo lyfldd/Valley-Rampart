@@ -65,11 +65,10 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
         // 1. 世界管理器（世界种子 + 地图大小 + 难度）
         WorldManager.Instance.ApplyConfig(newConfig.worldSeed, newConfig.worldSize, newConfig.difficulty);
 
-        // 2. 难度系统初始化（设初始系数 + 同步 TimeManager 的 secondsPerDay）
+        // 2. 难度系统初始化（设初始系数；秒/天不再按难度设，D547 统一度量衡）
         DifficultyManager.Instance.Initialize(newConfig.difficulty);
 
-        // 3. 时间系统从 WorldConfig 读规则（秒/天已在 DifficultyManager.Initialize 里按档位设了，
-        //    这里补设 daysPerSeason）
+        // 3. 时间系统从 WorldConfig 读规则（秒/天全难度统一 360，这里补设 daysPerSeason）
         ApplyTimeConfig();
 
         // 4. 按难度应用初始资源
@@ -84,7 +83,7 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
         if (config == null) return;
         var tc = config.time;
         TimeManager.Instance.SetDaysPerSeason(tc.daysPerSeason);
-        // secondsPerDay 已由 DifficultyManager 按档位设（Easy 慢/Hard 快）
+        // secondsPerDay 全难度统一（D547），由 WorldConfig.asset 唯一决定，此处无需再设
     }
 
     /// <summary>把 SeasonConfig 应用到 TimeManager（日出日落表）。</summary>
@@ -135,7 +134,6 @@ public class WorldSystem : Singleton<WorldSystem>, ISaveable
         // 读档时也要应用配置（子管理器的 LoadState 会恢复各自状态，
         // 但 TimeManager 的 daysPerSeason 等配置项需要从 WorldConfig 重新设）
         ApplyTimeConfig();
-        DifficultyManager.Instance.SyncConfigFromWorld();
 
         Debug.Log("[WorldSystem] 读档恢复完成");
     }

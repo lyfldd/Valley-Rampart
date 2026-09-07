@@ -4,13 +4,13 @@ using UnityEngine;
 /// 游戏时间管理器（单例）。
 ///
 /// 核心规则：
-///   - 现实 secondsPerDay 秒 = 游戏内一天（24小时）。默认 480 秒 = 8 分钟/天。
+///   - 现实 secondsPerDay 秒 = 游戏内一天（24小时）。默认 360 秒 = 6 分钟/天。
 ///   - CurrentDay 随时间推进递增；季节由天数决定，每 daysPerSeason 天换一季，春夏秋冬循环。
 ///   - 时段 Night→Dawn→Day→Dusk→Night 由「当天时刻 + 季节昼夜比例」动态计算。
 ///   - 季节影响日出/日落：夏白天最长(15h)，冬最短(10h)。
 ///
 /// 配置来源：WorldSystem.Config.time（TimeConfigData）。所有时间规则不再硬编码。
-/// secondsPerDay 会被 DifficultyManager.Initialize 按档位覆盖（Easy 慢/Hard 快）。
+/// secondsPerDay 全难度统一（D547 统一度量衡：难度-时间耦合已移除），由 WorldConfig.asset 唯一决定。
 ///
 /// 发布的事件（仅这三种，小时变化不发事件）：
 ///   - TimePhaseChangedEvent 时段切换时发布
@@ -27,7 +27,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
 
     // ===== 时间规则（运行时从 WorldConfig.time 读取，不再 SerializeField 硬编码）=====
 
-    private float secondsPerDay = 480f;     // 现实秒/天
+    private float secondsPerDay = 360f;     // 现实秒/天（默认兜底，真源=WorldConfig.asset）
     private int startDay = 1;               // 起始天
     private float startHour = 6f;           // 起始时刻
     private int daysPerSeason = 10;         // 每季天数
@@ -146,7 +146,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
             return;
         }
         var tc = WorldSystem.Instance.Config.time;
-        secondsPerDay = tc.secondsPerDay > 0 ? tc.secondsPerDay : 480f;
+        secondsPerDay = tc.secondsPerDay > 0 ? tc.secondsPerDay : 360f;
         startDay = Mathf.Max(1, tc.startDay);
         startHour = Mathf.Clamp(tc.startHour, 0f, 24f);
         daysPerSeason = Mathf.Max(1, tc.daysPerSeason);
@@ -266,7 +266,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// 彻底重置运行时状态到初始值。
     /// InitializeWorld 不覆盖 CurrentDay/CurrentSeason/CurrentTimeOfDay 等字段，
     /// Singleton 不重走 Awake，所以必须由 TeardownManager 显式重置。
-    /// secondsPerDay / daysPerSeason 不重置（InitializeWorld 会覆盖）。
+    /// secondsPerDay 不重置（D547 后唯一真源=WorldConfig.asset，Awake 一次读入；LoadState 可覆盖）。
     /// </summary>
     public void ResetState()
     {
@@ -290,7 +290,7 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
 
     // ===== 配置接口（由 DifficultyManager / WorldSystem 调用）=====
 
-    /// <summary>设置现实秒/天。难度越高可缩短（每天更紧张）或延长。</summary>
+    /// <summary>设置现实秒/天（读档链 LoadState/冒烟快进消费；难度档不再参与，D547）。</summary>
     public void SetSecondsPerDay(float seconds)
     {
         secondsPerDay = Mathf.Max(1f, seconds);

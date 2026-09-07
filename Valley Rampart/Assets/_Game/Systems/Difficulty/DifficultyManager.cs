@@ -57,31 +57,13 @@ public class DifficultyManager : Singleton<DifficultyManager>, ISaveable
         Debug.Log("[DifficultyManager] ResetState: 档位=1, 系数=1");
     }
 
-    /// <summary>新建游戏初始化。</summary>
+    /// <summary>新建游戏初始化（D547：难度不再触碰 TimeManager.secondsPerDay，度量衡全难度统一 360）。</summary>
     public void Initialize(int difficulty)
     {
         CurrentDifficulty = Mathf.Clamp(difficulty, 1, 3);
         CurrentFactor = CurrentDifficulty;
 
-        // 按档位同步 TimeManager 的 secondsPerDay
-        DifficultyPreset preset = Config.GetPreset(CurrentDifficulty);
-        if (TimeManager.Instance != null)
-        {
-            TimeManager.Instance.SetSecondsPerDay(preset.secondsPerDay);
-        }
-
-        Debug.Log($"[DifficultyManager] 初始化: 档位={CurrentDifficulty}, 系数={CurrentFactor}, 秒/天={preset.secondsPerDay}");
-    }
-
-    /// <summary>读档后同步配置（由 WorldSystem.LoadState 调用）。</summary>
-    public void SyncConfigFromWorld()
-    {
-        if (CurrentDifficulty <= 0) return;  // 未初始化则跳过
-        DifficultyPreset preset = Config.GetPreset(CurrentDifficulty);
-        if (TimeManager.Instance != null)
-        {
-            TimeManager.Instance.SetSecondsPerDay(preset.secondsPerDay);
-        }
+        Debug.Log($"[DifficultyManager] 初始化: 档位={CurrentDifficulty}, 系数={CurrentFactor}");
     }
 
     /// <summary>按当前难度获取初始国家资源包。</summary>

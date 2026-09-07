@@ -29,7 +29,7 @@ public class WorldConfig : ScriptableObject
 public struct TimeConfigData
 {
     [Tooltip("现实多少秒 = 游戏内一天")]
-    public float secondsPerDay;       // 默认 480（8分钟/天）
+    public float secondsPerDay;       // 默认 360（6分钟/天，D547 全难度统一）
 
     [Tooltip("游戏开始是第几天")]
     public int startDay;              // 默认 1
@@ -67,7 +67,7 @@ public struct DifficultyConfig
     public DifficultyPreset GetPreset(int difficultyValue)
     {
         if (presets == null || presets.Length == 0)
-            return new DifficultyPreset { name = "Default", difficultyValue = 2, secondsPerDay = 480f };
+            return new DifficultyPreset { name = "Default", difficultyValue = 2 };
         int index = Mathf.Clamp(difficultyValue - 1, 0, presets.Length - 1);
         return presets[index];
     }
@@ -92,8 +92,6 @@ public struct DifficultyPreset
 {
     public string name;              // "Easy" / "Normal" / "Hard"
     public int difficultyValue;      // 1 / 2 / 3（= DifficultyFactor 初始值）
-    [Tooltip("现实秒/天。Easy 节奏慢，Hard 节奏紧")]
-    public float secondsPerDay;      // Easy 600 / Normal 480 / Hard 360
 }
 
 /// <summary>季节规则配置（四季日出日落）。</summary>
