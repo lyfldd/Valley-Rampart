@@ -64,4 +64,20 @@
 
 ## 策划裁决区（策划端回写）
 
-> （待策划端裁决）
+> 2026-09-08 策划端实盘复核裁决（D576 · 0.6 §一百零六）：
+>
+> **1. 重证三笔=销号 D572④ ✅**
+> - a：本端 pwsh 复跑 on（probe5）/off（round_5）——**63/63 场景 totalDamageTaken 差异=0、总分 0.434=0.434、subScores 逐字段全等**，仪式性收拢机理实锤；「80%」口径错误自纠+跨口径对比禁令+「行为级声明必须带 on/off 对照」采信升训练轨常设纪律。行为级验收口径更正（状态机+负探针+粘性，不含承伤/总分）采纳=评分面方案落地后的演化目标。
+> - b：本端直读 results/baseline/v9/report.json（battlesPerScenario=100）——W9_T02_20260907_0 trig=63/end=2、W9_T09_20260907_0 trig=100/end=5，勘正确认、结论不变。
+> - c：D-016 台账 SHA256 双局快照在场（runs/det 在 ignore=L-02 第二通道成立），hash 级升格准。
+> - ⚠ 两笔计数 slip 随验收勘正（不涉结论）：①「24 个触发场景」实为 **23**（probe5 逐场景清点）；②D-017 §6「其余 126 场景」实为 **63**（v9 池实测 63 文件；126=12600 局÷100 口径误迁移）。负探针结构命题不受影响。
+>
+> **2. F28 开工追认+参数轮收口+结构议题登记 ✅**
+> - 六处结构补齐 diff 直读实锤（CardPool 默认 0 零回归/SimScenarioData+2/SimWorld else economy 优先/GenerateV9 写场/卡池 600·150=75% 夜间/gen 22 卡）；KF28 三场景 57 单位（21+8+28）天相位在场；经济昼夜链守卫核验认可；**零 Unity 回灌义务成立**（AI.Core NightFactor 三文件在场：TuningSnapshot/SafetyScoreFormulas/FactorContext）。
+> - 卡池迭代自纠嘉奖（首版全劣势局→B/C 档可赢局，round_0 verdict 6 回归 rejected 佐证；「必输局无收益空间」=指标先于参数 L-10 实战兑现）。
+> - round_1（0.5）/round_2（0.8）verdict 本端直读：均 Δ+0.001 candidate、regression=[]、holdout 0.000——快验制收参数轮准（D566① 带内）；safetyNightWeight 参数面死亡定性采信；结构议题候选登记准，重估触发=评分面方案落地（与 T06 r4 候选/T01 复开同触发池）。
+>
+> **3. 拓扑 T03 顺延准 ✅**——00 v2 拓扑序；D566⑥ 仪器义务已在场（report 场景级 supportArrivalRate/supportMoves/supportArrivals 三字段实存），T03 无附加前置。
+>
+> **策划端欠账重申**：评分面「保全式赢收益路径」设计稿（D572② 立项，含防罪2/罪5 条款）=T06 r4/T01 复开/F28 重估三池共同前置，策划端下轮交付。
+> 训练师三笔自纠全部诚实归因（80% 口径/T09_0 引用/首版卡池）+L-02 双在场兑现=嘉奖。HH.118 销号。
