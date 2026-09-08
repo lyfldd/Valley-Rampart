@@ -1026,3 +1026,8 @@ v2 的 `SaveManager` 是个"只管搬箱子的快递员"——业务模块自己
 
 >> 📌 **2026-08-30 漂移追记**（转录自 [文档对账报告_2026-08-23](./报告/落实对账/文档对账报告_2026-08-23.md) §三 及 _目录 状态列后续裁决；仅转录未重审代码，最后核对日期以 _目录 为准）：
 > - 版本 v2→v5（QQQ.2/QQQ.4）；BuildingSaveData 已 2D 化；2_11 明确 ISaveable 架构零重构，迁移细节归 2_11；WorldSystem/DifficultyManager 注册点补录待办仍有效。
+
+>> 📌 **2026-09-08 HH.109 存档域小批落库追记**（commit a0214b9；D577 验收成立，D564 施工）：
+> - 新增 ISaveable 注册点两行（§七 表外）：`ChestManager`（SaveId="ChestManager"/LoadPhase=Scene/payload=ChestSaveData v1：cellX/cellY/bornDay/ownerFaction/contents）+ `TrainingSystem`（SaveId="TrainingSystem"/LoadPhase=Scene/payload=TrainingSaveData v1：buildingSaveId/unitSaveId/buildingId+from/to 反查三键/startDay/inTraining/kingdomId/effCostDays）——双 payload version=1 零 schema bump（saveVersion 维持 3=M1）。
+> - `SaveManager` 新增 `TryGetSaveable(saveId, out ISaveable)` 反查支撑（幽灵引用视同未注册；只增不改既有语义）。
+> - 入档口径：fake-null 死引用/亡员条目不入档（旧档残留死键首次存档自愈洗掉）；读档时序=建筑先重建（阶段 1.5）→队列后恢复（阶段 2 Scene，M2 直证）；TrainingSystem.LoadState 先 `_queues.Clear()` 后恢复；清场泄漏修=TrainingSystem.ResetState（清 _queues/_recentDeaths）挂 WorldLifecycle.ClearAllBuildings 后编排行。
