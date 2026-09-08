@@ -48,6 +48,12 @@
 | M4 | HH.42 落盘幻觉 | grep 双锚点+git diff 自查=交付前置 |
 | M5 | 文件面 | 新 UI 文件+SiegeProductionSystem 只读引用+ToastManager（若接）；开工前 git status 划界列报 |
 
+## 二·补、D579 搭车两笔（2026-09-08 HH.115 验收串追加，用户拍板）
+
+- **补笔A 出册日志静默**：PopulationSystem 出册日志（L169 附近，逐条出册）改静默+注释（与 D563② 入册 L160 汇总口径对称——人口计数对账价值由 LogCountSnapshot/开局汇总行承载；六考长局每次单位死亡一条=刷屏面）。
+- **补笔B 战斗降速域死代码收口**：TimeManager `IsCombatSlowed` 恒 false 死分支三处（Update L162/SetGameSpeed L319/L387）+`ExitCombatSlow`/`HasActiveEnemies`（EnterCombatSlow 删除后永不触发）删除；`Valley_HH80_Run.cs` L72 过时注释（「夜战锁 1x 由游戏内 EnterCombatSlow 自动——损耗计入」）同步更正（HH.80 容器语义=主加速 3x 即可，删去死引用半句）。
+- 两笔合计约 20 行+1 注释；不改变本批探针与验收口径（P1~P6 照跑）；git diff 自查清单加入两笔涉及文件（PopulationSystem/TimeManager/Valley_HH80_Run）。
+
 ## 三、验收口径
 
 - P1~P6 全绿+四容器零回归+UI 三负探针（族检/上限/资源）行为级
