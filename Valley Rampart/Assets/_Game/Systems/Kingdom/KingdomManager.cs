@@ -340,7 +340,10 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
             treasuryFood = tv != null ? tv.GetAmount(ResourceType.Food) : 0,
             treasurySpecialFood = tv != null ? tv.GetAmount(ResourceType.SpecialFood) : 0,
             treasuryMeat = tv != null ? tv.GetAmount(ResourceType.Meat) : 0,
-            treasuryMetal = tv != null ? tv.GetAmount(ResourceType.Metal) : 0
+            treasuryMetal = tv != null ? tv.GetAmount(ResourceType.Metal) : 0,
+            // DZ-072a：副产两资源入档（TreasureVault.Managed 扩面配套）
+            treasuryCrystal = tv != null ? tv.GetAmount(ResourceType.Crystal) : 0,
+            treasuryFireOil = tv != null ? tv.GetAmount(ResourceType.FireOil) : 0
         };
         return new SavePayload
         {
@@ -377,6 +380,9 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         TreasurySpecialFood = data.treasurySpecialFood;
         TreasuryMeat = data.treasuryMeat;
         TreasuryMetal = data.treasuryMetal;
+        // DZ-072a：副产两资源读档缓存（旧档缺字段=0）
+        TreasuryCrystal = data.treasuryCrystal;
+        TreasuryFireOil = data.treasuryFireOil;
 
         // 2_17 步骤11 批2：读档后把玩家解锁态镜像到 KingdomState[0]（若 Registry 已就绪；未就绪则 Registry 创建玩家态时回拉）
         MirrorPlayerUnlockToRegistry();
@@ -391,6 +397,9 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     public int TreasurySpecialFood { get; private set; }
     public int TreasuryMeat { get; private set; }
     public int TreasuryMetal { get; private set; }
+    // DZ-072a：副产两资源读档缓存（TreasureVault 就绪后恢复）
+    public int TreasuryCrystal { get; private set; }
+    public int TreasuryFireOil { get; private set; }
 
     /// <summary>把旧存档（7/9 档）额度数组扩展到当前 13 档（v1 兼容：缺档补初始额度）。</summary>
     private int[] ResizeQuotaArray(int[] old)
@@ -417,6 +426,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         InitTradeQuotas();   // 新建游戏重新初始化贸易额度
         // 2_12 步骤8.4：清国库读档缓存（防新建局读到上局残留）
         TreasuryStone = TreasuryWood = TreasuryFood = TreasurySpecialFood = TreasuryMeat = TreasuryMetal = 0;
+        TreasuryCrystal = TreasuryFireOil = 0;   // DZ-072a：副产缓存同清
         // 2_17 步骤11 批2：复位同步玩家解锁态镜像到 KingdomState[0]（随 Registry 重置后回拉一致）
         MirrorPlayerUnlockToRegistry();
     }

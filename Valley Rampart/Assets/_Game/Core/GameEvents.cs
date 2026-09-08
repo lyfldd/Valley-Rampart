@@ -586,18 +586,8 @@ public readonly struct FormationDeselectedEvent
     public FormationDeselectedEvent(int formationId) { FormationId = formationId; }
 }
 
-// 敌人进入区块事件。由 GridSystem.TryEnter 在敌人跨 region 时发布（§1.3 威胁类事件升整 region）。
-public readonly struct EnemyEnteredRegionEvent
-{
-    public readonly int RegionIndex;
-    public readonly UnitController Enemy;
-
-    public EnemyEnteredRegionEvent(int regionIndex, UnitController enemy)
-    {
-        RegionIndex = regionIndex;
-        Enemy = enemy;
-    }
-}
+// DZ-076（HH.107 件3）：EnemyEnteredRegionEvent 死事件定义删除——全库零发布+唯一订阅方（TimeManager）同批退役
+//（doc 1 §1.4 已由 ChunkEvent 系取代，此处为 2_7 适配期「暂不删旧」遗留，现清偿）。
 
 // 敌人进入 Chunk 事件（doc 1 §1.4：旧 EnemyEnteredRegionEvent 由 ChunkEvent 取代；
 // 订阅方适配归 2_7，本片先新增事件与发布点，不删旧事件以免影响现有订阅方）。

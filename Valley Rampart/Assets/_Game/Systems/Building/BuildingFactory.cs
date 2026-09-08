@@ -306,6 +306,13 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
                     b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
             }
         }
+        // 矿洞副产（DZ-072a，D562 / HH.107 件1）：mine 双身份=A2 变体——isResourceNode 采集点身份不动
+        //（上面产能分支被 isResourceNode 排除，mine 本体无 StorageComponent/ProducerComponent），
+        // 另挂专属副产组件恒产水晶/火油入自管子仓（仿 isSiegeWorkshop 先例）。
+        if (def.isMineByproduct)
+        {
+            b.gameObject.AddComponent<MineByproductComponent>()?.Init(b);
+        }
         if (def.combat.attack > 0)
             b.gameObject.AddComponent<CombatComponent>()?.Init(b);
         if (def.isConsumable)

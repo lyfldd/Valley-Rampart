@@ -81,6 +81,10 @@ public class KingdomConfig : ScriptableObject
     public int byproductOrePerUnit = 5;        // 每 N 矿副产 1
     public int byproductCrystalCapacity = 20;  // 水晶副产本地存储上限
     public int byproductFireOilCapacity = 20;  // 火油副产本地存储上限
+    [Tooltip("矿洞副产产率（DZ-072a，D562）：水晶 个/秒。慢 rate 保稀缺（副产无等级门槛，原 Lv2 门槛不适用）；终值 P0 调优批调")]
+    public float byproductCrystalRate = 0.05f;
+    [Tooltip("矿洞副产产率（DZ-072a，D562）：火油 个/秒。慢 rate 保稀缺（副产无等级门槛，原 Lv3 门槛不适用）；终值 P0 调优批调")]
+    public float byproductFireOilRate = 0.05f;
 
     [Header("牧场养殖（§13.10，占位）")]
     public int ranchCapacity = 10;                // 牧场容量（动物总数上限）

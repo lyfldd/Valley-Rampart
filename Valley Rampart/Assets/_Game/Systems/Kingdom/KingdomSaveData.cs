@@ -25,4 +25,8 @@ public class KingdomSaveData
     public int treasurySpecialFood;
     public int treasuryMeat;
     public int treasuryMetal;
+    // DZ-072a（D562 / HH.107）：副产两资源入档（TreasureVault.Managed 扩面配套）。
+    // 尾插+旧档缺字段 → JsonUtility 默认 0 向前兼容，零 bump（M10）。
+    public int treasuryCrystal;
+    public int treasuryFireOil;
 }

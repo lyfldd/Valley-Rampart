@@ -40,6 +40,9 @@ public class ProductionSystem : Singleton<ProductionSystem>
             // 2_12 步骤9：投掷机厂逐秒产丹（D207~D212，HH.19 A×4；与铁匠铺并列专属组件）
             var siege = b.GetComponent<SiegeWorkshopBuilding>();
             if (siege != null) siege.Tick();
+            // 矿洞副产逐秒恒产水晶/火油（DZ-072a，D562 / HH.107 件1；与投掷机厂并列专属组件。漏挂=组件永不 Tick）
+            var byprod = b.GetComponent<MineByproductComponent>();
+            if (byprod != null) byprod.Tick();
         }
     }
 

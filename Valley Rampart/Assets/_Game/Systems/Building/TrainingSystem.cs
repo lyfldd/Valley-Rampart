@@ -342,7 +342,9 @@ public class TrainingSystem : Singleton<TrainingSystem>
         if (ks == null) return false;
         if (ks.resources.gold < gold) return false;
         if (metal > 0 && ks.resources.metal < metal) return false;
-        if (crystal > 0) { Debug.Log("[TrainingSystem] AI 国库仅五经济资源无水晶，魔法训练不可行"); return false; }
+        // DZ-072a（HH.107 件2/P8 配对审）：AI 副产台账桶水晶检解锁——旧硬拒「AI 国库仅五经济资源无水晶」
+        // 随 KingdomState.crystal 副产台账（mine 副产搬运分流入账）退役；不足仍拒（负探针 P3 同语义）。
+        if (crystal > 0 && ks.crystal < crystal) { Debug.Log("[TrainingSystem] AI 转职失败：水晶不足（台账 " + ks.crystal + "/" + crystal + "）"); return false; }
         return true;
     }
 
@@ -360,6 +362,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         {
             var ks = KingdomRegistry.Instance.Get(kingdomId);
             ks.Spend(new ResourcePack { gold = gold, metal = metal });
+            if (crystal > 0) ks.crystal -= crystal;   // DZ-072a：AI 副产台账扣水晶（与 CanPayRecruit 水晶检同桶）
         }
     }
 

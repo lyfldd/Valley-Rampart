@@ -12,11 +12,13 @@ using UnityEngine;
 /// </summary>
 public class TreasureVault : MonoBehaviour, IBuildingComponent
 {
-    /// <summary>国库纳管的非金实体资源（金直通不纳入）。</summary>
+    /// <summary>国库纳管的非金实体资源（金直通不纳入）。DZ-072a（HH.107）：扩 Crystal/FireOil（副产消费端解锁——
+    /// 旧只认六资源=玩家侧水晶 ModifyResource/GetAmount 恒 0，P3 转职消费链断）。</summary>
     static readonly ResourceType[] Managed =
     {
         ResourceType.Stone, ResourceType.Wood, ResourceType.Food,
-        ResourceType.SpecialFood, ResourceType.Meat, ResourceType.Metal
+        ResourceType.SpecialFood, ResourceType.Meat, ResourceType.Metal,
+        ResourceType.Crystal, ResourceType.FireOil
     };
 
     /// <summary>全局访问（主城装配后可用；仅一处）。</summary>
@@ -65,6 +67,8 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
             Deposit(ResourceType.SpecialFood, km.TreasurySpecialFood);
             Deposit(ResourceType.Meat, km.TreasuryMeat);
             Deposit(ResourceType.Metal, km.TreasuryMetal);
+            Deposit(ResourceType.Crystal, km.TreasuryCrystal);   // DZ-072a：副产两桶读档恢复
+            Deposit(ResourceType.FireOil, km.TreasuryFireOil);
         }
         if (RulerController.Instance != null) RulerController.Instance.EnsureTreasuryMigration();
     }
@@ -114,6 +118,13 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
             case ResourceType.SpecialFood: pack.food = amount; break;
             case ResourceType.Meat: pack.food = amount; break;
             case ResourceType.Metal: pack.metal = amount; break;
+            case ResourceType.Crystal:
+            case ResourceType.FireOil:
+                // DZ-072a（HH.107 列报）：副产两资源溢出不装箱（ResourcePack 无桶，本批不扩装箱语义）。
+                // 实际不可达：byproductRate=0.05/s → 攒满 250 容量需小时级；若未来调产量到国库满级别，需扩 ResourcePack 装箱。
+                // 本笔不入账（返回值=实际入库量，溢出量由调用方 GetAmount 差额可见），显式日志非静默丢。
+                Debug.LogWarning($"[TreasureVault] 国库满 {type} 溢出 {amount}：副产无装箱语义（DZ-072a 列报），不入箱");
+                return;
             default: return; // 弹药不走国库（HH.19 口径2），其余类型无装箱语义
         }
         var cell = Castle != null && GridSystem.Instance != null

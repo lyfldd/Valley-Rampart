@@ -46,7 +46,9 @@ public static class P1Observer
         "[WaterNetwork]", "[AIEconomySettlement]",  // HH.73/D535：AI 供水链观测（AI 桶水量+日结入账）
         // HH.86/DZ-065 件1g：派工/生产/资源/时间域补齐（四考全维度观测=L3 盲区治理；6 tag 计划口径中
         // [PopulationSystem]/[AIEconomySettlement] 已在案上方，实补 4）
-        "[TaskScheduler]", "[ProductionSystem]", "[RulerController]", "[SatietySystem]"
+        "[TaskScheduler]", "[ProductionSystem]", "[RulerController]", "[SatietySystem]",
+        // HH.107/DZ-072a：矿洞副产链观测（产出入仓/满仓停产/读档 clamp）
+        "[MineByproduct]"
         // 注：[VagrantCamp 无右括号前缀=[VagrantCampSystem]/[VagrantCamp] 双匹配（HH.78 修正：原 "[VagrantCamp]" 带括号漏 [VagrantCampSystem] 前缀）
     };
 

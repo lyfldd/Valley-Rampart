@@ -70,3 +70,4 @@ MonoBehaviour:
   prefab: {fileID: 0}
   monsterTargetValue: 30
   monsterIsHighValue: 0
+  isMineByproduct: 1

@@ -45,6 +45,15 @@ public class KingdomState
     /// <summary>起始国库过渡账本（baseStockpile D300；由 Foundry 步骤5 写入。2_17 步骤2 WarehouseRegistry per-kingdom 迁移吸收前，AI 无脑不消费，零风险）。</summary>
     public ResourcePack resources;
 
+    // ===== 矿洞副产台账（DZ-072a，D562 / HH.107 件2）=====
+    // 水晶/火油为副产稀缺资源，单列两桶不进 ResourcePack 五经济资源（AddWater/WaterNetwork 专用桶先例语义；
+    // 造价/退还语义不涉，避免扩全局结构）。由 TaskScheduler.AddGatherOverflow/副产搬运分流入账，
+    // TrainingSystem.PayRecruit 消费（P8 配对审：AI 侧转职水晶检解锁）。不入档（KingdomState=运行时态，每局 Foundry 重建）。
+    /// <summary>副产水晶存量（AI 国库台账；玩家(0) 不用此桶——玩家走 TreasureVault）。</summary>
+    public int crystal;
+    /// <summary>副产火油存量（AI 国库台账；玩家(0) 不用此桶——玩家走 TreasureVault）。</summary>
+    public int fireOil;
+
     // ===== 科技解锁态 per-kingdom（2_17 步骤11 序0 schema 预留 + 序8 落地载体）=====
     // D330 第二步：CastleUnlockTable 解锁态 per-kingdom（动态立国科技不继承 D295）。
     // 载体迁址路径：KingdomManager.ModuleLevels（全局单例，玩家）→ 每王国一份 dict[id]。
@@ -116,7 +125,7 @@ public class KingdomState
             && resources.metal >= cost.metal;
     }
 
-    /// <summary>按类型读取国库某资源（军工/需求强度缺口函数消费）。</summary>
+    /// <summary>按类型读取国库某资源（军工/需求强度缺口函数消费）。DZ-072a：副产两桶并入（AI 可感知水晶/火油缺口）。</summary>
     public int GetResourceValue(ResourceType type)
     {
         switch (type)
@@ -126,6 +135,8 @@ public class KingdomState
             case ResourceType.Wood: return resources.wood;
             case ResourceType.Food: return resources.food;
             case ResourceType.Metal: return resources.metal;
+            case ResourceType.Crystal: return crystal;    // DZ-072a 副产台账
+            case ResourceType.FireOil: return fireOil;    // DZ-072a 副产台账
             default: return 0;
         }
     }

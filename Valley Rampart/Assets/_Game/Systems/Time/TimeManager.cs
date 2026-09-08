@@ -127,14 +127,13 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
 
     private void Start()
     {
-        // 3.5 P0-6：敌人跨区块进入 → 战斗降速（强制 1x）
-        EventBus.Subscribe<EnemyEnteredRegionEvent>(OnEnemyEnteredRegion);
+        // DZ-076（HH.107 件3）：EnemyEnteredRegionEvent 订阅退役——死事件（全库零发布），订阅/退订/Handler 三处同删。
     }
 
     protected override void OnDestroy()
     {
         base.OnDestroy();
-        EventBus.Unsubscribe<EnemyEnteredRegionEvent>(OnEnemyEnteredRegion);
+        // DZ-076：EnemyEnteredRegionEvent 退订随事件删除退役。
     }
 
     /// <summary>从 WorldSystem.Config.time 读取时间规则。config 不可用时用默认值兜底。</summary>
@@ -358,11 +357,9 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     }
 
     /// <summary>敌人跨区块进入（威胁升整 region）→ 战斗降速。3.5 P0-6。</summary>
-    private void OnEnemyEnteredRegion(EnemyEnteredRegionEvent evt)
-    {
-        if (TestHarnessMode) return;   // 考跑守卫（清单 §3.1 三方法头部，冗余防线）
-        EnterCombatSlow();
-    }
+    // DZ-076（HH.107 件3）：OnEnemyEnteredRegion Handler 删除——唯一触发链（死事件 EnemyEnteredRegionEvent，全库
+    // 零发布）断裂，考跑加速「战斗降速打断」隐患永久消除（L-09 风险面注记，HH.108 报告）。
+    // EnterCombatSlow 本体保留列报（现无调用者=死方法；保留供未来设计评审 vs 同删，策划端 HH.108 验收裁）。
 
     /// <summary>把请求倍速吸附到最近允许档位（最小 1x）。</summary>
     private float ClampToAllowedScale(float scale)

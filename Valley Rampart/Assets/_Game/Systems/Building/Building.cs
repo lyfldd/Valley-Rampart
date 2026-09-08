@@ -602,6 +602,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         var storage = GetComponent<StorageComponent>();
         var producer = GetComponent<ProducerComponent>();
+        // DZ-072a：矿洞副产组件双仓存量（无组件=零值元组）
+        var mineByprod = GetComponent<MineByproductComponent>();
+        var mineByprodSaved = mineByprod != null ? mineByprod.SaveByproductState() : (crystal: 0, fireOil: 0);
         var data = new BuildingSaveData
         {
             defId = def != null ? def.id : "",
@@ -618,6 +621,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             storedAmount = storage != null ? storage.storedAmount : 0,
             byproductType = producer != null ? (int)producer.ByproductType : 0,
             byproductAmount = producer != null ? producer.ByproductAmount : 0,
+            // DZ-072a：矿洞副产组件双仓存量入档（旧档缺字段→默认 0 零 bump）
+            byproductCrystalAmount = mineByprodSaved.crystal,
+            byproductFireOilAmount = mineByprodSaved.fireOil,
             grade = (int)grade,   // QQQ.3 B8-5 / LC-B2：grade 入档
             totalInvested = totalInvested,  // 2_12 步骤7 / D155：累计投入入档
             kingdomId = kingdomId   // 2_16 步骤8：王国归属入档（读档恢复 AI/玩家归属）
@@ -669,6 +675,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
         var producer = GetComponent<ProducerComponent>();
         if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
+
+        // DZ-072a：矿洞副产组件双仓存量恢复（旧档缺字段=0，零恢复=新产链起点）
+        var mineByprod = GetComponent<MineByproductComponent>();
+        if (mineByprod != null) mineByprod.RestoreByproductState(data.byproductCrystalAmount, data.byproductFireOilAmount);
 
         // 网格占用恢复（Spawning 已占用，此处兜底幂等；2_2：footprint w×h）
         if (GridSystem.Instance != null)

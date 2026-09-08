@@ -571,8 +571,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 // QQQ.4 T11：正常路径已完成（Working→LoadInventoryFromSource→MovingToDest→UnloadInventory）。
                 // 此处兜底：无背包组件（非工人）→ 保持旧行为直接入国库，资源不丢。
                 var st = comp != null ? comp.GetComponent<StorageComponent>() : null;
-                if (st != null && GetInventory(brain) == null)
+                var carryInv = GetInventory(brain);
+                if (st != null && carryInv == null)
                     st.HarvestCarry();
+                // DZ-072a（HH.107）：满背包工人取货失败兜底卸货——旧路径背包满→取货失败→Complete 不卸→
+                // 重派再失败=死循环；就地 UnloadInventory（就近同国仓/台账兜底）根除循环，资源不丢。
+                else if (carryInv != null && !carryInv.IsEmpty)
+                    UnloadInventory(brain, task);
                 break;
 
             case KingdomTaskType.WaterHaul:
@@ -643,8 +648,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             case ResourceType.Wood: pack.wood = amount; break;
             case ResourceType.Food: pack.food = amount; break;
             case ResourceType.Metal: pack.metal = amount; break;
+            case ResourceType.Crystal: k.crystal += amount; return;   // DZ-072a：副产台账桶（HH.107 件2）
+            case ResourceType.FireOil: k.fireOil += amount; return;   // DZ-072a：副产台账桶
             default:
-                Debug.Log($"[TaskScheduler] 采集溢出丢弃：{type} 非国库五资源（AI 台账无此桶），×{amount}");
+                Debug.Log($"[TaskScheduler] 采集溢出丢弃：{type} 非国库五资源/副产桶（AI 台账无此桶），×{amount}");
                 return;
         }
         k.AddResources(pack);
@@ -660,7 +667,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return uc != null ? uc.GetOrAddInventory() : null;
     }
 
-    /// <summary>搬运第一段：建筑 StorageComponent 存量 → 工人背包（一次携带量）。返回是否搬入成功。</summary>
+    /// <summary>搬运第一段：建筑 StorageComponent 存量 → 工人背包（一次携带量）。返回是否搬入成功。
+    /// DZ-072a：矿洞副产任务（source=MineByproductComponent，本体无 StorageComponent）按 args 资源类型取副产子仓。</summary>
     private bool LoadInventoryFromSource(NPCBrain brain, KingdomTask task)
     {
         if (brain == null) return false;
@@ -669,6 +677,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         var comp = task.source as Component;
         if (comp == null) return false;
         var st = comp.GetComponent<StorageComponent>();
+        // 副产子仓取货（DZ-072a）：本体仓缺失或类型与 args 不符（Building ③ 广告任务 args 恒等于本体仓类型，不受影响），
+        // 且 source 挂有副产组件时 → 按 args.resourceType 取对应副产子仓。
+        if (task.args is ScaleTaskArgs sa && (st == null || st.resourceType != sa.resourceType))
+        {
+            var byprod = comp.GetComponent<MineByproductComponent>();
+            st = byprod != null ? byprod.GetStore(sa.resourceType) : null;
+        }
         if (st == null || st.storedAmount <= 0) return false;
         int max = Mathf.Max(1, st.GetCarryAmount());
         int amount = Mathf.Min(st.storedAmount, max);
@@ -688,18 +703,29 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 
         // 步骤11：切注册表（WarehouseRegistry.FindNearestAvailable 替 FindObjectsOfType 全场景扫描，D51 就近卸货）
         // 2_17 修复卡γ：第 3 参带工人归属国——玩家工人卸玩家库(0)、AI 工人卸 AI 库，跨王国绝不互卸。
-        var wkingdom = brain.GetComponent<UnitController>() != null ? brain.GetComponent<UnitController>().kingdomId : 0;
+        var uc = brain.GetComponent<UnitController>();
+        var wkingdom = uc != null ? uc.kingdomId : 0;
+        // DZ-072a（HH.107 件2）：副产两资源按归属国路由——玩家(0)卸国库 Vault（TreasureVault.Managed 扩面）；
+        // AI(>0) 直走台账 AddGatherOverflow（AI 经济=台账制 2_17 §追记②；AI 主城 Vault 系 CastleCore 无守卫
+        // 误挂的玩家国库结构=消费黑洞，AI 消费面读台账不读 Vault，卸进去即黑洞——照 AddWater 桶路由先例语义）。
+        if (wkingdom > 0 && (inv.carriedType == ResourceType.Crystal || inv.carriedType == ResourceType.FireOil))
+        {
+            AddGatherOverflow(uc, inv.carriedType, inv.UnloadAll());
+            return;
+        }
         StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position, wkingdom);
         if (best != null)
         {
             int added = best.Add(amount);
             int overflow = amount - added;
-            if (overflow > 0 && RulerController.Instance != null)
-                RulerController.Instance.ModifyResource(inv.carriedType, true, overflow);
+            // DZ-073（HH.107 件2）：溢出兜底改归属国分流——旧硬编码 RulerController=AI 溢出资玩家库；=0 玩家逐位零回归。
+            if (overflow > 0)
+                AddGatherOverflow(uc, inv.carriedType, overflow);
         }
-        else if (RulerController.Instance != null)
+        else
         {
-            RulerController.Instance.ModifyResource(inv.carriedType, true, amount);
+            // DZ-073：无仓兜底同病同修（旧硬编码玩家国库→归属国分流）。
+            AddGatherOverflow(uc, inv.carriedType, amount);
         }
     }
 
@@ -755,12 +781,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (filled < amount)
         {
             int leftover = amount - filled;
-            DepositAmmoBack(inv.carriedType, leftover, target.transform.position);
+            var uc = brain.GetComponent<UnitController>();
+            DepositAmmoBack(uc, inv.carriedType, leftover, target.transform.position);
         }
     }
 
-    /// <summary>装填剩余弹药退回最近同类仓库（不丢资源）。</summary>
-    private void DepositAmmoBack(ResourceType type, int amount, Vector2 nearPos)
+    /// <summary>装填剩余弹药退回最近同类仓库（不丢资源）。owner=弹药来源单位（DZ-073 归属国分流兜底用）。</summary>
+    private void DepositAmmoBack(UnitController owner, ResourceType type, int amount, Vector2 nearPos)
     {
         if (amount <= 0) return;
         StorageComponent best = null;
@@ -774,8 +801,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             if (d < bestDist) { bestDist = d; best = s; }
         }
         if (best != null) { best.Add(amount); return; }
-        // 无同类仓 → 入国库兜底（弹药不入国库除非改此兜底，此处保守：退回源仓失败才走国库）
-        RulerController.Instance?.ModifyResource(type, true, amount);
+        // 无同类仓 → 归属国分流兜底（DZ-073，HH.107 件2：旧硬编码 RulerController 玩家国库=AI 退弹资玩家库；
+        // 此处无 brain/uc 上下文，改签名带 uc 由调用方传入——=0 玩家原路径逐位，>0 入 AI 台账）。
+        AddGatherOverflow(owner, type, amount);
     }
 
     /// <summary>搬运段刺激注入：目标 = destPos（仓库/国库），区别于 Working 段的 SourcePos 刺激。</summary>
@@ -827,16 +855,23 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return task != null ? task.SourcePos : Vector2.zero;
     }
 
-    /// <summary>最近可用仓库（StorageComponent 中最近且 capacity&gt;stored），无则回退国库。</summary>
+    /// <summary>最近可用仓库（StorageComponent 中最近且 capacity&gt;stored），无则回退国库。
+    /// DZ-072a/DZ-073（HH.107）：对齐 UnloadInventory.FindNearestAvailable 既有语义——同国+同资源类型过滤。
+    /// 旧全场景不过滤=跨国远目的地/异型目的地（副产任务曾解析到跨国仓→工人超时→满背包死循环温床）。</summary>
     private Vector2 ResolveWarehouse(KingdomTask task)
     {
         var storages = FindObjectsOfType<StorageComponent>();
         StorageComponent best = null;
         float bestDist = float.MaxValue;
+        int kingdom = SourceKingdom(task);
+        int want = task != null && task.args is ScaleTaskArgs sa ? (int)sa.resourceType : -1;
         for (int i = 0; i < storages.Length; i++)
         {
             var s = storages[i];
             if (s == null || s.capacity <= s.storedAmount) continue;   // 已满不收
+            if (want >= 0 && (int)s.resourceType != want) continue;    // DZ-072a：同型（异型卸入会被 IWarehouse 拒）
+            var pb = s.GetComponentInParent<Building>();
+            if (pb != null ? pb.kingdomId != kingdom : kingdom != 0) continue;   // DZ-073：同国（防跨国远目的地；无主仓不收）
             float d = GridMath.DistCells(s.transform.position, task.SourcePos);
             if (d < bestDist) { bestDist = d; best = s; }
         }
@@ -906,10 +941,19 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     }
 
     /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0；
-    /// 无主源 -1（自然建筑）在路由时降级为先到先得池，任何国可匹配）。</summary>
+    /// 无主源 -1（自然建筑）在路由时降级为先到先得池，任何国可匹配）。
+    /// DZ-072a：矿洞副产组件任务源（MineByproductComponent 挂 Building 本体）按父建筑归属国路由——
+    /// AI 领土内 mine 副产任务入 AI 池（旧逻辑非 Building 恒归 0=错入玩家池）。</summary>
     private int SourceKingdom(KingdomTask task)
     {
-        return task != null && task.source is Building b ? b.kingdomId : 0;
+        if (task == null) return 0;
+        if (task.source is Building b) return b.kingdomId;
+        if (task.source is Component c)
+        {
+            var pb = c.GetComponentInParent<Building>();
+            if (pb != null) return pb.kingdomId;
+        }
+        return 0;
     }
 
     private float ArrivalThreshold(NPCBrain brain, float cellSize)

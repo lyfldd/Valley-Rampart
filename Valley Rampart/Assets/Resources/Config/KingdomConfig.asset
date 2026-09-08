@@ -117,6 +117,8 @@ MonoBehaviour:
   byproductOrePerUnit: 5
   byproductCrystalCapacity: 20
   byproductFireOilCapacity: 20
+  byproductCrystalRate: 0.05
+  byproductFireOilRate: 0.05
   ranchCapacity: 10
   ranchFeedPerAnimal: 1
   ranchMeatHappiness: 3
