@@ -404,9 +404,6 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         // 敌人在 GridSystem 感知不到墙体、IsBlockedByFortification 也查不到 → 城墙机制失效）。
         // 移动单位随后续移动 UpdateGridPosition 幂等覆盖，无副作用。
         UpdateGridPosition();
-
-        Debug.Log($"[UnitController] 初始化: {data.faction}_{data.occupation} "
-            + $"(HP: {CurrentHp}/{MaxHp}, ATK: {Attack}, DEF: {Defense})");
     }
 
     /// <summary>

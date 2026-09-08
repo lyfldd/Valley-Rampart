@@ -32,6 +32,15 @@ public class WildnessConfig : ScriptableObject
     public static WildnessConfig Load() => Resources.Load<WildnessConfig>("Config/WildnessConfig");
 
     /// <summary>
+    /// D468 同族豁免判定（DZ-069/HH.115 件C 唯一入口）：两单位同族（raceId 相等）→ 野性语义下
+    /// **互不索敌/互不溯源**（同族=结伙/中立；异族必攻维持；有国单位国民压制语义不动）。
+    /// 消费点=NPCBrain 野性扫描（UpdateWildnessThreats）+受击溯源（OnDamaged）——判定收口本处，
+    /// 调用方禁止各自内联 raceId 比较（防分支漂移）。同 raceId 缺省（相等）按同族保守中立。
+    /// </summary>
+    public static bool IsSameRaceExempt(UnitController a, UnitController b)
+        => a != null && b != null && a.raceId == b.raceId;
+
+    /// <summary>
     /// 野性是否生效（开关开 + 资产在场）。全局守卫单一入口，调用方禁止各自判 null。
     /// </summary>
     public static bool IsActive => _cached != null && _cached.enabled;

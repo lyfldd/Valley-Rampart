@@ -57,3 +57,9 @@ MonoBehaviour:
   crewRequired: 0
   crewRadiusCells: 0
   roleFamily: 1
+  rangedDamageReduce: 0
+  shelterChance: 0.3
+  shelterRadiusCells: 1
+  buildingDamageMul: 1
+  unitDamageMul: 1
+  pierceThroughCount: 0

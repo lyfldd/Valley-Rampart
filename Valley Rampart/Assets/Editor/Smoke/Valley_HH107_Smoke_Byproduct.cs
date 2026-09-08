@@ -7,7 +7,8 @@ using UnityEditor;
 //  HH.107 资源供给端补链批 冒烟（D562 / DZ-072a+DZ-073+DZ-076；任务书=多Agent交接/策划端/HH.107_资源供给端补链批_任务书.md §一件4）
 //  用法：菜单「Valley/验证/HH107_资源供给端补链」——Play 后点（MCP 自动触发，零手动进局）。
 //
-//  骨架=HH.73 真实进局先例（SmokeApi.EnterGame 固定 seed=21107，smoke_h107 槽，4 国世界）；
+//  骨架=HH.73 容器结构+入口走 HH.92 测试环境正门（TestHarnessApi.EnterTestRun 固定 seed=21107，考跑守卫全开，
+//  L-17 容器入口纪律 HH.115 件5 补改：SmokeApi.EnterGame→EnterTestRun+ExitTestRun 收尾；smoke_h107 槽，4 国世界）；
 //  mine/TrainingCamp/SiegeWorkshop=容器内直建（BuildingFactory.CreateBuildingInstance + kingdomId 指定，
 //  HH.79 直建先例；M6 口径——不依赖地图生成物，位置/归属全控）。产率加速=运行时改 KingdomConfig SO
 //  实例字段（Play 态改动不落盘，QuitSmoke 退 Play 自动还原；先例=HH.73 SetSecondsPerDay 快进）。
@@ -59,7 +60,7 @@ public static class Valley_HH107_Smoke_Byproduct
         _results.Clear();
         _allPass = true;
 
-        // ---- 真实链进局（SmokeApi 幂等守卫内；HH.73 先例）----
+        // ---- 进局（L-17 容器入口纪律：测试环境正门 TestHarnessApi.EnterTestRun，考跑守卫全开；HH.115 件5）----
         var cfg = new NewGameConfig
         {
             worldSeed = SEED,
@@ -70,7 +71,7 @@ public static class Valley_HH107_Smoke_Byproduct
             selectedSlotId = SLOT,
             kingdomName = "河谷王国"
         };
-        SmokeApi.EnterGame(cfg);
+        yield return TestHarnessApi.EnterTestRun(cfg, 60f);   // 60x 直通（HH.109 先例：单帧跨度≤60s<360s/天）
 
         // ---- 等世界就稳（120s 超时）----
         float t0 = Time.realtimeSinceStartup;
@@ -81,6 +82,7 @@ public static class Valley_HH107_Smoke_Byproduct
             if (Time.realtimeSinceStartup - t0 > 120f)
             {
                 Debug.LogError(TAG + " 等世界就绪超时(120s)。");
+                TestHarnessApi.ExitTestRun();   // L-17 收尾：异常路径同复原
                 SmokeApi.QuitSmoke();
                 yield break;
             }
@@ -100,6 +102,7 @@ public static class Valley_HH107_Smoke_Byproduct
         if (aiKids.Count < 2 || ruler == null || training == null)
         {
             Debug.LogError(TAG + $" 前置缺失（AI 国={aiKids.Count} 需≥2 / Ruler={ruler != null} / Training={training != null}），中止。");
+            TestHarnessApi.ExitTestRun();   // L-17 收尾：异常路径同复原
             SmokeApi.QuitSmoke();
             yield break;
         }
@@ -322,13 +325,14 @@ public static class Valley_HH107_Smoke_Byproduct
                 $"产火弹={produced} 弹仓 {ammoBefore}→{ammoAfter} 国库火油 {fireOilLoaded}→{fireOilAfter}（原料扣除）");
         }
 
-        // ---- 收尾：复原产率（同会话续跑容器防污染）+ 汇总 + 退 Play ----
+        // ---- 收尾：复原产率（同会话续跑容器防污染）+ 汇总 + 考跑态复原 + 退 Play ----
         if (kcfg != null) { kcfg.byproductCrystalRate = origCrystalRate; kcfg.byproductFireOilRate = origFireOilRate; }
         TimeManager.Instance.SetGameSpeed(1f);
 
         Debug.Log($"{TAG} ===== 轮汇总（{_results.Count} 探针）=====");
         for (int i = 0; i < _results.Count; i++) Debug.Log($"{TAG} {_results[i]}");
         Debug.Log($"{TAG} 判定：{(_allPass ? "ALL PASS" : "HAS FAIL")}");
+        TestHarnessApi.ExitTestRun();   // L-17 收尾：考跑态/timeScale/maximumDeltaTime 全量复原（HH.115 件5）
         SmokeApi.QuitSmoke();
     }
 
@@ -337,6 +341,7 @@ public static class Valley_HH107_Smoke_Byproduct
     private static void FailFast(string reason)
     {
         Debug.LogError($"{TAG} 中止：{reason}");
+        TestHarnessApi.ExitTestRun();   // L-17 收尾：异常路径同复原（HH.115 件5）
         SmokeApi.QuitSmoke();
     }
 

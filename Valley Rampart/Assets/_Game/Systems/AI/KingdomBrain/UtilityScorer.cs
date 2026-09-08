@@ -71,9 +71,29 @@ public static class UtilityScorer
     /// <summary>P0 每人口每日粮耗近似（与 KingdomBrainConfig.grainConsumptionPerPop 默认对齐）。</summary>
     private const int PerPopGrain = 1;
 
-    /// <summary>对王国可见候选打分，返回最优行动 id（无可执行 → None）。</summary>
-    public static UtilityAction ScoreTop(KingdomState k, UtilityActionConfig cfg, ScriptStage stage)
+    /// <summary>
+    /// 评分淘汰构成普查（HH.115 件E#6 存在性判定）：把「无可执行候选」分型为
+    /// **空候选集**（defTotal=0）vs **候选全不可行**（infeasible>0 且 top=None）vs **无需求/轴权零**——
+    /// 六考长局评分死锁归因面（14 锁死型诊断的候选侧分型；行为零变化，只多一层可观测性）。
+    /// </summary>
+    public struct ScoreCensus
     {
+        public int defTotal;        // 候选集总数（cfg.actions 长度，扣 None 占位）
+        public int stageFiltered;   // 阶段门控淘汰数
+        public int noNeed;          // 无需求淘汰数
+        public int infeasible;      // Feasible 二值门控淘汰数（D346）
+        public int axisFiltered;    // 轴权/阶段权重为零淘汰数
+        public UtilityAction top;   // 最优行动（None=无可执行）
+    }
+
+    /// <summary>对王国可见候选打分，返回最优行动 id（无可执行 → None）。诊断需求用带普查重载。</summary>
+    public static UtilityAction ScoreTop(KingdomState k, UtilityActionConfig cfg, ScriptStage stage)
+        => ScoreTop(k, cfg, stage, out _);
+
+    /// <summary>对王国可见候选打分，返回最优行动 id + 淘汰构成普查（HH.115 件E#6）。</summary>
+    public static UtilityAction ScoreTop(KingdomState k, UtilityActionConfig cfg, ScriptStage stage, out ScoreCensus census)
+    {
+        census = default;
         if (k == null || cfg == null || cfg.actions == null) return UtilityAction.None;
 
         float best = -1f;
@@ -83,24 +103,26 @@ public static class UtilityScorer
         {
             var def = defs[i];
             if (def.id == UtilityAction.None) continue;
-            if (stage < def.minStage) continue;                 // D321 阶段可见性门控
+            census.defTotal++;
+            if (stage < def.minStage) { census.stageFiltered++; continue; }   // D321 阶段可见性门控
 
             float need = NeedScore(k, def);
-            if (need <= 0.0001f) continue;                      // 无需求 → 不入选（免刷 0 分干扰）
-            if (!Feasible(k, def)) continue;                    // D346 二值门控：不可行 → 出局
+            if (need <= 0.0001f) { census.noNeed++; continue; }               // 无需求 → 不入选（免刷 0 分干扰）
+            if (!Feasible(k, def)) { census.infeasible++; continue; }         // D346 二值门控：不可行 → 出局
 
             float axis = def.axisWeight;
             if (k.personality != null && def.axis >= 0 && def.axis < k.personality.Length)
                 axis *= Mathf.Clamp01(k.personality[def.axis]); // 五轴独立线性乘入（D311）
-            if (axis <= 0.0001f) continue;
+            if (axis <= 0.0001f) { census.axisFiltered++; continue; }
 
             float stageW = (def.stageWeight != null && (int)stage < def.stageWeight.Length)
                 ? Mathf.Max(0f, def.stageWeight[(int)stage]) : 1f;
-            if (stageW <= 0f) continue;
+            if (stageW <= 0f) { census.axisFiltered++; continue; }
 
             float score = need * axis * stageW;
             if (score > best) { best = score; top = def.id; }
         }
+        census.top = top;
         return top;
     }
 

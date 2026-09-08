@@ -125,4 +125,5 @@ MonoBehaviour:
   goldMineGoldPerDay: 2
   kingdomSecondsPerDay: 180
   generalLimit: 2
+  warAcademyTrainingSpeedMul: 0.75
   hospitalRecoveryBonus: 5

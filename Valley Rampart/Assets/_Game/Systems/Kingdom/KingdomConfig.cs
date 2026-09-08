@@ -99,6 +99,10 @@ public class KingdomConfig : ScriptableObject
     [Tooltip("将军训练限量（§10 将军限量 2，可配置）")]
     public int generalLimit = 2;                  // 将军限量
 
+    [Header("战争学院加成（2_20 M6/D420，HH.115 E-T5 硬编码迁 SO）")]
+    [Tooltip("战争学院（WarAcademy，人类专属）在场时全局训练时长乘数（<1 加速；出厂值 0.75=-25%，HH.59 疑点④挂账清偿原值迁入）。消费=TrainingSystem.TryTrain 训练时长链")]
+    public float warAcademyTrainingSpeedMul = 0.75f;
+
     [Header("流浪汉营地（3.5.1 §4.1，E-S7：前期人口来源）")]
     [Tooltip("开局随机生成营地数下限")]
     public int vagrantCampMin = 2;

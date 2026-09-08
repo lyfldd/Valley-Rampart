@@ -132,9 +132,15 @@ public class FocusController
 
         // ---- 效用评分（D322 step2；阶段门控过滤 + 四因子打分）----
         ScriptStage stage = kingdom.scriptPhase ?? ScriptStage.Survive;
-        UtilityAction top = UtilityScorer.ScoreTop(kingdom, utilCfg, stage);
+        UtilityAction top = UtilityScorer.ScoreTop(kingdom, utilCfg, stage, out var census);
         LastTop = top;
-        if (top == UtilityAction.None) return;   // 无可执行候选 → 维持现状焦点
+        if (top == UtilityAction.None)
+        {
+            // HH.115 件E#6 存在性判定：空候选 vs 全不可行 vs 无需求分型（行为零变化，日结级诊断面）
+            Debug.Log($"[KingdomBrain] 评分空候选 k{kingdom.id} d{day}：候选集 {census.defTotal}（阶段滤 {census.stageFiltered}/" +
+                      $"无需求 {census.noNeed}/不可行 {census.infeasible}/轴权零 {census.axisFiltered}）→ 维持现状焦点");
+            return;   // 无可执行候选 → 维持现状焦点
+        }
 
         // ---- 焦点切换防抖（D322 step3：最高分≠当前 且 当前已持续≥3日才切，否则维持）----
         if (kingdom.focus != (int)top

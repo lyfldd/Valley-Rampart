@@ -321,18 +321,6 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         Debug.Log($"[TimeManager] 倍速 → {clamped}x");
     }
 
-    /// <summary>进入战斗降速（敌人被感知）：强制 1x，后续加速请求被忽略。</summary>
-    private void EnterCombatSlow()
-    {
-        if (TestHarnessMode) return;   // 考跑守卫（M2）：战斗降速不得打断考跑加速
-        if (IsCombatSlowed) return;
-        IsCombatSlowed = true;
-        CurrentTimeScale = 1f;
-        if (!Mathf.Approximately(Time.timeScale, 0f))
-            Time.timeScale = 1f;
-        Debug.Log("[TimeManager] 战斗降速：敌人靠近，强制 1x");
-    }
-
     /// <summary>退出战斗降速（敌人清除）：恢复玩家请求倍速（战斗结束恢复 2x）。</summary>
     private void ExitCombatSlow()
     {
@@ -359,7 +347,8 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     /// <summary>敌人跨区块进入（威胁升整 region）→ 战斗降速。3.5 P0-6。</summary>
     // DZ-076（HH.107 件3）：OnEnemyEnteredRegion Handler 删除——唯一触发链（死事件 EnemyEnteredRegionEvent，全库
     // 零发布）断裂，考跑加速「战斗降速打断」隐患永久消除（L-09 风险面注记，HH.108 报告）。
-    // EnterCombatSlow 本体保留列报（现无调用者=死方法；保留供未来设计评审 vs 同删，策划端 HH.108 验收裁）。
+    // EnterCombatSlow 本体已同删（D569 裁 HH.115 件4：死方法+残留注释清偿；ExitCombatSlow/HasActiveEnemies
+    // 保留=Update L162 恢复链仍消费 IsCombatSlowed 恒 false 死分支列报 HH.116）。
 
     /// <summary>把请求倍速吸附到最近允许档位（最小 1x）。</summary>
     private float ClampToAllowedScale(float scale)

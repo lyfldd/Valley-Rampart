@@ -336,6 +336,10 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ——攻击者为无国野人（Vagrant && !IsVagrantRecruited && 非 Monster）且 raceId≠自身才溯源。
         var srcUnit = evt.Source as UnitController;
         var selfUnit = _self as UnitController;
+        // D468 同族中立（DZ-069/HH.115 件C：r2 野人袭 r2 国民实锤修复点）——同族一律不溯源：
+        // 同族国民先袭野人（AOE 波及等）→ 野人受击溯源跨阵营放行 → 还手同族国民=偏离 D468
+        // 「同族=结伙/中立」语义。收口判定走 WildnessConfig.IsSameRaceExempt（含野人×野人同族）。
+        if (WildnessConfig.IsSameRaceExempt(srcUnit, selfUnit)) return;
         bool isWildAttacker = srcUnit != null
             && srcUnit.EffectiveOccupation == Occupation.Vagrant
             && !srcUnit.IsVagrantRecruited
@@ -621,7 +625,6 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
         float radiusWorld = Mathf.Max(1f, wild.wildAggroRadiusCells) * GetCellSize();
         Vector2 myPos = _self.GetPosition();
-        int myRace = self.raceId;
         float maxIntensity = _config != null ? _config.threatIntensityMax : 60f;
 
         _wildScan.Clear();
@@ -630,7 +633,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         {
             if (u == null || !u.IsAlive || ReferenceEquals(u, self)) continue;
             if (u.GetFaction() == Faction.Monster) continue;   // D428/2_14：传送门怪物不进种族矩阵
-            if (u.raceId == myRace) continue;                  // 同族：结伙偏好（不攻击）
+            if (WildnessConfig.IsSameRaceExempt(self, u)) continue;   // D468 同族豁免（DZ-069 收口）：同族=结伙偏好（不索敌）
             if (Vector2.Distance(myPos, u.GetPosition()) > radiusWorld) continue;
             _wildScan.Add(u);
         }

@@ -24,7 +24,7 @@ public class UnitRegistry : Singleton<UnitRegistry>
 
         if (_aliveUnits.Add(unit))
         {
-            Debug.Log($"[UnitRegistry] 注册: {unit.Data?.faction}_{unit.Data?.occupation}，当前共 {Count} 个单位");
+            // D563②：注册/注销逐条日志改汇总口径（一次性建局/清场打一行计数）——明细静默
         }
     }
 
@@ -37,7 +37,7 @@ public class UnitRegistry : Singleton<UnitRegistry>
 
         if (_aliveUnits.Remove(unit))
         {
-            Debug.Log($"[UnitRegistry] 注销: {unit.Data?.faction}_{unit.Data?.occupation}，当前剩 {Count} 个单位");
+            // D563②：汇总口径——注销明细静默，计数汇入清场/建局汇总行
         }
     }
 
@@ -111,10 +111,20 @@ public class UnitRegistry : Singleton<UnitRegistry>
 
     /// <summary>
     /// 清空注册表（场景切换/重置时使用）。
+    /// D563② 汇总口径：清场侧一次性打一行计数（注销明细已静默）。
     /// </summary>
     public void Clear()
     {
+        int cleared = _aliveUnits.Count;
         _aliveUnits.Clear();
-        Debug.Log("[UnitRegistry] 已清空所有注册单位");
+        Debug.Log($"[UnitRegistry] 清场汇总：本次注销 {cleared} 个单位（注册/注销明细已静默）");
+    }
+
+    /// <summary>
+    /// D563② 汇总口径：建局侧一次性打一行计数快照（供开局实体生成等节点调用，替代逐单位注册日志）。
+    /// </summary>
+    public void LogCountSnapshot(string reason)
+    {
+        Debug.Log($"[UnitRegistry] 单位计数快照[{reason}]：当前注册 {Count} 个单位");
     }
 }

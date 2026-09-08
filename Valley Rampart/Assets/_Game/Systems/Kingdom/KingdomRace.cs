@@ -87,20 +87,22 @@ public static class KingdomRace
     public static float GetGatherMul(int kingdomId, ResourceType resourceType)
     {
         var def = GetKingdomRaceDef(kingdomId);
-        if (def == null) return 1f;
+        // E-T7 缺表乘数显式化：缺表回退=1.0 中性（野生哨兵/异常来源不吃族修正）——显式常量声明
+        const float MissingRaceDefMul = 1f;
+        if (def == null) return MissingRaceDefMul;
         switch (resourceType)
         {
             case ResourceType.Stone:
             case ResourceType.Ore:
             {
                 // 2_20 M6 地脉熔炉：采矿产量全局+40%（2_20.1 §三，同 mineMul 消费点叠乘；乘算口径 1.3×1.4=1.82 HH.60 §三.2）
-                float leyMul = HasExclusiveBuilding(kingdomId, "LeyForge") ? 1.4f : 1f;
+                float leyMul = HasExclusiveBuilding(kingdomId, BuildingIds.LeyForge) ? 1.4f : 1f;
                 return def.mineMul * leyMul;
             }
             case ResourceType.Wood:  return def.lumberMul;
             case ResourceType.Food:
             case ResourceType.Meat:  return def.farmMul;
-            default:                 return 1f;   // 加工品/副产/货币不乘（D506③）
+            default:                 return MissingRaceDefMul;   // 加工品/副产/货币不乘（D506③）
         }
     }
 

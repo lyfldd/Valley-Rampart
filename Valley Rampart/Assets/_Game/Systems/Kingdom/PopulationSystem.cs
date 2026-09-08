@@ -157,7 +157,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         if (!IsPopulationEntity(unit)) return false;
         if (_entities.Contains(unit)) return false;
         _entities.Add(unit);
-        Debug.Log($"[PopulationSystem] 实体入册：{unit.EffectiveOccupation} @ {unit.transform.position}，人口 → {_entities.Count}");
+        // D563② 汇总口径：入册明细静默，人口计数汇入开局/清场汇总行（与 UnitRegistry 口径统一）
         return true;
     }
 
@@ -218,6 +218,7 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
         BirthCooldownDays = cfg.birthCooldownDefault;
         Debug.Log($"[PopulationSystem] 开局实体生成完成：{ok}/{cfg.initialWorkerCount + cfg.initialResidentCount} " +
                   $"（God-view 无君主；目标人口 {cfg.initialPopulation}；当前注册 {PopulationCount}）");
+        UnitRegistry.Instance?.LogCountSnapshot("开局");   // D563② 建局侧汇总行（全单位计数，替代逐条注册日志）
     }
 
     /// <summary>城堡两侧交替落位生成单个实体（idx 偶左奇右，逐圈外扩）。</summary>

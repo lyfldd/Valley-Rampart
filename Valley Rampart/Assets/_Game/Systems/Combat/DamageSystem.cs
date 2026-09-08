@@ -560,9 +560,6 @@ public class DamageSystem : Singleton<DamageSystem>
                 _kingdomAtkPub[victimKingdom] = (CurrentGameDay, -1);
             }
         }
-
-        // [取证/②守卫交锋] 完成段证据：节流点后打入，避免高频刷屏
-        Debug.Log($"[ChainFox] 守卫交锋: {victim} 受击 {damage} @ {victim.GetPosition()} <- {source}");
     }
 
     /// <summary>取受击实体所属王国 id（只认建筑/单位；自然实体/无归属返回 -1）。</summary>
@@ -623,7 +620,7 @@ public class DamageSystem : Singleton<DamageSystem>
 
         float value = Random.Range(0.5f, 1f);              // 金 0.5~1 占位（§6.1 P0 调优）
         // 战营效果②：战利品价值+50%（2_20.1 §三，挂点=战利品掉落结算处）
-        if (KingdomRace.HasExclusiveBuilding(killer.kingdomId, "WarCamp"))
+        if (KingdomRace.HasExclusiveBuilding(killer.kingdomId, BuildingIds.WarCamp))
             value *= 1.5f;
         int gold = Mathf.Max(1, Mathf.RoundToInt(value));
 

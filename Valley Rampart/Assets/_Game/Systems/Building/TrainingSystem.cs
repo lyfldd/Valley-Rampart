@@ -410,9 +410,15 @@ public class TrainingSystem : Singleton<TrainingSystem>, ISaveable
         // HH.66 段B#1 终核（D521 挂账）：trainSpeedMul 语义=训练时长%（<1 加速，2_20.1 §二 唯一映射权威）
         // → 乘法（原除法与权威口径方向反转：0.9 会算成 1.11× 变慢；占位全 1.0 期零行为差异，真值回填前修正）。
         var raceDef = KingdomRace.GetKingdomRaceDef(effKingdom);
-        float costMul = raceDef != null ? raceDef.trainCostMul : 1f;
-        float speedMul = raceDef != null ? raceDef.trainSpeedMul : 1f;
-        float academyMul = KingdomRace.HasExclusiveBuilding(effKingdom, "WarAcademy") ? 0.75f : 1f;
+        // E-T7 缺表乘数显式化：RaceDef 查表失败（野生哨兵/异常来源）→ 显式 1.0 中性回退（不吃任何族修正）
+        const float MissingRaceDefMul = 1f;
+        float costMul = raceDef != null ? raceDef.trainCostMul : MissingRaceDefMul;
+        float speedMul = raceDef != null ? raceDef.trainSpeedMul : MissingRaceDefMul;
+        // 2_20 M6 战争学院全局训练加速（E-T5 硬编码迁 SO：0.75 出厂值落 KingdomConfig.warAcademyTrainingSpeedMul）
+        var kingdomCfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+        float academyMul = KingdomRace.HasExclusiveBuilding(effKingdom, BuildingIds.WarAcademy)
+            ? (kingdomCfg != null ? kingdomCfg.warAcademyTrainingSpeedMul : 0.75f)
+            : MissingRaceDefMul;
         float rallyMul = 1f;   // 战争学院「溃败补充」：本职业 30s 内阵亡 → 本次补训成本-50%（一次性窗口）
         if (_recentDeaths.TryGetValue(def.toOccupation, out float dt) && Time.time - dt <= 30f)
         {
