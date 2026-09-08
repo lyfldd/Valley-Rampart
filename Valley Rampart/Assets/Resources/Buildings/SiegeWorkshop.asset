@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: SiegeWorkshop
   m_EditorClassIdentifier: 
   id: SiegeWorkshop
-  displayName: "\u6295\u63B7\u673A\u5382"
-  description: "\u6295\u63B7\u673A/\u5F29\u70AE/\u5F39\u836F"
+  displayName: "战争机器工坊"
+  description: "生产各族专属战争机器与配套弹药"
   faction: 1
   role: 1
   cost:
