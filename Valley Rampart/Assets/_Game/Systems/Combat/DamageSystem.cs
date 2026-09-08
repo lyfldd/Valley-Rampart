@@ -58,6 +58,9 @@ public class DamageSystem : Singleton<DamageSystem>
 
     private DamageConfig _config;
 
+    /// <summary>处方 A（HH.100/D556）：KingdomBrainConfig（节流参数 kingdomAttackEventThrottleDays 真源）。</summary>
+    private KingdomBrainConfig _brainCfg;
+
     private float ArmorK => _config.armorK;
     private float TickInterval => _config.tickInterval;
     private int MaxAttacksPerFrame => _config.maxAttacksPerFrame;
@@ -74,6 +77,12 @@ public class DamageSystem : Singleton<DamageSystem>
 
     /// <summary>victim -> 上次发 UnitDamagedEvent 时间（节流字典）。</summary>
     private readonly Dictionary<IDamageable, float> _lastEventTime = new();
+
+    /// <summary>处方 A：kingdomId -> (上次发布游戏日, 待补发受击日 -1=无)。per-kingdom 节流+终态不吞。</summary>
+    private readonly Dictionary<int, (float lastPubDay, int pendingHitDay)> _kingdomAtkPub = new();
+
+    /// <summary>当前游戏日（浮点；Time.time 为 scaled time，倍速下自动换算；360 兜底=HH.89 定案值）。</summary>
+    private static float CurrentGameDay => Time.time / (TimeManager.Instance != null ? TimeManager.Instance.SecondsPerDay : 360f);
 
     /// <summary>注册信息。</summary>
     private struct AttackRegistration
@@ -97,6 +106,7 @@ public class DamageSystem : Singleton<DamageSystem>
         _config = Resources.Load<DamageConfig>("Config/DamageConfig");
         if (_config == null)
             Debug.LogError("[DamageSystem] 未找到 DamageConfig！请确保 Resources/Config/DamageConfig.asset 存在。");
+        _brainCfg = Resources.Load<KingdomBrainConfig>("Config/Kingdoms/KingdomBrainConfig");
         EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
     }
 
@@ -114,6 +124,7 @@ public class DamageSystem : Singleton<DamageSystem>
         _overkillCount.Clear();
         _lastEventTime.Clear();
         _pendingAttacks.Clear();
+        _kingdomAtkPub.Clear();   // 处方 A（D556）：节流/补发状态随轮清——否则上局 pending 在新局乱发（A 验证轮实测串局）
         _tickTimer = 0f;
     }
 
@@ -129,6 +140,27 @@ public class DamageSystem : Singleton<DamageSystem>
 
         // 分片处理（每帧最多 MaxAttacksPerFrame 个）
         ProcessPendingAttacks();
+
+        // 处方 A 终态不吞（HH.100/D556）：受击流停止后，被节流吞掉的最后一次受击在窗满时补发
+        // ——保证窗口收敛=真实最后受击+focusMinDurationDays（无后续受击时无下一次发布来携带它，须主动补）。
+        if (_kingdomAtkPub.Count > 0 && _brainCfg != null && _brainCfg.kingdomAttackEventThrottleDays > 0f)
+        {
+            float gameDay = CurrentGameDay;
+            List<int> flush = null;
+            foreach (var kv in _kingdomAtkPub)
+            {
+                if (kv.Value.pendingHitDay >= 0 && gameDay - kv.Value.lastPubDay >= _brainCfg.kingdomAttackEventThrottleDays)
+                    (flush ??= new List<int>()).Add(kv.Key);
+            }
+            if (flush != null)
+            {
+                foreach (var kid in flush)
+                {
+                    EventBus.Publish(new KingdomAttackedEvent(kid, _kingdomAtkPub[kid].pendingHitDay));
+                    _kingdomAtkPub[kid] = (_kingdomAtkPub[kid].lastPubDay, -1);   // 只清 pending，不动 lastPubDay（真实最后发布时点不变）
+                }
+            }
+        }
     }
 
     // ===== 注册接口（NPCBrain 调用，决策 2+8）=====
@@ -495,9 +527,39 @@ public class DamageSystem : Singleton<DamageSystem>
         // 2_17 步骤8（HH.24 增补2）：被攻击信号挂伤害管线命中层——只对 AI 王国(kingdomId>0)发。
         // 职责界定：只有"该王国实体确实受击"（伤害真实落地）才算被攻击，非选目标意图（故不挂怪物/波次选目标层）。
         // 消费方：KingdomBrain.FocusController 订阅→次日强制防御姿态（D322 常设底线）。
+        // 处方 A（HH.100/D556）：per-kingdom 发布节流——窗内受击不丢（记 pendingHitDay），窗满补发且携带真实受击日
+        // （终态不吞：窗口收敛恒=最后真实受击+focusMinDurationDays，与无节流语义等价）。
         int victimKingdom = VictimKingdomId(victim);
         if (victimKingdom > 0 && EventBus.HasSubscribers<KingdomAttackedEvent>())
-            EventBus.Publish(new KingdomAttackedEvent(victimKingdom));
+        {
+            float throttleDays = _brainCfg != null ? _brainCfg.kingdomAttackEventThrottleDays : 5f;
+            // hitDay 用「局内日历」（TimeManager.CurrentDay）——Time.time/360 是 Play 连续时间，与局内日错位
+            // （A 验证轮五版实测：day1 的事件 hitDay=0→窗口锁在过期日）。节流窗仍用 CurrentGameDay（全局连续+ResetState 随轮清）。
+            int hitDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : Mathf.FloorToInt(CurrentGameDay);
+            if (throttleDays <= 0f)
+            {
+                EventBus.Publish(new KingdomAttackedEvent(victimKingdom, hitDay));   // 0=禁用节流（原行为）
+            }
+            else if (_kingdomAtkPub.TryGetValue(victimKingdom, out var st))
+            {
+                if (CurrentGameDay - st.lastPubDay >= throttleDays)
+                {
+                    // 窗满：若有被吞受击则补发其真实受击日，否则发布本次
+                    int pubDay = st.pendingHitDay >= 0 ? st.pendingHitDay : hitDay;
+                    EventBus.Publish(new KingdomAttackedEvent(victimKingdom, pubDay));
+                    _kingdomAtkPub[victimKingdom] = (CurrentGameDay, -1);
+                }
+                else
+                {
+                    _kingdomAtkPub[victimKingdom] = (st.lastPubDay, hitDay);   // 窗内受击：待补发（终态不吞）
+                }
+            }
+            else
+            {
+                EventBus.Publish(new KingdomAttackedEvent(victimKingdom, hitDay));   // 首次受击直发
+                _kingdomAtkPub[victimKingdom] = (CurrentGameDay, -1);
+            }
+        }
 
         // [取证/②守卫交锋] 完成段证据：节流点后打入，避免高频刷屏
         Debug.Log($"[ChainFox] 守卫交锋: {victim} 受击 {damage} @ {victim.GetPosition()} <- {source}");

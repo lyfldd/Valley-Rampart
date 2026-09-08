@@ -30,6 +30,9 @@ public class FocusController
     /// <summary>本王国被攻击标记（KingdomAttackedEvent 命中置位，Update 消费）。</summary>
     private bool _attackedFlag;
 
+    /// <summary>处方 A（D556）：最近一次受击的真实游戏日（节流补发事件携带；-1=无/未标注）。</summary>
+    private int _lastHitDay = -1;
+
     /// <summary>防御姿态持续到某日（被攻击后强制防御窗口 = focusMinDurationDays）。</summary>
     private int _defenseEndDay;
 
@@ -43,7 +46,7 @@ public class FocusController
     /// <summary>本次评分顶行动（调试/冒烟断言：对比常设底线是否覆盖评分排序，冒烟#4）。</summary>
     public UtilityAction LastTop { get; private set; } = UtilityAction.None;
 
-    /// <summary>HH.100/P0 件A ④单变量组诊断开关（默认 false=正式行为零变化；跳过被攻击防御窗口强制。跑后复位 false，去留归 A-T2 处方裁决）。</summary>
+    /// <summary>HH.100/P0 件A ④单变量组诊断开关（默认 false=正式行为零变化；跳过被攻击防御窗口强制。D556 裁定常设诊断开关——种族1 调试钩先例+六考 14 锁类归因复用价值）。</summary>
     public static bool DiagBypassDefenseWindow = false;
 
     public FocusController(int kingdomId)
@@ -59,7 +62,11 @@ public class FocusController
 
     private void OnAttacked(KingdomAttackedEvent evt)
     {
-        if (evt.KingdomId == _kingdomId) _attackedFlag = true;
+        if (evt.KingdomId == _kingdomId)
+        {
+            _attackedFlag = true;
+            _lastHitDay = evt.HitDay;   // 处方 A：真实受击日（补发事件携带；-1=未标注）
+        }
     }
 
     /// <summary>兼容重载（步骤8 冒烟沿用 3 参签名；内部自动载入效用配置）。</summary>
@@ -75,10 +82,13 @@ public class FocusController
         int population = kingdom.workerCount + kingdom.warriorCount;
 
         // 被攻击置位 → 防御窗口延到防抖日数末（姿态稳定窗口）
+        // 处方 A：窗口按真实受击日（HitDay）刷新而非事件到达日——补发迟到不虚延窗口，收敛恒=最后受击+N 日。
         if (_attackedFlag)
         {
-            _defenseEndDay = Mathf.Max(_defenseEndDay, day + Mathf.Max(0, brainCfg.focusMinDurationDays));
+            int hitDay = _lastHitDay >= 0 ? _lastHitDay : day;
+            _defenseEndDay = Mathf.Max(_defenseEndDay, hitDay + Mathf.Max(0, brainCfg.focusMinDurationDays));
             _attackedFlag = false;
+            _lastHitDay = -1;
         }
 
         // ---- 常设底线（D322 优先级最高、不评分、即时强制，跳过防抖；执行序=粮→人口→被攻击）----

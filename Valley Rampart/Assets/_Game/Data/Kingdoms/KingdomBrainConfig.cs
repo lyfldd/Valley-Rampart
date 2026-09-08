@@ -58,6 +58,10 @@ public class KingdomBrainConfig : ScriptableObject
     [Tooltip("焦点切换防抖最小持续天数（≥3日占位）")]
     public int focusMinDurationDays = 3;
 
+    [Header("被攻击事件节流（HH.100/D556 处方 A）")]
+    [Tooltip("KingdomAttackedEvent 同王国发布最小间隔（游戏日）。>focusMinDurationDays 时结构性打破「持续袭扰→防御窗口永续」——袭扰持续下 focus 以 [窗口期/评分期] 交替而非永久锁⑭。0=禁用节流（原受击即发行为）。终态不吞：窗内被吞事件在窗满时补发且携带真实受击日，窗口收敛恒=最后受击+focusMinDurationDays")]
+    public float kingdomAttackEventThrottleDays = 5f;
+
     [Header("常设底线（D322，触发式不评分；执行序=粮→人口→被攻击 三级底线）")]
     [Tooltip("粮储低于 N 日消耗强制屯粮（粮储 < N × 人口 × perPop 时触发；底线第一级「保命」）")]
     public int grainReserveDaysFloor = 2;

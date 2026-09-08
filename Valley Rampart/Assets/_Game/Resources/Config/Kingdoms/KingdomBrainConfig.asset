@@ -27,6 +27,7 @@ MonoBehaviour:
   expandToMilitary_expansionChunks: 2
   maxStageUpPerDay: 1
   focusMinDurationDays: 3
+  kingdomAttackEventThrottleDays: 5
   grainReserveDaysFloor: 2
   grainConsumptionPerPop: 1
   popFloor: 6

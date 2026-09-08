@@ -653,5 +653,7 @@ public readonly struct KingdomBrainCreatedEvent
 public readonly struct KingdomAttackedEvent
 {
     public readonly int KingdomId;
-    public KingdomAttackedEvent(int kingdomId) { KingdomId = kingdomId; }
+    /// <summary>受击发生的游戏日（HH.100/D556 处方 A 终态不吞：节流补发事件携带真实受击日，窗口按受击日刷新而非补发日；-1=未标注（旧行为=按收到日刷新））。</summary>
+    public readonly int HitDay;
+    public KingdomAttackedEvent(int kingdomId, int hitDay = -1) { KingdomId = kingdomId; HitDay = hitDay; }
 }

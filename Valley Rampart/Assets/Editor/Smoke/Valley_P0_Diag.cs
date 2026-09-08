@@ -27,7 +27,15 @@ public static class Valley_P0_Diag
     public static void Run()
     {
         if (!EditorApplication.isPlaying) { Debug.LogError("[P0D] 须先 GameScene 进 Play。"); return; }
-        new GameObject("P0D_Runner").AddComponent<DiagHost>().Host(RunAll());
+        new GameObject("P0D_Runner").AddComponent<DiagHost>().Host(RunAll(null, "七局"));
+    }
+
+    /// <summary>HH.101/D556：H3 复现轮（d2 food 保底标准件+袭扰注入 differential）——ffbase(兵4+food保底,无袭扰) vs ffatk(+袭扰3/日)。</summary>
+    [MenuItem("Valley/诊断/P0_Diag_H3复现轮")]
+    public static void RunH3()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[P0D] 须先 GameScene 进 Play。"); return; }
+        new GameObject("P0D_Runner").AddComponent<DiagHost>().Host(RunAll(new[] { "ffatk" }, "H3复现轮"));
     }
 
     private class DiagHost : MonoBehaviour { public void Host(IEnumerator r) => StartCoroutine(r); }
@@ -36,7 +44,7 @@ public static class Valley_P0_Diag
     private static readonly List<string> _pathFails = new List<string>();
     private static bool _pathFailDay1Done;
 
-    private static IEnumerator RunAll()
+    private static IEnumerator RunAll(string[] onlyIds, string batchLabel)
     {
         var variants = new (string id, string label, System.Action<int, int> inject)[]
         {
@@ -48,22 +56,38 @@ public static class Valley_P0_Diag
             ("happy5",    "幸福加5",      (k, pos) => AddHappiness(k, 5f)),
             ("unlock14",  "14解锁",       null),            // flag 在局首置位
             ("goldx",     "gold消歧",     null),            // 日切保底 gold>=500
+            ("ffbase",    "food保底无袭扰", null),          // D556/d2：粮警解除基线（H3 differential 左半）
+            ("ffatk",     "food保底加袭扰", null),          // D556：+袭扰注入3/日（右半；单变量=袭扰）
         };
         Application.logMessageReceived += OnLog;
         EventBus.Subscribe<KingdomAttackedEvent>(OnAtk);
         var summary = new List<string>();
         for (int i = 0; i < variants.Length; i++)
         {
+            if (onlyIds != null && System.Array.IndexOf(onlyIds, variants[i].id) < 0) continue;
             yield return RunOne(variants[i].id, variants[i].label, variants[i].inject, summary);
         }
         EventBus.Unsubscribe<KingdomAttackedEvent>(OnAtk);
         Application.logMessageReceived -= OnLog;
         FocusController.DiagBypassDefenseWindow = false;   // M7：跑后复位（裁决区④：跑后摘除）
-        Debug.Log("[P0D] ===== 七局汇总 =====\n" + string.Join("\n", summary));
+        Debug.Log($"[P0D] ===== {batchLabel}汇总 =====\n" + string.Join("\n", summary));
         SmokeApi.QuitSmoke();
     }
 
     private static void InjectNothing(int k, int pos) { }
+
+    /// <summary>找王国首个存活指定职业单位（管线注入用）。</summary>
+    private static UnitController FirstAliveUnit(int kid, Occupation occ)
+    {
+        var reg = UnitRegistry.Instance;
+        if (reg == null) return null;
+        foreach (var u in new List<UnitController>(reg.GetAllUnits()))
+        {
+            if (u != null && u.IsAlive && u.kingdomId == kid && u.Data != null && u.Data.occupation == occ)
+                return u;
+        }
+        return null;
+    }
 
     private static Vector2Int ToVec(int pos) => new Vector2Int(pos >> 16, pos & 0xffff);
 
@@ -74,7 +98,7 @@ public static class Valley_P0_Diag
     private static IEnumerator RunOne(string id, string label, System.Action<int, int> inject, List<string> summary)
     {
         FocusController.DiagBypassDefenseWindow = (id == "unlock14");
-        _atkCount = 0; _pathFails.Clear(); _pathFailDay1Done = false;
+        _atkCount = 0; _atkCountA = 0; _pathFails.Clear(); _pathFailDay1Done = false;
 
         yield return TestHarnessApi.EnterTestRun(new NewGameConfig
         {
@@ -89,6 +113,7 @@ public static class Valley_P0_Diag
         var kB = TestFixtureApi.PlaceKingdom(FixtureTier.Midgame, 2, posB, "诊断乙");
         int kidA = kA != null ? kA.id : -1;
         int kidB = kB != null ? kB.id : -1;
+        _diagKidA = kidA;
         if (kidA < 0 || kidB < 0) { summary.Add($"{label}({id})：PlaceKingdom 失败，局作废"); yield break; }
 
         if (inject != null) inject(kidA, PackVec(posA));
@@ -119,14 +144,32 @@ public static class Valley_P0_Diag
                 // ---- 日切动作 ----
                 if (lastDay >= 0)   // 非首日
                 {
+                    var kKeep = KingdomRegistry.Instance.Get(kidA);
                     if (id == "attack3")
                         for (int i = 0; i < ATTACKS_PER_DAY; i++)
-                            EventBus.Publish(new KingdomAttackedEvent(kidA));
-                    if (id == "goldx" && KingdomRegistry.Instance.Get(kidA) != null)
+                            EventBus.Publish(new KingdomAttackedEvent(kidA));   // 旁路注入（历史口径：绕过 DamageSystem，不受处方 A 节流）
+                    if (id == "ffatk")
                     {
-                        var kk = KingdomRegistry.Instance.Get(kidA);
-                        if (kk.resources.gold < 500) kk.resources.gold = 500;   // 消歧：永不缺金
+                        // D556/A 验证：走真实受击管线（RegisterAttack→ExecuteAttack→ApplyDamage→PublishDamagedEvent→per-kingdom 节流点）。
+                        // ⚠️必须近战（即时命中）：远程=位置驱动弹，移动 worker 必 miss→伤害永不落地（A 验证轮一版实测实收=0）。
+                        // cd=360 游戏秒=日均 1 击（≈五考袭扰节奏）；attack=1 保 worker 不死；range=999 过距离检查（对角注入）。
+                        var atk = FirstAliveUnit(kidB, Occupation.Warrior);
+                        var tgt = FirstAliveUnit(kidA, Occupation.Worker);
+                        if (atk != null && tgt != null && DamageSystem.Instance != null)
+                            DamageSystem.Instance.RegisterAttack(atk, tgt, new AttackProfile
+                            {
+                                attack = 1, range = 999f, cd = 360f, isRanged = false
+                            });
+                        else
+                            Debug.LogWarning($"[P0D] ffatk 管线注入缺单位 atk={(atk != null)} tgt={(tgt != null)}");
                     }
+                    if (id == "goldx" && kKeep != null)
+                    {
+                        if (kKeep.resources.gold < 500) kKeep.resources.gold = 500;   // 消歧：永不缺金
+                    }
+                    // D556/d2 food 保底标准件：粮警解除（grainAlarm 线=grainReserveDaysFloor×pop≈28，保底 200 留余量）
+                    if ((id == "ffbase" || id == "ffatk") && kKeep != null && kKeep.resources.food < 200)
+                        kKeep.resources.food = 200;
                     if (id == "happy5") AddHappiness(kidA, 5f);   // 每日维持（日结重算后补注）
                 }
 
@@ -149,8 +192,8 @@ public static class Valley_P0_Diag
                     Debug.Log($"[P0D][CSV] var={id},day={day},k={kid},focus={k.focus},workers={k.workerCount},warriors={k.warriorCount}," +
                               $"gold={k.resources.gold:0},food={k.resources.food:0},stage={k.scriptPhase},{(kid == kidA ? $"n7={n7:F2}" : $"atkAll={_atkCount}")}");
                 }
-                if (id == "attack3")
-                    Debug.Log($"[P0D][ATK] day={day} 累计注入+实收 KingdomAttackedEvent={_atkCount}");
+                if (id == "attack3" || id == "ffatk")
+                    Debug.Log($"[P0D][ATK] var={id} day={day} 全局实收={_atkCount} kidA实收={_atkCountA}");
             }
 
             if (Time.realtimeSinceStartup - t0 > 900f) { Debug.LogWarning($"[P0D] {label} 15 分钟硬顶break"); break; }
@@ -212,5 +255,12 @@ public static class Valley_P0_Diag
             _pathFails.Add(condition);
     }
 
-    private static void OnAtk(KingdomAttackedEvent evt) => _atkCount++;
+    private static int _atkCountA;   // 仅 kidA（k4）的事件数——考跑局含随机立国 3 国（k1~k3 互打混入全局计数）
+    private static int _diagKidA = -1;
+
+    private static void OnAtk(KingdomAttackedEvent evt)
+    {
+        _atkCount++;
+        if (evt.KingdomId == _diagKidA) _atkCountA++;
+    }
 }

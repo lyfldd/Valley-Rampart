@@ -22,7 +22,7 @@ MonoBehaviour:
   expansionist: 0.6
   diplomatic: 0.2
   trainCostMul: 0.85
-  trainSpeedMul: 1.15
+  trainSpeedMul: 0.85
   meleeAtkMul: 1.15
   rangedAtkMul: 0.85
   moveSpeedMul: 1.05
