@@ -8,9 +8,18 @@ using UnityEngine;
 /// P0 占位原则：转职 = 改 occupation（数据层），NPC 站桩/训练表演后置到 AI 稳定后
 /// （走 IWorkerTaskExecutor 接口，本系统不实现 NPC 行为）。
 /// 职业变更写入 UnitController.RuntimeOccupation（不污染共享 UnitData SO）并随 UnitSaveData 持久化。
+///
+/// 存档（DZ-075 / HH.109 件2）：ISaveable Scene 阶段——队列条目引用建筑/单位，
+/// M2 硬条款「建筑先重建→队列后恢复」：建筑在阶段 1.5 由 BuildingFactory.SpawnFromSave 重建，
+/// 本系统阶段 2 LoadState 按 buildingSaveId/unitSaveId 反查实例恢复（裁定口径=入档优于丢失退款 D564）。
 /// </summary>
-public class TrainingSystem : Singleton<TrainingSystem>
+public class TrainingSystem : Singleton<TrainingSystem>, ISaveable
 {
+    // ===== ISaveable（DZ-075 / HH.109 件2）=====
+    public string SaveId => "TrainingSystem";
+    /// <summary>Scene 阶段（M2 硬条款）：建筑先重建（阶段 1.5 Spawner）→ 队列后恢复（阶段 2 本系统）。</summary>
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Scene;
+
     private TrainingConfig _config;
     private readonly Dictionary<string, List<TrainingDef>> _byBuilding = new Dictionary<string, List<TrainingDef>>();
 
@@ -120,6 +129,125 @@ public class TrainingSystem : Singleton<TrainingSystem>
         _queues.Remove(building);
     }
 
+    // ===== ISaveable 实现（DZ-075 / HH.109 件2）=====
+
+    public SavePayload SaveState()
+    {
+        var payload = new TrainingSavePayload();
+        foreach (var kv in _queues)
+        {
+            var building = kv.Key;
+            if (building == null) continue;   // fake-null 死键不入档（清场泄漏自愈：残留死键首次存档洗掉）
+            var q = kv.Value;
+            if (q == null) continue;
+            for (int i = 0; i < q.Entries.Count; i++)
+            {
+                var e = q.Entries[i];
+                if (e == null || e.def.buildingId == null) continue;
+                if (e.unit == null || !e.unit.IsAlive) continue;   // 丢失单位条目作废（不退款口径，列报）
+                payload.entries.Add(new TrainingQueueSaveEntry
+                {
+                    buildingSaveId = building.SaveId,
+                    unitSaveId = e.unit.SaveId,
+                    buildingId = e.def.buildingId,
+                    fromOccupation = (int)e.def.fromOccupation,
+                    toOccupation = (int)e.def.toOccupation,
+                    startDay = e.startDay,
+                    inTraining = e.inTraining,
+                    kingdomId = e.kingdomId,
+                    effCostDays = e.effCostDays
+                });
+            }
+        }
+        return new SavePayload
+        {
+            typeName = typeof(TrainingSavePayload).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(payload),
+            version = payload.version
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(TrainingSavePayload).AssemblyQualifiedName) return;
+        var data = JsonUtility.FromJson<TrainingSavePayload>(payload.json);
+        if (data == null || data.entries == null) return;
+
+        // 先清后恢复（M2/防跨局残留）：读档链不走 ResetWorldForNext（ContinueFromSave 仅 TeardownScene），
+        // 旧局队列残留在此清偿；随后按存档恢复。
+        _queues.Clear();
+
+        int restored = 0, droppedUnit = 0, droppedDef = 0;
+        for (int i = 0; i < data.entries.Count; i++)
+        {
+            var e = data.entries[i];
+            // M2 时序：阶段 1.5 建筑/单位已重建注册，此处反查必然可及；查无=旧档单位被读档过滤（P5.3 D432）等
+            if (!SaveManager.Instance.TryGetSaveable(e.buildingSaveId, out var bSave) || !(bSave is Building building))
+            {
+                droppedDef++;
+                Debug.LogWarning($"[TrainingSystem] 读档恢复：建筑 {e.buildingSaveId} 反查失败，条目作废（{e.buildingId}）");
+                continue;
+            }
+            if (!SaveManager.Instance.TryGetSaveable(e.unitSaveId, out var uSave) || !(uSave is UnitController unit))
+            {
+                droppedUnit++;
+                Debug.LogWarning($"[TrainingSystem] 读档恢复：单位 {e.unitSaveId} 反查失败（旧档过滤/已亡），条目作废不退款（D564 口径）");
+                continue;
+            }
+            // TrainingDef 反查（SO 配置键三匹配；不重验门禁——存档态即合法态，重验会吞档）
+            TrainingDef def = FindTrainingDef(e.buildingId, (Occupation)e.fromOccupation, (Occupation)e.toOccupation);
+            if (def.buildingId == null)
+            {
+                droppedDef++;
+                Debug.LogWarning($"[TrainingSystem] 读档恢复：训练定义反查失败（{e.buildingId} {e.fromOccupation}→{e.toOccupation}），条目作废");
+                continue;
+            }
+
+            if (!_queues.TryGetValue(building, out var q))
+            {
+                q = new TrainingQueue();
+                _queues[building] = q;
+            }
+            q.Entries.Add(new TrainingQueueEntry
+            {
+                unit = unit,
+                def = def,
+                startDay = e.startDay,
+                inTraining = e.inTraining,
+                kingdomId = e.kingdomId,
+                effCostDays = e.effCostDays
+            });
+            if (e.inTraining) q.ActiveCount++;
+            restored++;
+        }
+        Debug.Log($"[TrainingSystem] 读档恢复：{restored}/{data.entries.Count} 条队列（单位作废={droppedUnit} 定义/建筑作废={droppedDef}，先清后恢复）");
+    }
+
+    /// <summary>按 buildingId+起止职业在配置表反查训练定义（未命中返回 default，buildingId=null）。</summary>
+    private TrainingDef FindTrainingDef(string buildingId, Occupation from, Occupation to)
+    {
+        if (string.IsNullOrEmpty(buildingId)) return default;
+        var list = GetTrainings(buildingId);
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].fromOccupation == from && list[i].toOccupation == to) return list[i];
+        }
+        return default;
+    }
+
+    /// <summary>
+    /// 跨轮清场钩子（DZ-075 清场泄漏修 / HH.109 件2 方案B，仿 HH.93 T13 DamageSystem.ResetState 先例）：
+    /// WorldLifecycle.ResetWorldForNext 编排调用。ClearAllBuildings 直接 Destroy 不走 Building.Die，
+    /// _queues 死键+死 unit 引用永久滞留——此处统一清偿（队列+溃败补充窗口）。
+    /// </summary>
+    public void ResetState()
+    {
+        int leaked = _queues.Count;
+        _queues.Clear();
+        _recentDeaths.Clear();
+        Debug.Log($"[TrainingSystem] ResetState: 训练队列清偿 {leaked} 桶（含溃败补充窗口；跨轮残留清偿）");
+    }
+
     protected override void Awake()
     {
         base.Awake();
@@ -128,6 +256,7 @@ public class TrainingSystem : Singleton<TrainingSystem>
         BuildLookup();
         // 2_20 M6 战争学院「溃败补充」：订阅阵亡事件记录战斗职业最近阵亡时间（TryTrain 消费一次性窗口）
         EventBus.Subscribe<UnitDiedEvent>(OnUnitDied);
+        SaveManager.Instance.RegisterSaveable(this);   // DZ-075（KingdomManager L74 先例；重复注册由 RegisterSaveable 去重拦截）
     }
 
     protected override void OnDestroy()

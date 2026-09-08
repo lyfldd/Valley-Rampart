@@ -4,10 +4,13 @@ using UnityEngine;
 /// <summary>
 /// 箱子管理器（2_12 步骤7C + 步骤11 / D269 统一资源容器 D142 的唯一归属者）。
 /// 负责：生成（由触发源调用）、拾取接口、命中重置、过期扫描、单格数量上限（D222）。
-/// 生成触发源归属：工人背包满（D221）→ 8 调度层；怪物掉落（D213）→ 2_14；仓库溢出（D222）→ 步骤11；本步只定义接口。
-/// 搬运/拾取入背包 → 8 调度层；渲染 → 2_10；存档 → 2_11 步骤8（本步不留 ISaveable，避免与 2_11 重复）。
+/// 生成触发源归属：工人背包满（D221）→ 8 调度层；怪物掉落（D213）→ 2_14；仓库溢出（D222）→ 步骤11。
+/// 搬运/拾取入背包 → 8 调度层；渲染 → 2_10。
+/// 存档（DZ-074 / HH.109 件1）：ISaveable Scene 阶段——箱子=场景动态对象（参照 Building/单位先例）；
+/// LoadState 先 ClearAll 后重建（幂等，M2：兼防 DontDestroyOnLoad 跨局残留；读档链不重跑地图生成
+/// 故无「地图生成宝箱双份」风险——SpawnChest 全工程仅 DamageSystem/TreasureVault/MonsterController 三运行时调用方）。
 /// </summary>
-public class ChestManager : Singleton<ChestManager>
+public class ChestManager : Singleton<ChestManager>, ISaveable
 {
     /// <summary>实例是否已存在（Instance 判空，供外部安全访问）。</summary>
     public static bool HasInstance => Instance != null;
@@ -17,9 +20,17 @@ public class ChestManager : Singleton<ChestManager>
     /// <summary>存活箱子总数（供调试/上限判定）。</summary>
     public int Count => _chests.Count;
 
+    // ===== ISaveable（DZ-074 / HH.109 件1）=====
+    public string SaveId => "ChestManager";
+    /// <summary>Scene 阶段（列报选型）：箱子为场景动态对象，GridSystem/TimeManager（Global）已先行恢复，
+    /// CoordToWorld 与过期扫描锚点可用；参照 Building(L34)/单位 同阶段先例。</summary>
+    public SaveLoadPhase LoadPhase => SaveLoadPhase.Scene;
+
     private void Awake()
     {
         base.Awake();   // Singleton：自动创建 + DontDestroyOnLoad
+        if (_instance != this) return;
+        SaveManager.Instance.RegisterSaveable(this);   // KingdomManager L74 先例（重复注册由 RegisterSaveable 去重拦截）
     }
 
     private void Update()
@@ -133,5 +144,59 @@ public class ChestManager : Singleton<ChestManager>
             if (_chests[i] != null && _chests[i].gameObject != null)
                 Destroy(_chests[i].gameObject);
         _chests.Clear();
+    }
+
+    // ===== ISaveable 实现（DZ-074 / HH.109 件1）=====
+
+    public SavePayload SaveState()
+    {
+        var payload = new ChestSavePayload();
+        for (int i = 0; i < _chests.Count; i++)
+        {
+            var c = _chests[i];
+            if (c == null) continue;   // fake-null 死引用不入档（读档侧自愈）
+            payload.chests.Add(new ChestSaveEntry
+            {
+                cellX = c.cell.x,
+                cellY = c.cell.y,
+                bornDay = c.bornDay,
+                ownerFaction = (int)c.ownerFaction,
+                contents = c.contents
+            });
+        }
+        return new SavePayload
+        {
+            typeName = typeof(ChestSavePayload).AssemblyQualifiedName,
+            json = JsonUtility.ToJson(payload),
+            version = payload.version
+        };
+    }
+
+    public void LoadState(SavePayload payload)
+    {
+        if (payload.typeName != typeof(ChestSavePayload).AssemblyQualifiedName) return;
+        var data = JsonUtility.FromJson<ChestSavePayload>(payload.json);
+        if (data == null || data.chests == null) return;
+
+        // 先清后建（M2 幂等）：防 DontDestroyOnLoad 跨局残留 + 读档重复重建双份；
+        // 读档链不重跑地图生成（A 路径）故无地图宝箱双份风险（SpawnChest 三调用方均运行时行为）。
+        ClearAll();
+
+        for (int i = 0; i < data.chests.Count; i++)
+        {
+            var e = data.chests[i];
+            var cell = new GridCoord(e.cellX, e.cellY);
+            var pack = e.contents;
+            if (pack.IsZero) continue;   // 空箱不重建（SpawnChest 同语义：内容空不落箱）
+
+            // 内联重建（不走 SpawnChest：bornDay 用存档原值不过期重置；不做单格上限检查——存档态即合法态）
+            var go = new GameObject("Chest");
+            go.transform.position = WorldPosOf(cell);
+            var chest = go.AddComponent<ChestEntity>();
+            chest.Init(cell, pack, e.bornDay);
+            chest.ownerFaction = (Faction)e.ownerFaction;
+            _chests.Add(chest);
+        }
+        Debug.Log($"[ChestManager] 读档重建：{data.chests.Count} 个箱子（先清后建幂等）");
     }
 }

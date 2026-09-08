@@ -41,6 +41,7 @@ public static class WorldLifecycle
         // ⑤ 散点清场（Level 2 靠 LoadScene 兜底，同场景重建必须显式清）
         if (GridSystem.Instance != null) GridSystem.Instance.ClearAll();
         if (BuildingFactory.Instance != null) BuildingFactory.Instance.ClearAllBuildings();
+        if (TrainingSystem.Instance != null) TrainingSystem.Instance.ResetState();   // DZ-075（HH.109 件2 方案B）：ClearAllBuildings 直接 Destroy 不走 Die，_queues 死键+死 unit 引用滞留——跨轮清偿（HH.93 T13 同族编排）
         if (ChestManager.Instance != null) ChestManager.Instance.ClearAll();
         if (KingdomRegistry.Instance != null) KingdomRegistry.Instance.ResetState();
         if (KingdomBrainRegistry.Instance != null) KingdomBrainRegistry.Instance.ResetState();   // T13/M10（HH.92）：AI 决策注册跨轮残留清偿（策划侦察实锤缺口）

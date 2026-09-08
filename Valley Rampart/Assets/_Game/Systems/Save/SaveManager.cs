@@ -175,6 +175,21 @@ public class SaveManager : Singleton<SaveManager>
     }
 
     /// <summary>
+    /// 按 SaveId 反查已注册的 ISaveable（DZ-075 / HH.109 件2：TrainingSystem.LoadState 恢复队列时
+    /// 反查建筑/单位实例用——阶段 1.5 Spawner 已重建并注册，阶段 2 分发时反查必然可及）。
+    /// 只增不改既有语义（M1）；查无返回 false。
+    /// </summary>
+    public bool TryGetSaveable(string saveId, out ISaveable saveable)
+    {
+        saveable = null;
+        if (string.IsNullOrEmpty(saveId)) return false;
+        if (!_saveables.TryGetValue(saveId, out var found)) return false;
+        if (found is MonoBehaviour mb && mb == null) return false;   // 幽灵引用视同未注册
+        saveable = found;
+        return true;
+    }
+
+    /// <summary>
     /// R6: 清理已销毁的 MonoBehaviour 引用。场景切换后旧场景的单位已被 Unity 销毁，
     /// 但 _saveables 字典仍持有 C# 引用。此方法扫描并移除这些"幽灵引用"。
     /// 应在 GameBootstrap.Awake 中调用。

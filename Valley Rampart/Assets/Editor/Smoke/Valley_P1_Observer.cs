@@ -48,7 +48,9 @@ public static class P1Observer
         // [PopulationSystem]/[AIEconomySettlement] 已在案上方，实补 4）
         "[TaskScheduler]", "[ProductionSystem]", "[RulerController]", "[SatietySystem]",
         // HH.107/DZ-072a：矿洞副产链观测（产出入仓/满仓停产/读档 clamp）
-        "[MineByproduct]"
+        "[MineByproduct]",
+        // HH.109/DZ-074：箱子读档重建观测（先清后建幂等/重建计数）
+        "[ChestManager]"
         // 注：[VagrantCamp 无右括号前缀=[VagrantCampSystem]/[VagrantCamp] 双匹配（HH.78 修正：原 "[VagrantCamp]" 带括号漏 [VagrantCampSystem] 前缀）
     };
 
