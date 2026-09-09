@@ -71,9 +71,9 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     public float CurrentTimeScale { get; private set; } = 1f;
     /// <summary>支持的倍速档位（KingdomConfig.timeScales；未配置回退 {1,2}）。</summary>
     private float[] _allowedScales = { 1f, 2f };
-    /// <summary>战斗降速中（有敌人被感知）→ 强制 1x，禁止加速。</summary>
-    public bool IsCombatSlowed { get; private set; }
-    /// <summary>玩家上次请求的倍速（战斗降速结束后恢复此值，默认 1x）。</summary>
+    // HH.111 补笔B（D579⑥ 裁）：战斗降速域死代码收口——EnterCombatSlow 已随 HH.115 件4 同删（D569），
+    // IsCombatSlowed 恒 false 死分支三处 + ExitCombatSlow/HasActiveEnemies（永不触发链）一并删除。
+    /// <summary>玩家上次请求的倍速（默认 1x）。</summary>
     private float _pendingScale = 1f;
 
     // ===== 2_8 步骤11：倍速 TimeScale API（D240/D241/D256）+ sim 对拍锁 =====
@@ -157,10 +157,6 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
     {
         if (GameStateManager.Instance == null) return;
         if (GameStateManager.Instance.CurrentState != GameState.Playing) return;
-
-        // 3.5 P0-6：战斗降速中 → 检测敌人是否全部清除，清除则恢复玩家请求倍速（战斗结束恢复 2x）
-        if (IsCombatSlowed && !HasActiveEnemies())
-            ExitCombatSlow();
 
         AdvanceTime(Time.deltaTime);
     }
@@ -276,10 +272,9 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         _dayTimer = (CurrentTimeOfDay / 24f) * secondsPerDay;
         CurrentPhase = CalculatePhase(CurrentTimeOfDay, CurrentSeason);
 
-        // QQQ.3 B8-6 / LC-G4：重置倍速/战斗降速，防止上局 2x/降速残留到新局
+        // QQQ.3 B8-6 / LC-G4：重置倍速，防止上局 2x 残留到新局（战斗降速域死代码已随 HH.111 补笔B 收口）
         CurrentTimeScale = 1f;
         _pendingScale = 1f;
-        IsCombatSlowed = false;
         _simLocked1x = false;
         TestHarnessMode = false;   // HH.92/T1：考跑态随局复原（防跨局残留加速）
         Time.timeScale = 1f;
@@ -302,53 +297,23 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
         daysPerSeason = Mathf.Max(1, days);
     }
 
-    // ===== 3.5 P0-6：倍速控制 + 战斗降速 =====
+    // ===== 3.5 P0-6：倍速控制 =====
 
     /// <summary>
     /// 设置游戏倍速（仅允许 KingdomConfig.timeScales 档位，如 {1,2}）。
-    /// 战斗降速中（IsCombatSlowed）→ 强制 1x，忽略加速请求。
     /// 暂停（Time.timeScale==0）时不覆盖，避免把暂停解冻成 1x。
     /// </summary>
     public void SetTimeScale(float scale)
     {
         float clamped = ClampToAllowedScale(scale);
         CurrentTimeScale = clamped;
-        _pendingScale = clamped;   // 记录玩家请求倍速（战斗结束后恢复用）
+        _pendingScale = clamped;   // 记录玩家请求倍速
 
-        // 战斗降速强制 1x；暂停态（0）不覆盖，避免解冻暂停
-        if (IsCombatSlowed || Mathf.Approximately(Time.timeScale, 0f)) return;
+        // 暂停态（0）不覆盖，避免解冻暂停
+        if (Mathf.Approximately(Time.timeScale, 0f)) return;
         Time.timeScale = clamped;
         Debug.Log($"[TimeManager] 倍速 → {clamped}x");
     }
-
-    /// <summary>退出战斗降速（敌人清除）：恢复玩家请求倍速（战斗结束恢复 2x）。</summary>
-    private void ExitCombatSlow()
-    {
-        if (TestHarnessMode) return;   // 考跑守卫（M2）：考跑中战斗降速链整体不启用
-        IsCombatSlowed = false;
-        CurrentTimeScale = _pendingScale;
-        if (!Mathf.Approximately(Time.timeScale, 0f))
-            Time.timeScale = _pendingScale;
-        Debug.Log($"[TimeManager] 战斗结束，恢复 → {_pendingScale}x");
-    }
-
-    /// <summary>当前是否仍有存活敌人（Undead 阵营）。供战斗降速结束判定。</summary>
-    private bool HasActiveEnemies()
-    {
-        if (UnitRegistry.Instance == null) return false;
-        foreach (var u in UnitRegistry.Instance.GetAllUnits())
-        {
-            if (u == null || u.Data == null) continue;
-            if (u.Data.faction == Faction.Monster && u.IsAlive) return true;
-        }
-        return false;
-    }
-
-    /// <summary>敌人跨区块进入（威胁升整 region）→ 战斗降速。3.5 P0-6。</summary>
-    // DZ-076（HH.107 件3）：OnEnemyEnteredRegion Handler 删除——唯一触发链（死事件 EnemyEnteredRegionEvent，全库
-    // 零发布）断裂，考跑加速「战斗降速打断」隐患永久消除（L-09 风险面注记，HH.108 报告）。
-    // EnterCombatSlow 本体已同删（D569 裁 HH.115 件4：死方法+残留注释清偿；ExitCombatSlow/HasActiveEnemies
-    // 保留=Update L162 恢复链仍消费 IsCombatSlowed 恒 false 死分支列报 HH.116）。
 
     /// <summary>把请求倍速吸附到最近允许档位（最小 1x）。</summary>
     private float ClampToAllowedScale(float scale)
@@ -369,16 +334,16 @@ public class TimeManager : Singleton<TimeManager>, ISaveable
 
     /// <summary>
     /// 设置游戏倍速（0.5/1/2/3 四档，吸附到最近档位），供 2_13 UI 按钮调用。
-    /// sim 对拍锁中（<see cref="LockSpeedToSim"/>）强制 1x；战斗降速中同样强制 1x。
+    /// sim 对拍锁中（<see cref="LockSpeedToSim"/>）强制 1x。
     /// </summary>
     public void SetGameSpeed(float speed)
     {
-        if (_simLocked1x || IsCombatSlowed)
+        if (_simLocked1x)
         {
             if (!Mathf.Approximately(Time.timeScale, 0f))
                 Time.timeScale = 1f;
             CurrentTimeScale = 1f;
-            _pendingScale = _simLocked1x ? 1f : _pendingScale;   // sim 锁时玩家请求倍速不记录
+            _pendingScale = 1f;   // sim 锁时玩家请求倍速不记录
             return;
         }
 

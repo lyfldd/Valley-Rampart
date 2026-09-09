@@ -166,7 +166,10 @@ public class PopulationSystem : Singleton<PopulationSystem>, ISaveable
     {
         if (unit == null) return;
         if (_entities.Remove(unit))
-            Debug.Log($"[PopulationSystem] 实体出册：{unit.EffectiveOccupation}，人口 → {_entities.Count}");
+        {
+            // HH.111 补笔A（D579⑤ 裁）：出册明细静默（与 D563② 入册 L160 汇总口径对称——人口计数
+            // 对账由 LogCountSnapshot/开局汇总行承载；六考长局每死一单位一条=刷屏面）
+        }
     }
 
     // ===== 事件驱动增删 =====

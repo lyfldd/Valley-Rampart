@@ -69,7 +69,7 @@ public static class Valley_HH80_Run
         }
         yield return new WaitForSeconds(1f);
 
-        // 主加速 3x（UI 同源 API；夜战锁 1x 由游戏内 EnterCombatSlow 自动——损耗计入，R3）
+        // 主加速 3x（UI 同源 API；战斗降速域已随 HH.111 补笔B 收口删净，主加速 3x 即可——D579⑥）
         if (TimeManager.Instance != null) TimeManager.Instance.SetGameSpeed(3f);
         Debug.LogWarning("[HH80跑] 开局就绪 seed=" + SEED + " 槽=" + SLOT + " → 3x 主加速挂档（P1 观测器须已在跑：镜像+CSV+检查点）");
 

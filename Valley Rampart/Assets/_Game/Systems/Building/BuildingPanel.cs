@@ -456,6 +456,13 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
+        // 战争机器工坊：生产入口（HH.111 玩家生产入口批；P8 首案玩家侧处置 D558④/D564）
+        if (def.id == "SiegeWorkshop")
+        {
+            AddFunctionButton("生产", OnMachineProduceClicked);
+            any = true;
+        }
+
         // 牧场：动物数 / 容量（RanchSystem）
         if (def.id == "Ranch")
         {
@@ -564,6 +571,16 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         }
         trainingPanel.SetTarget(_target);
         UIManager.Instance?.Push(trainingPanel, _lastCtx);
+    }
+
+    /// <summary>战争机器工坊「生产」按钮：推送 MachinePanel 入栈（HH.111；TrainingPanel 同构，动态构建无需场景挂载）。</summary>
+    private void OnMachineProduceClicked()
+    {
+        if (_target == null) return;
+        var machinePanel = MachinePanel.Instance;
+        if (machinePanel == null) return;
+        machinePanel.SetTarget(_target);
+        UIManager.Instance?.Push(machinePanel, _lastCtx);
     }
 
     /// <summary>采集按钮（QQQ.2 T19 / DR-11）：确认采集 → 锁定资源点 → 调度器下 tick 派发 Gather；关闭面板。</summary>

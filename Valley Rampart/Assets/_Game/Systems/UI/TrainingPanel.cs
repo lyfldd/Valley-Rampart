@@ -260,8 +260,8 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
         return ruler != null && ruler.Gold > 0;
     }
 
-    /// <summary>职业中文显示名（默认回退 ToString）。</summary>
-    private static string OccName(Occupation occ)
+    /// <summary>职业中文显示名（默认回退 ToString）。HH.111：升 public 供 MachinePanel 同源调用（名称表单源禁抄）。</summary>
+    public static string OccName(Occupation occ)
     {
         switch (occ)
         {
@@ -290,6 +290,7 @@ public class TrainingPanel : MonoBehaviour, IUIPanel
             case Occupation.Ranger: return "游侠";
             case Occupation.Windwalker: return "风行者";
             case Occupation.DeerRider: return "鹿骑";
+            case Occupation.Ballista: return "重弩炮";   // D496 收编人类重弩炮（HH.111 名称表补行）
             case Occupation.Mortar: return "臼炮";
             case Occupation.VineCatapult: return "藤蔓弹射器";
             case Occupation.Ram: return "攻城槌";

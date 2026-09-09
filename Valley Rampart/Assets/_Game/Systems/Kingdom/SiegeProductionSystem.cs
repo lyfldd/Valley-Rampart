@@ -118,6 +118,14 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         }
     }
 
+    // ===== HH.111 玩家生产入口（UI 只读查询门面；M1/M3：白名单与校验逻辑零改动，单源转发禁抄表）=====
+
+    /// <summary>机器族检只读查询（生产面板 UI 过滤用；判定真源=IsRaceAllowedMachine 单源）。</summary>
+    public static bool IsMachineAllowed(int race, Occupation type) => IsRaceAllowedMachine(race, type);
+
+    /// <summary>机器造价只读查询（生产面板 UI 显示/置灰用；真源=GetMachineCost 单源）。</summary>
+    public ResourcePack PeekMachineCost(Occupation type) => GetMachineCost(type);
+
     /// <summary>
     /// 2_17 步骤11 批1·按王国归属统计已放置战争机器数（AI/动态王国口径）。
     /// 只统计不改产：AI 战争机器生产链归步骤13。玩家调用点仍走 GetPlacedMachineCount()（零回归）。
