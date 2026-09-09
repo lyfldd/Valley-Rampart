@@ -13,7 +13,7 @@ using UnityEditor;
 // ============================================================================
 public static class Valley_HH80_Scout
 {
-    private static readonly int[] SEEDS = { 31415, 27182, 16180, 57721 };   // 三考新 seed 候选（避开 20273/22360/52707/7841/31337 已用；HH.88 五考候选 51713 已单探定案，见 Logs/P1/hh80_scout_result.log）
+    private static readonly int[] SEEDS = { 60221, 73311, 90210 };   // HH.122 六考新 seed 候选（避开历史 20273/22360/52707/7841/31337/16180/31415/27182/57721/51713/21109+冒烟 21111/21112/42424；D582 六考开跑配置件）
 
     [MenuItem("Valley/验证/HH80_侦察")]
     public static void Run()
