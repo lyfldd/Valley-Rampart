@@ -4,19 +4,20 @@ using UnityEngine;
 using UnityEditor;
 
 // ============================================================================
-//  HH.80 P1 三考正式跑容器（Editor-only；HH.71 协议+D541 差异四处）
+//  HH.80 P1 考跑正式容器（Editor-only；HH.71 协议；D585 正门版=test-harness-first 铁律④补接）
 //  用法：GameScene Play → 先启动 P1 观测器（Valley/观测/P1_启动观测）→ 本菜单。
-//  职责：EnterGame(seed=16180, p1_run3 槽)→等就绪→SetGameSpeed(3f)→独立监控循环
+//  职责：EnterTestRun 正门进局（D585 全守卫=判负封死+T11 野怪静默+考跑档直通 15x；
+//  玩家真实局态挂机=T10 幽灵化 OFF）→独立监控循环
 //  （自订阅 logMessageReceived 数「剧本阶段 → 军事」——不掏 P1Observer 私有字段，
 //  接口纪律）→ 达标（≥2 AI 军事期）或熔断（day≥120）或灭绝全灭 → SetGameSpeed(0)
-//  停速+Save(p1_run3) 封盘+写状态文件 Logs/P1/hh80_run_status.log（console 大缓冲教训）。
+//  停速+Save 封盘+ExitTestRun 全量恢复+写状态文件 Logs/P1/hh80_run_status.log（console 大缓冲教训）。
 //  每 20 日评审打点（协议）→ 镜像日志+CSV 承担，本容器只做终局三停（达标/熔断/灭绝）。
-//  红线：零玩家干预（本容器只 SetGameSpeed+Save，不建造不训练不输资源）。
+//  红线：零玩家干预（本容器只开考跑档+Save，不建造不训练不输资源）。
 // ============================================================================
 public static class Valley_HH80_Run
 {
-    private const int SEED = 73311;          // HH.122 六考 seed（侦察定案 2026-09-09：4 AI[林影 r1/玄岩 r2/战歌 r3/霜岩 r2]+国距 45.9~117.1 均衡无口袋+营地 2+非历史局，报备；候选 60221[k1~k3=28.8 邻过近]/90210[39.1 偏近+3AI]弃，见 Logs/P1/hh80_scout_result.log）
-    private const string SLOT = "p1_run6";   // 六考独立命名（p1_run5=五考复核包原封勿覆盖，p1_run4/p1_run3 同）
+    private const int SEED = 69496;          // HH.122 六考正门重跑 seed（侦察定案 2026-09-09 D585：3 AI[密林 r1/寒晶 r2/战歌 r3]+国距 64.7~175.5 均衡无口袋+营地 2+非历史局；候选 48271[33.3 近]/81203[18.7 近]弃；73311=D45 袭扰段报废，见 Logs/P1/hh80_scout_result.log）
+    private const string SLOT = "p1_run6b";  // 六考正门重跑段独立命名（p1_run6=D45 袭扰段检查点 day005~045 原封勿覆盖=D585 袭扰面证据链）
     private const int CIRCUIT_BREAK_DAY = 120;
 
     private static readonly List<int> _military = new List<int>();
@@ -69,9 +70,10 @@ public static class Valley_HH80_Run
         }
         yield return new WaitForSeconds(1f);
 
-        // 主加速 3x（UI 同源 API；战斗降速域已随 HH.111 补笔B 收口删净，主加速 3x 即可——D579⑥）
-        if (TimeManager.Instance != null) TimeManager.Instance.SetGameSpeed(3f);
-        Debug.LogWarning("[HH80跑] 开局就绪 seed=" + SEED + " 槽=" + SLOT + " → 3x 主加速挂档（P1 观测器须已在跑：镜像+CSV+检查点）");
+        // 正门进局（test-harness-first 铁律①/D585：EnterTestRun 全守卫=判负封死+T11 野怪静默+考跑档直通
+        // [speedOverride=null→读 WorldConfig.time.testSpeedMultiplier SO 缺省 15]；玩家真实局态=T10 OFF）
+        yield return TestHarnessApi.EnterTestRun(cfg);
+        Debug.LogWarning("[HH80跑] 正门进局 seed=" + SEED + " 槽=" + SLOT + " 考跑守卫全开（D585 判负封死+T11 野怪静默，玩家真实局态挂机；P1 观测器须已在跑：镜像+CSV+检查点）");
 
         // 终局三停监控：达标（≥2 AI 军事期）/熔断（D120）/灭绝（AI 全灭）
         while (!_done)
@@ -102,6 +104,7 @@ public static class Valley_HH80_Run
         Application.logMessageReceived -= WatchMilitary;
         if (TimeManager.Instance != null) TimeManager.Instance.SetGameSpeed(0f);
         bool saved = SaveManager.Instance != null && SaveManager.Instance.Save(SLOT);
+        TestHarnessApi.ExitTestRun();   // 正门收尾：考跑态/maximumDeltaTime/渲染全量恢复（D585；封盘在后不丢档）
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("===== HH.80 三考收工 =====");
         sb.AppendLine(why);
