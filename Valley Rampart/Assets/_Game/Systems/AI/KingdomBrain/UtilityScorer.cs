@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // ============================================================================
@@ -62,7 +63,13 @@ public enum NeedKind : byte
     // ===== HH.86 件3b/3c（尾插）=====
     WellGap,         // 水井缺口（⑯ 建水井）：needA=目标井数（默认 1）；本国 Active 井 < 目标 → 缺口（井损重建通道 DZ-043）
     MetalGap,        // 金属缺口（⑰ 建铁匠铺）：needA=国库 Metal 底线（占位 30）；低于则想建铁匠铺打通石→Metal
-    ExclusiveGap     // 专属建筑缺口（⑱~㉑）：本国无族专属建筑 → 占位底分 0.5（军事期军备面；族门禁在 Feasible）
+    ExclusiveGap,    // 专属建筑缺口（⑱~㉑）：本国无族专属建筑 → 占位底分 0.5（军事期军备面；族门禁在 Feasible）
+    // ===== 2_22 P0 批A / A4 军事维度缺口（D589 内源节拍：纯缺口驱动评分，不乘威胁门控——
+    //      威胁=0 时缺口依然评分，批B 行动 ⑯训练将军/⑰建军事建筑/⑦扩多兵种 落地后消费；
+    //      行动条目批A 不落=评分循环无对应 def，零行为漂移）=====
+    GeneralGap,      // 缺将军：本国将军数 < generalLimit → 缺口（读快照 GeneralCount；将军补任链 §3.2）
+    FormationGap,    // 缺编队：本国编队数 < needA 目标 → 缺口（读快照 FormationCount；成军链批B）
+    UnitTypeGap      // 缺兵种：军事训练域可训兵种多样性缺口（读快照 OwnedCombatOccupations；可训域=D570 口径 共通+本族）
 }
 
 /// <summary>效用评分器（纯函数层，2_17 步骤9）。单入口 ScoreTop。</summary>
@@ -206,6 +213,47 @@ public static class UtilityScorer
                 return Mathf.Clamp01((d.needA - k.GetResourceValue(ResourceType.Metal)) / Mathf.Max(1f, d.needA));
             case NeedKind.ExclusiveGap:  // ⑱~㉑ 本国已有族专属建筑 → 0；无 → 占位底分 0.5（族门禁在 Feasible，M6 复用）
                 return KingdomRace.HasExclusiveBuilding(k.id, d.buildingId) ? 0f : 0.5f;
+            // ===== 2_22 P0 批A / A4 军事维度缺口（读 SituationHub 快照；快照缺席回退 0 分防 NRE）=====
+            case NeedKind.GeneralGap:    // 缺将军：GeneralCount < generalLimit → 缺口（内源：缺口即评分不乘威胁）
+            {
+                if (!SituationHub.TryGet(k.id, out var sitG) || sitG == null) return 0f;
+                var mcfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+                int limit = mcfg != null && mcfg.generalLimit > 0 ? mcfg.generalLimit : 2;   // 对齐 CanTrainGeneral 兜底
+                int haveG = sitG.GeneralCount;
+                return haveG >= limit ? 0f : Mathf.Clamp01((limit - haveG) / (float)limit);
+            }
+            case NeedKind.FormationGap:  // 缺编队：FormationCount < needA 目标 → 缺口
+            {
+                if (!SituationHub.TryGet(k.id, out var sitF) || sitF == null) return 0f;
+                int wantF = (int)Mathf.Max(1, d.needA);
+                return sitF.FormationCount >= wantF ? 0f : Mathf.Clamp01((wantF - sitF.FormationCount) / (float)wantF);
+            }
+            case NeedKind.UnitTypeGap:   // 缺兵种：可训域战斗兵种（共通+本族，D570 口径）多样性缺口
+            {
+                if (!SituationHub.TryGet(k.id, out var sitU) || sitU == null) return 0f;
+                // 可训域=TrainingDef（raceId==-1 共通 || ==本国族）且 IsCombat(toOccupation)，去重计数
+                var trainable = new HashSet<int>();
+                var tcfg = Resources.Load<TrainingConfig>("Config/TrainingConfig");
+                int myRace = KingdomRace.GetKingdomRace(k.id);
+                if (tcfg != null && tcfg.trainings != null)
+                {
+                    for (int i = 0; i < tcfg.trainings.Length; i++)
+                    {
+                        var t = tcfg.trainings[i];
+                        if (t.raceId != -1 && t.raceId != myRace) continue;   // D419 族门禁预过滤
+                        if (!MilitaryProfessions.IsCombat(t.toOccupation)) continue;
+                        trainable.Add((int)t.toOccupation);
+                    }
+                }
+                int totalT = trainable.Count;
+                if (totalT <= 0) return 0f;
+                // 拥有侧=快照 OwnedCombatOccupations 与可训域交集
+                int ownedT = 0;
+                if (sitU.OwnedCombatOccupations != null)
+                    for (int i = 0; i < sitU.OwnedCombatOccupations.Count; i++)
+                        if (trainable.Contains(sitU.OwnedCombatOccupations[i])) ownedT++;
+                return ownedT >= totalT ? 0f : Mathf.Clamp01((totalT - ownedT) / (float)totalT);
+            }
             default: return 0f;
         }
     }
@@ -250,18 +298,25 @@ public static class UtilityScorer
     public static float WarriorGapScore(int warrior, int target)
         => warrior >= target ? 0f : Mathf.Clamp01((target - warrior) / Mathf.Max(1f, target));
 
-    /// <summary>邻国兵力之和（真源=KingdomRegistry 其它非玩家王国的战士数）。D348 威胁分子。</summary>
+    /// <summary>
+    /// 邻接王国兵力之和（D515/D339：威胁分子=「邻接」非全体；A5 邻接修正——旧实现=全部非玩家
+    /// 王国战士求和，与 2_17 §3.1.3/D339/D348 文档口径偏差，本批对齐）。真源=KingdomRegistry
+    /// 非玩家王国战士数 × TerritorySystem.AreKingdomsAdjacent（中区块 4 邻接触）。
+    /// 玩家国(id=0)不计入（原口径保留：AI 间互算，玩家压力走常设底线被攻窗口）。
+    /// </summary>
     private static int NeighborMilitary(int selfId)
     {
         var reg = KingdomRegistry.Instance;
         if (reg == null) return 0;
+        var ts = TerritorySystem.Instance;
         int sum = 0;
         var all = reg.GetAll();
         for (int i = 0; i < all.Count; i++)
         {
             var o = all[i];
             if (o == null || o.id == selfId || o.IsPlayer) continue;
-            sum += o.warriorCount;
+            // A5 邻接过滤：非邻接国兵力不入威胁分子（负探针锚：远距 AI 国加兵，威胁分不变）
+            if (ts == null || ts.AreKingdomsAdjacent(selfId, o.id)) sum += o.warriorCount;
         }
         return sum;
     }

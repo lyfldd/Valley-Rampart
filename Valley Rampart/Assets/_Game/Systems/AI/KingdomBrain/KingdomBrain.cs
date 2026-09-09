@@ -32,6 +32,35 @@ public class KingdomBrain
     /// <summary>当前剧本阶段（快捷映射 StageMachine.Stage）。</summary>
     public ScriptStage Stage => StageMachine.Stage;
 
+    // ===== 态势层（2_22 P0 批A / A1+A2，D517/D528/D589）=====
+    /// <summary>最新统一国情快照（日 tick 子步① 全量重建后经 SituationHub 供评分域消费）。</summary>
+    private SituationSnapshot _situation;
+    /// <summary>损毁日志（LossEntry 流水；日 tick 聚合进快照窗口+TTL 清除；运行时态不入档——
+    /// 读档后窗口重建属已知边界=快照无持久态八格口径）。</summary>
+    private readonly List<LossEntry> _lossLog = new List<LossEntry>();
+    /// <summary>事件缓冲：日 tick 后到达的损毁（次 tick 并入 _lossLog）。</summary>
+    private readonly List<LossEntry> _pendingLosses = new List<LossEntry>();
+    /// <summary>最近一次外部接触日（KingdomAttackedEvent.HitDay/UnitDiedEvent 死亡日；peaceDays 递推基准）。</summary>
+    private int _lastContactDay = -1;
+    /// <summary>最近事件日（脏标记；日 tick 消费后置 -1；dirtyTtlDays 异常兜底）。</summary>
+    private int _dirtyDay = -1;
+
+    /// <summary>本国将军数（A4 GeneralGap 消费；口径对齐 TrainingSystem.CanTrainGeneral L676 按 kingdomId 扫 UnitRegistry）。</summary>
+    public static int CountGenerals(int kingdomId)
+    {
+        int count = 0;
+        if (UnitRegistry.Instance != null)
+        {
+            foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+            {
+                if (unit == null || unit.Data == null) continue;
+                if (unit.kingdomId != kingdomId) continue;
+                if (unit.EffectiveOccupation == Occupation.General) count++;
+            }
+        }
+        return count;
+    }
+
     // ===== 派遣落地计数（完整局批次执行面观测；运行时态不入档——读档后归零属已知边界）=====
     private struct DispatchStat { public int trainOk, buildOk, trainTry, buildTry; }
     private static readonly Dictionary<int, DispatchStat> s_dispatch = new Dictionary<int, DispatchStat>();
@@ -60,10 +89,62 @@ public class KingdomBrain
     }
 
     /// <summary>订阅王国脑事件（王国诞生时由 Factory 调用；Unsubscribe 成对，D337/D340）。</summary>
-    public void Subscribe() => Focus.Subscribe();
+    public void Subscribe()
+    {
+        Focus.Subscribe();
+        // A2（2_22 P0 批A）：态势层事件源——事件只置脏标记/缓冲，不即时改快照（D517 机制）
+        EventBus.Subscribe<KingdomAttackedEvent>(OnSituationAttacked);
+        EventBus.Subscribe<UnitDiedEvent>(OnSituationUnitDied);
+        // A6（2_22 P0 批A）：将军阵亡/编队解散上浮 → 缺将军/缺编队补任缺口感知（§3.2）
+        EventBus.Subscribe<GeneralDiedEvent>(OnGeneralDied);
+        EventBus.Subscribe<FormationDisbandedEvent>(OnFormationDisbanded);
+    }
 
     /// <summary>退订全部事件（灭亡销毁钩子，D337；2_19 灭亡管线接入）。</summary>
-    public void Unsubscribe() => Focus.Unsubscribe();
+    public void Unsubscribe()
+    {
+        Focus.Unsubscribe();
+        EventBus.Unsubscribe<KingdomAttackedEvent>(OnSituationAttacked);
+        EventBus.Unsubscribe<UnitDiedEvent>(OnSituationUnitDied);
+        EventBus.Unsubscribe<GeneralDiedEvent>(OnGeneralDied);
+        EventBus.Unsubscribe<FormationDisbandedEvent>(OnFormationDisbanded);
+        SituationHub.Remove(kingdomId);   // 快照槽随脑退订移除（无持久态八格口径）
+    }
+
+    // ===== 态势层事件处理（A2/A6：只置脏标记+缓冲，不改快照聚合值=D517 机制）=====
+
+    private void OnSituationAttacked(KingdomAttackedEvent evt)
+    {
+        if (evt.KingdomId != kingdomId) return;
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        // D556 处方 A 终态口径：窗口按真实受击日刷新（HitDay；-1=旧行为按收到日）
+        int contactDay = evt.HitDay >= 0 ? evt.HitDay : day;
+        if (contactDay > _lastContactDay) _lastContactDay = contactDay;
+        _dirtyDay = day;
+    }
+
+    private void OnSituationUnitDied(UnitDiedEvent evt)
+    {
+        if (!(evt.Unit is UnitController uc) || uc == null) return;
+        if (uc.kingdomId != kingdomId) return;   // 只记本国损毁
+        if (evt.Cause == DeathCause.Demolished) return;   // 拆除不计（对齐 L128 击杀统计口径）
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        _pendingLosses.Add(new LossEntry { Day = day, IsBuilding = false, OccupationId = (int)uc.EffectiveOccupation });
+        if (day > _lastContactDay) _lastContactDay = day;
+        _dirtyDay = day;
+    }
+
+    private void OnGeneralDied(GeneralDiedEvent evt)
+    {
+        if (evt.KingdomId != kingdomId) return;
+        _dirtyDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+    }
+
+    private void OnFormationDisbanded(FormationDisbandedEvent evt)
+    {
+        if (evt.KingdomId != kingdomId) return;
+        _dirtyDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+    }
 
     /// <summary>
     /// 每日王国脑 tick（D347 五步②）。SimMode 挂细模拟→采快照→剧本推进→同步阶段→刷新焦点→焦点下发执行。
@@ -83,6 +164,12 @@ public class KingdomBrain
         var cfg = KingdomBrain.LoadConfig();
         var ucfg = UtilityActionConfig.LoadConfig();
         kingdom.simMode = mode;   // 同步真实模式（原恒写 Fine 会覆写 Abstract 态；GetMode 读同字段=幂等）
+
+        // ① 态势层重建（2_22 P0 批A / A2，D517：日 tick 全量重建=纯函数聚合；事件只置脏标记
+        // 已在 handler 侧完成。子步序断言锚=①重建→②剧本（下方 StageMachine.Tick）→③评分（Focus.Update））
+        var scfg = SituationConfig.Load();
+        _situation = BuildSituation(kingdom, day, scfg);
+        SituationHub.Put(kingdomId, _situation);
 
         var ctx = BuildContext(kingdom, cfg);
         bool upgraded = StageMachine.Tick(ctx, cfg);
@@ -128,6 +215,98 @@ public class KingdomBrain
             if (b != null && b.kingdomId == kingdomId && b.IsActive) n++;
         }
         return n;
+    }
+
+    // ===== 态势层构建（2_22 P0 批A / A2，D517 五件聚合 + D589 内源节拍时间场）=====
+
+    /// <summary>
+    /// 统一国情快照构建（日 tick 子步①）。纯函数聚合：
+    /// 威胁分布/边境接触面=TerritorySystem 邻接查询（A5 同口径）× KingdomRegistry 兵力；
+    /// 军力现状=本国战士（机器战力入口径：B8 落地前 MachineCount 恒 0=零行为差异，D570）；
+    /// 损毁清单/兵种表现统计=窗口聚合（事件缓冲次 tick 并入+TTL 滚动）；
+    /// peaceDays=内源节拍时间场（D589：无接触日自然递推——评分域军事缺口内源化数据地基）。
+    /// 邻接表按 id 升序保确定性（同 seed 红线）。
+    /// </summary>
+    private SituationSnapshot BuildSituation(KingdomState k, int day, SituationConfig cfg)
+    {
+        // 事件缓冲并入流水+TTL 清除（消费脏标记：构建后清 _dirtyDay）
+        if (_pendingLosses.Count > 0)
+        {
+            _lossLog.AddRange(_pendingLosses);
+            _pendingLosses.Clear();
+        }
+        int ttl = cfg != null ? cfg.lossTtlDays : 7;
+        if (ttl > 0)
+            _lossLog.RemoveAll(l => day - l.Day >= ttl);
+
+        var snap = new SituationSnapshot
+        {
+            KingdomId = kingdomId,
+            Day = day,
+            OwnWarriorCount = k.warriorCount,
+            MachineCount = 0,   // B8 机器链落地后接线（D570 军力现状口径含机器；落地前恒 0）
+            Threats = new List<ThreatEntry>(),
+            Losses = new List<LossEntry>(_lossLog),
+            PeaceDays = _lastContactDay < 0 ? -1 : day - _lastContactDay,
+            Dirty = _dirtyDay >= 0,   // 周期内发生过事件（脏标记 TTL 兜底=异常未消费态）
+            EconomyBlockPlaceholder = true,   // ②经济诊断块占位：真值随 2_23 资源 P0 R-A1（D528）
+            PopulationBlockPlaceholder = true // ③人口盘点块占位：真值随 2_23 资源 P1
+        };
+        _dirtyDay = -1;   // 日 tick 消费完毕（下一事件重新置位）
+
+        // 威胁分布+边境接触面（A5 邻接口径；id 升序保确定性）
+        var ts = TerritorySystem.Instance;
+        var reg = KingdomRegistry.Instance;
+        if (ts != null && reg != null)
+        {
+            var adj = new List<int>(ts.GetAdjacentKingdoms(kingdomId));
+            adj.Sort();
+            for (int i = 0; i < adj.Count; i++)
+            {
+                var other = reg.Get(adj[i]);
+                if (other == null || other.IsPlayer) continue;   // 玩家不入威胁分布（与 NeighborMilitary 同口径）
+                snap.Threats.Add(new ThreatEntry { KingdomId = other.id, WarriorCount = other.warriorCount });
+            }
+        }
+        snap.BorderContactCount = snap.Threats.Count;
+
+        // 军事维度缺口真值（A4 数据源）：将军数/编队数/在场战斗职业去重（确定性升序）
+        snap.GeneralCount = CountGenerals(kingdomId);
+        var ownedCombat = new HashSet<int>();
+        if (UnitRegistry.Instance != null)
+        {
+            foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+            {
+                if (unit == null || unit.Data == null || unit.kingdomId != kingdomId) continue;
+                var occ = unit.EffectiveOccupation;
+                if (MilitaryProfessions.IsCombat(occ)) ownedCombat.Add((int)occ);
+            }
+        }
+        snap.OwnedCombatOccupations = new List<int>(ownedCombat);
+        snap.OwnedCombatOccupations.Sort();
+        if (FormationManager.Instance != null)
+        {
+            var fs = FormationManager.Instance.AllFormations;
+            int cnt = 0;
+            for (int i = 0; i < fs.Count; i++)
+                if (fs[i] != null && fs[i].KingdomId == kingdomId) cnt++;
+            snap.FormationCount = cnt;
+        }
+
+        // 兵种表现统计骨架：窗口内 per 职业死亡计数（确定性聚合；表现分=B5 战斗结算域）
+        var deaths = new Dictionary<int, int>();
+        for (int i = 0; i < _lossLog.Count; i++)
+        {
+            var l = _lossLog[i];
+            if (l.IsBuilding) continue;
+            deaths.TryGetValue(l.OccupationId, out int n);
+            deaths[l.OccupationId] = n + 1;
+        }
+        snap.UnitPerformance = new List<UnitPerfStat>(deaths.Count);
+        foreach (var kv in deaths)
+            snap.UnitPerformance.Add(new UnitPerfStat { OccupationId = kv.Key, Deaths = kv.Value });
+        snap.UnitPerformance.Sort((a, b) => a.OccupationId.CompareTo(b.OccupationId));   // 确定性序
+        return snap;
     }
 
     /// <summary>载入王国脑配置（缺 asset 时回退默认占位实例；so-data-driven 禁魔法数）。</summary>

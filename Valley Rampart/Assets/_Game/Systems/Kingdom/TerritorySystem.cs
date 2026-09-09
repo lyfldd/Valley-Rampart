@@ -60,6 +60,59 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
     public bool IsTerritory(Vector2Int mid, int kingdomId) =>
         _territory.TryGetValue(mid, out var k) && k == kingdomId;
 
+    // ===== 邻接王国查询（2_22 P0 批A / A5，D515/D339 口径落地）=====
+
+    /// <summary>邻接缓存：kingdomId → 邻接国 id 集（懒构建，领土写点置脏失效）。</summary>
+    private Dictionary<int, HashSet<int>> _adjacencyCache;
+    private bool _adjacencyDirty = true;
+
+    /// <summary>
+    /// 两国是否邻接（中区块 4 邻接触=共享边；D339/D515「邻接王国」口径的格子级定案，
+    /// 与 ExpandTick 4 邻接 D283/D326 同族——实施回注 2_17 §3.1.3）。同国恒 false。
+    /// </summary>
+    public bool AreKingdomsAdjacent(int a, int b)
+    {
+        if (a == b) return false;
+        EnsureAdjacencyCache();
+        return _adjacencyCache != null
+            && _adjacencyCache.TryGetValue(a, out var set) && set.Contains(b);
+    }
+
+    /// <summary>某王国邻接国只读视图（无邻接=空集；态势层威胁分布/边境接触面消费，A2）。</summary>
+    public IReadOnlyCollection<int> GetAdjacentKingdoms(int kingdomId)
+    {
+        EnsureAdjacencyCache();
+        return _adjacencyCache != null && _adjacencyCache.TryGetValue(kingdomId, out var set)
+            ? (IReadOnlyCollection<int>)set
+            : (IReadOnlyCollection<int>)System.Array.Empty<int>();
+    }
+
+    /// <summary>邻接缓存懒构建：O(N) 全账本扫描，每格只查右/上两向防重复登记（无向边两端落表）。</summary>
+    private void EnsureAdjacencyCache()
+    {
+        if (!_adjacencyDirty && _adjacencyCache != null) return;
+        var adj = new Dictionary<int, HashSet<int>>();
+        foreach (var kv in _territory)
+        {
+            TryLinkAdjacency(adj, kv.Value, new Vector2Int(kv.Key.x + 1, kv.Key.y));
+            TryLinkAdjacency(adj, kv.Value, new Vector2Int(kv.Key.x, kv.Key.y + 1));
+        }
+        _adjacencyCache = adj;
+        _adjacencyDirty = false;
+    }
+
+    private void TryLinkAdjacency(Dictionary<int, HashSet<int>> adj, int owner, Vector2Int other)
+    {
+        if (!_territory.TryGetValue(other, out int otherOwner) || otherOwner == owner) return;
+        if (!adj.TryGetValue(owner, out var s)) { s = new HashSet<int>(); adj[owner] = s; }
+        s.Add(otherOwner);
+        if (!adj.TryGetValue(otherOwner, out var s2)) { s2 = new HashSet<int>(); adj[otherOwner] = s2; }
+        s2.Add(owner);
+    }
+
+    /// <summary>领土账本写点统一失效入口（5 写点：RebuildInitial/ClaimInitial/ExpandTick/ClaimFootprintChunk/LoadState）。</summary>
+    private void InvalidateAdjacencyCache() => _adjacencyDirty = true;
+
     /// <summary>
     /// 从当前全部建筑重推初始领土（D343：初始建筑外扩 1 中区块，Chebyshev 3×3 并集）。
     /// 幂等、确定性：依 KingdomRegistry 建筑清单按 (kingdomId,x,y) 序扫描，中区块集排序后按 kingdomId 升序广播事件。
@@ -106,6 +159,7 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
                 _territory[c] = k;
             EventBus.Publish(new TerritoryChangedEvent(k, cells));
         }
+        InvalidateAdjacencyCache();   // A5：账本重推→邻接缓存失效
     }
 
     // 计数器（验收/完整局用）
@@ -132,6 +186,7 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
         if (claimed.Count == 0) return;
         claimed.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
         EventBus.Publish(new TerritoryChangedEvent(kingdomId, claimed));
+        InvalidateAdjacencyCache();   // A5：初始圈入→邻接缓存失效
     }
 
     /// <summary>某王国全部建筑的中区块 Chebyshev 1-ring 并集（D343 3×3）。RebuildInitial 与 ClaimInitial 共用同源逻辑。</summary>
@@ -214,6 +269,7 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
             }
             _lastExpandDay[id] = day;
             EventBus.Publish(new TerritoryChangedEvent(id, claimed));
+            InvalidateAdjacencyCache();   // A5：推边界→邻接缓存失效
         }
     }
 
@@ -276,6 +332,7 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
         if (_territory.ContainsKey(mid)) return;
         _territory[mid] = kingdomId;
         EventBus.Publish(new TerritoryChangedEvent(kingdomId, new List<Vector2Int> { mid }));
+        InvalidateAdjacencyCache();   // A5：建造纳土→邻接缓存失效
     }
 
     // ===== 批次C ④债：存档入档（ISaveable Global 段，独立 SaveId="TerritorySystem"）=====
@@ -312,6 +369,7 @@ public class TerritorySystem : Singleton<TerritorySystem>, ISaveable
             foreach (var d in data.lastExpandDay)
                 _lastExpandDay[d.kingdomId] = d.day;
         _loadedFromSave = true;   // 门控：EnterPlaying 不再 RebuildInitial 覆盖存档领土
+        InvalidateAdjacencyCache();   // A5：存档恢复→邻接缓存失效
         Debug.Log($"[TerritorySystem] 从存档恢复领土 {_territory.Count} 块");
     }
 

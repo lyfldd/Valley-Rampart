@@ -645,6 +645,10 @@ public class FormationController : MonoBehaviour
         if (_generalUnit != null && ReferenceEquals(evt.Unit, _generalUnit))
         {
             Debug.Log("[FormationController] 将军阵亡，编队解散，全体批量清理状态。");
+            // A6（2_22 P0 批A）：将军阵亡上浮王国脑（审计实锤6「编队自散无事件上浮」补链）
+            // → 军力/编队脏标记 → 次日快照更新 → 缺将军可评分（§3.2 将军补任链）
+            int kid = ResolveKingdomId();
+            if (kid >= 0) EventBus.Publish(new GeneralDiedEvent(kid));
             DisbandAll();
             return;
         }
@@ -729,12 +733,37 @@ public class FormationController : MonoBehaviour
     /// </summary>
     public void DisbandAll()
     {
+        // A6（2_22 P0 批A）：编队解散上浮王国脑（全部解散路径：将军阵亡/手动解散/OnDestroy 兜底）
+        // → 编队现状脏标记 → 次日快照更新 → 缺编队可评分；-1=无法归属不发布
+        int kid = ResolveKingdomId();
+        if (kid >= 0) EventBus.Publish(new FormationDisbandedEvent(kid, _generalUnit == null ? false : !IsGeneralAlive()));
+
         foreach (var m in _members)
         {
             ClearFormationState(m);
         }
         _members.Clear();
         Debug.Log("[FormationController] 编队解散，全体状态清理完成。");
+    }
+
+    /// <summary>编队所属王国推导（A6 发布归属）：将军优先，无将军（守城编队）取首个成员，全空=-1。</summary>
+    private int ResolveKingdomId()
+    {
+        if (_generalUnit != null) return _generalUnit.kingdomId;
+        for (int i = 0; i < _members.Count; i++)
+            if (_members[i].Unit != null) return _members[i].Unit.kingdomId;
+        return -1;
+    }
+
+    /// <summary>编队归属王国（公开只读；态势层快照 FormationCount 按 id 过滤消费，A2）。</summary>
+    public int KingdomId => ResolveKingdomId();
+
+    /// <summary>将军存活判定（A6 FormationDisbandedEvent.GeneralLost：将军引用在但 HP≤0=连带损失）。</summary>
+    private bool IsGeneralAlive()
+    {
+        if (_generalUnit == null) return false;
+        var dmg = _generalUnit as IDamageable;
+        return dmg == null || dmg.CurrentHp > 0;
     }
 
     /// <summary>

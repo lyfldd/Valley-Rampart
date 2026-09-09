@@ -145,6 +145,31 @@ public readonly struct UnitDiedEvent
     }
 }
 
+// ===== 王国脑军事态势事件（2_22 P0 批A / A6：将军阵亡上浮，审计实锤6「编队自散无事件上浮」补链）=====
+
+/// <summary>
+/// 将军阵亡事件。FormationController.OnUnitDied 将军分支发布（将军编队自散处）。
+/// 王国脑订阅：军力现状脏标记 → 次日快照更新 → 缺将军可评分（2_22 §3.2 将军补任链）；
+/// 批C C6 军覆危机打断（将军阵亡+无存活编队=事件即时不等日 tick）消费同一事件。
+/// </summary>
+public readonly struct GeneralDiedEvent
+{
+    public readonly int KingdomId;    // 阵亡将军所属王国（-1=无法归属，不发布）
+    public GeneralDiedEvent(int kingdomId) { KingdomId = kingdomId; }
+}
+
+/// <summary>
+/// 编队解散事件。FormationController.DisbandAll 发布（将军阵亡/君主手动解散等全部解散路径）。
+/// 王国脑订阅：编队现状脏标记 → 次日快照更新 → 缺编队可评分；GeneralLost=true=连带将军损失
+/// （补任缺口双通道之一）。
+/// </summary>
+public readonly struct FormationDisbandedEvent
+{
+    public readonly int KingdomId;    // 编队所属王国（-1=无法归属，不发布）
+    public readonly bool GeneralLost; // 是否连带将军损失（将军阵亡解散=true）
+    public FormationDisbandedEvent(int kingdomId, bool generalLost) { KingdomId = kingdomId; GeneralLost = generalLost; }
+}
+
 // ===== 资源事件 =====
 
 // 资源类型枚举。对应君主国家持有的四种基础资源。
