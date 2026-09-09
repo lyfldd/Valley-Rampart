@@ -39,7 +39,13 @@ public enum UtilityAction : byte
     BuildWarAcademy = 18,  // ⑱建战争学院（人类专属；raceId=0）
     BuildWarCamp = 19,     // ⑲建兽人战营（兽人专属；raceId=3）
     BuildLeyForge = 20,    // ⑳建地脉熔炉（矮人专属；raceId=2）
-    BuildArcheryRange = 21 // ㉑建精灵射箭场（精灵专属；raceId=1）
+    BuildArcheryRange = 21, // ㉑建精灵射箭场（精灵专属；raceId=1）
+    // ===== 2_22 P0 批B 建军链（尾插保持 int 稳定；圈号系⑯⑰已被 HH.86 占用，下列圈号=2_22 文档系编号）=====
+    TrainGeneral = 22,      // 2_22⑯ 训练将军（B2）：军事期起（minStage=3）；执行=兵营 Barracks 队列训练 General（与玩家同链 generalLimit）
+    BuildBarracks = 23,     // 2_22⑰a 建兵营（B3）：共通军事建筑（General/Warrior/Cavalry 训练入口）
+    BuildTrainingCamp = 24, // 2_22⑰b 建训练营（B3）：共通军事建筑（Archer/Mage/Healer+本族专属兵训练入口）
+    BuildSiegeWorkshop = 25, // 2_22㉔ 建投掷机厂（B8）：共通中性建筑（SiegeWorkshopBuilding 弹药厂）
+    ProduceMachine = 26     // 2_22㉕ 造战争机器（B8）：战争态势驱动（MachineDemand）；不进配兵双环（语义正交）
 }
 
 /// <summary>需求强度缺口函数类型（D323 单调缺口；参数 needA/needB 语义见各 case）。</summary>
@@ -69,7 +75,10 @@ public enum NeedKind : byte
     //      行动条目批A 不落=评分循环无对应 def，零行为漂移）=====
     GeneralGap,      // 缺将军：本国将军数 < generalLimit → 缺口（读快照 GeneralCount；将军补任链 §3.2）
     FormationGap,    // 缺编队：本国编队数 < needA 目标 → 缺口（读快照 FormationCount；成军链批B）
-    UnitTypeGap      // 缺兵种：军事训练域可训兵种多样性缺口（读快照 OwnedCombatOccupations；可训域=D570 口径 共通+本族）
+    UnitTypeGap,     // 缺兵种：军事训练域可训兵种多样性缺口（读快照 OwnedCombatOccupations；可训域=D570 口径 共通+本族）
+    // ===== 2_22 P0 批B / B8 战争机器（D558→D570）=====
+    MachineDemand    // 造机器需求（㉕）：战争态势驱动=军事期(stage==3)+邻接威胁非空（快照 Threats）→ 需求分；
+                     // 守城需求=警戒/动员档（批C 接入位，P0 占位=军事期+威胁即驱动）；族门禁/上限在执行链 D558
 }
 
 /// <summary>效用评分器（纯函数层，2_17 步骤9）。单入口 ScoreTop。</summary>
@@ -213,22 +222,25 @@ public static class UtilityScorer
                 return Mathf.Clamp01((d.needA - k.GetResourceValue(ResourceType.Metal)) / Mathf.Max(1f, d.needA));
             case NeedKind.ExclusiveGap:  // ⑱~㉑ 本国已有族专属建筑 → 0；无 → 占位底分 0.5（族门禁在 Feasible，M6 复用）
                 return KingdomRace.HasExclusiveBuilding(k.id, d.buildingId) ? 0f : 0.5f;
-            // ===== 2_22 P0 批A / A4 军事维度缺口（读 SituationHub 快照；快照缺席回退 0 分防 NRE）=====
-            case NeedKind.GeneralGap:    // 缺将军：GeneralCount < generalLimit → 缺口（内源：缺口即评分不乘威胁）
+            // ===== 2_22 P0 批B / B2：训练将军（读 SituationHub 快照；快照缺席回退 0 分防 NRE）=====
+            case NeedKind.GeneralGap:    // 缺将军：GeneralCount < generalLimit → 缺口；叠加内源势能项（D590 增补节②：
+                                         // 缺口=内源基线、势能=连续叠加——无缺口时势能仍给行动压力=无袭扰环境不恒死滞）
             {
                 if (!SituationHub.TryGet(k.id, out var sitG) || sitG == null) return 0f;
                 var mcfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
                 int limit = mcfg != null && mcfg.generalLimit > 0 ? mcfg.generalLimit : 2;   // 对齐 CanTrainGeneral 兜底
                 int haveG = sitG.GeneralCount;
-                return haveG >= limit ? 0f : Mathf.Clamp01((limit - haveG) / (float)limit);
+                float gapG = haveG >= limit ? 0f : Mathf.Clamp01((limit - haveG) / (float)limit);
+                return gapG + InternalDrive(k);
             }
-            case NeedKind.FormationGap:  // 缺编队：FormationCount < needA 目标 → 缺口
+            case NeedKind.FormationGap:  // 缺编队：FormationCount < needA 目标 → 缺口+内源势能叠加
             {
                 if (!SituationHub.TryGet(k.id, out var sitF) || sitF == null) return 0f;
                 int wantF = (int)Mathf.Max(1, d.needA);
-                return sitF.FormationCount >= wantF ? 0f : Mathf.Clamp01((wantF - sitF.FormationCount) / (float)wantF);
+                float gapF = sitF.FormationCount >= wantF ? 0f : Mathf.Clamp01((wantF - sitF.FormationCount) / (float)wantF);
+                return gapF + InternalDrive(k);
             }
-            case NeedKind.UnitTypeGap:   // 缺兵种：可训域战斗兵种（共通+本族，D570 口径）多样性缺口
+            case NeedKind.UnitTypeGap:   // 缺兵种：可训域战斗兵种（共通+本族，D570 口径）多样性缺口+内源势能叠加
             {
                 if (!SituationHub.TryGet(k.id, out var sitU) || sitU == null) return 0f;
                 // 可训域=TrainingDef（raceId==-1 共通 || ==本国族）且 IsCombat(toOccupation)，去重计数
@@ -252,7 +264,17 @@ public static class UtilityScorer
                 if (sitU.OwnedCombatOccupations != null)
                     for (int i = 0; i < sitU.OwnedCombatOccupations.Count; i++)
                         if (trainable.Contains(sitU.OwnedCombatOccupations[i])) ownedT++;
-                return ownedT >= totalT ? 0f : Mathf.Clamp01((totalT - ownedT) / (float)totalT);
+                float gapU = ownedT >= totalT ? 0f : Mathf.Clamp01((totalT - ownedT) / (float)totalT);
+                return gapU + InternalDrive(k);
+            }
+            case NeedKind.MachineDemand: // ㉕ 造机器（B8）：战争态势驱动=军事期+邻接威胁非空（守城/攻城需求域）；
+                                          // 批C 姿态层警戒/动员档接入后细化（P0 占位口径）；内源项不驱动机器（语义正交）
+            {
+                if (!SituationHub.TryGet(k.id, out var sitM) || sitM == null) return 0f;
+                if (k.scriptPhase != ScriptStage.Military) return 0f;             // 军事期才响应战争态势
+                if (sitM.Threats == null || sitM.Threats.Count == 0) return 0f;   // 无邻接威胁=无攻城/守城需求
+                float wantM = Mathf.Max(1, d.needA);
+                return Mathf.Clamp01(wantM / (wantM + sitM.MachineCount)) * 0.8f; // 机器数越少需求越高（上限内）
             }
             default: return 0f;
         }
@@ -319,6 +341,24 @@ public static class UtilityScorer
             if (ts == null || ts.AreKingdomsAdjacent(selfId, o.id)) sum += o.warriorCount;
         }
         return sum;
+    }
+
+    /// <summary>
+    /// 内源势能项（2_22 P0 批B，D590 增补节②③/D589 列报2）：三连续输入线性加权 × SO 总权重。
+    /// 叠加语义=缺口分 + drive（不整体 clamp）——缺口满格 1.0 时势能仍有边际（0.1 保守量级），
+    /// 无缺口时势能独立给行动压力（无袭扰环境不恒死滞=内源节拍核心）。
+    /// 权重 SO 化（SituationConfig.internalDriveWeight 初始 0.1=数值禁区保守下沿，只接结构不调值；
+    /// 可训练标量预留=factor_registry S 行随 B4 登记）。置 0=退化六考死滞表型（负探针锚）。
+    /// </summary>
+    private static float InternalDrive(KingdomState k)
+    {
+        if (!SituationHub.TryGet(k.id, out var sit) || sit == null) return 0f;
+        var scfg = SituationConfig.Load();
+        if (scfg == null || scfg.internalDriveWeight <= 0f) return 0f;
+        float drive = scfg.driveEconShare * sit.DriveEconomic
+                    + scfg.drivePopShare * sit.DrivePopPressure
+                    + scfg.driveStorageShare * sit.DriveStorage;
+        return scfg.internalDriveWeight * Mathf.Clamp01(drive);
     }
 
     /// <summary>二值可行性门控（D346）。不看需求连续量，硬条件不过 → 0 出局。

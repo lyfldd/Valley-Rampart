@@ -31,6 +31,17 @@ public class SituationConfig : ScriptableObject
     [Tooltip("恢复线：动员档回落警戒档的滞回判据（>危机线防抖，C1 滞回窗）")]
     public int recoveryLine = 4;
 
+    // ===== 内源节拍（D590 增补节/D589 列报2：阶段推进评分不得以外部袭扰为唯一源）=====
+    [Header("内源势能（D590 增补节②③：连续权重函数禁硬表；数值禁区=初始权重 0.1 保守量级只接结构不调值，实值归 P0 调优后续轮；可训练标量预留）")]
+    [Tooltip("内源势能总权重（军事行动 NeedScore 合成项乘数；0=关[负探针锚：置 0 退化六考死滞表型]）")]
+    [Range(0f, 1f)] public float internalDriveWeight = 0.1f;
+    [Tooltip("经济盈余率分量占比（三输入线性加权内份额，和=1；连续函数=最简线性起步）")]
+    [Range(0f, 1f)] public float driveEconShare = 0.5f;
+    [Tooltip("人口压力分量占比")]
+    [Range(0f, 1f)] public float drivePopShare = 0.3f;
+    [Tooltip("仓储水位分量占比")]
+    [Range(0f, 1f)] public float driveStorageShare = 0.2f;
+
     /// <summary>载入态势配置（缺 asset 时回退默认占位实例；对齐 KingdomBrain.LoadConfig 先例）。</summary>
     public static SituationConfig Load()
     {

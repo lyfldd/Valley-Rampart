@@ -181,7 +181,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
     /// 生产战争机器（AI/王国归属 overload，2_17 步骤13 批C 清偿 D454：能力打通+触发延后军事期）。
     /// 玩家(id=0) 缺省走原 ProduceMachine→Faction.PlayerCamp，零回归。
     /// AI(id&gt;0)：国库扣费 + per-kingdom 上限 + 生成带 kingdomId 单位（SpawnUnit 门面自动覆写 AiKingdom 阵营）。
-    /// 触发方（UtilityAction/SiegeWorkshop 前置）属 2_18 军事期内容一并议（HH.42 §四决策点2 裁 A）。
+    /// 触发方=2_22 P0 批B ㉔㉕ 行动（BuildSiegeWorkshop/ProduceMachine 已落地接线，D570 转正；DZ-083c 注释义务更新）。
     /// </summary>
     public bool ProduceMachine(Occupation type, Vector2 spawnPos, int kingdomId)
     {

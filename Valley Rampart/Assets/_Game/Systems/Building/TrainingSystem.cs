@@ -99,6 +99,21 @@ public class TrainingSystem : Singleton<TrainingSystem>, ISaveable
         {
             e.unit.SetOccupation(e.def.toOccupation);
             Debug.Log($"[TrainingSystem] 训练完成：{e.def.fromOccupation} → {e.def.toOccupation}（{e.def.buildingId}，耗金{e.def.costGold} 水晶{e.def.costCrystal}）");
+
+            // 2_22 P0 批B / B7：AI 将军毕业自动成军（BindGeneral→RecruitStandard，镜像 AIDebugSpawnController.
+            // BindGeneralFormation 既有样例链）；玩家(0)路径不变=红线玩家侧零改动（玩家将军成军走既有手动/UI 链）。
+            if (e.def.toOccupation == Occupation.General && e.unit.kingdomId > 0)
+            {
+                var go = e.unit.gameObject;
+                var fc = go.GetComponent<FormationController>();
+                if (fc == null) fc = go.AddComponent<FormationController>();
+                fc.faction = e.unit.Data != null ? e.unit.Data.faction : Faction.AiKingdom;
+                if (fc.formationTable == null)
+                    fc.formationTable = Resources.Load<FormationTable>("Formations/FormationTable");
+                fc.BindGeneral(e.unit);
+                fc.RecruitStandard();
+                Debug.Log($"[TrainingSystem] AI 将军#{e.unit.npcId} 毕业，自动成军（BindGeneral+RecruitStandard）");
+            }
         }
         q.ActiveCount = Mathf.Max(0, q.ActiveCount - 1);
         q.Entries.Remove(e);
@@ -560,6 +575,52 @@ public class TrainingSystem : Singleton<TrainingSystem>, ISaveable
         for (int i = 1; i < pool.Count; i++)
             if (pool[i].npcId < chosen.npcId) chosen = pool[i];
         return TryTrain(chosen, def, building);
+    }
+
+    /// <summary>
+    /// AI 王国桶取人训练入口（2_22 P0 批B / B1 系统级入口）：从指定 AI 王国的空闲居民池取人入队，
+    /// 与玩家 TryTrainFromPool 共用同一底层 TryTrain(unit, def, building) 校验链（国库扣费/族门禁/
+    /// 建筑等级/generalLimit——L436 对 AI 生效）。B1 验收=AI 与玩家同一校验链 ✅。
+    /// 确定性：npcId 稳定最小选人（HH.27 同款纪律）。
+    /// </summary>
+    public bool TryTrainFromKingdomPool(int kingdomId, Building building, Occupation toOccupation)
+    {
+        if (building == null || building.def == null || kingdomId <= 0) return false;
+        var trainings = GetTrainings(building.def.id);
+        if (trainings == null || trainings.Count == 0) return false;
+
+        TrainingDef def = default;
+        bool found = false;
+        for (int i = 0; i < trainings.Count; i++)
+        {
+            if (trainings[i].toOccupation == toOccupation)
+            {
+                def = trainings[i];
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+
+        // AI 桶：本国空闲居民（Resident=训练链 fromOccupation 源；镜像 TryTrainFromPool 玩家桶结构）
+        var pool = new List<UnitController>();
+        if (UnitRegistry.Instance != null)
+        {
+            foreach (var unit in UnitRegistry.Instance.GetAllUnits())
+            {
+                if (unit == null || unit.Data == null) continue;
+                if (unit.kingdomId != kingdomId) continue;
+                if (unit.EffectiveOccupation != def.fromOccupation) continue;
+                if (!unit.IsAlive) continue;
+                pool.Add(unit);
+            }
+        }
+        if (pool.Count == 0) return false;
+
+        var chosen = pool[0];
+        for (int i = 1; i < pool.Count; i++)
+            if (pool[i].npcId < chosen.npcId) chosen = pool[i];
+        return TryTrain(chosen, def, building, kingdomId);
     }
 
     /// <summary>按训练定义 buildingId 找活动训练建筑实例（旧无参调用兼容；无则返回 null=无槽位限制）。</summary>

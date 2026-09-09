@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   raceId: 3
   raceName: "\u517D\u4EBA"
-  raceDescription: "「奇怪？长着牛角的野人？」兽人的字典里没有“耕种”——他们的田是别人的营地，收成靠抢，经济靠打仗。狂战士越杀越上头，狼骑兵抢完就跑。和兽人做邻居，仓库门最好上三把锁。"
+  raceDescription: "\u300C\u5947\u602A\uFF1F\u957F\u7740\u725B\u89D2\u7684\u91CE\u4EBA\uFF1F\u300D\u517D\u4EBA\u7684\u5B57\u5178\u91CC\u6CA1\u6709\u201C\u8015\u79CD\u201D\u2014\u2014\u4ED6\u4EEC\u7684\u7530\u662F\u522B\u4EBA\u7684\u8425\u5730\uFF0C\u6536\u6210\u9760\u62A2\uFF0C\u7ECF\u6D4E\u9760\u6253\u4ED7\u3002\u72C2\u6218\u58EB\u8D8A\u6740\u8D8A\u4E0A\u5934\uFF0C\u72FC\u9A91\u5175\u62A2\u5B8C\u5C31\u8DD1\u3002\u548C\u517D\u4EBA\u505A\u90BB\u5C45\uFF0C\u4ED3\u5E93\u95E8\u6700\u597D\u4E0A\u4E09\u628A\u9501\u3002"
   bannerColor: {r: 0.6, g: 0.1, b: 0.1, a: 1}
   militant: 0.8
   economic: 0.3
@@ -38,3 +38,15 @@ MonoBehaviour:
   exclusiveUnitDefs:
   - {fileID: 11400000, guid: a1fb07e3146bbfb49ab415ef06adb8eb, type: 2}
   - {fileID: 11400000, guid: e07a2999d663e85449b7e01098c778ee, type: 2}
+  unitPriors:
+  - occupation: 28
+    prior: 0.8
+  - occupation: 29
+    prior: 0.6
+  - occupation: 3
+    prior: 0.6
+  - occupation: 2
+    prior: 0.2
+  - occupation: 6
+    prior: 0.2
+  defaultUnitPrior: 0.1

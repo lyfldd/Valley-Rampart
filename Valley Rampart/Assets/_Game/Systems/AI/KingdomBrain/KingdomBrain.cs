@@ -170,6 +170,7 @@ public class KingdomBrain
         var scfg = SituationConfig.Load();
         _situation = BuildSituation(kingdom, day, scfg);
         SituationHub.Put(kingdomId, _situation);
+        UpdateLearnedWeights(_situation);   // B5 局内环自整定（P0=日 tick 结算节拍，战斗结算事件 2_18 后切换）
 
         var ctx = BuildContext(kingdom, cfg);
         bool upgraded = StageMachine.Tick(ctx, cfg);
@@ -293,6 +294,12 @@ public class KingdomBrain
             snap.FormationCount = cnt;
         }
 
+        // 内源势能三输入（D590 增补节②；现算轻量口径=R-A1 前占位，R-A1 真值块落地后接替——
+        // 口径如实注记：经济=gold/100、人口=(worker+warrior)/20、仓储=food/50，全 clamp01）
+        snap.DriveEconomic = Mathf.Clamp01(k.resources.gold / 100f);
+        snap.DrivePopPressure = Mathf.Clamp01((k.workerCount + k.warriorCount) / 20f);
+        snap.DriveStorage = Mathf.Clamp01(k.GetResourceValue(ResourceType.Food) / 50f);
+
         // 兵种表现统计骨架：窗口内 per 职业死亡计数（确定性聚合；表现分=B5 战斗结算域）
         var deaths = new Dictionary<int, int>();
         for (int i = 0; i < _lossLog.Count; i++)
@@ -347,7 +354,19 @@ public class KingdomBrain
                 ExecuteBuildFocus(kingdom, cfg);
                 break;
             case UtilityAction.RecruitWarrior:
-                ExecuteRecruitWarrior(kingdom, cfg);
+                ExecuteRecruitArmy(kingdom, cfg);
+                break;
+            // 2_22 P0 批B：⑯训练将军 + ㉔/㉕战争机器（路由追加；建造类 23/24/25 走既有 ExecuteBuildFocus 通用通道）
+            case UtilityAction.TrainGeneral:
+                ExecuteTrainGeneral(kingdom, cfg);
+                break;
+            case UtilityAction.BuildBarracks:
+            case UtilityAction.BuildTrainingCamp:
+            case UtilityAction.BuildSiegeWorkshop:
+                ExecuteBuildFocus(kingdom, cfg);
+                break;
+            case UtilityAction.ProduceMachine:
+                ExecuteProduceMachine(kingdom, cfg);
                 break;
             case UtilityAction.Tech:
                 ExecuteTech(kingdom, cfg);
@@ -441,6 +460,152 @@ public class KingdomBrain
         Debug.Log($"[KingdomBrain] k{kingdomId} ⑦招战士落地：工人#{w.npcId} → Warrior（金-{gold} 粮-{food}，兵力 {kingdom.warriorCount}）");
     }
 
+    /// <summary>
+    /// ⑦招兵扩多兵种（2_22 P0 批B / B6，§3.4 双环内环消费端）：按双环权重选招，不再是 Warrior 直转。
+    /// 招募分 = 出厂倾向(B4 RaceDef.unitPriors) × 性格调制(好战轴) × 局内环学习权重(B5) × 经济可负担 ÷ 多样性惩罚。
+    /// 候选域（D570 细化）：TrainingDef raceId∈{-1,本族} 且 IsCombat 且 非 General（⑯专属域）；
+    /// 建筑前置联动：兵种训练建筑不在场 → 本轮不可选招（由 ⑰建军事建筑缺口评分导向先建——两行动自然咬合）。
+    /// 执行=TryTrainFromKingdomPool（B1 系统级入口，AI 与玩家同链：国库扣费/族门禁/建筑等级）；
+    /// 兵源池=Resident（训练链 fromOccupation 源）；池空时 Worker 先转 Resident（AI 编制内调配，如实列报）。
+    /// 确定性：候选按 Occupation int 升序遍历，同分取小 id。
+    /// </summary>
+    private void ExecuteRecruitArmy(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        if (kingdom.warriorCount >= UtilityScorer.MilitaryTarget(kingdom, cfg))
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;   // 已达兵力目标（D348 门控兜底）
+        }
+
+        // 候选集：可训域 ∩ 建筑在场 ∩ 军事职业 ∩ 非 General（确定性升序）
+        var tcfg = Resources.Load<TrainingConfig>("Config/TrainingConfig");
+        var raceDef = KingdomRace.GetKingdomRaceDef(kingdomId);
+        int myRace = KingdomRace.GetKingdomRace(kingdomId);
+        if (tcfg == null || tcfg.trainings == null || raceDef == null) { Bump(kingdomId, train: true, ok: false); return; }
+
+        var candidates = new List<(TrainingDef def, Building b, float score)>();
+        var seen = new HashSet<Occupation>();
+        for (int i = 0; i < tcfg.trainings.Length; i++)
+        {
+            var t = tcfg.trainings[i];
+            if (t.raceId != -1 && t.raceId != myRace) continue;                    // D419/D570 族门禁预过滤
+            if (t.toOccupation == Occupation.General) continue;                    // ⑯专属域
+            if (!MilitaryProfessions.IsCombat(t.toOccupation)) continue;           // 军事域
+            if (!seen.Add(t.toOccupation)) continue;                               // 同兵种多条目去重（首个=优先）
+            var b = FindKingdomBuilding(kingdomId, t.buildingId);                  // 建筑前置联动
+            if (b == null) continue;                                               // 缺建筑→本轮不可选招（防空转）
+            if (t.minBuildingLevel > 0 && b.level < t.minBuildingLevel) continue;  // 建筑等级未到（⑰升级导向）
+            candidates.Add((t, b, 0f));
+        }
+        if (candidates.Count == 0)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;   // 无可选招兵种（缺建筑/缺 def）→ ⑰建造缺口评分导向
+        }
+
+        // 双环招募分（确定性：遍历序=candidates 追加序=TrainingConfig 顺序×去重）
+        float militant = kingdom.personality != null && kingdom.personality.Length > 0 ? kingdom.personality[0] : 0.5f;
+        float bestScore = -1f;
+        int bestIdx = -1;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var t = candidates[i].def;
+            float prior = raceDef.GetUnitPrior(t.toOccupation);                    // B4 出厂先验
+            float personalityMod = 1f + (militant - 0.5f) * 0.2f;                  // 性格调制（好战轴保守 ±10%）
+            float learned = BattleLearnedWeights.Get(kingdomId, (int)t.toOccupation); // B5 局内环
+            // 经济可负担（effective 成本近似=base×trainCostMul ceil，与 TryTrain 同口径）
+            float costMul = raceDef.trainCostMul;
+            bool affordable = kingdom.resources.gold >= Mathf.CeilToInt(t.costGold * costMul)
+                           && (t.costCrystal <= 0 || kingdom.crystal >= Mathf.CeilToInt(t.costCrystal * costMul))
+                           && (t.costMetal <= 0 || kingdom.resources.metal >= Mathf.CeilToInt(t.costMetal * costMul));
+            if (!affordable) continue;                                             // 经济不可负担→本轮不选
+            float score = prior * personalityMod * learned;
+            candidates[i] = (t, candidates[i].b, score);
+            if (score > bestScore) { bestScore = score; bestIdx = i; }
+        }
+        if (bestIdx < 0)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            Debug.Log($"[KingdomBrain] k{kingdomId} ⑦选招无可负担候选（资源不足），明日再试");
+            return;
+        }
+
+        var chosen = candidates[bestIdx].def;
+        var chosenB = candidates[bestIdx].b;
+        bool ok = TrainingSystem.Instance != null
+                  && TrainingSystem.Instance.TryTrainFromKingdomPool(kingdomId, chosenB, chosen.toOccupation);
+        if (!ok && FindOwnWorker() != null)
+        {
+            // 兵源池兜底：Resident 池空但 Worker 在 → Worker 先转 Resident（AI 编制内调配）再训练（如实列报 HH.138）
+            var w = FindOwnResident() ?? FindOwnWorker();
+            if (w != null && w.EffectiveOccupation != Occupation.Resident) w.SetOccupation(Occupation.Resident);
+            ok = TrainingSystem.Instance != null
+                 && TrainingSystem.Instance.TryTrainFromKingdomPool(kingdomId, chosenB, chosen.toOccupation);
+        }
+        Bump(kingdomId, train: true, ok: ok);
+        if (ok)
+            Debug.Log($"[KingdomBrain] k{kingdomId} ⑦多兵种选招落地：→ {chosen.toOccupation}（先验{raceDef.GetUnitPrior(chosen.toOccupation):F2}×性格{militant:F2}×学习{BattleLearnedWeights.Get(kingdomId, (int)chosen.toOccupation):F2}，@{chosenB.def.id}）");
+    }
+
+    /// <summary>
+    /// 2_22⑯ 训练将军（B2）：执行=本国兵营 Barracks 队列训练 General（与玩家同链 generalLimit=2）。
+    /// 成军链（B7）由将军毕业事件驱动（TrainingSystem 出队→BindGeneral→RecruitStandard，见 B7 接线）。
+    /// </summary>
+    private void ExecuteTrainGeneral(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        var barracks = FindKingdomBuilding(kingdomId, BuildingIds.Barracks);
+        if (barracks == null)
+        {
+            Bump(kingdomId, train: true, ok: false);
+            return;   // 无兵营 → ⑰建兵营缺口评分导向先建
+        }
+        bool ok = TrainingSystem.Instance != null
+                  && TrainingSystem.Instance.TryTrainFromKingdomPool(kingdomId, barracks, Occupation.General);
+        if (!ok && FindOwnWorker() != null)
+        {
+            var w = FindOwnResident() ?? FindOwnWorker();
+            if (w != null && w.EffectiveOccupation != Occupation.Resident) w.SetOccupation(Occupation.Resident);
+            ok = TrainingSystem.Instance != null
+                 && TrainingSystem.Instance.TryTrainFromKingdomPool(kingdomId, barracks, Occupation.General);
+        }
+        Bump(kingdomId, train: true, ok: ok);
+        if (ok) Debug.Log($"[KingdomBrain] k{kingdomId} ⑯训练将军入队（兵营，队列中）");
+    }
+
+    /// <summary>
+    /// 2_22㉕ 造战争机器（B8，D558→D570）：执行=SiegeProductionSystem.ProduceMachine(type,spawnPos,kingdomId)
+    /// AI overload 同链（族门禁 IsRaceAllowedMachine+per-kingdom 上限+国库扣费）；选型=本族机器 def 首个。
+    /// 位置=主城旁首合法微格（FindAIBuildSpot 语义复用→spawnPos 近主城）。
+    /// 不进配兵双环（机器不走训练链，B6 候选域已排除机器=语义正交）。
+    /// </summary>
+    private void ExecuteProduceMachine(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        var sps = SiegeProductionSystem.Instance;
+        if (sps == null) { Bump(kingdomId, train: false, ok: false); return; }
+        if (FindKingdomBuilding(kingdomId, BuildingIds.SiegeWorkshop) == null)
+        {
+            Bump(kingdomId, train: false, ok: false);
+            return;   // 厂前置守卫：无投掷机厂不可造（评分侧 ㉔ 建厂缺口导向先建——两行动咬合）
+        }
+        // 本族机器选型（确定性：Occupation int 升序首个本族可造机器——IsRaceAllowedMachine 同源校验）
+        Occupation[] machines = { Occupation.Ballista, Occupation.SiegeMachine, Occupation.Mortar, Occupation.VineCatapult, Occupation.Ram };
+        int myRace = KingdomRace.GetKingdomRace(kingdomId);
+        Occupation pick = machines[0];
+        bool found = false;
+        for (int i = 0; i < machines.Length; i++)
+        {
+            if (SiegeProductionSystem.IsMachineAllowed(myRace, machines[i])) { pick = machines[i]; found = true; break; }
+        }
+        if (!found) { Bump(kingdomId, train: false, ok: false); return; }
+
+        var anchor = FindCastleCell(kingdomId);
+        if (!anchor.HasValue) { Bump(kingdomId, train: false, ok: false); return; }
+        var spawnPos = new Vector2(anchor.Value.x + 1.5f, anchor.Value.y + 1.5f);   // 主城旁近点（厂/城产出惯例位）
+        bool ok = sps.ProduceMachine(pick, spawnPos, kingdomId);
+        Bump(kingdomId, train: false, ok: ok);
+        if (ok) Debug.Log($"[KingdomBrain] k{kingdomId} ㉕造机器落地：{pick} @ {spawnPos}");
+    }
+
     /// <summary>找一个本王国活工人（Worker/Porter/Civilian，对齐 workerCount 口径；确定性：npcId 最小序）。</summary>
     private UnitController FindOwnWorker()
     {
@@ -528,6 +693,55 @@ public class KingdomBrain
             return u;
         }
         return null;
+    }
+
+    /// <summary>找本国活居民（B6 兵源池：Resident=训练链 fromOccupation 源；确定性 npcId 最小序）。</summary>
+    private UnitController FindOwnResident()
+    {
+        if (UnitRegistry.Instance == null || UnitRegistry.Instance.GetAllUnits() == null) return null;
+        UnitController best = null;
+        foreach (var u in UnitRegistry.Instance.GetAllUnits())
+        {
+            if (u == null || !u.IsAlive) continue;
+            if (u.kingdomId != kingdomId) continue;
+            if (u.EffectiveOccupation != Occupation.Resident) continue;
+            if (best == null || u.npcId < best.npcId) best = u;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// B5 局内环自整定（日 tick 结算节拍）：窗口死亡统计 → BattleLearnedWeights 更新+归因日志。
+    /// η=0.05 占位（七日滚动窗口下同一事件衰减式影响，总量可控——口径如实列报 HH.138）。
+    /// </summary>
+    private void UpdateLearnedWeights(SituationSnapshot snap)
+    {
+        if (snap?.UnitPerformance == null || snap.UnitPerformance.Count == 0) return;
+        var stats = new UnitPerfInput[snap.UnitPerformance.Count];
+        for (int i = 0; i < stats.Length; i++)
+            stats[i] = new UnitPerfInput { OccupationId = snap.UnitPerformance[i].OccupationId, Deaths = snap.UnitPerformance[i].Deaths };
+        var deltas = BattleLearnedWeights.UpdateFromLosses(kingdomId, stats, 0.05f);
+        if (deltas.Count == 0) return;
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < deltas.Count; i++)
+            sb.Append($" {(Occupation)deltas[i].OccupationId}:{deltas[i].OldW:F2}→{deltas[i].NewW:F2}(perf{deltas[i].PerfScore:F2})");
+        Debug.Log($"[KingdomBrain] k{kingdomId} 局内环权重更新（窗口死亡归因）：{sb}");
+    }
+
+    /// <summary>找本国任一 Active 建筑（B2/B6 建筑前置联动：训练建筑在场判定；确定性 id 序）。</summary>
+    private static Building FindKingdomBuilding(int kingdomId, string buildingId)
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || reg.All == null || string.IsNullOrEmpty(buildingId)) return null;
+        Building best = null;
+        for (int i = 0; i < reg.All.Count; i++)
+        {
+            var b = reg.All[i];
+            if (b == null || b.def == null || !b.IsActive) continue;
+            if (b.kingdomId != kingdomId || b.def.id != buildingId) continue;
+            if (best == null || string.CompareOrdinal(b.def.id, best.def.id) < 0) best = b;
+        }
+        return best;
     }
 
     /// <summary>建造类焦点真实通道：SO buildingId → 主城螺旋选址 → BuildController.TryBuild（门面校验/扣费一体）。</summary>

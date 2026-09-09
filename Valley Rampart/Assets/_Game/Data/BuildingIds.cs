@@ -15,4 +15,9 @@ public static class BuildingIds
     public const string WarCamp      = "WarCamp";       // 兽人专属（战营；击杀回复）
     public const string LeyForge     = "LeyForge";      // 矮人专属（地脉熔炉；采矿 +40%）
     public const string ArcheryRange = "ArcheryRange";  // 精灵专属（射箭场）
+
+    // ===== 共通军事建筑（2_22 P0 批B / B3，散点收口同纪律）=====
+    public const string Barracks      = "Barracks";       // 兵营（General/Warrior/Cavalry 训练入口；⑯训练将军前置）
+    public const string TrainingCamp  = "TrainingCamp";   // 训练营（Archer/Mage/Healer+本族专属兵；矮人专属兵走此 Lv2）
+    public const string SiegeWorkshop = "SiegeWorkshop";  // 投掷机厂（㉔；isSiegeWorkshop=true 弹药厂）
 }

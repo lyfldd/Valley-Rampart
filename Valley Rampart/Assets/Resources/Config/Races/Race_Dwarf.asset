@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   raceId: 2
   raceName: "\u77EE\u4EBA"
-  raceDescription: "「听说他们喜欢矿石？」矮人不止喜欢矿石——他们干脆住进了山里，把家修成一圈圈楼梯，炉火千年不熄。磐石卫士站在最前面从不后退，火枪“轰”一声，最厚的盔甲也得开个洞。想攻下矮人的城？山：我先不同意。"
+  raceDescription: "\u300C\u542C\u8BF4\u4ED6\u4EEC\u559C\u6B22\u77FF\u77F3\uFF1F\u300D\u77EE\u4EBA\u4E0D\u6B62\u559C\u6B22\u77FF\u77F3\u2014\u2014\u4ED6\u4EEC\u5E72\u8106\u4F4F\u8FDB\u4E86\u5C71\u91CC\uFF0C\u628A\u5BB6\u4FEE\u6210\u4E00\u5708\u5708\u697C\u68AF\uFF0C\u7089\u706B\u5343\u5E74\u4E0D\u7184\u3002\u78D0\u77F3\u536B\u58EB\u7AD9\u5728\u6700\u524D\u9762\u4ECE\u4E0D\u540E\u9000\uFF0C\u706B\u67AA\u201C\u8F70\u201D\u4E00\u58F0\uFF0C\u6700\u539A\u7684\u76D4\u7532\u4E5F\u5F97\u5F00\u4E2A\u6D1E\u3002\u60F3\u653B\u4E0B\u77EE\u4EBA\u7684\u57CE\uFF1F\u5C71\uFF1A\u6211\u5148\u4E0D\u540C\u610F\u3002"
   bannerColor: {r: 0.7, g: 0.4, b: 0.15, a: 1}
   militant: 0.3
   economic: 0.8
@@ -38,3 +38,17 @@ MonoBehaviour:
   exclusiveUnitDefs:
   - {fileID: 11400000, guid: 0cfb33f167201134486980ac06be0e40, type: 2}
   - {fileID: 11400000, guid: c14a550c44998294c8a7dd9024b95c05, type: 2}
+  unitPriors:
+  - occupation: 8
+    prior: 0.7
+  - occupation: 10
+    prior: 0.6
+  - occupation: 30
+    prior: 0.6
+  - occupation: 31
+    prior: 0.6
+  - occupation: 3
+    prior: 0.5
+  - occupation: 2
+    prior: 0.2
+  defaultUnitPrior: 0.1

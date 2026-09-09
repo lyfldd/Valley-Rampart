@@ -111,4 +111,28 @@ public class RaceDef : ScriptableObject
     public BuildingDef exclusiveBuildingDef;
     [Tooltip("专属兵种引用数组（NpcProfessionDef，每族 2 个 D490 修订版+机器 4 台 D496/D497 归 exclusiveUnitDefs 或机器位另挂，M7 定型；现空挂账）")]
     public NpcProfessionDef[] exclusiveUnitDefs;
+
+    // ===== 兵种出厂倾向先验（2_22 P0 批B / B4，D519）=====
+    [System.Serializable]
+    public class UnitPrior
+    {
+        public Occupation occupation;   // 兵种（军事职业；机器不走双环=B8 不配此项）
+        [Tooltip("出厂倾向 0~1（⑦选招权重起步先验；0=本族底色不倾向）")]
+        [Range(0f, 1f)] public float prior = 0.1f;
+    }
+    [Header("兵种出厂倾向先验（B4/D519：种族底色起步值，局内环训练自会改写；策划不保留配比解释权——起步值=执行端按乘数表占位推导，HH.138 列报）")]
+    [Tooltip("共通+本族军事兵种出厂倾向表；未列出兵种回退 defaultUnitPrior")]
+    public UnitPrior[] unitPriors;
+    [Tooltip("未列出兵种的默认倾向（0.1=中性低底，防新兵种漏配）")]
+    [Range(0f, 1f)] public float defaultUnitPrior = 0.1f;
+
+    /// <summary>读取某兵种出厂倾向（B6 招募分第一因子；未列出=defaultUnitPrior）。</summary>
+    public float GetUnitPrior(Occupation o)
+    {
+        if (unitPriors != null)
+            for (int i = 0; i < unitPriors.Length; i++)
+                if (unitPriors[i] != null && unitPriors[i].occupation == o)
+                    return unitPriors[i].prior;
+        return defaultUnitPrior;
+    }
 }

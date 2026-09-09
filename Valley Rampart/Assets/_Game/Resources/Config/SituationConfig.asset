@@ -18,3 +18,7 @@ MonoBehaviour:
   dirtyTtlDays: 1
   crisisLine: 2
   recoveryLine: 4
+  internalDriveWeight: 0.1
+  driveEconShare: 0.5
+  drivePopShare: 0.3
+  driveStorageShare: 0.2

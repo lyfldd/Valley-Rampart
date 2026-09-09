@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1c77b85ec61b1d64997ff0258ed360ad, type: 3}
   m_Name: UtilityActionConfig
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   actions:
   - id: 1
     name: "\u5EFA\u4F4F\u5B85"
@@ -121,7 +121,7 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -140,7 +140,7 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -159,7 +159,7 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -197,7 +197,7 @@ MonoBehaviour:
     - 0.5
     - 1
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -216,7 +216,7 @@ MonoBehaviour:
     - 0
     - 0.5
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -235,7 +235,7 @@ MonoBehaviour:
     - 0
     - 0.5
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -254,7 +254,7 @@ MonoBehaviour:
     - 0
     - 0.5
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -273,7 +273,7 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -292,7 +292,7 @@ MonoBehaviour:
     - 1
     - 1
     - 1
-    buildingId:
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0
@@ -410,5 +410,100 @@ MonoBehaviour:
     costGold: 15
     costStone: 0
     costWood: 30
+    costFood: 0
+    buildTargetCap: 0
+  - id: 22
+    name: "\u8BAD\u7EC3\u5C06\u519B"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 18
+    needA: 2
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId: Barracks
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 23
+    name: "\u5EFA\u5175\u8425"
+    minStage: 2
+    axis: 0
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0.3
+    - 0.5
+    - 1
+    buildingId: Barracks
+    costGold: 20
+    costStone: 10
+    costWood: 15
+    costFood: 0
+    buildTargetCap: 1
+  - id: 24
+    name: "\u5EFA\u8BAD\u7EC3\u8425"
+    minStage: 2
+    axis: 0
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0.3
+    - 0.5
+    - 1
+    buildingId: TrainingCamp
+    costGold: 20
+    costStone: 10
+    costWood: 15
+    costFood: 0
+    buildTargetCap: 1
+  - id: 25
+    name: "\u5EFA\u6295\u63B7\u673A\u5382"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 17
+    needA: 1
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId: SiegeWorkshop
+    costGold: 30
+    costStone: 20
+    costWood: 20
+    costFood: 0
+    buildTargetCap: 1
+  - id: 26
+    name: "\u9020\u6218\u4E89\u673A\u5668"
+    minStage: 3
+    axis: 0
+    axisWeight: 1
+    need: 21
+    needA: 2
+    needB: 0
+    stageWeight:
+    - 0
+    - 0
+    - 0.5
+    - 1
+    buildingId: SiegeWorkshop
+    costGold: 0
+    costStone: 0
+    costWood: 0
     costFood: 0
     buildTargetCap: 0

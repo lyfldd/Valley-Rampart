@@ -80,6 +80,16 @@ public class SituationSnapshot
     /// <summary>本国在场战斗职业去重清单（UnitTypeGap 消费；确定性升序——可训域多样性缺口的「拥有」侧）。</summary>
     public System.Collections.Generic.List<int> OwnedCombatOccupations;
 
+    // ===== 内源势能输入（D590 增补节②：经济盈余率/人口压力/仓储水位三连续输入——评分域军事行动
+    //      内源节拍项消费；0~1 归一。数据源=BuildSituation 从 KingdomState 现算（轻量口径）；
+    //      R-A1 经济诊断块落地后由真值块接替（交接关系见 2_23 §2.1）。）=====
+    /// <summary>经济盈余率 0~1（国库 gold 相对基线水位；现算口径=gold/100 clamp01，R-A1 后接替）。</summary>
+    public float DriveEconomic;
+    /// <summary>人口压力 0~1（工人对住房容量占比=capacityCount/10 clamp01；现算口径，资源 P1 后接替）。</summary>
+    public float DrivePopPressure;
+    /// <summary>仓储水位 0~1（粮/储备容量占比 clamp01；现算口径，R-A1 后接替）。</summary>
+    public float DriveStorage;
+
     // ===== 内源节拍时间场（D589 列报2；批A 地基）=====
 
     /// <summary>和平持续天数：自最近一次外部接触（被攻/本国单位被击杀）以来的天数；

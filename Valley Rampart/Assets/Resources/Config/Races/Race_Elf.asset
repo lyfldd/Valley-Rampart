@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   raceId: 1
   raceName: "\u7CBE\u7075"
-  raceDescription: "「哇塞！竟然是会动的树！」哦不，那是精灵——月银密林的原住民。他们的箭从你视野的尽头飞来；等你想看清射手，风行者已经消失在林间。在你发现密林之前，密林早就发现了你。"
+  raceDescription: "\u300C\u54C7\u585E\uFF01\u7ADF\u7136\u662F\u4F1A\u52A8\u7684\u6811\uFF01\u300D\u54E6\u4E0D\uFF0C\u90A3\u662F\u7CBE\u7075\u2014\u2014\u6708\u94F6\u5BC6\u6797\u7684\u539F\u4F4F\u6C11\u3002\u4ED6\u4EEC\u7684\u7BAD\u4ECE\u4F60\u89C6\u91CE\u7684\u5C3D\u5934\u98DE\u6765\uFF1B\u7B49\u4F60\u60F3\u770B\u6E05\u5C04\u624B\uFF0C\u98CE\u884C\u8005\u5DF2\u7ECF\u6D88\u5931\u5728\u6797\u95F4\u3002\u5728\u4F60\u53D1\u73B0\u5BC6\u6797\u4E4B\u524D\uFF0C\u5BC6\u6797\u65E9\u5C31\u53D1\u73B0\u4E86\u4F60\u3002"
   bannerColor: {r: 0.2, g: 0.6, b: 0.3, a: 1}
   militant: 0.3
   economic: 0.5
@@ -39,3 +39,19 @@ MonoBehaviour:
   - {fileID: 11400000, guid: d23c950cbeb670f48965bbbc23fc3ba6, type: 2}
   - {fileID: 11400000, guid: ee9cb99d5afc92d429b1a8d4d12a14ad, type: 2}
   - {fileID: 11400000, guid: f39f6de056d89b44296f39ffdf3b86e1, type: 2}
+  unitPriors:
+  - occupation: 2
+    prior: 0.8
+  - occupation: 32
+    prior: 0.7
+  - occupation: 33
+    prior: 0.5
+  - occupation: 34
+    prior: 0.5
+  - occupation: 5
+    prior: 0.4
+  - occupation: 6
+    prior: 0.4
+  - occupation: 3
+    prior: 0.2
+  defaultUnitPrior: 0.1
