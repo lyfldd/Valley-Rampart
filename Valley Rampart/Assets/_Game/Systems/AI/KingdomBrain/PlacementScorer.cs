@@ -18,7 +18,8 @@ using UnityEngine;
 //    F1 距威胁边境 → 主威胁国主城格作方向锚（快照 Threats 升序首个非零兵国；威胁≈0 置 0 退化通用）。
 //    F2 距关联建筑 → 本国最近一座 Active 关联建筑格距（Chebyshev）。
 //    F3 距主城+同类密度 → 主城格距紧凑项 − 密度半径内本国同类建筑计数×惩罚。
-//  归一化：f1/f2/f3 距离项均以扫描半径为分母线性归一到 [0,1]（越近越高），f3 可为负被 clamp 0。
+//  归一化：f2/f3 距离项以扫描半径为分母线性归一到 [0,1]（越近越高），f3 可为负被 clamp 0；
+//            f1 分母=max(主城-威胁锚实际 Chebyshev 距离, 扫描半径)（HH.144 件2/D598——威胁锚带外时带内保有朝向梯度）。
 //
 //  边界（D4）：Unity 侧执行层不进 AI.Core（sim 无空间概念零镜像）；玩家建造入口/UI/校验零改动；
 //  城墙 per-def 特征集=仅 F3（紧凑行为即现状等价）。
@@ -81,6 +82,14 @@ public static class PlacementScorer
                 links[i] = new GridCoord(links[i].x * div, links[i].y * div, links[i].layer);
         var castleSub = new GridCoord(anchor.x * div, anchor.y * div, anchor.layer);
 
+        // r4 修（HH.144 件2/D598 列报3 兑现）：F1 分母=max(主城-威胁锚实际 Chebyshev 距离, 带径 maxR×div)——
+        // 病灶=分母仅带径（32 sub），威胁锚距主城>带径（实测 k1↔k2 45 格=常态地图形态）时带内 F1 恒 0
+        // =w1 空转+军事朝向性（§3.7 验收判据）系统性不可达。锚与主城均已转 sub 域（上方转换链同源）。
+        // 全候选同值，环带循环外一次计算；威胁≈0 时 threatAnchor 无值→F1 置 0 口径不变。
+        int f1Denom = maxR * div;
+        if (threatAnchor.HasValue)
+            f1Denom = Mathf.Max(Chebyshev(castleSub, threatAnchor.Value), maxR * div);
+
         float best = float.NegativeInfinity;
         bool found = false;
 
@@ -98,7 +107,7 @@ public static class PlacementScorer
                     continue;   // 校验先行全继承（九项）；不过=非候选
                 result.Candidates++;
 
-                float f1 = ComputeF1(sub, threatAnchor, maxR, div);
+                float f1 = ComputeF1(sub, threatAnchor, f1Denom);
                 float f2 = ComputeF2(sub, links, maxR, div);
                 float f3 = ComputeF3(sub, castleSub, kingdomId, def.id, maxR, densityR, densityPenalty, div);
                 float score = w1 * f1 + w2 * f2 + w3 * f3;
@@ -117,11 +126,12 @@ public static class PlacementScorer
         return found;
     }
 
-    /// <summary>F1 距威胁锚（主威胁国主城方向，越近越高；威胁≈0 → 0 退化通用）。锚点与 spot 均 sub 域，半径按 cell 格换算 div 倍。</summary>
-    private static float ComputeF1(GridCoord spot, GridCoord? threatAnchor, int maxR, int div)
+    /// <summary>F1 距威胁锚（主威胁国主城方向，越近越高；威胁≈0 → 0 退化通用）。锚点与 spot 均 sub 域。
+    /// 分母=调用方传入（max(主城-威胁锚实际距离, 带径)；HH.144 件2/D598——威胁锚带外时带内保有朝向梯度）。</summary>
+    private static float ComputeF1(GridCoord spot, GridCoord? threatAnchor, int denom)
     {
         if (!threatAnchor.HasValue) return 0f;   // 威胁≈0：F1 置 0（§3.7 表口径）
-        return 1f - Mathf.Clamp01(Chebyshev(spot, threatAnchor.Value) / (float)(maxR * div));
+        return 1f - Mathf.Clamp01(Chebyshev(spot, threatAnchor.Value) / (float)denom);
     }
 
     /// <summary>F2 距最近关联建筑（本国 Active 同 def；无关联建筑/未配置 → 0）。锚点与 spot 均 sub 域。</summary>

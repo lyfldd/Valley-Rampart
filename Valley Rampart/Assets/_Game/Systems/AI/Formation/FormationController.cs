@@ -223,6 +223,11 @@ public class FormationController : MonoBehaviour
     {
         var result = new List<NPCBrain>();
         var allBrains = FindObjectsByType<NPCBrain>(FindObjectsSortMode.None);
+        // HH.144 件1（D598 列报2 兑现）：招募池按编队归属国收紧——过滤锚=ResolveKingdomId()（override 优先）。
+        // 病灶（HH.141 实锤）：AI 王国单位 faction=PlayerCamp 共享面→AI 守军/B7 成军跨国籍抽兵（m=6 编队 kid=0/0/3）。
+        // ownKid>=0 时 unit.kingdomId 不匹配者不入池（faction 过滤保留=双重收紧）；
+        // ownKid<0（空编队无将军且未 override）→fallback 现行 faction-only 行为（向后兼容：玩家 debug 成军链空编队首招可达）。
+        int ownKid = ResolveKingdomId();
         foreach (var brain in allBrains)
         {
             if (brain == null) continue;
@@ -230,6 +235,8 @@ public class FormationController : MonoBehaviour
             if (unit == null || unit.Data == null) continue;
             // 3.0.1_6 §4.3：招募只招本阵营空闲士兵（敌方将军招 Undead，不抢我方兵）
             if (unit.Data.faction != faction) continue;
+            // HH.144 件1（D598）：国籍过滤=双重收紧（守军 override/将军/首成员推导归属；-1=不收紧保兼容）
+            if (ownKid >= 0 && unit.kingdomId != ownKid) continue;
             // 3.7：全兵种入编，但排除工人/君主/静态工事（机器/塔/墙/门不参与编队移动）
             if (!IsRecruitable(unit.Data.occupation)) continue;
             if (brain.HasFormationSlot) continue;  // 已编队

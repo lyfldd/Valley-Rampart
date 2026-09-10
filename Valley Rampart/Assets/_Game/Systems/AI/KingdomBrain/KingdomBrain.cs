@@ -555,8 +555,8 @@ public class KingdomBrain
     /// C4 守军编队自动派驻：AddComponent 既有模式（镜像 B7 将军成军/AIDebugSpawnController 样例链
     /// =L-06 生产链合规，士兵成员来自场景 FindIdleSoldiers 真实单位非裸构）；
     /// 锚点=本国工事建筑（IsFortification）transform，无工事回退主城 transform。
-    /// 口径注记：FindIdleSoldiers 按 Faction.AiKingdom 过滤=AI 共享阵营粒度（B7 成军同款既有模型），
-    /// 多 AI 局跨国招兵风险列报观察。
+    /// 口径注记：跨国招兵已修（HH.144 件1/D598）——FindIdleSoldiers 增 kingdomId 过滤
+    ///（过滤锚=ResolveKingdomId override），守军编队成员国籍纯度由 override+过滤双保险。
     /// </summary>
     private bool TrySpawnGarrisonSquad()
     {
