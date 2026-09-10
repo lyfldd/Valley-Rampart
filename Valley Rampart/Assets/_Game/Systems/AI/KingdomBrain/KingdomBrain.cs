@@ -342,7 +342,6 @@ public class KingdomBrain
             Losses = new List<LossEntry>(_lossLog),
             PeaceDays = _lastContactDay < 0 ? -1 : day - _lastContactDay,
             Dirty = _dirtyDay >= 0,   // 周期内发生过事件（脏标记 TTL 兜底=异常未消费态）
-            EconomyBlockPlaceholder = true,   // ②经济诊断块占位：真值随 2_23 资源 P0 R-A1（D528）
             PopulationBlockPlaceholder = true // ③人口盘点块占位：真值随 2_23 资源 P1
         };
         _dirtyDay = -1;   // 日 tick 消费完毕（下一事件重新置位）
@@ -392,6 +391,11 @@ public class KingdomBrain
         snap.DrivePopPressure = Mathf.Clamp01((k.workerCount + k.warriorCount) / 20f);
         snap.DriveStorage = Mathf.Clamp01(k.GetResourceValue(ResourceType.Food) / 50f);
 
+        // ② 经济诊断块真值（2_23 资源 P0 批A / R-A1；D630 收支口径 A+，日 tick 全量重建）
+        // 注：内源势能三输入（上方）本批维持既有现算口径不动——"真值块接替"=消费面扩展，
+        //     归批B/C（本批=就位+可产出，L-01：真值就位≠本批消费），避免引入行为漂移。
+        snap.Economy = BuildEconomyBlock(k, day);
+
         // 兵种表现统计骨架：窗口内 per 职业死亡计数（确定性聚合；表现分=B5 战斗结算域）
         var deaths = new Dictionary<int, int>();
         for (int i = 0; i < _lossLog.Count; i++)
@@ -406,6 +410,121 @@ public class KingdomBrain
             snap.UnitPerformance.Add(new UnitPerfStat { OccupationId = kv.Key, Deaths = kv.Value });
         snap.UnitPerformance.Sort((a, b) => a.OccupationId.CompareTo(b.OccupationId));   // 确定性序
         return snap;
+    }
+
+    // ===== 经济诊断块构建（2_23 资源 P0 批A / R-A1；D630 收支口径 A+）=====
+
+    /// <summary>
+    /// 经济诊断块取数（Unity 侧适配层，对齐 AbstractEconomySettlement.BuildSnapshot 分工）：
+    /// KingdomState 台账号 + BuildingRegistry 盘点 + 人口派生计数 → EconomyInput（纯 DTO）
+    /// → EconomyDiagnosis.Build（纯函数四件真值）。收支窗口＝自上次重建以来累计，取后清零。
+    /// 确定性：建筑遍历固定排序（同 seed 两轮逐字节一致；⑤-3 硬性 a 同款纪律）。
+    /// </summary>
+    private static EconomyBlock BuildEconomyBlock(KingdomState k, int day)
+    {
+        var dcfg = KingdomDiagnosisConfig.Load();
+        var mcfg = MustHaveConfig.Load();
+        int pop = k.workerCount + k.warriorCount;
+
+        var buildings = QueryKingdomBuildingsSorted(k.id);
+        var prod = new Dictionary<int, ProductionEntry>();
+        int storageUsed = 0, storageCap = 0, fortCount = 0, gatherNodes = 0, warehouses = 0;
+
+        for (int i = 0; i < buildings.Count; i++)
+        {
+            var b = buildings[i];
+            var def = b.def;
+            if (def == null) continue;
+
+            if (b.IsFortification) fortCount++;
+            if (def.isResourceNode) gatherNodes++;                        // 实体型资源点（采集点口径）
+            if (def.id == "Warehouse" || def.id == "Granary") warehouses++;
+
+            var storage = b.GetComponent<StorageComponent>();
+            if (storage != null)
+            {
+                storageUsed += storage.storedAmount;
+                storageCap += storage.capacity;
+            }
+
+            int eco = MapProduceToEco(def);
+            if (eco < 0) continue;
+            prod.TryGetValue(eco, out var entry);
+            entry.Resource = (EcoResource)eco;
+            entry.Count += 1;
+            entry.LevelSum += b.level;
+            entry.RateSum += def.producer.rate;
+            entry.WorkersSum += def.concurrentWorkers;
+            prod[eco] = entry;
+        }
+
+        var production = new List<ProductionEntry>(prod.Count);
+        foreach (var kv in prod) production.Add(kv.Value);
+
+        var input = new EconomyInput
+        {
+            KingdomId = k.id,
+            Day = day,
+            StockGold = k.resources.gold,
+            StockStone = k.resources.stone,
+            StockWood = k.resources.wood,
+            StockFood = k.resources.food,
+            StockMetal = k.resources.metal,
+            Flow = EconomyDiagnosis.TakeFlow(k.id),   // 读后清零（纯函数化关键，D630 A+）
+            WorkerCount = k.workerCount,
+            WarriorCount = k.warriorCount,
+            Production = production,
+            StorageUsed = storageUsed,
+            StorageCapacity = storageCap,
+            FortCount = fortCount,
+            GatherNodeCount = gatherNodes,
+            WarehouseCount = warehouses,
+            IsAbstract = k.simMode == SimMode.Abstract,
+            Baseline = mcfg.ResolveBaseline(pop),
+            GrainConsumptionPerPop = dcfg != null ? dcfg.grainConsumptionPerPop : 1,
+            FarmPerPeopleBaseline = dcfg != null ? dcfg.capacityPerPeopleBaseline : 0f,
+            GatherNodePerPopBaseline = dcfg != null ? dcfg.gatherNodePerPopBaseline : 0f
+        };
+        return EconomyDiagnosis.Build(input);
+    }
+
+    /// <summary>产能建筑 → 五元资源映射（对齐 AIEconomySettlement.MapToPack/AbstractEconomySettlement 口径）；-1=非五元跳过。</summary>
+    private static int MapProduceToEco(BuildingDef def)
+    {
+        if (def == null || def.producer.kind != ProduceKind.Resource) return -1;
+        if (def.isBlacksmith) return (int)EcoResource.Metal;   // 铁匠铺 矿石→Metal（D200/D609）
+        switch (def.outputResource)
+        {
+            case ResourceType.Gold: return (int)EcoResource.Gold;
+            case ResourceType.Stone: return (int)EcoResource.Stone;
+            case ResourceType.Wood: return (int)EcoResource.Wood;
+            case ResourceType.Food: return (int)EcoResource.Food;
+            case ResourceType.Metal: return (int)EcoResource.Metal;
+            default: return -1;   // Ore/Crystal/FireOil/Meat/SpecialFood/Water 等：非五元，不入诊断产能盘点
+        }
+    }
+
+    /// <summary>某王国 Active 建筑（固定排序：坐标→def.id；⑤-3 硬性 a 同款，禁依赖注册序/收集序）。</summary>
+    private static List<Building> QueryKingdomBuildingsSorted(int kingdomId)
+    {
+        var list = new List<Building>();
+        var reg = BuildingRegistry.Instance;
+        if (reg != null && reg.All != null)
+        {
+            var src = reg.All;
+            for (int i = 0; i < src.Count; i++)
+                if (src[i] != null && src[i].kingdomId == kingdomId && src[i].IsActive)
+                    list.Add(src[i]);
+        }
+        list.Sort((a, b) =>
+        {
+            if (a.coord.y != b.coord.y) return a.coord.y.CompareTo(b.coord.y);
+            if (a.coord.x != b.coord.x) return a.coord.x.CompareTo(b.coord.x);
+            var ad = a.def != null ? a.def.id : "";
+            var bd = b.def != null ? b.def.id : "";
+            return string.CompareOrdinal(ad, bd);
+        });
+        return list;
     }
 
     /// <summary>载入王国脑配置（缺 asset 时回退默认占位实例；so-data-driven 禁魔法数）。</summary>

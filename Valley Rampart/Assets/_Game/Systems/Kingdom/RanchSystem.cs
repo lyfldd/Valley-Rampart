@@ -101,7 +101,7 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
         {
             var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
             if (k == null || k.resources.gold < d.youngCost) { Debug.Log($"[RanchSystem] 王国[{kingdomId}] 金不足，无法购买 {type} 幼崽"); return false; }
-            k.resources.gold -= d.youngCost;   // AI 台账扣金（五经济资源真源；肉/特食归 AbstractEconomySettler）
+            k.Spend(new ResourcePack { gold = d.youngCost });   // D632 A′：走台账 API 收口直写（金扣计入经济诊断窗口）
         }
 
         list.Add(new AnimalEntry { type = type, daysGrown = 0, isAdult = d.growDays <= 0 });
@@ -178,7 +178,7 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
         }
         var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
         if (k == null || k.resources.food < amount) return false;
-        k.resources.food -= amount;
+        k.Spend(new ResourcePack { food = amount });   // D632 A′：走台账 API 收口直写（粮扣计入经济诊断窗口）
         return true;
     }
 
@@ -206,7 +206,7 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
         {
             var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
             if (k == null) return false;
-            k.resources.food += meat;   // 占位：AI 肉产出真实落账归 AbstractEconomySettler
+            k.AddResources(new ResourcePack { food = meat });   // 占位：AI 肉产出真实落账归 AbstractEconomySettler（D632 A′：走台账 API 收口直写）
         }
         Debug.Log($"[RanchSystem] 宰杀 {entry.type} → 得肉 {meat}（kingdomId={kingdomId}），牧场剩 {list.Count}");
         return true;

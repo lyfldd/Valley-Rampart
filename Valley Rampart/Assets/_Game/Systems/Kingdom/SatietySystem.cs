@@ -217,7 +217,7 @@ public class SatietySystem : Singleton<SatietySystem>
             if (kingdomId <= 0)
                 RulerController.Instance.ModifyResource(ResourceType.Food, false, dailyFoodCost);
             else
-                kingdom.resources.food -= dailyFoodCost;   // AI 扣本国国库（D453）
+                kingdom.Spend(new ResourcePack { food = dailyFoodCost });   // AI 扣本国国库（D453；D632 A′：走台账 API 收口直写）
             unit.Satiety = Mathf.Clamp(unit.Satiety + cfg.foodRestoreGrain, 0, 100);
             fed = true;
         }

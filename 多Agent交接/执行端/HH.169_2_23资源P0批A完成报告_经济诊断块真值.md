@@ -118,3 +118,40 @@ R-A1/R-A2/R-A3 均为 **Unity 侧纯新增**（诊断块 sim 镜像＝S-B1 归�
 - **A′ 收口任务**（执行端）：`RanchSystem.cs:104/181/209`→`Spend`/`AddResources`；`SatietySystem.cs:220`→`Spend`；**`KingdomState.cs:160-166 Refund`→`AddResources`**（或内部调用 `AddResources`）；附负探针（三处行为字段前后逐位一致）+ grep 双锚点（`RegisterFlow` 消费点＝AddResources/Spend/Refund 三处）+ 既有冒烟零退化；同批追加，随批B 开工前收口。
 - **列报 2/3 注记义务**：两口径并存注记（粮裕日 vs Abstract 加权）已如实；`staggerTierMin` 悬空字段回填义务挂批C/重构批。
 - **教训核查**：本串**新增 1 条教训候选**＝**「绕台账 API 直写点必须全库清点，禁凭主 API 面推断覆盖完整」**（执行端列 4 处、实为 5 处；与 **L-15「挂账≠承接」同族**——均为「凭单一视图/自陈推断完整性」的漏项）。**是否入册**：与 L-15 同族 ⇒ **不新立独立条目**（防库膨胀，`vr-planner-leadership` 反模式），**在 L-15 条下加实例注记**（Round 台账直写清点，D632）。
+
+---
+
+## 五、A′ 收口执行（D632 前置附条兑现，2026-09-11）
+
+> 依据：D632 列报1 裁 **A′**（授权本批顺带收口，范围 4→5 处）＋前置附条「批B 开工前须确认 A′ 五处收口已落盘」。
+> 执行端自认：原列 4 处系**凭 `\.resources\.` 前导点写法 grep** 推断覆盖，漏掉 `KingdomState` 内部无点写法 ⇒ 命中策划端点出的盲区（L-15 同族）。
+
+**① 全库清点（先清后改，补课）**：`Resources\.(gold|stone|wood|food|metal)\s*(\+=|-=|=)` 全库扫（含无前导点）⇒ 生产面直写点＝**恰 5 处**：`RanchSystem.cs:104/181/209`、`SatietySystem.cs:220`、`KingdomState.cs:162-166`（`Refund` 五行）。策划端 5 处判定**穷尽、无第 6 处**（其余命中全在 `Assets/Editor/Smoke/*` 测试面，非生产路径）。
+
+**② 五处收口（全部改走台账 API）**：
+| # | 位置 | 改法 |
+|---|------|------|
+| 1 | `RanchSystem.cs:104` 买幼崽扣金 | `k.resources.gold -= d.youngCost` → `k.Spend(new ResourcePack { gold = d.youngCost })` |
+| 2 | `RanchSystem.cs:181` 喂粮扣粮 | `k.resources.food -= amount` → `k.Spend(new ResourcePack { food = amount })` |
+| 3 | `RanchSystem.cs:209` 宰杀产肉入粮 | `k.resources.food += meat` → `k.AddResources(new ResourcePack { food = meat })` |
+| 4 | `SatietySystem.cs:220` AI 进食扣粮（D453） | `kingdom.resources.food -= dailyFoodCost` → `kingdom.Spend(new ResourcePack { food = dailyFoodCost })` |
+| 5 | `KingdomState.cs:160-166` `Refund` 五行 `+=` | 五行直写 → **内部改走 `AddResources`**（`Mathf.RoundToInt(cost.X * ratio)` 口径逐字保留；潜伏点：AI 生产调用点=0） |
+
+**③ 验收证据（四项）**：
+- **负探针（行为字段前后逐位一致）** ✅：Unity 反射探针实录 `[1]Spend 存量逐位一致=True A=(460,180,188,270,44) B=(460,180,188,270,44); [2]Refund(0.5) 逐位一致=True A.gold=480 B.gold=480; [3]AddResources 逐位一致=True food=292/292`；窗口登记实测 `B(新API)in=61 out=108`（＝Spend 出 108／Refund 入 54＋Add 入 7）；**玩家 id=0 豁免登记=True、p.gold=90**（`RegisterFlow` 内 `kingdomId<=0 return` 无副作用）。
+- **grep 双锚点** ✅：①生产面 `resources.X` 直写点＝**0 残留**（收口后复扫）②`EconomyDiagnosis.RegisterFlow` 消费点＝`KingdomState.cs:156`(Spend)/`:184`(AddResources)；**精度注记**＝`Refund` 采用**经 `AddResources` 复用**实现（非第三处直接调用）⇒ 直接调用点实为 **2 处**、覆盖 **AddResources/Spend/Refund 三入口**（等价达成策划端「三处齐」要求，形态差异如实标注）。
+- **既有冒烟零退化** ✅：`Smoke_2_22P0` run1（正门，seed 21140，15x）**PASS=32 / FAIL=0**，日志 `Logs/P1/smoke_2_22p0_run1.log`（2422B，与批A 首跑同字节数）。
+- **编译 0 警 0 错** ✅（`refresh_unity(compile=request)` 后 error 0；新增告警 0）。
+
+**④ diff 面（本批合计）**：5 改（`KingdomBrain` +121／`SituationSnapshot` 28／`KingdomState` +26·−／`RanchSystem` 6／`SatietySystem` 2）＋ 6 新（3 `.cs`＋3 `.asset` 含 meta）＝**161 insertions / 22 deletions**；`AI.Core` 目录 git status **空**；批外零混入。
+
+**⑤ 口径注记（呼应 D632 精度注记）**：第 5 处 `Refund` 系**潜伏点**（AI 生产调用点=0；玩家拆除走 `RulerController.Refund` 独立通道，不入 AI 台账）——收口目的＝**一致性＋防未来潜伏陷阱**（AI 拆除/退款链 2_19/2_23 P2 若接线即成流量缺口），**非更正当前活跃流量**；前 4 处为活跃 AI 流量。
+
+**⑥ 列报 2/3 注记义务兑现**：粮裕日（存活判据同源）vs Abstract 1/2/3 加权**两口径并存已在代码注释如实标注**（`EconomyDiagnosis.cs` 头部「粮裕日」段）；`staggerTierMin` 悬空字段**回填义务已注记于 `MustHaveConfig.cs` 字段 Tooltip**（「运行时无 per-kingdom 读口，-1=不使用（留结构待后续批）」，挂批C/重构批）。
+
+### A′ 收口裁决（策划端回写，裁决前保持空白）
+
+| 决策点 | 裁决 | 理由 |
+|--------|------|------|
+| A′ 五处收口是否验收（含负探针/grep 双锚点/冒烟零退化） |  |  |
+

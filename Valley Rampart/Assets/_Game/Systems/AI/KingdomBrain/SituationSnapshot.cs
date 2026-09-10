@@ -6,7 +6,7 @@
 //
 //  三块结构（D528，2_23 §2.1 权威）：
 //    ① 军事态势块=本批真值（D517 五件聚合+D589 内源节拍时间场）
-//    ② 经济诊断块=占位（真值随 2_23 资源 P0 R-A1 填充，零二次改造）
+//    ② 经济诊断块=**真值**（2_23 资源 P0 批A / R-A1 已填充，D630 收支口径 A+）
 //    ③ 人口盘点块=占位（真值随 2_23 资源 P1 填充）
 //
 //  内源节拍地基（D589 列报2 归域兑现）：peaceDays=自最近一次外部接触（被攻/本国单位
@@ -99,11 +99,12 @@ public class SituationSnapshot
     /// <summary>脏标记（A2 负探针锚）：日 tick 消费后清零；事件到达置位但不改本快照任何聚合值。</summary>
     public bool Dirty;
 
-    // ===== ② 经济诊断块（占位——真值随 2_23 资源 P0 R-A1 填充，零二次改造 D528）=====
+    // ===== ② 经济诊断块（真值——2_23 资源 P0 批A / R-A1；D630 收支口径 A+）=====
 
-    /// <summary>经济诊断块占位：R-A1 四件真值（五元收支/产能盘点/断链检测/储备水位）落此域。
-    /// 批A 只预留挂点不预造字段（防超前返工=清单范围声明），结构扩展权归 2_23 清单。</summary>
-    public bool EconomyBlockPlaceholder;
+    /// <summary>经济诊断块四件真值（五元收支/产能盘点/断链检测/储备水位）：
+    /// 由 KingdomBrain.BuildSituation → BuildEconomyBlock 日 tick 全量重建（纯函数聚合），
+    /// 不入档（八格 8）；消费侧需空判（读档后首个日 tick 前为 null）。</summary>
+    public EconomyBlock Economy;
 
     // ===== ③ 人口盘点块（占位——真值随 2_23 资源 P1 填充）=====
 
@@ -127,11 +128,20 @@ public static class SituationHub
     /// <summary>读取某国快照（无则 false——评分侧缺口函数回退 0 分防 NRE）。</summary>
     public static bool TryGet(int kingdomId, out SituationSnapshot snapshot) => _map.TryGetValue(kingdomId, out snapshot);
 
-    /// <summary>王国灭亡/退订时移除（随 KingdomBrain.Unsubscribe 调用）。</summary>
-    public static void Remove(int kingdomId) => _map.Remove(kingdomId);
+    /// <summary>王国灭亡/退订时移除（随 KingdomBrain.Unsubscribe 调用）；同步清该国经济诊断收支窗口（八格 5/7）。</summary>
+    public static void Remove(int kingdomId)
+    {
+        _map.Remove(kingdomId);
+        EconomyDiagnosis.Remove(kingdomId);
+    }
 
-    /// <summary>全清（harness 两轮间/新开局归零用，对齐 KingdomBrain.ResetDispatchStats 先例）。</summary>
-    public static void Clear() => _map.Clear();
+    /// <summary>全清（harness 两轮间/新开局归零用，对齐 KingdomBrain.ResetDispatchStats 先例）；
+    /// 同步清经济诊断收支窗口（防跨轮残留污染首日窗口）。</summary>
+    public static void Clear()
+    {
+        _map.Clear();
+        EconomyDiagnosis.Clear();
+    }
 }
 
 /// <summary>

@@ -144,7 +144,8 @@ public class KingdomState
         }
     }
 
-    /// <summary>扣除资源包（调用前需先 CanAfford；台账制直接减字段，不进玩家事件链）。</summary>
+    /// <summary>扣除资源包（调用前需先 CanAfford；台账制直接减字段，不进玩家事件链）。
+    /// 2_23 资源 P0 批A/R-A1（D630 收支口径 A+）：支出登记进经济诊断当日窗口（负数=出）。</summary>
     public void Spend(ResourcePack cost)
     {
         resources.gold -= cost.gold;
@@ -152,19 +153,27 @@ public class KingdomState
         resources.wood -= cost.wood;
         resources.food -= cost.food;
         resources.metal -= cost.metal;
+        EconomyDiagnosis.RegisterFlow(id, -cost.gold, -cost.stone, -cost.wood, -cost.food, -cost.metal);
     }
 
-    /// <summary>按比例退还资源包（拆除退款 ratio=0.5 等；metal 随比退还，不静默丢铁）。</summary>
+    /// <summary>按比例退还资源包（拆除退款 ratio=0.5 等；metal 随比退还，不静默丢铁）。
+    /// 2_23 资源 P0 批A/R-A1（D632 A′）：改走 AddResources 收口台账直写——本次退款计入经济诊断
+    /// 入账窗口（一致性；本点为潜伏点：AI 生产调用点=0，玩家走 RulerController.Refund 独立通道）。</summary>
     public void Refund(ResourcePack cost, float ratio = 1.0f)
     {
-        resources.gold += Mathf.RoundToInt(cost.gold * ratio);
-        resources.stone += Mathf.RoundToInt(cost.stone * ratio);
-        resources.wood += Mathf.RoundToInt(cost.wood * ratio);
-        resources.food += Mathf.RoundToInt(cost.food * ratio);
-        resources.metal += Mathf.RoundToInt(cost.metal * ratio);
+        AddResources(new ResourcePack
+        {
+            gold = Mathf.RoundToInt(cost.gold * ratio),
+            stone = Mathf.RoundToInt(cost.stone * ratio),
+            wood = Mathf.RoundToInt(cost.wood * ratio),
+            food = Mathf.RoundToInt(cost.food * ratio),
+            metal = Mathf.RoundToInt(cost.metal * ratio)
+        });
     }
 
-    /// <summary>国库入账（产出/采集入台账；加总）。</summary>
+    /// <summary>国库入账（产出/采集入台账；加总）。
+    /// 2_23 资源 P0 批A/R-A1（D630 收支口径 A+）：入账登记进经济诊断当日窗口
+    /// （负值=出账，AbstractEconomySettlement.ApplyDelta 带符号增量走本口）。</summary>
     public void AddResources(ResourcePack gain)
     {
         resources.gold += gain.gold;
@@ -172,5 +181,6 @@ public class KingdomState
         resources.wood += gain.wood;
         resources.food += gain.food;
         resources.metal += gain.metal;
+        EconomyDiagnosis.RegisterFlow(id, gain.gold, gain.stone, gain.wood, gain.food, gain.metal);
     }
 }

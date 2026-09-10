@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 809b348a672416a499c032c3c27d5d14, type: 3}
+  m_Name: MustHaveConfig
+  m_EditorClassIdentifier: 
+  tiers:
+  - tierName: "\u6751\u5E84"
+    minPopulation: 0
+    farmPerPeople: 5
+    minWarehouse: 1
+    wallTargetCount: 0
+    staggerTierMin: -1
+  - tierName: "\u6751\u843D"
+    minPopulation: 6
+    farmPerPeople: 5
+    minWarehouse: 1
+    wallTargetCount: 2
+    staggerTierMin: -1
+  - tierName: "\u8981\u585E"
+    minPopulation: 12
+    farmPerPeople: 5
+    minWarehouse: 1
+    wallTargetCount: 4
+    staggerTierMin: -1
