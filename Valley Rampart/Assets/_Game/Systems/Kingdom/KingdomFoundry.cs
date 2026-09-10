@@ -110,8 +110,16 @@ public static class KingdomFoundry
             // 寻路2（HH.48）：MapData 层可走 ≠ 运行时可走（预置建筑占格/障碍）→ 落点不可走时就近吸附；
             // 吸附为固定环序确定性扫描，不消耗 rng 流，同 seed 逐字节一致不破坏。
             Vector2 spawnPos = SpawnPosSnapper.SnapWorld(world, $"AI工人k{kingdomId}#{k}");
-            if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, spawnPos, kingdomId) != null)
+            var workerGo = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, spawnPos, kingdomId);
+            if (workerGo != null)
+            {
+                // DZ-086（D625①）：AI 工人个体族=国族——照 PopulationSystem.cs:337/440 生育路径先例。
+                // 原缺写致保留 UnitController.ResetForReuse 的默认 Human，使 HH.153 族池化对 AI 恒取 Human 池
+                // （件11 验收的依赖闭包：不补则 AI 侧族池形同虚设）。
+                var uc = workerGo.GetComponent<UnitController>();
+                if (uc != null) uc.raceId = KingdomRace.GetKingdomRace(kingdomId);
                 placed++;
+            }
         }
         if (placed > 0)
             Debug.Log($"[KingdomFoundry] 王国(kingdomId={kingdomId}) 实体化工人 {placed}/{count}（台账已双写，2_17 步骤3）。");
