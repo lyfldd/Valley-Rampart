@@ -358,6 +358,18 @@ public class AttentionTuningConfig : ScriptableObject
     [Tooltip("热点有效期（秒：超过则不再朝旧热点移动，原 hotspotMaxAge=5）")]
     public float fbHotspotMaxAge = 10f;
 
+    [Header("F30 意图权重个体面（D596；Unity 侧死字段——消费者=阶段B IntentBiasConfig，2_21 §4.2）")]
+    [Tooltip("残编撤退倾向乘子：scoreRetreat += (1-survival)×iwRetreat。默认 1.0=数学恒等，域 0~2（0=抑制 2=加倍）")]
+    public float iwRetreat = 1f;
+    [Tooltip("远程支援倾向乘子（rule②）：scoreCharge += 1×iwSupport。默认 1.0=数学恒等，域 0~2")]
+    public float iwSupport = 1f;
+    [Tooltip("高价值冲锋倾向乘子（rule③）：scoreCharge += heat×iwCharge。默认 1.0=数学恒等，域 0~2")]
+    public float iwCharge = 1f;
+    [Tooltip("出城迎战倾向乘子（rule③.5）：scoreSally += wallHpRatio×iwSally。默认 1.0=数学恒等，域 0~2")]
+    public float iwSally = 1f;
+    [Tooltip("防守坚守倾向乘子（rule④）：scoreDefense += heat×iwDefense。默认 1.0=数学恒等，域 0~2")]
+    public float iwDefense = 1f;
+
     [Header("LOD 三区思考（3.0.1_LOD §1.5 / §五）")]
     [Tooltip("活跃区 Think 频率（Hz，现状 10）")]
     public float lodActiveThinkHz = 10f;
@@ -529,6 +541,12 @@ public class AttentionTuningConfig : ScriptableObject
             fbSurvivalRetreatGate = fbSurvivalRetreatGate,
             fbSupportSearchRadius = fbSupportSearchRadius,
             fbHotspotMaxAge = fbHotspotMaxAge,
+            // F30 意图权重个体面（D596）：Unity 侧死字段，同源透传（消费者=阶段B IntentBiasConfig）
+            iwRetreat = iwRetreat,
+            iwSupport = iwSupport,
+            iwCharge = iwCharge,
+            iwSally = iwSally,
+            iwDefense = iwDefense,
             threatIntensityMax = threatIntensityMax,
             countFactorFullCount = countFactorFullCount,
             closeRangeMinRaw = closeRangeMinRaw,

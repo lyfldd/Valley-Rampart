@@ -245,4 +245,14 @@ public struct TuningSnapshot
     // 默认值（E1 定案）：对应意图的阵型权重 1.0，非对应 0.3，不设 0（0 会让某阵型永不选中）。
     // 注意：struct 字段不能初始化器（C# 9），默认值在 sim SimConfig.DefaultTuning() 与 Unity AttentionTuningConfig.ToSnapshot() 赋值。
     public float[] formationWeights;
+
+    // ===== F30 意图权重个体面（D484~D488 / D596 三项通过；KEYS_键族设计稿 §二/§三）=====
+    // ⚠️ Unity 侧死字段（15_账本 Unity 死字段差距账）：Unity 无连续权重路径（DecideIntentWeighted 仅 sim 侧），
+    // 消费者=Unity 阶段B IntentBiasConfig（2_21 §4.2 迁移路径），阶段B 施工时销账。
+    // 与 harness 侧同源（sim-sync 红线）；默认 1.0=数学恒等，域 0.0~2.0。
+    public float iwRetreat;     // 残编撤退倾向：scoreRetreat += (1f - survival) × iwRetreat
+    public float iwSupport;     // 远程支援倾向（rule②）：scoreCharge += 1f × iwSupport
+    public float iwCharge;      // 高价值冲锋倾向（rule③）：scoreCharge += heat × iwCharge
+    public float iwSally;       // 出城迎战倾向（rule③.5）：scoreSally += wallHpRatio × iwSally
+    public float iwDefense;     // 防守坚守倾向（rule④）：scoreDefense += heat × iwDefense
 }
