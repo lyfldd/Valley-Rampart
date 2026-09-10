@@ -29,6 +29,9 @@ public class KingdomBrain
     /// <summary>国策焦点 + 常设底线 + 被攻击打断（D322/D340）。</summary>
     public FocusController Focus { get; }
 
+    /// <summary>常设军事姿态层（2_22 P0 批C / C1，D518：三档升降滞回，不占焦点槽）。</summary>
+    public MilitaryPostureController Posture { get; }
+
     /// <summary>当前剧本阶段（快捷映射 StageMachine.Stage）。</summary>
     public ScriptStage Stage => StageMachine.Stage;
 
@@ -86,6 +89,7 @@ public class KingdomBrain
     {
         this.kingdomId = kingdomId;
         Focus = new FocusController(kingdomId);
+        Posture = new MilitaryPostureController(kingdomId);
     }
 
     /// <summary>订阅王国脑事件（王国诞生时由 Factory 调用；Unsubscribe 成对，D337/D340）。</summary>
@@ -109,6 +113,7 @@ public class KingdomBrain
         EventBus.Unsubscribe<GeneralDiedEvent>(OnGeneralDied);
         EventBus.Unsubscribe<FormationDisbandedEvent>(OnFormationDisbanded);
         SituationHub.Remove(kingdomId);   // 快照槽随脑退订移除（无持久态八格口径）
+        PostureHub.Remove(kingdomId);     // 姿态档槽随脑退订移除（批C，同上口径）
     }
 
     // ===== 态势层事件处理（A2/A6：只置脏标记+缓冲，不改快照聚合值=D517 机制）=====
@@ -121,6 +126,9 @@ public class KingdomBrain
         int contactDay = evt.HitDay >= 0 ? evt.HitDay : day;
         if (contactDay > _lastContactDay) _lastContactDay = contactDay;
         _dirtyDay = day;
+        // C6 危机打断①被攻（2_22 §3.1 尾注/D340）：事件即时不等日 tick，焦点当日重规划
+        // （FocusController 自身 OnAttacked 已置标记，InterruptReplan 内 Update 消费→防御窗口当日生效）
+        InterruptFocus(day);
     }
 
     private void OnSituationUnitDied(UnitDiedEvent evt)
@@ -137,13 +145,50 @@ public class KingdomBrain
     private void OnGeneralDied(GeneralDiedEvent evt)
     {
         if (evt.KingdomId != kingdomId) return;
-        _dirtyDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        _dirtyDay = day;
+        // C6 危机打断②军覆（2_22 §3.1 尾注/A6 事件域）：将军阵亡+无存活编队 → 当日即时重规划
+        TryInterruptOnArmyWipe(day);
     }
 
     private void OnFormationDisbanded(FormationDisbandedEvent evt)
     {
         if (evt.KingdomId != kingdomId) return;
-        _dirtyDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+        _dirtyDay = day;
+        // C6 危机打断②军覆：编队解散（GeneralLost）后无存活编队+无将军 → 当日即时重规划
+        TryInterruptOnArmyWipe(day);
+    }
+
+    /// <summary>
+    /// 军覆判定+危机打断（C6）：将军数==0 且无本国存活编队 → 焦点当日重规划（不等次日 tick）。
+    /// 打断事件与快照解耦（看事件本身实时查询，不读日 tick 快照聚合值=D517 机制不破坏）。
+    /// </summary>
+    private void TryInterruptOnArmyWipe(int day)
+    {
+        if (CountGenerals(kingdomId) > 0) return;
+        if (CountOwnFormations() > 0) return;
+        Debug.Log($"[KingdomBrain] k{kingdomId} 军覆危机（无将军+无编队）→ 当日焦点重规划（C6/D340）");
+        InterruptFocus(day);
+    }
+
+    /// <summary>本国存活编队计数（实时查询；军覆判定面）。</summary>
+    private int CountOwnFormations()
+    {
+        if (FormationManager.Instance == null) return 0;
+        var fs = FormationManager.Instance.AllFormations;
+        int cnt = 0;
+        for (int i = 0; i < fs.Count; i++)
+            if (fs[i] != null && fs[i].KingdomId == kingdomId) cnt++;
+        return cnt;
+    }
+
+    /// <summary>危机打断入口：焦点即时重规划（当日生效；执行面随下次日 tick，决策当日完成）。</summary>
+    private void InterruptFocus(int day)
+    {
+        var kingdom = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
+        if (kingdom == null || kingdom.IsPlayer) return;
+        Focus.InterruptReplan(kingdom, KingdomBrain.LoadConfig(), UtilityActionConfig.LoadConfig(), day);
     }
 
     /// <summary>
@@ -178,6 +223,12 @@ public class KingdomBrain
         Focus.Update(kingdom, cfg, ucfg, day);      // D322 焦点模型（底线→评分→防抖切换）→ kingdom.focus=行动id
         if (mode == SimMode.Fine)
             ExecuteFocus(kingdom, cfg);             // 焦点下发真实执行（完整局批次接通）；Abstract 期=经济执行分叉跳过
+
+        // ⑥ 姿态层（2_22 P0 批C / C1，D518：焦点外常态行为——不占国策焦点槽）。
+        // 消费当日快照+国库军力做三档升降（滞回防抖），随档驱动 C3 巡逻/C4 驻防/C5 动员行为。
+        Posture.Evaluate(_situation, kingdom, scfg, MilitaryPostureConfig.Load(), day);
+        if (mode == SimMode.Fine)
+            ExecutePosture(kingdom, MilitaryPostureConfig.Load());   // Abstract 期姿态行为同样分叉跳过（经济执行分叉同款）
 
         if (upgraded)
             Debug.Log($"[KingdomBrain] k{kingdomId} 剧本阶段 → {ScriptStageMachine.Name(StageMachine.Stage)} (Day {day})");
@@ -388,6 +439,199 @@ public class KingdomBrain
         }
     }
 
+    // ===== 姿态层行为驱动（2_22 P0 批C / C3 巡逻 + C4 驻防 + C5 动员，D518 §3.3）=====
+
+    /// <summary>
+    /// 姿态档下发行为（日 tick 子步⑥，SimMode.Fine 才执行）。档位语义：
+    /// 无=回收巡逻（无常态军事行为）；警戒=补巡逻到目标数（C3，主威胁方向）；
+    /// 动员=停止远程派遣+召回（StopPatrol）+守军编队自动派驻（C4 集结守军）。
+    /// </summary>
+    private void ExecutePosture(KingdomState kingdom, MilitaryPostureConfig pcfg)
+    {
+        var posture = Posture.Current;
+        if (posture == MilitaryPosture.Alert)
+        {
+            ExecuteAlertPatrol(pcfg);   // C3 警戒巡逻
+            return;
+        }
+        if (posture == MilitaryPosture.Mobilized)
+        {
+            ExecuteMobilize(kingdom, pcfg);   // C4 驻防 + C5 召回
+            return;
+        }
+        // None：无常态军事行为——回收既有巡逻（警戒解除后士兵回归决策核常态；
+        // 档位滞回窗保护下不会反复启停 churn）
+        StopAllOwnPatrols();
+    }
+
+    /// <summary>C3 警戒档巡逻：本国空闲战斗单位补巡逻到目标数（方向=主威胁方向；npcId 升序确定性）。</summary>
+    private void ExecuteAlertPatrol(MilitaryPostureConfig pcfg)
+    {
+        int want = pcfg != null ? Mathf.Max(0, pcfg.alertPatrolCount) : 2;
+        if (want <= 0) return;
+        var dirOpt = ResolveMainThreatDirection();
+        if (!dirOpt.HasValue) return;   // 无威胁锚（降档竞态/主城缺失）→ 本轮不补
+
+        int patrolling = 0;
+        var candidates = new List<UnitController>();
+        var units = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
+        if (units != null)
+        {
+            foreach (var u in units)
+            {
+                if (u == null || !u.IsAlive || u.kingdomId != kingdomId) continue;
+                if (!MilitaryProfessions.IsCombat(u.EffectiveOccupation)) continue;
+                var brain = u.GetComponent<NPCBrain>();
+                if (brain != null && brain.HasFormationSlot) continue;   // 编队士兵不拉去巡逻
+                if (brain != null && PatrolTaskSystem.IsPatrolling(brain)) { patrolling++; continue; }
+                candidates.Add(u);
+            }
+        }
+        candidates.Sort((a, b) => a.npcId.CompareTo(b.npcId));   // 确定性：npcId 升序
+        for (int i = 0; i < candidates.Count && patrolling < want; i++)
+        {
+            var brain = candidates[i].GetComponent<NPCBrain>();
+            if (brain == null) continue;
+            PatrolTaskSystem.StartPatrol(brain, dirOpt.Value);
+            patrolling++;
+        }
+    }
+
+    /// <summary>主威胁方向（C3）：快照威胁表首个非零兵国主城 → 本国主城指向（表序=id 升序确定性）。</summary>
+    private Vector2? ResolveMainThreatDirection()
+    {
+        if (_situation?.Threats == null || _situation.Threats.Count == 0) return null;
+        int threatKid = -1;
+        for (int i = 0; i < _situation.Threats.Count; i++)
+            if (_situation.Threats[i].WarriorCount > 0) { threatKid = _situation.Threats[i].KingdomId; break; }
+        if (threatKid < 0) return null;
+        var own = FindCastleCell(kingdomId);
+        var foe = FindCastleCell(threatKid);
+        if (!own.HasValue || !foe.HasValue) return null;
+        Vector2 d = new Vector2(foe.Value.x - own.Value.x, foe.Value.y - own.Value.y);
+        return d.sqrMagnitude > 1e-6f ? d.normalized : (Vector2?)null;
+    }
+
+    /// <summary>C4+C5 动员档：停止远程派遣+召回（StopPatrol 本国巡逻单位）+守军编队自动派驻（集结守军）。</summary>
+    private void ExecuteMobilize(KingdomState kingdom, MilitaryPostureConfig pcfg)
+    {
+        // C5 停止远程派遣+召回：本国全部巡逻单位停巡（士兵回归 AI 决策核常态=自然回城；
+        // ⑪出征本为占位桩无派遣面，被宣战硬触发器=2_18 P1 挂点不实现）
+        StopAllOwnPatrols();
+        // C4 守军集结：目标数内自动派驻 isGarrison 守城编队（锚点=本国工事，无则主城）
+        int want = pcfg != null ? Mathf.Max(1, pcfg.mobilizeGuardSquads) : 1;
+        int have = CountOwnGarrisonSquads();
+        for (int n = have; n < want; n++)
+        {
+            if (!TrySpawnGarrisonSquad()) break;
+        }
+    }
+
+    /// <summary>本国巡逻单位全停（C5 召回；确定性遍历）。</summary>
+    private void StopAllOwnPatrols()
+    {
+        var units = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
+        if (units == null) return;
+        foreach (var u in units)
+        {
+            if (u == null || !u.IsAlive || u.kingdomId != kingdomId) continue;
+            var brain = u.GetComponent<NPCBrain>();
+            if (brain != null && PatrolTaskSystem.IsPatrolling(brain)) PatrolTaskSystem.StopPatrol(brain);
+        }
+    }
+
+    /// <summary>本国守军（isGarrison）编队计数（C4 目标数判定面）。</summary>
+    private int CountOwnGarrisonSquads()
+    {
+        if (FormationManager.Instance == null) return 0;
+        var fs = FormationManager.Instance.AllFormations;
+        int cnt = 0;
+        for (int i = 0; i < fs.Count; i++)
+            if (fs[i] != null && fs[i].KingdomId == kingdomId && fs[i].isGarrison) cnt++;
+        return cnt;
+    }
+
+    /// <summary>
+    /// C4 守军编队自动派驻：AddComponent 既有模式（镜像 B7 将军成军/AIDebugSpawnController 样例链
+    /// =L-06 生产链合规，士兵成员来自场景 FindIdleSoldiers 真实单位非裸构）；
+    /// 锚点=本国工事建筑（IsFortification）transform，无工事回退主城 transform。
+    /// 口径注记：FindIdleSoldiers 按 Faction.AiKingdom 过滤=AI 共享阵营粒度（B7 成军同款既有模型），
+    /// 多 AI 局跨国招兵风险列报观察。
+    /// </summary>
+    private bool TrySpawnGarrisonSquad()
+    {
+        Transform anchor = FindFortificationAnchor(kingdomId);
+        if (anchor == null) anchor = FindCastleTransform(kingdomId);
+        if (anchor == null) return false;
+        var go = new GameObject($"AI_Garrison_k{kingdomId}");
+        var fc = go.AddComponent<FormationController>();
+        // r3 修（P5 实锤）：faction 镜像 B7 先例（TrainingSystem：fc.faction=将军单位 Data.faction）——
+        // 守军编队无将军→取本国任一活体单位。AI 王国单位 faction 实测=PlayerCamp（归属面=kingdomId 既有模型），
+        // 硬设 AiKingdom 会让 FindIdleSoldiers 的 faction 过滤落空=0 候选→空壳。
+        fc.faction = ResolveKingdomFaction(kingdomId);
+        if (fc.formationTable == null)
+            fc.formationTable = Resources.Load<FormationTable>("Formations/FormationTable");
+        fc.InitGarrison(anchor);
+        // r3 修（HH.140 P5 实锤）：显式归属——招募池为共享阵营面时成员国籍混杂，靠首成员反推会漂移
+        //（实测 kid=0/3：玩家/他国兵入编→守军计数按 id 过滤落空）。
+        fc.SetKingdomIdOverride(kingdomId);
+        fc.RecruitStandard();
+        if (fc.MemberCount <= 0)
+        {
+            // r3 修（P5 实锤）：中区块编队上限等空间约束拒绝招募→0 成员无将军→KingdomId 解析=-1
+            // →计数面（KingdomId==kingdomId && isGarrison）永不满足→have 恒 0→每次动员重复建壳堆积
+            //（与批B D594"计数面与创建面失配→无限循环"同型）。即建即毁止堆积，明日再试。
+            Object.Destroy(go);
+            Debug.Log($"[KingdomBrain] k{kingdomId} 守军编队招募落空（空间约束/无兵源）→销毁空壳明日再试（C4）");
+            return false;
+        }
+        Debug.Log($"[KingdomBrain] k{kingdomId} 动员档守军编队派驻 @ {anchor.name}（C4，锚=工事/主城，成员={fc.MemberCount}）");
+        return true;
+    }
+
+    /// <summary>本国单位真实 faction（守军编队 faction 取值源；无本国活体单位→AiKingdom 兜底）。</summary>
+    private static Faction ResolveKingdomFaction(int kid)
+    {
+        var units = UnitRegistry.Instance != null ? UnitRegistry.Instance.GetAllUnits() : null;
+        if (units != null)
+        {
+            foreach (var u in units)
+            {
+                if (u == null || !u.IsAlive || u.kingdomId != kid) continue;
+                if (u.Data != null) return u.Data.faction;
+            }
+        }
+        return Faction.AiKingdom;
+    }
+
+    /// <summary>找本国工事建筑 transform（IsFortification 既有判定=⑨城墙类；固定遍历序确定性）。</summary>
+    private static Transform FindFortificationAnchor(int kid)
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || reg.All == null) return null;
+        for (int i = 0; i < reg.All.Count; i++)
+        {
+            var b = reg.All[i];
+            if (b != null && b.kingdomId == kid && b.IsActive && b.IsFortification)
+                return b.transform;
+        }
+        return null;
+    }
+
+    /// <summary>找某国主城建筑 transform（守军编队兜底锚点；固定遍历序确定性）。</summary>
+    private static Transform FindCastleTransform(int kid)
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || reg.All == null) return null;
+        for (int i = 0; i < reg.All.Count; i++)
+        {
+            var b = reg.All[i];
+            if (b != null && b.kingdomId == kid && b.def != null && b.def.id == "castle" && b.IsActive)
+                return b.transform;
+        }
+        return null;
+    }
+
     /// <summary>⑥招工人真实通道：流浪汉 → 本国工人（D345 人口增长唯一途径，防卡死关键路径）。</summary>
     private void ExecuteRecruitWorker(KingdomState kingdom, KingdomBrainConfig cfg)
     {
@@ -575,7 +819,7 @@ public class KingdomBrain
     /// <summary>
     /// 2_22㉕ 造战争机器（B8，D558→D570）：执行=SiegeProductionSystem.ProduceMachine(type,spawnPos,kingdomId)
     /// AI overload 同链（族门禁 IsRaceAllowedMachine+per-kingdom 上限+国库扣费）；选型=本族机器 def 首个。
-    /// 位置=主城旁首合法微格（FindAIBuildSpot 语义复用→spawnPos 近主城）。
+    /// 位置=主城旁固定偏移近点（厂/城产出惯例位；非选址打分器链——机器非建筑无 PlacementValidator 面）。
     /// 不进配兵双环（机器不走训练链，B6 候选域已排除机器=语义正交）。
     /// </summary>
     private void ExecuteProduceMachine(KingdomState kingdom, KingdomBrainConfig cfg)
@@ -597,6 +841,14 @@ public class KingdomBrain
             if (SiegeProductionSystem.IsMachineAllowed(myRace, machines[i])) { pick = machines[i]; found = true; break; }
         }
         if (!found) { Bump(kingdomId, train: false, ok: false); return; }
+        // D594 整改令·执行侧防御预检（可选条款一并落）：prefab 缺失扣费前拦截——
+        // 双保险第二层（第一层=评分侧 Feasible 不评）；口径同源 MachinePanel.IsPrefabMissing（HH.111 P5）
+        if (MachinePanel.IsPrefabMissing(pick, out string whyMissing))
+        {
+            Bump(kingdomId, train: false, ok: false);
+            Debug.Log($"[KingdomBrain] k{kingdomId} ㉕造机器拦截：{pick} prefab 缺失（{whyMissing}）——扣费前防御预检（D594）");
+            return;
+        }
 
         var anchor = FindCastleCell(kingdomId);
         if (!anchor.HasValue) { Bump(kingdomId, train: false, ok: false); return; }
@@ -761,55 +1013,47 @@ public class KingdomBrain
             return;
         }
 
-        var spot = FindAIBuildSpot(kingdom.id, bdef, cfg.aiBuildRadius);
-        if (!spot.HasValue)
+        // D3（2_22 P0 批D，D525 §3.7）：选址半边升级——首格即用 → 打分器最优格（全量候选+F1/F2/F3 特征）
+        var spot = PlacementScorer.TryPick(kingdom.id, bdef, cfg.aiBuildRadius,
+            BuildingPlacementConfig.Load(), SituationHub.TryGet(kingdomId, out var sitB) ? sitB : null, out var pickB);
+        if (!spot)
         {
             // HH.88 件3：选址无落位静默点观测口（HH.87 列报 10）——失败原因+kingdomId
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点选址失败：{bdef.id} 半径 {cfg.aiBuildRadius} 内无合法落位（明日再试）");
             Bump(kingdomId, train: false, ok: false);
             return;   // 半径内无合法落位：明日再试
         }
+        var spotCell = pickB.Sub;
 
         var bc = BuildController.Instance;
         if (bc == null) { Bump(kingdomId, train: false, ok: false); return; }
-        bool ok = bc.TryBuild(bdef, spot.Value, GateOrientation.Horizontal, kingdomId);
+        bool ok = bc.TryBuild(bdef, spotCell, GateOrientation.Horizontal, kingdomId);
         Bump(kingdomId, train: false, ok: ok);
         if (ok)
-            Debug.Log($"[KingdomBrain] k{kingdomId} 建造焦点落地：{def0.Value.buildingId} @ ({spot.Value.x},{spot.Value.y})");
+            Debug.Log($"[KingdomBrain] k{kingdomId} 建造焦点落地：{def0.Value.buildingId} @ ({spotCell.x},{spotCell.y})" +
+                      $"（打分 {pickB.Score:F3}=F1 {pickB.F1:F2}+F2 {pickB.F2:F2}+F3 {pickB.F3:F2}，候选 {pickB.Candidates}）");
         else
             // HH.88 件3：TryBuild=false 静默点观测口（门面校验/扣费未过；细分原因看 [BuildController] 拒绝日志）
-            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点 TryBuild=false：{def0.Value.buildingId} @ ({spot.Value.x},{spot.Value.y})（门面校验/扣费未过，细分原因见 [BuildController] 拒绝日志）");
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点 TryBuild=false：{def0.Value.buildingId} @ ({spotCell.x},{spotCell.y})（门面校验/扣费未过，细分原因见 [BuildController] 拒绝日志）");
     }
 
     /// <summary>
-    /// AI 选址器：以本国主城为锚的切比雪夫环带扫描（r=0..maxR 固定序=确定性），取首个放置合法微格。
-    /// 合法性由 PlacementValidator 全量校验（占用/地形/水域/资源节点需求/AI 国库资源门——与玩家同套规则）。
+    /// AI 选址器兼容壳（2_22 P0 批D / D3，D525）：产品路径已升级 PlacementScorer.TryPick
+    /// （全量候选+特征打分+argmax 固定平局序，ExecuteBuildFocus 直调）——本方法保留为单一实现
+    /// 委托壳（批B HH.137 探针反射依赖+潜在脚本化调用），首格即用语义已废止。
+    /// 合法性由 PlacementValidator 全量校验（与玩家同套规则，scorer 内全继承）。
     /// </summary>
     private static GridCoord? FindAIBuildSpot(int kingdomId, BuildingDef def, int maxRadius)
     {
-        var grid = GridSystem.Instance;
-        var anchorCell = FindCastleCell(kingdomId);
-        if (grid == null || anchorCell == null) return null;
-        var anchor = anchorCell.Value;
-
-        for (int r = 0; r <= Mathf.Max(1, maxRadius); r++)
-        {
-            for (int dy = -r; dy <= r; dy++)
-            for (int dx = -r; dx <= r; dx++)
-            {
-                if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue;   // 只扫当前环
-                var cell = new GridCoord(anchor.x + dx, anchor.y + dy);
-                if (!grid.IsInBounds(cell)) continue;
-                var sub = grid.CellToSub(cell, 0, 0);
-                if (PlacementValidator.ValidatePlacement(def, sub, GateOrientation.Horizontal, kingdomId).ok)
-                    return sub;
-            }
-        }
+        SituationHub.TryGet(kingdomId, out var sit);
+        if (PlacementScorer.TryPick(kingdomId, def, maxRadius, BuildingPlacementConfig.Load(), sit, out var r))
+            return r.Sub;
         return null;
     }
 
-    /// <summary>找某国主城（castle 建筑坐标；固定遍历序）。无主城 → null。</summary>
-    private static GridCoord? FindCastleCell(int kingdomId)
+    /// <summary>找某国主城（castle 建筑坐标；固定遍历序）。无主城 → null。
+    /// public static（批C C3 主威胁方向复用=敌城/己城锚点查询；原 private 收编）。</summary>
+    public static GridCoord? FindCastleCell(int kingdomId)
     {
         var reg = BuildingRegistry.Instance;
         if (reg == null || reg.All == null) return null;

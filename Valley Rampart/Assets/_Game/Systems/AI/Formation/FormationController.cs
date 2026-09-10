@@ -57,6 +57,14 @@ public class FormationController : MonoBehaviour
     [Tooltip("是否无将军守城编队（true=城墙锚点模式，false=将军 NPC 模式）")]
     public bool isGarrison = false;
 
+    // 2_22 批C r3 修（HH.140 P5 实锤）：守军编队无将军→归属靠首成员反推，而招募池为共享阵营面
+    // （faction 粒度）时成员国籍混杂→KingdomId 漂移→态势层/守军计数按 id 过滤全部落空。
+    // 显式归属覆盖（>=0 生效；不设=旧推导语义完全向后兼容）。
+    private int _kingdomIdOverride = -1;
+
+    /// <summary>显式设置编队归属（守军等无将军编队由创建方传入；-1=清除覆盖回到推导）。</summary>
+    public void SetKingdomIdOverride(int kid) => _kingdomIdOverride = kid;
+
     // ===== 运行时状态 =====
     private UnitController _generalUnit;            // 将军单位（isGarrison=true 时为 null）
     private Transform _anchor;                       // 锚点 Transform（将军或城墙点）
@@ -746,9 +754,10 @@ public class FormationController : MonoBehaviour
         Debug.Log("[FormationController] 编队解散，全体状态清理完成。");
     }
 
-    /// <summary>编队所属王国推导（A6 发布归属）：将军优先，无将军（守城编队）取首个成员，全空=-1。</summary>
+    /// <summary>编队所属王国推导（A6 发布归属）：显式覆盖优先，将军次之，无将军（守城编队）取首个成员，全空=-1。</summary>
     private int ResolveKingdomId()
     {
+        if (_kingdomIdOverride >= 0) return _kingdomIdOverride;
         if (_generalUnit != null) return _generalUnit.kingdomId;
         for (int i = 0; i < _members.Count; i++)
             if (_members[i].Unit != null) return _members[i].Unit.kingdomId;

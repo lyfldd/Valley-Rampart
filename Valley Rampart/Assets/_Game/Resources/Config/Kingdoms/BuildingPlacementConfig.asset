@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8aa93d7bb5636a7438118e1a891d4402, type: 3}
+  m_Name: BuildingPlacementConfig
+  m_EditorClassIdentifier: 
+  rules:
+  - buildingId: Barracks
+    w1ThreatFront: 1
+    w2LinkBuilding: 0
+    w3CastleCompact: 1
+    linkBuildingId: 
+    sameTypeDensityPenalty: 0.5
+  - buildingId: TrainingCamp
+    w1ThreatFront: 1
+    w2LinkBuilding: 0
+    w3CastleCompact: 1
+    linkBuildingId: 
+    sameTypeDensityPenalty: 0.5
+  - buildingId: WarCamp
+    w1ThreatFront: 1
+    w2LinkBuilding: 0
+    w3CastleCompact: 1
+    linkBuildingId: 
+    sameTypeDensityPenalty: 0.5
+  - buildingId: WarAcademy
+    w1ThreatFront: 1
+    w2LinkBuilding: 0
+    w3CastleCompact: 1
+    linkBuildingId: 
+    sameTypeDensityPenalty: 0.5
+  - buildingId: ArcheryRange
+    w1ThreatFront: 1
+    w2LinkBuilding: 0
+    w3CastleCompact: 1
+    linkBuildingId: 
+    sameTypeDensityPenalty: 0.5
+  - buildingId: SiegeWorkshop
+    w1ThreatFront: 1
+    w2LinkBuilding: 0
+    w3CastleCompact: 1
+    linkBuildingId: 
+    sameTypeDensityPenalty: 0.5
+  - buildingId: farm
+    w1ThreatFront: 0
+    w2LinkBuilding: 1
+    w3CastleCompact: 1
+    linkBuildingId: Granary
+    sameTypeDensityPenalty: 0
+  - buildingId: mine
+    w1ThreatFront: 0
+    w2LinkBuilding: 1
+    w3CastleCompact: 1
+    linkBuildingId: Warehouse
+    sameTypeDensityPenalty: 0
+  defaultW1: 0
+  defaultW2: 0
+  defaultW3: 1
+  densityRadiusCells: 5

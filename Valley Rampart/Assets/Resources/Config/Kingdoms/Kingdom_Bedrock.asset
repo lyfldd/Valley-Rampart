@@ -20,7 +20,7 @@ MonoBehaviour:
   - "\u7384\u5CA9\u56FD"
   bannerColor: {r: 0.45, g: 0.45, b: 0.5, a: 1}
   preferredClimates: 0000000001000000
-  preferredFeature: 0
+  preferredFeature: 3
   militant: 0.5
   economic: 0.45
   defensive: 0.9

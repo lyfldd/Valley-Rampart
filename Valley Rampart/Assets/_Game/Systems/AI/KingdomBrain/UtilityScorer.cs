@@ -267,12 +267,15 @@ public static class UtilityScorer
                 float gapU = ownedT >= totalT ? 0f : Mathf.Clamp01((totalT - ownedT) / (float)totalT);
                 return gapU + InternalDrive(k);
             }
-            case NeedKind.MachineDemand: // ㉕ 造机器（B8）：战争态势驱动=军事期+邻接威胁非空（守城/攻城需求域）；
-                                          // 批C 姿态层警戒/动员档接入后细化（P0 占位口径）；内源项不驱动机器（语义正交）
+            case NeedKind.MachineDemand: // ㉕ 造机器（B8）：战争态势驱动=军事期+守城/攻城需求域。
+                                          // 批C 姿态层细化（批B 占位口径兑现）：需求域=邻接威胁非空（攻城向）
+                                          // 或 姿态≥警戒档（PostureHub 守城向=动员档无威胁也有守城需求）；内源项不驱动机器（语义正交）
             {
                 if (!SituationHub.TryGet(k.id, out var sitM) || sitM == null) return 0f;
                 if (k.scriptPhase != ScriptStage.Military) return 0f;             // 军事期才响应战争态势
-                if (sitM.Threats == null || sitM.Threats.Count == 0) return 0f;   // 无邻接威胁=无攻城/守城需求
+                bool threatM = sitM.Threats != null && sitM.Threats.Count > 0;    // 攻城需求：邻接威胁非空
+                bool postureM = PostureHub.Get(k.id) >= MilitaryPosture.Alert;    // 守城需求：警戒/动员档（批C）
+                if (!threatM && !postureM) return 0f;
                 float wantM = Mathf.Max(1, d.needA);
                 return Mathf.Clamp01(wantM / (wantM + sitM.MachineCount)) * 0.8f; // 机器数越少需求越高（上限内）
             }
@@ -423,6 +426,11 @@ public static class UtilityScorer
             case UtilityAction.BuildWarCamp:
             case UtilityAction.BuildLeyForge:
             case UtilityAction.BuildArcheryRange:
+            // 2_22 P0 批B 三军事建造行动（批B 遗留缺口补全：原缺 case → default:false 挡死评分侧，
+            // 批C 搭车随 D594 整改令一并补——三守卫①上限②族门禁③限建镜像全继承）
+            case UtilityAction.BuildBarracks:
+            case UtilityAction.BuildTrainingCamp:
+            case UtilityAction.BuildSiegeWorkshop:
             {
                 // 建造类：按 def 成本镜像逐项判国库（选址/前置等硬规则归执行门面二次校验）
                 // HH.86 件3a②/3c 三守卫扩：
@@ -441,6 +449,57 @@ public static class UtilityScorer
                     && k.GetResourceValue(ResourceType.Stone) >= d.costStone
                     && k.GetResourceValue(ResourceType.Wood) >= d.costWood
                     && k.GetResourceValue(ResourceType.Food) >= d.costFood;
+            }
+            // ===== 2_22 P0 批B 遗留缺口补全+D594 整改令（批C 搭车）=====
+            case UtilityAction.TrainGeneral:
+            {
+                // ⑯ 训练将军（批B 遗留补 case）：金成本镜像（TrainingDef General 条目×trainCostMul ceil，
+                // 与 TryTrainFromKingdomPool 扣费同口径）+将军上限镜像（generalLimit，对齐 CanTrainGeneral）；
+                // 兵营前置由 GeneralGap 评分导向建（执行面 FindKingdomBuilding 早退守卫已有，评分不镜像防过严）。
+                var mcfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+                int limit = mcfg != null && mcfg.generalLimit > 0 ? mcfg.generalLimit : 2;
+                if (KingdomBrain.CountGenerals(k.id) >= limit) return false;
+                var tcfgG = Resources.Load<TrainingConfig>("Config/TrainingConfig");
+                var raceDefG = KingdomRace.GetKingdomRaceDef(k.id);
+                int myRaceG = KingdomRace.GetKingdomRace(k.id);
+                if (tcfgG?.trainings == null || raceDefG == null) return false;
+                for (int i = 0; i < tcfgG.trainings.Length; i++)
+                {
+                    var t = tcfgG.trainings[i];
+                    if (t.toOccupation != Occupation.General) continue;
+                    if (t.raceId != -1 && t.raceId != myRaceG) continue;   // D419 族门禁
+                    return k.resources.gold >= Mathf.CeilToInt(t.costGold * raceDefG.trainCostMul);
+                }
+                return false;   // 无可训 General 条目（域配置缺失）
+            }
+            case UtilityAction.ProduceMachine:
+            {
+                // ㉕ 造战争机器（D594 整改令本体=🔴B8 prefab 预检+批B 遗留补 case）：
+                // ①厂前置镜像（无投掷机厂不可评——防评分选中执行早退空转，⑳建厂缺口导向先建）
+                // ②per-kingdom 上限镜像（GetPlacedMachineCountByKingdom/GetMachineLimit 单源）
+                // ③prefab 预检（D594 硬条款）：本族可造机器 prefab 全缺失 → 不评（false）——
+                //   缺口驱动持续选中→反复扣费→不生成→上限守卫永不触发=资源流失黑洞（D594 风险定性）；
+                //   判定同源=MachinePanel.IsPrefabMissing（UnitDataManager 图纸面，HH.111 P5 口径）；
+                // ④金成本镜像（PeekMachineCost 单源，选型=本族首台 IsMachineAllowed 机器升序确定性）。
+                var sps = SiegeProductionSystem.Instance;
+                if (sps == null) return false;
+                if (CountActiveDef(k.id, BuildingIds.SiegeWorkshop) < 1) return false;   // ①厂前置
+                if (sps.GetPlacedMachineCountByKingdom(k.id) >= sps.GetMachineLimit()) return false;   // ②上限
+                Occupation[] machinePool = { Occupation.Ballista, Occupation.SiegeMachine, Occupation.Mortar, Occupation.VineCatapult, Occupation.Ram };
+                int raceK = KingdomRace.GetKingdomRace(k.id);
+                Occupation pickK = machinePool[0];
+                bool foundK = false;
+                bool anyPrefabReady = false;
+                for (int i = 0; i < machinePool.Length; i++)
+                {
+                    if (!SiegeProductionSystem.IsMachineAllowed(raceK, machinePool[i])) continue;
+                    if (!foundK) { pickK = machinePool[i]; foundK = true; }   // 升序首台=执行选型同源
+                    if (!MachinePanel.IsPrefabMissing(machinePool[i], out _)) anyPrefabReady = true;   // ③任一台在场即可
+                }
+                if (!foundK) return false;                                    // 本族无可造机器
+                if (!anyPrefabReady) return false;                            // ③prefab 全缺失→不评（D594 硬条款）
+                var costK = sps.PeekMachineCost(pickK);
+                return k.resources.gold >= costK.gold;   // ④金成本镜像（石木按 2_20.1 §8.1 机器造价域=金主导，执行面全量校验兜底）
             }
             case UtilityAction.Rebuild:
             case UtilityAction.Defense:

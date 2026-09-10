@@ -113,11 +113,11 @@ public static class MapGenRules
         spawns.Add(player);
         templateBindings.Add(null);
 
-        // AI 王国：按各自 KingdomDef.preferredClimates 数组按序匹配
+        // AI 王国：按各自 KingdomDef.preferredClimates 数组按序匹配（+preferredFeature 特征过滤 D5）
         for (int i = 0; i < aiCount; i++)
         {
             var tpl = templates != null && i < templates.Count ? templates[i] : null;
-            spawns.Add(PickSpawnForTemplate(rng, map, margin, minDist, spawns, tpl));
+            spawns.Add(PickSpawnForTemplate(rng, map, margin, minDist, spawns, tpl, cfg));
             templateBindings.Add(tpl);
         }
 
@@ -125,12 +125,29 @@ public static class MapGenRules
         map.kingdomTemplates = templateBindings;
     }
 
-    /// <summary>AI 出生点：偏好带按序匹配，全部失败回退全局兜底+日志（D292）。</summary>
-    static Vector2Int PickSpawnForTemplate(System.Random rng, MapData map, int margin, int minDist,
-                                           List<Vector2Int> spawns, KingdomDef tpl)
+    /// <summary>
+    /// AI 出生点：偏好带按序匹配+preferredFeature 特征过滤（D5，D316 悬空转正→DZ-080），全部失败回退全局兜底+日志（D292）。
+    /// 两轮结构：第一轮=带内特征匹配（真实过滤）；第二轮=带内忽略特征（回退+日志=D5 验收负探针锚）。
+    /// public static（批D 探针 P2d 回退负探针直调依赖）。
+    /// </summary>
+    public static Vector2Int PickSpawnForTemplate(System.Random rng, MapData map, int margin, int minDist,
+                                                  List<Vector2Int> spawns, KingdomDef tpl, MapGenRulesConfig cfg)
     {
+        var feature = tpl != null ? tpl.preferredFeature : KingdomPreferredFeature.None;
         if (tpl != null && tpl.preferredClimates != null && tpl.preferredClimates.Length > 0)
         {
+            // 第一轮：偏好带内带特征匹配（D316 原设计=preferredFeature 真实过滤）
+            if (feature != KingdomPreferredFeature.None)
+            {
+                for (int b = 0; b < tpl.preferredClimates.Length; b++)
+                {
+                    var p = PickWalkableInClimate(rng, map, margin, tpl.preferredClimates[b], minDist, spawns, feature, cfg, filterFeature: true);
+                    if (p.x >= 0) return p;
+                }
+                // 回退（D5 验收负探针锚=无特征地形回退+日志）：带内忽略特征继续选点（D292 回退模式复用）
+                Debug.LogWarning($"[MapGenRules] 模板 {tpl.templateName} 偏好带内特征 {feature} 无匹配候选，回退忽略特征带内选点（D292/D5）。");
+            }
+            // 第二轮（或 None 无特征过滤直进）：带内纯气候匹配
             for (int b = 0; b < tpl.preferredClimates.Length; b++)
             {
                 var p = PickWalkableInClimate(rng, map, margin, tpl.preferredClimates[b], minDist, spawns);
@@ -141,9 +158,11 @@ public static class MapGenRules
         return PlaceRandomWalkable(rng, map, margin, spawns, minDist);
     }
 
-    /// <summary>在指定气候带内随机抽可走格（带间距校验）。找不到返回 (-1,-1)。</summary>
+    /// <summary>在指定气候带内随机抽可走格（带间距校验；可选 preferredFeature 特征过滤 D5）。找不到返回 (-1,-1)。</summary>
     static Vector2Int PickWalkableInClimate(System.Random rng, MapData map, int margin, ClimateZone climate,
-                                            int minDist, List<Vector2Int> spawns)
+                                            int minDist, List<Vector2Int> spawns,
+                                            KingdomPreferredFeature feature = KingdomPreferredFeature.None,
+                                            MapGenRulesConfig cfg = null, bool filterFeature = false)
     {
         int guard = 0;
         while (guard++ < 3000)
@@ -154,9 +173,62 @@ public static class MapGenRules
             if (minDist > 0 && TooClose(spawns, new Vector2Int(x, y), minDist)) continue;
             var p = NearestWalkable(map, x, y);
             if (p.x < 0) continue;
+            if (filterFeature && !MatchesPreferredFeature(map, p, feature, cfg)) continue;   // D5 特征过滤
             return p;
         }
         return new Vector2Int(-1, -1);
+    }
+
+    /// <summary>
+    /// 立国选址特征匹配判定（2_22 P0 批D / D5，D316 原设计语义+M4 尾插枚举四特征全实现）：
+    /// RiverAdjacent=候选点半径内存在水格（River/Lake/Ocean）；ForestDense/MineralRich/BarrenRich=
+    /// 候选点所在大区块（ChunkSize=16）内 Tree/Mine/Plain 格占比达阈值（MapGenRulesConfig）。
+    /// None=恒命中（不过滤）。
+    /// </summary>
+    public static bool MatchesPreferredFeature(MapData map, Vector2Int p, KingdomPreferredFeature feature, MapGenRulesConfig cfg)
+    {
+        switch (feature)
+        {
+            case KingdomPreferredFeature.RiverAdjacent:
+            {
+                int r = cfg != null ? Mathf.Max(1, cfg.featureScanRadiusCells) : 8;
+                for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int x = p.x + dx, y = p.y + dy;
+                    if (!InB(map, x, y)) continue;
+                    var f = map.features[Idx(map, x, y)];
+                    if (f == FeatureType.River || f == FeatureType.Lake || f == FeatureType.Ocean) return true;
+                }
+                return false;
+            }
+            case KingdomPreferredFeature.ForestDense:
+                return ChunkFeatureRatio(map, p, FeatureType.Tree)
+                       >= (cfg != null ? cfg.forestDensityThreshold : 0.10f);
+            case KingdomPreferredFeature.MineralRich:
+                return ChunkFeatureRatio(map, p, FeatureType.Mine)
+                       >= (cfg != null ? cfg.mineralDensityThreshold : 0.05f);
+            case KingdomPreferredFeature.BarrenRich:
+                return ChunkFeatureRatio(map, p, FeatureType.Plain)
+                       >= (cfg != null ? cfg.barrenDensityThreshold : 0.60f);
+            default:
+                return true;   // None/未知=不过滤
+        }
+    }
+
+    /// <summary>候选点所在大区块内指定特征物占比（D5 区块密度类特征判定核；越界格不计入分母）。</summary>
+    public static float ChunkFeatureRatio(MapData map, Vector2Int p, FeatureType need)
+    {
+        int cx = (p.x / ChunkSize) * ChunkSize, cy = (p.y / ChunkSize) * ChunkSize;
+        int total = 0, hits = 0;
+        for (int y = cy; y < cy + ChunkSize; y++)
+        for (int x = cx; x < cx + ChunkSize; x++)
+        {
+            if (!InB(map, x, y)) continue;
+            total++;
+            if (map.features[Idx(map, x, y)] == need) hits++;
+        }
+        return total > 0 ? hits / (float)total : 0f;
     }
 
     /// <summary>全局随机可走格兜底（D292/D41 间距校验）。</summary>

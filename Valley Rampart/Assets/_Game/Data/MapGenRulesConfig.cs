@@ -34,6 +34,16 @@ public class MapGenRulesConfig : ScriptableObject
     [Tooltip("威胁刷点距出生点的最小大区块数（视野外）")]
     public int threatMinChunkDistance = 2;
 
+    [Header("立国选址特征匹配（2_22 P0 批D / D5，D316 悬空转正→DZ-080）")]
+    [Tooltip("RiverAdjacent 特征判定半径（格）：半径内存在 River/Lake/Ocean 水格即命中")]
+    public int featureScanRadiusCells = 8;
+    [Tooltip("ForestDense 命中阈值：候选点所在大区块(16×16)林木(Tree)格占比 ≥ 该值")]
+    [Range(0f, 1f)] public float forestDensityThreshold = 0.10f;
+    [Tooltip("MineralRich 命中阈值：候选点所在大区块矿(Mine)格占比 ≥ 该值")]
+    [Range(0f, 1f)] public float mineralDensityThreshold = 0.05f;
+    [Tooltip("BarrenRich 命中阈值：候选点所在大区块开阔地(Plain)格占比 ≥ 该值")]
+    [Range(0f, 1f)] public float barrenDensityThreshold = 0.60f;
+
     // ===== 查表辅助 =====
 
     /// <summary>按地图档位查出生点间距下限。</summary>

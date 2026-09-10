@@ -48,6 +48,18 @@ public static class PatrolTaskSystem
     /// <summary>当前活跃巡逻数（调试/套件查询）。</summary>
     public static int ActiveCount => _tasks.Count;
 
+    /// <summary>
+    /// 某单位是否在巡逻中（2_22 P0 批C / C3 AI 侧驱动查询面：警戒档补巡逻计数+动员档召回遍历）。
+    /// 纯新增查询（既有行为零变化）；brain 为 null 时安全返回 false。
+    /// </summary>
+    public static bool IsPatrolling(NPCBrain brain)
+    {
+        if (brain == null) return false;
+        for (int i = 0; i < _tasks.Count; i++)
+            if (ReferenceEquals(_tasks[i].Brain, brain)) return true;
+        return false;
+    }
+
     // ===== 脚本化/debug 入口 =====
 
     /// <summary>发布巡逻：指定单位沿默认方向（+X 世界推进）探路。</summary>

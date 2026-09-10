@@ -46,6 +46,9 @@ public class FocusController
     /// <summary>本次评分顶行动（调试/冒烟断言：对比常设底线是否覆盖评分排序，冒烟#4）。</summary>
     public UtilityAction LastTop { get; private set; } = UtilityAction.None;
 
+    /// <summary>危机打断待消费标记（C6/D340：事件即时重规划一次，跳过防抖；Update 消费后清零）。</summary>
+    private bool _interruptPending;
+
     /// <summary>HH.100/P0 件A ④单变量组诊断开关（默认 false=正式行为零变化；跳过被攻击防御窗口强制。D556 裁定常设诊断开关——种族1 调试钩先例+六考 14 锁类归因复用价值）。</summary>
     public static bool DiagBypassDefenseWindow = false;
 
@@ -143,10 +146,29 @@ public class FocusController
         }
 
         // ---- 焦点切换防抖（D322 step3：最高分≠当前 且 当前已持续≥3日才切，否则维持）----
-        if (kingdom.focus != (int)top
+        // C6 危机打断：_interruptPending 待消费时跳过防抖强制切换一次（事件即时重规划，D340），
+        // 消费即清——日 tick 常规路径防抖行为零变化（红线）。
+        if (_interruptPending)
+        {
+            _interruptPending = false;
+            if (kingdom.focus != (int)top) SetFocus(kingdom, (int)top, day);
+        }
+        else if (kingdom.focus != (int)top
             && day >= _focusSinceDay + Mathf.Max(1, brainCfg.focusMinDurationDays))
             SetFocus(kingdom, (int)top, day);
         // 否则维持（"已是最优" 或 "防抖中" 均不改）
+    }
+
+    /// <summary>
+    /// 危机打断（2_22 P0 批C / C6，D340 事件打断）：事件即时不等日 tick，焦点当日重规划。
+    /// 被攻类=消费自身 _attackedFlag（防御窗口当日生效）；军覆类=强制重评跳过防抖切换。
+    /// 常设底线三级判定序不动（粮→人口→被攻，红线）——本方法只是把 Update 的消费时点从
+    /// 次日 tick 提前到事件当刻+一次防抖旁路，日 tick 常规路径行为零变化。
+    /// </summary>
+    public void InterruptReplan(KingdomState kingdom, KingdomBrainConfig brainCfg, UtilityActionConfig utilCfg, int day)
+    {
+        _interruptPending = true;
+        Update(kingdom, brainCfg, utilCfg, day);
     }
 
     private void SetFocus(KingdomState kingdom, int id, int day)
