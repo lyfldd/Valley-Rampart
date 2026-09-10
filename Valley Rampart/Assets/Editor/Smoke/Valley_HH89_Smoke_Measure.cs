@@ -37,7 +37,9 @@ public static class Valley_HH89_Smoke_Measure
         string[] names = { "Easy", "Hard" };
         for (int r = 0; r < diffs.Length; r++)
         {
-            SmokeApi.EnterGame(new NewGameConfig
+            // HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速（D600/L-17；
+            // 考跑只直通 timeScale，不改 SecondsPerDay——V1/V2 度量衡断言语义不受影响）
+            yield return TestHarnessApi.EnterTestRun(new NewGameConfig
             {
                 worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = diffs[r],
                 worldSize = WorldSize.Medium, selectedSlotId = "smoke_h89_" + diffs[r],
@@ -50,7 +52,7 @@ public static class Valley_HH89_Smoke_Measure
             {
                 yield return null;
                 if (Time.realtimeSinceStartup - t0 > 120f)
-                { Debug.LogError("[HH89冒烟] 等世界就绪超时（难度=" + diffs[r] + "）。"); SmokeApi.QuitSmoke(); yield break; }
+                { Debug.LogError("[HH89冒烟] 等世界就绪超时（难度=" + diffs[r] + "）。"); TestHarnessApi.ExitTestRun(); SmokeApi.QuitSmoke(); yield break; }
             }
             yield return new WaitForSeconds(0.5f);
 
@@ -76,6 +78,7 @@ public static class Valley_HH89_Smoke_Measure
 
         bool allPass = !results.Exists(x => x.EndsWith("=False"));
         Debug.Log("[HH89冒烟] 轮汇总 " + (allPass ? "ALL PASS" : "FAIL") + "\n" + string.Join("\n", results));
+        TestHarnessApi.ExitTestRun();   // HH.150 正门收尾：全量恢复考跑态
         SmokeApi.QuitSmoke();
     }
 }

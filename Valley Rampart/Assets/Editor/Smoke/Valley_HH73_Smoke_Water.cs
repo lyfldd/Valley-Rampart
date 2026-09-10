@@ -6,7 +6,7 @@ using UnityEditor;
 // ============================================================================
 //  HH.73 AI 供水链修复批 冒烟（D535；任务书=多Agent交接/策划端/HH.73_AI供水链修复批_任务书.md §三）
 //  用法：菜单「Valley/验证/HH73_AI供水修复」——MainMenuScene 或 GameScene Play 后点（自动进局）。
-//  结构：SmokeApi.EnterGame 真实链进局（seed=20273 固定，smoke_w73 槽）→ 等就稳 →
+//  结构：TestHarnessApi.EnterTestRun 正门进局（HH.150，seed=20273 固定，smoke_w73 槽）→ 等就稳 →
 //    P1 结构：AI 国预置含 Well（baseBuildingDefIds 插序）+ AI 桶有水（GetStored 公开口）。
 //    P2 行为正：AI 农田恢复产粮——快进窗口内 AI 桶被消耗（ConsumeWater 只由 TryConsumeFarmWater 调用，
 //       桶水下降=产粮事件真实发生）+ AI farm Storage 曾 >0（产出面证据）。
@@ -46,7 +46,8 @@ public static class Valley_HH73_Smoke_Water
             selectedSlotId = SLOT,
             kingdomName = "河谷王国"
         };
-        SmokeApi.EnterGame(cfg);
+        // HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速（D600/L-17）
+        yield return TestHarnessApi.EnterTestRun(cfg);
 
         // ---- 等世界就稳（120s 超时）----
         float t0 = Time.realtimeSinceStartup;
@@ -57,6 +58,7 @@ public static class Valley_HH73_Smoke_Water
             if (Time.realtimeSinceStartup - t0 > 120f)
             {
                 Debug.LogError("[HH73冒烟] 等世界就绪超时(120s)。");
+                TestHarnessApi.ExitTestRun();   // HH.150 正门收尾
                 SmokeApi.QuitSmoke();
                 yield break;
             }
@@ -75,6 +77,7 @@ public static class Valley_HH73_Smoke_Water
         if (aiKids.Count == 0)
         {
             Debug.LogError("[HH73冒烟] 无 AI 国，中止。");
+            TestHarnessApi.ExitTestRun();   // HH.150 正门收尾
             SmokeApi.QuitSmoke();
             yield break;
         }
@@ -186,6 +189,7 @@ public static class Valley_HH73_Smoke_Water
         }
         Debug.Log($"[HH73冒烟] ===== {(pass == results.Count ? "ALL PASS" : $"HAS FAIL({results.Count - pass})")}（{pass}/{results.Count}）=====");
 
+        TestHarnessApi.ExitTestRun();   // HH.150 正门收尾：全量恢复考跑态
         SmokeApi.QuitSmoke();
     }
 

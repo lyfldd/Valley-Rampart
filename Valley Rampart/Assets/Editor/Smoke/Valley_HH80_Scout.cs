@@ -40,7 +40,8 @@ public static class Valley_HH80_Scout
                 worldSeed = seed, mapSeed = seed, raceId = 0, difficulty = 2,
                 worldSize = WorldSize.Medium, selectedSlotId = "smoke_scout80", kingdomName = "侦察局"
             };
-            SmokeApi.EnterGame(cfg);
+            // HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速（D600/L-17）
+            yield return TestHarnessApi.EnterTestRun(cfg);
 
             float t0 = Time.realtimeSinceStartup;
             while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
@@ -99,6 +100,7 @@ public static class Valley_HH80_Scout
         }
         catch (System.Exception e) { Debug.LogError("[HH80侦察] 结果写文件失败: " + e.Message); }
 
+        TestHarnessApi.ExitTestRun();   // HH.150 正门收尾：全量恢复考跑态
         SmokeApi.QuitSmoke();
     }
 }

@@ -56,6 +56,7 @@ public static class Valley2_20C_Smoke_M8M9
     {
         yield return RunCoroutine();
         Debug.Log("[2_20C冒烟] 自动跑完成 → 清场退 Play（D522）");
+        TestHarnessApi.ExitTestRun();   // HH.150 正门收尾：全量恢复考跑态
         SmokeApi.ResetWorldForNext();
         SmokeApi.QuitSmoke();
     }
@@ -151,7 +152,8 @@ public static class Valley2_20C_Smoke_M8M9
         Check(Mathf.Abs(meanGW0 - tplGW.militant) <= 0.05f, "P3 人类零回归", $"人类·金穗好战轴 24 抽样均值={meanGW0:F3}≈模板值={tplGW.militant:F2}（基准 0.5 时新公式=原口径分布）");
 
         // ===== P4 端到端消费链：真实局全 AI 王国逐国包络（基准+模板偏离±噪声）=====
-        SmokeApi.EnterGame(new NewGameConfig
+        // HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速（D600/L-17）
+        yield return TestHarnessApi.EnterTestRun(new NewGameConfig
         {
             raceId = RaceIds.Dwarf, worldSeed = 22360, mapSeed = 22360,
             difficulty = 2, worldSize = WorldSize.Medium,

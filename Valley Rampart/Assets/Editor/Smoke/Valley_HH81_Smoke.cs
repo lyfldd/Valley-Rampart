@@ -41,14 +41,15 @@ public static class Valley_HH81_Smoke
             worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = 2,
             worldSize = WorldSize.Medium, selectedSlotId = SLOT, kingdomName = "河谷王国"
         };
-        SmokeApi.EnterGame(cfg);
+        // HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速（D600/L-17）
+        yield return TestHarnessApi.EnterTestRun(cfg);
 
         float t0 = Time.realtimeSinceStartup;
         while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
                || KingdomRegistry.Instance == null || KingdomRegistry.Instance.Count < 4)
         {
             yield return null;
-            if (Time.realtimeSinceStartup - t0 > 120f) { Debug.LogError("[HH81冒烟] 等世界就绪超时。"); SmokeApi.QuitSmoke(); yield break; }
+            if (Time.realtimeSinceStartup - t0 > 120f) { Debug.LogError("[HH81冒烟] 等世界就绪超时。"); TestHarnessApi.ExitTestRun(); SmokeApi.QuitSmoke(); yield break; }
         }
         yield return new WaitForSeconds(0.5f);
 
@@ -198,6 +199,7 @@ public static class Valley_HH81_Smoke
         }
         catch (System.Exception e) { Debug.LogError("[HH81冒烟] 结果写文件失败: " + e.Message); }
 
+        TestHarnessApi.ExitTestRun();   // HH.150 正门收尾：全量恢复考跑态
         SmokeApi.QuitSmoke();
     }
 

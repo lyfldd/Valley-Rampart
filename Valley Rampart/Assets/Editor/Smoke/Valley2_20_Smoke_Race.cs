@@ -72,9 +72,10 @@ public static class Valley2_20_Smoke_Race
             }
         }
         yield return null; yield return null;   // 阶段1 收尾余量
-        // D520 冒烟自动化（HH.62）：SmokeApi.EnterGame 无条件建局（等价用户进局真实链路），
+        // D520 冒烟自动化（HH.62）：无条件建局（等价用户进局真实链路），
         // 不再「ActiveMap 空才自建、否则走用户世界」——自动化接管，真机世界不跑冒烟菜单。
-        SmokeApi.EnterGame(new NewGameConfig
+        // HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速（D600/L-17）
+        yield return TestHarnessApi.EnterTestRun(new NewGameConfig
         {
             mapSeed = SEED,
             worldSeed = SEED,
@@ -877,6 +878,8 @@ public static class Valley2_20_Smoke_Race
         if (runner != null) Object.Destroy(runner.gameObject);
 
         // D520 冒烟自动化（HH.62）：清场（WorldLifecycle 同场景重建编排）+ 退出 Play（点一次菜单全程自动化闭环）
+        // HH.150 正门收尾：ExitTestRun 全量恢复考跑态 + QuitSmoke 清场退 Play
+        TestHarnessApi.ExitTestRun();
         SmokeApi.ResetWorldForNext();
         SmokeApi.QuitSmoke();
     }

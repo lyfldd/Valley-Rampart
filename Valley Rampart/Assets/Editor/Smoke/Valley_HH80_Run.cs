@@ -59,17 +59,8 @@ public static class Valley_HH80_Run
             worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = 2,
             worldSize = WorldSize.Medium, selectedSlotId = SLOT, kingdomName = "河谷王国"
         };
-        SmokeApi.EnterGame(cfg);
-
-        float t0 = Time.realtimeSinceStartup;
-        while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
-               || KingdomRegistry.Instance == null || KingdomRegistry.Instance.Count < 4)
-        {
-            yield return null;
-            if (Time.realtimeSinceStartup - t0 > 120f) { Debug.LogError("[HH80跑] 等世界就绪超时。"); yield break; }
-        }
-        yield return new WaitForSeconds(1f);
-
+        // HH.150 清残留：删除迁正门时遗留的裸局 SmokeApi.EnterGame+服务性等就绪块
+        // （双建局冗余；EnterTestRun 内置等就绪，直接正门进局）
         // 正门进局（test-harness-first 铁律①/D585：EnterTestRun 全守卫=判负封死+T11 野怪静默+考跑档直通
         // [speedOverride=null→读 WorldConfig.time.testSpeedMultiplier SO 缺省 15]；玩家真实局态=T10 OFF）
         yield return TestHarnessApi.EnterTestRun(cfg);

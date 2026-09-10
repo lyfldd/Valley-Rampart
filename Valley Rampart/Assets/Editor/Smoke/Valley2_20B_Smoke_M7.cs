@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -57,7 +57,7 @@ public static class Valley2_20B_Smoke_M7
         yield return new WaitForSeconds(0.2f);
 
         // ===== D520 多轮自动跑：四族固定 seed 各 1 局（4 轮）+ 换 seed 2 轮（周批回归）=====
-        // 每轮=SmokeApi.EnterGame（等价用户进局真实链路）→ P1~P13 探针（自适应国族）→ SmokeApi.ResetWorldForNext（同场景清场）
+        //         每轮=TestHarnessApi.EnterTestRun 正门进局（HH.150，含等就绪+考跑加速）→ P1~P13 探针（自适应国族）→ SmokeApi.ResetWorldForNext（同场景清场）
         var rounds = new[] {
             (raceId: RaceIds.Human, seed: 22360, raceName: "人类"),
             (raceId: RaceIds.Elf,   seed: 22360, raceName: "精灵"),
@@ -86,8 +86,8 @@ public static class Valley2_20B_Smoke_M7
 
             Debug.Log($"[2_20B冒烟] ============ 第 {i + 1}/{rounds.Length} 轮 族={round.raceName}(raceId={round.raceId}) seed={round.seed} ============");
 
-            // 进局（SmokeApi：等价用户进局真实链路 + ActiveMap 幂等守卫）
-            SmokeApi.EnterGame(new NewGameConfig
+            // 进局（HH.150 迁正门：TestHarnessApi.EnterTestRun = EnterGame 真实链+等就绪+考跑加速；D600/L-17）
+            yield return TestHarnessApi.EnterTestRun(new NewGameConfig
             {
                 raceId = round.raceId,
                 worldSeed = round.seed,
@@ -419,6 +419,8 @@ public static class Valley2_20B_Smoke_M7
         }
 
         // ===== 全部轮次完成 =====
+        // HH.150 正门收尾：ExitTestRun 全量恢复（考跑态/timeScale/渲染减负）+ QuitSmoke 清场退 Play
+        TestHarnessApi.ExitTestRun();
         SmokeApi.QuitSmoke();
     }
 
