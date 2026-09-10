@@ -199,7 +199,7 @@ public static class AbstractEconomySettlement
             if (def.isSiegeWorkshop) continue;                     // 投掷机厂产弹药，非经济资源不入国库
 
             string type = null;
-            if (def.isBlacksmith) type = "Metal";                  // 铁匠铺石→Metal（D200）
+            if (def.isBlacksmith) type = "Metal";                  // 铁匠铺矿石→Metal（D200/D609；代码语义不动=仍产 Metal）
             else
             {
                 switch (def.outputResource)

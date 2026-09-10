@@ -46,15 +46,36 @@ public static class Valley2_17_Smoke_9
             if (all[i] != null && !all[i].IsPlayer) { ai = all[i]; break; }
         if (ai == null) { Debug.Log("[2_17_9冒烟] noAI-FAIL"); yield break; }
 
-        // ---- #19 存活期不卡死：恰有可行候选 → 焦点非空；且⑥(招工人)人口不足时 gap>0 且可行 ----
+        // ---- #19 存活期不卡死（HH.131 件3 / D592 裁 a=断言分型）----
+        //  已裁产品形态（HH.86 份额式纠偏）：popAlarm 相位轮替——占位轮 SetFocus(⑥) 不跑评分不设 LastTop；
+        //  让位轮才跑评分设 LastTop；非 popAlarm 态照常评分。原「Update 后 LastTop≠None」单断言与该形态漂移
+        //  （D592 归因三重证据=非产品缺陷）→ 分型：占位轮断⑥ / 让位轮断 LastTop≠None / 非 popAlarm 维持原断言。
+        //  相位强制法：popAlarm 门槛入参=bcfg 阈值（KingdomState.workerCount 为只读派生不可直写）——
+        //  内存改/还原，不落盘（HH.115 内存载值先例；退 Play 自动还原）。
         int origFood = (int)ai.resources.food;
         ai.resources.food = 99999;   // 粮裕免触发粮底线（测评分层焦点）
         ai.resources.gold = 100;
-        var f19 = new FocusController(ai.id);
-        f19.Update(ai, bcfg, ucfg, 1);
-        bool focusSet = ai.focus != 0;
-        bool topNonNone = f19.LastTop != UtilityAction.None;
+        int origPopFloor = bcfg.popFloor;
+        int origDevMin = bcfg.developToExpand_workersMin;
         bool recruitOpen = ai.workerCount < 10 && ai.resources.gold > 0;   // ⑥ 可招（D345 防卡死关键路径）
+
+        // (a) 非 popAlarm 态：门槛置 0（workerCount<0 恒假）→ 维持原断言（焦点非空 + 评分非空）
+        bcfg.popFloor = 0; bcfg.developToExpand_workersMin = 0;
+        var f19Free = new FocusController(ai.id);
+        f19Free.Update(ai, bcfg, ucfg, 1);
+        bool freeFocusSet = ai.focus != 0;
+        bool freeTopNonNone = f19Free.LastTop != UtilityAction.None;
+
+        // (b) popAlarm 态：门槛置 workerCount+1（恒触发）→ 占位轮断⑥ + 人为构造让位轮断 LastTop≠None（保判别力）
+        bcfg.popFloor = ai.workerCount + 1; bcfg.developToExpand_workersMin = ai.workerCount + 1;
+        var f19 = new FocusController(ai.id);
+        f19.Update(ai, bcfg, ucfg, 1);                                    // 相位 0 → 占位轮（recruitedTurn）
+        bool occupiedFocus6 = ai.focus == FocusController.FocusRecruitWorker;
+        bool occupiedTopNone = f19.LastTop == UtilityAction.None;         // 占位轮不跑评分（形态取证）
+        int cap19 = Mathf.Max(1, bcfg.popAlarmFocusCapDays);
+        f19.Update(ai, bcfg, ucfg, 1 + cap19);                            // 相位 cap → 让位轮（跑评分）
+        bool yieldedTopNonNone = f19.LastTop != UtilityAction.None;
+        bcfg.popFloor = origPopFloor; bcfg.developToExpand_workersMin = origDevMin;
 
         // ---- #4 常设底线覆盖评分（D322 优先级最高、不评分、即时、跳过防抖）----
         ai.focus = (int)UtilityAction.RecruitWorker;   // 人为评分态焦点⑥
@@ -74,8 +95,11 @@ public static class Valley2_17_Smoke_9
         if (origPers != null) ai.personality = origPers;        // 还原，不污染后续
         bool divergence = belligTop != econTop;
 
-        c.Add($"#19焦点非空={(focusSet ? "OK" : "FAIL")}");
-        c.Add($"#19评分非空={(topNonNone ? "OK" : "FAIL")}");
+        c.Add($"#19非popAlarm焦点非空={(freeFocusSet ? "OK" : "FAIL")}");
+        c.Add($"#19非popAlarm评分非空={(freeTopNonNone ? "OK" : "FAIL")}");
+        c.Add($"#19占位轮焦点⑥={(occupiedFocus6 ? "OK" : "FAIL")}");
+        c.Add($"#19占位轮不设评分={(occupiedTopNone ? "OK" : "FAIL")}");
+        c.Add($"#19让位轮评分非空={(yieldedTopNonNone ? "OK" : "FAIL")}");
         c.Add($"#19⑥可招={(recruitOpen ? "OK" : "FAIL")}");
         c.Add($"#4底线覆盖评分={(bottomCovers ? "OK" : "FAIL")}");
         c.Add($"#3性格分化(好战{belligTop}vs经济{econTop})={(divergence ? "OK" : "FAIL")}");

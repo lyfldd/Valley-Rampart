@@ -267,7 +267,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         }
 
         // 仅玩家建造的 Publish（HH.4 裁决：发布侧剔除，地图自然预置建筑不 Publish——无订阅者时避免全图丢弃刷屏）。
-        if (isPlayerBuilt)
+        // DZ-077：再加 HasSubscribers 守卫（无订阅者不广播）。
+        if (isPlayerBuilt && EventBus.HasSubscribers<BuildingPlacedEvent>())
         {
             try { EventBus.Publish(new BuildingPlacedEvent(b)); }
             catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] Publish BuildingPlacedEvent 失败: " + ex.Message); }
@@ -282,8 +283,11 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         if (b == null || def == null) return;
         // HH.86/DZ-041 件3a①：空壳仓储补挂——rate==0 但有容量且 role==Economy（Warehouse/Granary 类）照挂
         // StorageComponent 入 WarehouseRegistry（旧=不挂→采集/搬运无落点→连轴建 79 座空壳）。
+        // DZ-078：排除 outputResource==Gold——market（rate=0+cap=100+role=Economy）曾误挂 Gold 死仓
+        //（金=货币直通不占仓，该仓无任何消费面）；金直通由 RulerController 承担。
         bool econStorageOnly = def.producer.rate <= 0f && def.producer.capacity > 0
-            && def.role == BuildingRole.Economy;
+            && def.role == BuildingRole.Economy
+            && def.outputResource != ResourceType.Gold;
         if (econStorageOnly)
         {
             b.gameObject.AddComponent<StorageComponent>()?.Init(b);
@@ -299,7 +303,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             else
             {
                 b.gameObject.AddComponent<StorageComponent>()?.Init(b);
-                // 铁匠铺（2_12 步骤8 D200）：挂 BlacksmithBuilding 替代通用 ProducerComponent（石→Metal 就地加工）
+                // 铁匠铺（2_12 步骤8 D200）：挂 BlacksmithBuilding 替代通用 ProducerComponent（矿石→Metal 就地加工 D609）
                 if (def.isBlacksmith)
                     b.gameObject.AddComponent<BlacksmithBuilding>()?.Init(b);
                 else

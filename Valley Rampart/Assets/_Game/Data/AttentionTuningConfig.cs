@@ -187,6 +187,8 @@ public class AttentionTuningConfig : ScriptableObject
     public float talkCooldown = 8f;
     [Tooltip("视野内同时气泡上限（DR-10：6，超出进轮转队列）")]
     public int talkMaxActive = 6;
+    [Tooltip("正常态弹话混入族池的概率（QQQ.6/HH.153 需求1：0.4=40% 抽族池句 / 60% 抽职业池句；饥饿/受伤态不走族池）。纯表现层，不进 ToSnapshot（sim 零义务）")]
+    public float talkRaceChance = 0.4f;
 
     [Header("rawFactor 权重（3.0.1_LOD §3.2 统一因子表，入 SO 防硬编码）")]
     [Tooltip("敌人距离因子权重")]

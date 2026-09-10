@@ -15,7 +15,9 @@ using UnityEngine;
 ///   - 只处理 AI 王国（kingdomId&gt;0）；玩家(id=0)产出不走本路由（玩家物流走 WarehouseRegistry/TreasureVault），零回归。
 ///   - 国库只认五经济资源（Gold/Stone/Wood/Food/Metal，2a 语义）。非经济资源（Ore/Crystal/FireOil/
 ///     特殊食物/肉/弹药）不入 AI 国库，跳过保留在本地存储。
-///   - 水井 kingidId&gt;0 已在 ProducerComponent 拦截不入水网，本路由天然不处理。
+///     （DZ-063② 注记：AI 侧这些非经济资源当前**无消费端**，保留本地存储为过渡态；消费端归后续批。）
+///   - 水井 kingdomId&gt;0：**D537（HH.73 供水链修复）已解除 D454 拦截**——AI 井产水入 AI 水桶，不走本路由；
+///     原「已在 ProducerComponent 拦截不入水网」注记已过时（DZ-063③ 勘正，D535 熔断后失实）。
 /// </summary>
 public static class AIEconomySettlement
 {

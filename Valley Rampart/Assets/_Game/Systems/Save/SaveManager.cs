@@ -288,13 +288,17 @@ public class SaveManager : Singleton<SaveManager>
             File.Move(tempPath, path);
 
             Debug.Log($"[SaveManager] 保存成功: {path}，共 {root.modules.Count} 个模块");
-            EventBus.Publish(new GameSavedEvent(slotId, true));
+            // DZ-077：无订阅者不广播
+            if (EventBus.HasSubscribers<GameSavedEvent>())
+                EventBus.Publish(new GameSavedEvent(slotId, true));
             return true;
         }
         catch (Exception e)
         {
             Debug.LogError($"[SaveManager] 保存失败: {e}");
-            EventBus.Publish(new GameSavedEvent(slotId, false));
+            // DZ-077：无订阅者不广播
+            if (EventBus.HasSubscribers<GameSavedEvent>())
+                EventBus.Publish(new GameSavedEvent(slotId, false));
             return false;
         }
     }

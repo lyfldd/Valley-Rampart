@@ -268,6 +268,10 @@ public class HappinessSystem : Singleton<HappinessSystem>
     /// <summary>是否存在处于 Active 态的指定 id 建筑（教堂/医院等）。</summary>
     public static bool HasBuilding(string buildingId) => CountActiveBuildings(buildingId) > 0;
 
+    /// <summary>per-kingdom 重载（DZ-079）：只判本国 Active 建筑——饱食回血加成按主体，
+    /// 防玩家医院给 AI 单位加回血（DZ-046 per-kingdom 口径的残留消费点补齐）。</summary>
+    public static bool HasBuilding(string buildingId, int kingdomId) => CountActiveBuildings(buildingId, kingdomId) > 0;
+
     /// <summary>
     /// 王国房屋总容量（Σ活动房屋 Lv 容量 3/5/8，§13.14）。
     /// 3.5 P0-1：PopulationSystem 生育硬前置用——剩余容量 > 0 才允许出生（房屋满=禁止生育）。
@@ -289,8 +293,17 @@ public class HappinessSystem : Singleton<HappinessSystem>
         return capacity;
     }
 
-    /// <summary>房屋 Lv 容量（§13.14：Lv1=3 / Lv2=5 / Lv3=8）。</summary>
-    public static int GetHouseCapacity(int level) => level >= 3 ? 8 : level >= 2 ? 5 : 3;
+    /// <summary>房屋 Lv 容量（§13.14 / D614：Lv1=12 / Lv2=20 / Lv3=32，×4 保密度）。
+    /// SO 化（D614）：数值唯一真源=KingdomConfig.houseCapacityByLevel（索引 0=Lv1），本口统一读 SO（消费面自动生效）。</summary>
+    public static int GetHouseCapacity(int level)
+    {
+        // 直读唯一真源 SO（不经 KingdomManager.Instance——其 Singleton 取用会自建实例，编辑器域不安全；本口需 Editor/Play 双安全）
+        var cfg = Resources.Load<KingdomConfig>("Config/KingdomConfig");
+        var table = cfg != null ? cfg.houseCapacityByLevel : null;
+        if (table == null || table.Length == 0) return 12;   // 兜底=新 Lv1 值（SO 缺失不退回旧 3）
+        int idx = Mathf.Clamp(level - 1, 0, table.Length - 1);
+        return table[idx];
+    }
 
     /// <summary>
     /// 某王国房屋总容量（HH.78/D540 per-kingdom 生育前置：AI 生育消费；

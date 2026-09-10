@@ -8,9 +8,9 @@ using UnityEngine.UIElements;
 /// 阈值越限播报/图标形式让渡请裁决（HH.46）。
 /// 入口：列国名单行点击（KingdomListPanel.OpenKingdomIntel）；点选 AI 王国实体入场路径让渡
 /// （SelectionController 点选只收己方，实体点击入口归交互层后续）。
-/// 让渡登记（HH.46）：①关系列——外交系统未建（2_18 域）；②剧本阶段列——ScriptStageMachine 在场
-/// 但 KingdomState 未携带阶段字段，接线归 2_17 域增量；③AI 国幸福值——per-kingdom 幸福 getter
-/// 未公开（仅三因子 API 公开），归 2_17 域；④战争迷雾可见度口径归 2_18/2_13 细化（本面板现为全知）。
+/// 让渡登记（HH.46）：①关系列——外交系统未建（2_18 域）；④战争迷雾可见度口径归 2_18/2_13 细化（本面板现为全知）。
+/// 已清偿（HH.133 件3 / DZ-082②③）：②剧本阶段列=KingdomState.scriptPhase（公开字段，AI 由王国脑日 tick 同步）；
+/// ③AI 国幸福值=HappinessSystem.GetKingdomHappiness(kid)（公开口）；二者均只读公开口，不掏私有字段（D520）。
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class KingdomIntelPanel : MonoBehaviour, IUIPanel
@@ -78,14 +78,15 @@ public class KingdomIntelPanel : MonoBehaviour, IUIPanel
         Set(_resources, state != null
             ? $"金{state.resources.gold} 木{state.resources.wood} 石{state.resources.stone} 粮{state.resources.food} 铁{state.resources.metal}"
             : "—");
-        // 幸福：玩家实值；AI per-kingdom 幸福 getter 未公开 → "—"（让渡 2_17 域）
-        Set(_happiness, state != null && state.IsPlayer && hs != null ? $"{hs.OverallHappiness:F0}" : "—");
+        // 幸福：per-kingdom 真值（DZ-082③；读公开口 GetKingdomHappiness=GetOverallHappiness(kid)，D520 不掏私有字段）
+        Set(_happiness, state != null && hs != null ? $"{hs.GetKingdomHappiness(state.id):F0}" : "—");
         // 幸福三惩罚因子（0.6 §三十五登记① 承接：税收减少/人口增长减少/士气低，per-kingdom API 现役）
         Set(_taxFactor, state != null && hs != null ? $"×{hs.GetTaxCoefficient(state.id):F2}" : "—");
         Set(_growthFactor, state != null && hs != null ? $"×{hs.GetPopulationGrowthFactor(state.id):F2}" : "—");
         Set(_moraleFactor, state != null && hs != null ? $"×{hs.GetRetreatThresholdModifier(state.id):F2}" : "—");
         Set(_relation, "—");    // 让渡：外交系统未建（2_18 域）
-        Set(_stage, "—");       // 让渡：剧本阶段字段未接 KingdomState（2_17 域增量）
+        // 剧本阶段（DZ-082②；读公开口 KingdomState.scriptPhase——AI 由王国脑日 tick 同步，玩家=null）
+        Set(_stage, state != null && state.scriptPhase.HasValue ? ScriptStageMachine.Name(state.scriptPhase.Value) : "—");
     }
 
     private static void Set(Label label, string text)

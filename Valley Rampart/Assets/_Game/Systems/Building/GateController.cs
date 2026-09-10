@@ -94,7 +94,9 @@ public class GateController : MonoBehaviour
         {
             // 2_2：关门=阻挡（BuildingBlocked）；开门=可走。occupant 注册不变。
             _building.SetGateBlocking(State == GateState.Closed);
-            EventBus.Publish(new GateStateChangedEvent(_building, State == GateState.Open));
+            // DZ-077：无订阅者不广播（防每次开关门刷 [EventBus] 警告）
+            if (EventBus.HasSubscribers<GateStateChangedEvent>())
+                EventBus.Publish(new GateStateChangedEvent(_building, State == GateState.Open));
             return;
         }
         ApplyToUnit();

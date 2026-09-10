@@ -35,7 +35,7 @@ public enum UtilityAction : byte
     Diplomacy = 15,        // ⑮外交姿态（P1，2_18 接管）
     // ===== HH.86 件3b/3c 供给与铁链补全（尾插保持 int 稳定；参数占位待策划调，报告列报）=====
     BuildWell = 16,        // ⑯建水井：井损重建通道（DZ-043；WellGap=本国 Active 井数 < 目标）
-    BuildBlacksmith = 17,  // ⑰建铁匠铺：AI 铁链打通（石→Metal；MetalGap=国库 Metal 低于底线）
+    BuildBlacksmith = 17,  // ⑰建铁匠铺：AI 铁链打通（矿石→Metal，D609；MetalGap=国库 Metal 低于底线）
     BuildWarAcademy = 18,  // ⑱建战争学院（人类专属；raceId=0）
     BuildWarCamp = 19,     // ⑲建兽人战营（兽人专属；raceId=3）
     BuildLeyForge = 20,    // ⑳建地脉熔炉（矮人专属；raceId=2）
@@ -68,7 +68,7 @@ public enum NeedKind : byte
     TerritoryGap,    // 领土缺口（⑩ 推边界）：needA=目标非初始占区数；非初始占区 < 目标越缺越想扩（HH.32 裁2 A′，欲望与容量分离）
     // ===== HH.86 件3b/3c（尾插）=====
     WellGap,         // 水井缺口（⑯ 建水井）：needA=目标井数（默认 1）；本国 Active 井 < 目标 → 缺口（井损重建通道 DZ-043）
-    MetalGap,        // 金属缺口（⑰ 建铁匠铺）：needA=国库 Metal 底线（占位 30）；低于则想建铁匠铺打通石→Metal
+    MetalGap,        // 金属缺口（⑰ 建铁匠铺）：needA=国库 Metal 底线（占位 30）；低于则想建铁匠铺打通矿石→Metal
     ExclusiveGap,    // 专属建筑缺口（⑱~㉑）：本国无族专属建筑 → 占位底分 0.5（军事期军备面；族门禁在 Feasible）
     // ===== 2_22 P0 批A / A4 军事维度缺口（D589 内源节拍：纯缺口驱动评分，不乘威胁门控——
     //      威胁=0 时缺口依然评分，批B 行动 ⑯训练将军/⑰建军事建筑/⑦扩多兵种 落地后消费；
@@ -218,7 +218,7 @@ public static class UtilityScorer
                 int have = CountActiveDef(k.id, "Well");
                 return have >= (int)Mathf.Max(1, d.needA) ? 0f : Mathf.Clamp01((d.needA - have) / Mathf.Max(1f, d.needA));
             }
-            case NeedKind.MetalGap:      // ⑰ 国库 Metal 低于底线（needA，占位 30）→ 想建铁匠铺打通石→Metal（DZ-052）
+            case NeedKind.MetalGap:      // ⑰ 国库 Metal 低于底线（needA，占位 30）→ 想建铁匠铺打通矿石→Metal（DZ-052/D609）
                 return Mathf.Clamp01((d.needA - k.GetResourceValue(ResourceType.Metal)) / Mathf.Max(1f, d.needA));
             case NeedKind.ExclusiveGap:  // ⑱~㉑ 本国已有族专属建筑 → 0；无 → 占位底分 0.5（族门禁在 Feasible，M6 复用）
                 return KingdomRace.HasExclusiveBuilding(k.id, d.buildingId) ? 0f : 0.5f;

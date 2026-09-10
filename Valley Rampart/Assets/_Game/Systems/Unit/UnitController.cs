@@ -1437,8 +1437,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
 
     /// <summary>
-    /// 按当前状态从对话池随机抽取一句（QQQ.1 需求5）。
+    /// 按当前状态从对话池随机抽取一句（QQQ.1 需求5；HH.153/QQQ.6 需求1 双层池混合）。
     /// 状态优先级：受伤(hp&lt;40%) &gt; 饥饿(satiety&lt;30) &gt; 正常。对应状态池为空时回退到正常池。
+    /// 正常态：talkRaceChance 概率抽【族池】（按自身 raceId），否则抽【职业池·正常】；
+    /// 饥饿/受伤态：100% 抽【职业池·状态】（状态信息优先，不混族池出戏）；族池 null → 回退职业池。
     /// public 供 NPCBrain 空闲自动说话（QQQ.2 T2 / DR-10）与点击对话共用。
     /// </summary>
     public string PickTalkLine()
@@ -1446,7 +1448,88 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         bool hungry = Satiety < 30;
         bool injured = MaxHp > 0 && (float)CurrentHp / MaxHp < 0.4f;
         var lines = GetTalkLinesByOccupation(EffectiveOccupation, hungry, injured);
+        // HH.153 双层混合：仅正常态按 talkRaceChance 混族池（比例住 AttentionTuningConfig，so-data-driven）
+        if (!hungry && !injured && Random.value < TalkRaceChance)
+        {
+            var racePool = GetRaceTalkPool(raceId);
+            if (racePool != null && racePool.Length > 0) lines = racePool;
+        }
         return lines != null && lines.Length > 0 ? lines[Random.Range(0, lines.Length)] : "……";
+    }
+
+    /// <summary>族池混入概率（QQQ.6 需求1：AttentionTuningConfig.talkRaceChance；SO 缺失时回退 0.4）。</summary>
+    static AttentionTuningConfig s_attentionTuning;
+    static bool s_attentionTuningLoaded;
+    static float TalkRaceChance
+    {
+        get
+        {
+            if (!s_attentionTuningLoaded)
+            {
+                s_attentionTuning = Resources.Load<AttentionTuningConfig>("Config/AttentionTuningConfig");
+                s_attentionTuningLoaded = true;
+            }
+            return s_attentionTuning != null ? s_attentionTuning.talkRaceChance : 0.4f;
+        }
+    }
+
+    // ===== HH.153（QQQ.6 需求2）：四族族池（4 族 × 8 句，逐字录入；static readonly 零每次分配）=====
+    static readonly string[] s_raceTalkHuman =
+    {
+        "别慌，种田是稳的。",
+        "我们靠收成说话，不靠嗓门。",
+        "墙修好了，麦子也收好了，万事不慌。",
+        "排队，是个好文明。",
+        "均衡，是一种朴实无华的阴险。",
+        "今天也是平平无奇的一天。",
+        "仓库满了，比打赢仗还踏实。",
+        "我种我的田，你们打你们的仗。",
+    };
+    static readonly string[] s_raceTalkOrc =
+    {
+        "今天也没架打？手痒。",
+        "田是什么？抢来的才香。",
+        "狼骑兵出动，仓库门记得关好。",
+        "打架之前，先算算对面值多少。",
+        "家当都在身上：骨头、粗木、皮革。",
+        "文明人靠种田？我们靠拳头。",
+        "越打越上头，这毛病改不了。",
+        "别瞪我，我眼神就这样。",
+    };
+    static readonly string[] s_raceTalkDwarf =
+    {
+        "山都不服，就服我这锤子。",
+        "炉火千年不熄，活计千年不断。",
+        "什么都能修，就是修不好脾气。",
+        "这盔甲，锤出来的才叫盔甲。",
+        "胡子里藏了半斤矿渣，别问。",
+        "路是一圈圈修的，日子是一锤锤过的。",
+        "别催，好铁不怕等。",
+        "稳如老山，硬如我这身板。",
+    };
+    static readonly string[] s_raceTalkElf =
+    {
+        "在你看见我之前，我就看见你了。",
+        "箭会飞，风声不会骗你。",
+        "密林里，谁还不是个客人呢。",
+        "别找了，我在这，又不在。",
+        "月光照到的地方，都算我家。",
+        "你的脚步声……实在有点吵。",
+        "走慢点，别踩到正在长大的春天。",
+        "射手的事，交给风去解释。",
+    };
+
+    /// <summary>按自身种族 id 返回族池句（QQQ.6 §需求2）；未知 raceId 返回 null（调用侧回退职业池）。</summary>
+    string[] GetRaceTalkPool(int race)
+    {
+        switch (race)
+        {
+            case RaceIds.Human: return s_raceTalkHuman;
+            case RaceIds.Elf: return s_raceTalkElf;
+            case RaceIds.Dwarf: return s_raceTalkDwarf;
+            case RaceIds.Orc: return s_raceTalkOrc;
+            default: return null;
+        }
     }
 
     /// <summary>返回某职业的对话池（按状态：正常/饥饿/受伤，池空回退正常）。</summary>
@@ -1464,7 +1547,60 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     enum TalkState { Normal, Hungry, Injured }
 
-    /// <summary>按职业+状态返回对话文案池（QQQ.1 需求5 设计文案，17 职业）。</summary>
+    // ===== HH.153（QQQ.6 需求3）：十七职业对话池（逐字录入定稿；static readonly 一次分配零 GC）=====
+    static readonly string[] s_talkWorkerNormal = { "正在干活呢。", "木头、石头、粮食，都得有人搬。", "今天也要努力工作。", "嘿咻……这活儿不轻。", "手艺不能丢，天天练。", "仓库快满了，加把劲。", "今天的砖，格外的烫手。", "躺平是理想，搬砖是现实。" };
+    static readonly string[] s_talkWorkerHungry = { "肚子好饿……什么时候开饭。", "干不动了，想吃东西。", "粮仓是不是空了？", "画饼不能充饥，给口饭吧。" };
+    static readonly string[] s_talkWorkerInjured = { "嘶……疼……还能撑住。", "轻伤不下火线。", "腰……我的腰……" };
+
+    static readonly string[] s_talkPorterNormal = { "搬运中，请让让。", "这批货挺沉的。", "往仓库送呢。", "别挡道，赶时间。", "一趟又一趟。", "运完了能歇会儿吗。", "再来一趟，我就是麒麟臂。", "路是我走宽的，肩是我扛壮的。" };
+    static readonly string[] s_talkPorterHungry = { "扛不动了……没吃饭。", "饿得手抖。", "越搬越轻了……原来是饿飘了。" };
+
+    static readonly string[] s_talkResidentNormal = { "还没活干……想学门手艺。", "今天天气不错。", "什么时候能有活干呢。", "闲着也是闲着。", "希望能派上用场。", "你看起来很忙。", "工位在哪？我随时上岗。", "不干活的日子，心虚得慌。" };
+    static readonly string[] s_talkResidentHungry = { "好饿啊……粮仓还有粮吗。", "肚子咕咕叫。", "咕噜咕噜，肚子的发言权最大。" };
+
+    static readonly string[] s_talkChildNormal = { "我很快就会长大啦！", "长大了我也要干活！", "嘿嘿，好好玩。", "大人都在忙呢。", "我以后要当英雄！", "你看我跑得快不快。", "我把石头扔得可远了，比弓箭手还远！", "嘘，我在训练，以后是将军。" };
+    static readonly string[] s_talkChildHungry = { "饿饿……想吃东西。", "妈妈什么时候回来。", "肚肚在打鼓，快开饭啦！" };
+
+    static readonly string[] s_talkVagrantNormal = { "……又冷又饿……", "能给口吃的吗。", "我已经流浪好久了。", "求求你，收留我吧。", "外面的世界好危险。", "只要一口粮食就好。", "我也能干活的。", "我这破碗，见证了太多。", "听说城里管饭？消息靠谱吗。" };
+    static readonly string[] s_talkVagrantHungry = { "三天没吃东西了……", "饿得走不动了。", "我这破碗，今天格外想装饭。" };
+
+    static readonly string[] s_talkRulerNormal = { "王国就托付给我吧。", "子民们需要我。", "建设王国，任重道远。", "今天的决策，明天的未来。", "王国的繁荣是我的责任。", "有什么事尽管说。", "吾乃一国之主。", "朕最近有点焦虑，国库不慌我就慌。", "当国王的第一课：学会数麦子。" };
+    static readonly string[] s_talkRulerInjured = { "我没事……还能指挥。", "保护王国要紧。", "朕只是蹭破点皮……真的。" };
+
+    static readonly string[] s_talkGeneralNormal = { "军令请走 E 键面板。", "士兵们随时待命。", "兵者，国之大事。", "布阵迎敌！", "令行禁止。", "战况如何？", "稳住阵脚。", "阵型错一步，回去重跑十圈。", "我不说话的时候，是在想战术。" };
+    static readonly string[] s_talkGeneralInjured = { "将不退，兵不散。", "轻伤而已。", "小伤，正好练练铁布衫。" };
+
+    static readonly string[] s_talkWarriorNormal = { "剑在手，不退缩。", "为了王国！", "训练不能停。", "敌人来了尽管上。", "保家卫国是本分。", "嘿嘿，手痒了。", "今天砍柴的手感，格外的顺。", "对面别怂，出来练练。" };
+    static readonly string[] s_talkWarriorHungry = { "饿得挥不动剑……", "军粮还没到吗。", "打架前先吃饭，这是铁律。" };
+    static readonly string[] s_talkWarriorInjured = { "小伤，不碍事。", "还能战。", "皮糙肉厚，就是拿来扛的。" };
+
+    static readonly string[] s_talkArcherNormal = { "弓弦已上，随时放箭。", "百步穿杨。", "风向……差不多。", "箭囊还满着呢。", "远程压制交给我。", "脱靶这事儿，风不背锅我背。", "我的箭会告诉你什么叫距离。" };
+    static readonly string[] s_talkArcherHungry = { "拉弓没力气……", "饿了手会抖。", "抖一下就脱靶，脱靶就丢人。" };
+
+    static readonly string[] s_talkCrossbowmanNormal = { "弩已上弦。", "穿透盔甲没问题。", "装填……好了。", "射程之内，皆是猎物。", "机械的力量。", "咔嚓一声，对面汗毛竖起。", "机械不骗人，比运气可靠。", "装填有点慢，正好让对面多怕一会儿。" };
+    static readonly string[] s_talkCrossbowmanInjured = { "还能再射几发。", "不退。", "手指头没事，弩就没停。" };
+
+    static readonly string[] s_talkHeavyWarriorNormal = { "重甲在手，万夫莫开。", "我是铜墙铁壁。", "冲我来的都后悔。", "盾墙不可破。", "挡在前面是我的职责。", "这身板，风都吹不弯。", "谁要推我？先问过这身铁。", "我不是胖，我是负重训练。" };
+    static readonly string[] s_talkHeavyWarriorInjured = { "甲还没破，人还在。", "重装不退。", "甲没破？那就是皮肉之苦，小事。" };
+
+    static readonly string[] s_talkCavalryNormal = { "冲锋号角何时响？", "马蹄之下，寸草不生。", "速度就是优势。", "绕后突袭，我的强项。", "马儿今天状态不错。", "我和我的马，天下无敌（大概）。", "跑得快的秘诀：别想太多。" };
+    static readonly string[] s_talkCavalryHungry = { "马也得吃东西啊……", "饿得跑不动。", "人饿马也饿，寸步难行。" };
+
+    static readonly string[] s_talkShieldGuardNormal = { "盾在人在。", "我守这里，谁都过不来。", "盾墙坚不可摧。", "后面的人放心输出。", "我的盾就是城墙。", "站桩，是一门被低估的艺术。", "对面砸了半天，我纹丝不动，帅不帅。", "我这盾，擦得比脸还亮。" };
+
+    static readonly string[] s_talkMageNormal = { "魔力充盈。", "一个火球，一片敌军。", "元素听我号令。", "别打断我施法。", "魔法不是戏法。", "咒语念错一个字，火球变烟花。", "读书人打架，讲究的就是个风度。", "火球术：解决不了的问题，加大火球。" };
+    static readonly string[] s_talkMageHungry = { "魔力需要饱食支撑……", "饿得念不动咒。", "空腹施法，容易把自己点着。" };
+
+    static readonly string[] s_talkHealerNormal = { "谁受伤了？我来。", "圣光护佑。", "别担心，有我在。", "治疗优先给前线。", "愿光明庇佑你们。", "别逞强，你躺了我才最忙。", "伤筋动骨一百天？在我这，三天。", "别怕，有我在，血条就有救。" };
+    static readonly string[] s_talkHealerInjured = { "我自己也得小心。", "还能撑住。", "医者不自医？那是对别人说的。" };
+
+    static readonly string[] s_talkBishopNormal = { "信仰即是力量。", "圣言指引方向。", "黑暗退散。", "我为主传道。", "神眷不灭。", "信我，不如信我的治疗术（也归我管）。", "祷告归祷告，救人归救人，两不误。", "黑暗退散！……退了吗？退了就好。" };
+
+    static readonly string[] s_talkArchmageNormal = { "奥术洪流蓄势待发。", "我已洞悉元素本质。", "别浪费我的法力。", "一念之间，天地变色。", "魔法之巅，不过如此。", "我一念之间天地变色……等我先念念咒。", "年轻人，别急，魔法之巅风大。", "我研究的课题：如何让火球更圆。" };
+
+    static readonly string[] s_talkFallback = { "……" };
+
+    /// <summary>按职业+状态返回对话文案池（QQQ.1 需求5；HH.153/QQQ.6 需求3 定稿，17 职业）。</summary>
     string[] GetTalkPool(Occupation occ, TalkState state)
     {
         switch (occ)
@@ -1472,124 +1608,124 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             case Occupation.Worker:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "肚子好饿……什么时候开饭。", "干不动了，想吃东西。", "粮仓是不是空了？" };
-                    case TalkState.Injured: return new[] { "嘶……疼……还能撑住。", "轻伤不下火线。" };
-                    default: return new[] { "正在干活呢。", "木头、石头、粮食，都得有人搬。", "今天也要努力工作。", "嘿咻……这活儿不轻。", "手艺不能丢，天天练。", "仓库快满了，加把劲。" };
+                    case TalkState.Hungry: return s_talkWorkerHungry;
+                    case TalkState.Injured: return s_talkWorkerInjured;
+                    default: return s_talkWorkerNormal;
                 }
             case Occupation.Porter:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "扛不动了……没吃饭。", "饿得手抖。" };
+                    case TalkState.Hungry: return s_talkPorterHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "搬运中，请让让。", "这批货挺沉的。", "往仓库送呢。", "别挡道，赶时间。", "一趟又一趟。", "运完了能歇会儿吗。" };
+                    default: return s_talkPorterNormal;
                 }
             case Occupation.Resident:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "好饿啊……粮仓还有粮吗。", "肚子咕咕叫。" };
+                    case TalkState.Hungry: return s_talkResidentHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "还没活干……想学门手艺。", "今天天气不错。", "什么时候能有活干呢。", "闲着也是闲着。", "希望能派上用场。", "你看起来很忙。" };
+                    default: return s_talkResidentNormal;
                 }
             case Occupation.Child:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "饿饿……想吃东西。", "妈妈什么时候回来。" };
+                    case TalkState.Hungry: return s_talkChildHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "我很快就会长大啦！", "长大了我也要干活！", "嘿嘿，好好玩。", "大人都在忙呢。", "我以后要当英雄！", "你看我跑得快不快。" };
+                    default: return s_talkChildNormal;
                 }
             case Occupation.Vagrant:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "三天没吃东西了……", "饿得走不动了。" };
+                    case TalkState.Hungry: return s_talkVagrantHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "……又冷又饿……", "能给口吃的吗。", "我已经流浪好久了。", "求求你，收留我吧。", "外面的世界好危险。", "只要一口粮食就好。", "我也能干活的。" };
+                    default: return s_talkVagrantNormal;
                 }
             case Occupation.Ruler:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
-                    case TalkState.Injured: return new[] { "我没事……还能指挥。", "保护王国要紧。" };
-                    default: return new[] { "王国就托付给我吧。", "子民们需要我。", "建设王国，任重道远。", "今天的决策，明天的未来。", "王国的繁荣是我的责任。", "有什么事尽管说。", "吾乃一国之主。" };
+                    case TalkState.Injured: return s_talkRulerInjured;
+                    default: return s_talkRulerNormal;
                 }
             case Occupation.General:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
-                    case TalkState.Injured: return new[] { "将不退，兵不散。", "轻伤而已。" };
-                    default: return new[] { "军令请走 E 键面板。", "士兵们随时待命。", "兵者，国之大事。", "布阵迎敌！", "令行禁止。", "战况如何？", "稳住阵脚。" };
+                    case TalkState.Injured: return s_talkGeneralInjured;
+                    default: return s_talkGeneralNormal;
                 }
             case Occupation.Warrior:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "饿得挥不动剑……", "军粮还没到吗。" };
-                    case TalkState.Injured: return new[] { "小伤，不碍事。", "还能战。" };
-                    default: return new[] { "随时准备战斗！", "剑在手，不退缩。", "为了王国！", "训练不能停。", "敌人来了尽管上。", "保家卫国是本分。", "嘿嘿，手痒了。" };
+                    case TalkState.Hungry: return s_talkWarriorHungry;
+                    case TalkState.Injured: return s_talkWarriorInjured;
+                    default: return s_talkWarriorNormal;
                 }
             case Occupation.Archer:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "拉弓没力气……", "饿了手会抖。" };
+                    case TalkState.Hungry: return s_talkArcherHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "随时准备战斗！", "弓弦已上，随时放箭。", "百步穿杨。", "风向……差不多。", "箭囊还满着呢。", "远程压制交给我。" };
+                    default: return s_talkArcherNormal;
                 }
             case Occupation.Crossbowman:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
-                    case TalkState.Injured: return new[] { "还能再射几发。", "不退。" };
-                    default: return new[] { "随时准备战斗！", "弩已上弦。", "穿透盔甲没问题。", "装填……好了。", "射程之内，皆是猎物。", "机械的力量。" };
+                    case TalkState.Injured: return s_talkCrossbowmanInjured;
+                    default: return s_talkCrossbowmanNormal;
                 }
             case Occupation.HeavyWarrior:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
-                    case TalkState.Injured: return new[] { "甲还没破，人还在。", "重装不退。" };
-                    default: return new[] { "随时准备战斗！", "重甲在手，万夫莫开。", "我是铜墙铁壁。", "冲我来的都后悔。", "盾墙不可破。", "挡在前面是我的职责。" };
+                    case TalkState.Injured: return s_talkHeavyWarriorInjured;
+                    default: return s_talkHeavyWarriorNormal;
                 }
             case Occupation.Cavalry:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "马也得吃东西啊……", "饿得跑不动。" };
+                    case TalkState.Hungry: return s_talkCavalryHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "随时准备战斗！", "冲锋号角何时响？", "马蹄之下，寸草不生。", "速度就是优势。", "绕后突袭，我的强项。", "马儿今天状态不错。" };
+                    default: return s_talkCavalryNormal;
                 }
             case Occupation.ShieldGuard:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
                     case TalkState.Injured: return null;
-                    default: return new[] { "随时准备战斗！", "盾在人在。", "我守这里，谁都过不来。", "盾墙坚不可摧。", "后面的人放心输出。", "我的盾就是城墙。" };
+                    default: return s_talkShieldGuardNormal;
                 }
             case Occupation.Mage:
                 switch (state)
                 {
-                    case TalkState.Hungry: return new[] { "魔力需要饱食支撑……", "饿得念不动咒。" };
+                    case TalkState.Hungry: return s_talkMageHungry;
                     case TalkState.Injured: return null;
-                    default: return new[] { "随时准备战斗！", "魔力充盈。", "一个火球，一片敌军。", "元素听我号令。", "别打断我施法。", "魔法不是戏法。" };
+                    default: return s_talkMageNormal;
                 }
             case Occupation.Healer:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
-                    case TalkState.Injured: return new[] { "我自己也得小心。", "还能撑住。" };
-                    default: return new[] { "随时准备战斗！", "谁受伤了？我来。", "圣光护佑。", "别担心，有我在。", "治疗优先给前线。", "愿光明庇佑你们。" };
+                    case TalkState.Injured: return s_talkHealerInjured;
+                    default: return s_talkHealerNormal;
                 }
             case Occupation.Bishop:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
                     case TalkState.Injured: return null;
-                    default: return new[] { "随时准备战斗！", "信仰即是力量。", "圣言指引方向。", "黑暗退散。", "我为主传道。", "神眷不灭。" };
+                    default: return s_talkBishopNormal;
                 }
             case Occupation.Archmage:
                 switch (state)
                 {
                     case TalkState.Hungry: return null;
                     case TalkState.Injured: return null;
-                    default: return new[] { "随时准备战斗！", "奥术洪流蓄势待发。", "我已洞悉元素本质。", "别浪费我的法力。", "一念之间，天地变色。", "魔法之巅，不过如此。" };
+                    default: return s_talkArchmageNormal;
                 }
             default:
-                return new[] { "……" };
+                return s_talkFallback;
         }
     }
 

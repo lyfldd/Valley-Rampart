@@ -30,6 +30,8 @@
         <ui:Button name="population-button" text="人口" class="pop-button" />
         <!-- 列国名单入口按钮（2_13 批D 四职责承接③：打开 KingdomListPanel；D305 播报点击展开让渡） -->
         <ui:Button name="kingdom-list-button" text="列国" class="pop-button" />
+        <!-- 单位操作·巡逻入口（DZ-081 / HH.133 件2）：选中己方单位时显示；点击进入 2~4 路径点设定 -->
+        <ui:Button name="patrol-button" text="巡逻" class="pop-button" style="display: none;" />
         <!-- 倍速角落按钮（2_13 D241：0.5x/1x/2x/3x → TimeManager.SetGameSpeed；sim 对拍锁定 1x） -->
         <ui:VisualElement name="speed-row" class="speed-row">
             <ui:Button name="speed-05" text="0.5x" class="speed-button" />

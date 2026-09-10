@@ -267,7 +267,9 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         var buildBtn = new Button { name = $"build-{def.id}", text = "建造" };
         buildBtn.AddToClassList("building-card__build-btn");
         bool uniqueBuilt = IsUniqueBuilt(def);
-        buildBtn.SetEnabled(ruler != null && ruler.CanAfford(def.cost) && !uniqueBuilt);
+        // DZ-062 口径统一：置灰判定改走 WarehouseHelper（与 BuildController.CanPayBuild 同口径——
+        // 国库+本地仓多仓凑单），替代原 ruler.CanAfford 单看国库，修「国库不足但本地仓足→按钮不可点」。
+        buildBtn.SetEnabled(WarehouseHelper.CanAfford(def.cost) && !uniqueBuilt);
         buildBtn.clicked += () => OnBuildClicked(def);
         header.Add(nameLabel);
         header.Add(buildBtn);
@@ -390,7 +392,8 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
     private void OnBuildClicked(BuildingDef def)
     {
         if (def == null) return;
-        if (RulerController.Instance != null && !RulerController.Instance.CanAfford(def.cost))
+        // DZ-062：与置灰判定同口径（WarehouseHelper 多仓凑单），防「按钮可点但点击被国库单口径拦下」。
+        if (!WarehouseHelper.CanAfford(def.cost))
         {
             Debug.LogWarning("[BuildingMenuPanel] 资源不足: " + def.id);
             return;

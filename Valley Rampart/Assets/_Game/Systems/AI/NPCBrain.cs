@@ -386,21 +386,24 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // 本地处理（主，可靠不丢）
         // 到达焦点目标 -> 下 tick L2 三维表走"已到达"分支
         // EventBus 辅转发（供调度/调试/音效）
-        EventBus.Publish(new ExecutorArrivedEvent(this, position, fromModule));
+        if (EventBus.HasSubscribers<ExecutorArrivedEvent>())   // DZ-077：无订阅者不广播
+            EventBus.Publish(new ExecutorArrivedEvent(this, position, fromModule));
     }
 
     public void OnMoveComplete(Vector2 position)
     {
         // 本地处理（主）：撤退完成 -> HitCooldownStateMachine Caution 计时起点（§13.3 关键）
         _hitCooldown.OnMoveComplete();
-        EventBus.Publish(new ExecutorMoveCompleteEvent(this, position));
+        if (EventBus.HasSubscribers<ExecutorMoveCompleteEvent>())   // DZ-077：无订阅者不广播
+            EventBus.Publish(new ExecutorMoveCompleteEvent(this, position));
     }
 
     public void OnAnchorLost()
     {
         // 本地处理（主）：跟随锚点死亡 -> 清除 FollowStimulus
         _followProvider.ClearAnchor();
-        EventBus.Publish(new ExecutorAnchorLostEvent(this));
+        if (EventBus.HasSubscribers<ExecutorAnchorLostEvent>())   // DZ-077：无订阅者不广播
+            EventBus.Publish(new ExecutorAnchorLostEvent(this));
     }
 
     // ===== Update（感知 + Think，含 tick 分片）=====

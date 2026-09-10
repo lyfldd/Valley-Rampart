@@ -304,7 +304,9 @@ public class BuildController : Singleton<BuildController>
         if (def.isGate && go.GetComponent<GateController>() == null)
             go.AddComponent<GateController>();
 
-        EventBus.Publish(new BuildingPlacedEvent(b));
+        // DZ-077：无订阅者不广播（防每次建造刷 [EventBus] 警告）
+        if (EventBus.HasSubscribers<BuildingPlacedEvent>())
+            EventBus.Publish(new BuildingPlacedEvent(b));
 
         Debug.Log($"[BuildController] 建造{(kingdomId > 0 ? $"AI国{kingdomId}" : "玩家")} {def.id} at cell ({coord.x},{coord.y}) fp {fp.x}x{fp.y}");
 

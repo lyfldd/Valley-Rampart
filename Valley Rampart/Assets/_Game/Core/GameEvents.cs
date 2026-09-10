@@ -179,15 +179,15 @@ public enum ResourceType
     Stone,  // 石材
     Wood,   // 木材
     Food,   // 食物
-    // ===== 3.5 新资源（末尾追加保持旧值稳定；存建筑存储，不入君主国库）=====
-    Ore,        // 矿石（矿洞主产；→仓库）
-    Crystal,    // 法力水晶（矿洞 Lv2 副产）
-    FireOil,    // 火油（矿洞 Lv3 副产）
+    // ===== 3.5 新资源（末尾追加保持旧值稳定；存建筑存储/国库桶）=====
+    Ore,        // 矿石（矿场伴生/矿脉主产；铁匠铺 Ore→Metal 原料，D609；→国库 Ore 桶=T1.8）
+    Crystal,    // 法力水晶（矿洞恒产副产 D562；档位化=重构批件③目标态）
+    FireOil,    // 火油（矿洞恒产副产 D562；档位化=重构批件③目标态）
     // ===== 3.5 P1 粮大类子资源（末尾追加；§13.11 特殊食物/肉）=====
     SpecialFood,// 特殊食物（粮食加工坊：粮×2→1；饱食+8/幸福+1；贸易额度6/4天）
     Meat,       // 肉（牧场屠宰制；饱食+20/幸福+3；贸易额度4/4天）
     // ===== 2_12 步骤8 铁匠铺（D199，末尾追加保持旧值稳定；2026-08-23 步骤8）=====
-    Metal,      // 金属（铁匠铺石→Metal 就地加工 D200；兵种强化 D132/工事升级 D131 消耗）实体资源，可搬运/装箱/存储/交易
+    Metal,      // 金属（铁匠铺矿石→Metal 就地加工 D200/D609；兵种强化 D132/工事升级 D131 消耗）实体资源，可搬运/装箱/存储/交易
     // ===== 2_12 步骤9 弹药（D207~D212，末尾追加保持旧值稳定；2026-08-23 步骤9）=====
     // 裁决 HH.19 A×4：弹药=可搬运资源，真源=投掷机厂/仓库 StorageComponent；不纳国库（GameEvents 前例同 Ore/Crystal/FireOil）。
     // 命名避开两侧 ProjectileType.Stone/Fireball/Magic 撞名（sim 训练仓同），用 XxAmmo 后缀（HH.19 裁决口径1）。
@@ -214,21 +214,7 @@ public readonly struct RulerResourceChangedEvent
 
 // ===== 战斗事件 =====
 
-// 单位攻击事件。由 UnitController 在发起攻击时发布。
-// 包含原始伤害值（RawDamage），实际伤害由防御公式计算后发布 UnitDamagedEvent。
-public readonly struct UnitAttackEvent
-{
-    public readonly UnitController Attacker;
-    public readonly UnitController Target;
-    public readonly int RawDamage;
-
-    public UnitAttackEvent(UnitController attacker, UnitController target, int rawDamage)
-    {
-        Attacker = attacker;
-        Target = target;
-        RawDamage = rawDamage;
-    }
-}
+// DZ-077 清扫：UnitAttackEvent 已删（零发布零订阅死定义）。攻击信息由 UnitDamagedEvent（下）承接。
 
 // 单位受伤事件（3.4 决策 3）。由 DamageSystem 在伤害结算后发布。
 // 复用此事件（原零订阅），不新建 UnitHitEvent。Unit/Source 类型改 IDamageable，建筑也走此事件。
@@ -561,13 +547,7 @@ public readonly struct PathFailedEvent
     public PathFailedEvent(UnitController unit, Vector2 destination) { Unit = unit; Destination = destination; }
 }
 
-// 建筑产能 tick 事件。由产能系统每秒发布（3.3.2 第四节后置工作）。
-// RulerController 订阅此事件结算资源产出。
-public readonly struct BuildingProductionTickEvent
-{
-    public readonly Building Building;
-    public BuildingProductionTickEvent(Building building) { Building = building; }
-}
+// DZ-077 清扫：BuildingProductionTickEvent 已删（零发布零订阅死定义）。
 
 // 建筑激活事件（3.3.4 批次3）。建造/修复/升级完成时由 Building.OnConstructionComplete 发布。
 // BuildController 订阅此事件解锁建造菜单（主城修复后）；产能系统订阅此事件启动产出。

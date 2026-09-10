@@ -21,6 +21,14 @@ public class TopLeftHUD : MonoBehaviour
     private Label _seasonLabel;
     private Button _populationButton;
     private Button _kingdomListButton;                          // 2_13 批D：列国名单入口（四职责承接③）
+    private Button _patrolButton;                               // DZ-081 巡逻入口（HH.133 件2；选中单位时显示）
+    private bool _patrolButtonShown;
+
+    /// <summary>当前激活的 HUD（巡逻按钮命中判定用；SelectionController 只读）。</summary>
+    public static TopLeftHUD Active { get; private set; }
+
+    /// <summary>巡逻入口按钮（SelectionController 命中判定用；可能为 null）。</summary>
+    public Button PatrolButton => _patrolButton;
     private readonly Button[] _speedButtons = new Button[4];   // D241 倍速角落按钮（0.5x/1x/2x/3x）
     private static readonly float[] SpeedValues = { 0.5f, 1f, 2f, 3f };
     private bool _labelsBound;
@@ -32,6 +40,7 @@ public class TopLeftHUD : MonoBehaviour
 
     private void OnEnable()
     {
+        Active = this;
         if (!_labelsBound) BindLabels();
         EventBus.Subscribe<UnitSpawnedEvent>(OnUnitSpawned);
         EventBus.Subscribe<UnitHpChangedEvent>(OnHpChanged);
@@ -43,6 +52,7 @@ public class TopLeftHUD : MonoBehaviour
 
     private void OnDisable()
     {
+        if (Active == this) Active = null;
         EventBus.Unsubscribe<UnitSpawnedEvent>(OnUnitSpawned);
         EventBus.Unsubscribe<UnitHpChangedEvent>(OnHpChanged);
         EventBus.Unsubscribe<UnitAttributeChangedEvent>(OnAttributeChanged);
@@ -81,6 +91,8 @@ public class TopLeftHUD : MonoBehaviour
 
     private void Update()
     {
+        UpdatePatrolButton();
+
         var tm = TimeManager.Instance;
         if (tm == null || _timeLabel == null) return;
 
@@ -114,6 +126,10 @@ public class TopLeftHUD : MonoBehaviour
         // 2_13 批D：列国名单入口按钮绑定（四职责承接③；D305"播报点击展开"让渡登记）
         _kingdomListButton = root.Q<Button>("kingdom-list-button");
         if (_kingdomListButton != null) _kingdomListButton.clicked += OnKingdomListClicked;
+
+        // DZ-081 巡逻入口（HH.133 件2）：默认隐藏，有己方单位选中/设定中时显示（UpdatePatrolButton）
+        _patrolButton = root.Q<Button>("patrol-button");
+        if (_patrolButton != null) _patrolButton.clicked += OnPatrolClicked;
 
         // D241 倍速角落按钮绑定（0.5x/1x/2x/3x → TimeManager.SetGameSpeed）
         _speedButtons[0] = root.Q<Button>("speed-05");
@@ -245,6 +261,32 @@ public class TopLeftHUD : MonoBehaviour
             return;
         }
         UIManager.Instance?.Push(listPanel, new Interactor(Faction.PlayerCamp, Vector3.zero));
+    }
+
+    /// <summary>
+    /// 「巡逻」按钮（DZ-081 / HH.133 件2）：未进入设定→进入路径点设定；设定中→确认发布（≥2 点）。
+    /// </summary>
+    private void OnPatrolClicked()
+    {
+        var sel = SelectionController.Instance;
+        if (sel == null) return;
+        if (sel.IsPatrolSetupActive) sel.ConfirmPatrolSetup();
+        else sel.BeginPatrolSetup();
+    }
+
+    /// <summary>巡逻按钮显隐/文案：选中集非空或设定中→显示；设定中→「确认巡逻」。</summary>
+    private void UpdatePatrolButton()
+    {
+        if (_patrolButton == null) return;
+        var sel = SelectionController.Instance;
+        bool setup = sel != null && sel.IsPatrolSetupActive;
+        bool show = setup || (sel != null && sel.Selected.Count > 0);
+        if (show != _patrolButtonShown)
+        {
+            _patrolButtonShown = show;
+            _patrolButton.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+        _patrolButton.text = setup ? "确认巡逻" : "巡逻";
     }
 
     private void OnDayChanged(TimeDayChangedEvent evt)

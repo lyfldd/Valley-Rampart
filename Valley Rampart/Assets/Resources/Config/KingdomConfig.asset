@@ -119,6 +119,12 @@ MonoBehaviour:
   byproductFireOilCapacity: 20
   byproductCrystalRate: 0.05
   byproductFireOilRate: 0.05
+  byproductOreRate: 0.05
+  byproductOreCapacity: 20
+  houseCapacityByLevel:
+  - 12
+  - 20
+  - 32
   ranchCapacity: 10
   ranchFeedPerAnimal: 1
   ranchMeatHappiness: 3

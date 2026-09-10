@@ -54,7 +54,7 @@
                     <ui:Label text="剧本阶段" class="form-label" />
                     <ui:Label name="intel-stage" text="—" class="form-input" />
                 </ui:VisualElement>
-                <ui:Label name="intel-debt-hint" text="关系/剧本阶段/AI国幸福值=让渡（2_18/2_17 域）" class="form-hint" />
+                <ui:Label name="intel-debt-hint" text="关系=让渡（2_18 域）；剧本阶段/AI国幸福值已接（HH.133 件3）" class="form-hint" />
             </ui:VisualElement>
 
             <ui:Button name="kingdom-intel-close-button" text="关闭" class="form-button" />

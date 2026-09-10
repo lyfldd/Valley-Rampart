@@ -90,29 +90,29 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     private static BlacksmithDef _blacksmithDefCache;
 
     /// <summary>
-    /// 就地加工增值。2_12 步骤8：兑现铁匠铺 Metal 分支（D200，石→Metal）。
+    /// 就地加工增值。2_12 步骤8 兑现铁匠铺 Metal 分支（D200）；**D609/T1.2：原料由石改矿石（Ore→Metal）**。
     /// 其余 in/out 组合仍返回 0（未实现）。本仓库承诺存 Metal（outputResource=Metal）。
-    /// 流程：校验输入石足够（RulerController 国库真源）→ 扣石 → 加 Metal 入本仓库（容量内整批）。
+    /// 流程：校验输入矿石足够（RulerController 国库 Ore 真源——T1.8 已补国库 Ore 桶）→ 扣矿 → 加 Metal 入本仓库（容量内整批）。
     /// </summary>
     public int Transform(ResourceType @in, ResourceType @out, int amt)
     {
-        if (@in != ResourceType.Stone || @out != ResourceType.Metal) return 0;   // 仅铁匠铺 Metal 加工
+        if (@in != ResourceType.Ore || @out != ResourceType.Metal) return 0;   // 仅铁匠铺 Metal 加工（D609：矿石→Metal）
         if (amt <= 0) return 0;
         int room = capacity - storedAmount;
         if (room <= 0) return 0;
 
         if (_blacksmithDefCache == null)
             _blacksmithDefCache = Resources.Load<BlacksmithDef>("Config/BlacksmithDef");
-        int ratio = _blacksmithDefCache != null && _blacksmithDefCache.stoneToMetalRatio > 0
-            ? _blacksmithDefCache.stoneToMetalRatio
+        int ratio = _blacksmithDefCache != null && _blacksmithDefCache.oreToMetalRatio > 0
+            ? _blacksmithDefCache.oreToMetalRatio
             : 2;   // 兜底占位 2:1
 
         int metal = Mathf.Min(Mathf.Max(1, amt / ratio), room);
-        int stoneNeeded = metal * ratio;
+        int oreNeeded = metal * ratio;
         var ruler = RulerController.Instance;
-        if (ruler == null || ruler.Stone < stoneNeeded) return 0;   // 石不足 → 整批不产（累计器保留，等石攒够）
+        if (ruler == null || ruler.Ore < oreNeeded) return 0;   // 矿石不足 → 整批不产（累计器保留，等矿攒够）
 
-        ruler.ModifyResource(ResourceType.Stone, false, stoneNeeded);
+        ruler.ModifyResource(ResourceType.Ore, false, oreNeeded);
         int added = Add(metal);
         return added;
     }

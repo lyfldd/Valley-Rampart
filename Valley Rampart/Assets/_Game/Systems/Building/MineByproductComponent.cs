@@ -6,10 +6,11 @@ using UnityEngine;
 /// GuardDeploymentSystem/Building 拆除守卫/BuildingPanel 全消费此 flag——M1 红线），另挂本组件恒产水晶/火油。
 ///
 /// 结构（仿 SiegeWorkshopBuilding 厂级弹药仓）：
-///   - 挂 2 个单资源子 StorageComponent（Crystal/FireOil），容量取 KingdomConfig.byproductCrystalCapacity/
-///     byproductFireOilCapacity。不注册 WarehouseRegistry（子仓=待运出缓冲非可存仓，见 CreateSubStore 注）。
-///   - 产率：KingdomConfig.byproductCrystalRate/byproductFireOilRate（0.05/s=慢产保稀缺；副产无等级门槛，
-///     原 ProducerComponent Lv2/Lv3 门槛随 mine levels=[] 不适用——已裁决策）。
+///   - 挂 **3** 个单资源子 StorageComponent（Crystal/FireOil/**Ore**；T1.4/D609 加矿石伴生），容量取
+///     KingdomConfig.byproductCrystalCapacity/byproductFireOilCapacity/byproductOreCapacity。
+///     不注册 WarehouseRegistry（子仓=待运出缓冲非可存仓，见 CreateSubStore 注）。
+///   - 产率：KingdomConfig.byproductCrystalRate/byproductFireOilRate/byproductOreRate（0.05/s=慢产保稀缺；
+///     副产无等级门槛，原 ProducerComponent Lv2/Lv3 门槛随 mine levels=[] 不适用——已裁决策）。
 ///   - 恒产：不设工人门（任务书「恒产」口径；石头采集链的工人派工与本组件互不相干）。
 ///   - 搬运：本组件实现 ITaskSource（TreeGatherSource 非 Building 任务源先例），子仓存量达
 ///     transportThreshold 时发 Transport（destType=NearestWarehouse；args 带子仓资源类型，
@@ -19,7 +20,7 @@ using UnityEngine;
 /// 已知限制（列报）：同矿水晶/火油两仓 Transport 广告按同 source 同 type 计数（CountAssignedForType），
 /// 并发在派时互相挤占规模派工名额——效果为两仓错峰搬运（不断链），最小方案接受。
 ///
-/// 存档：BuildingSaveData.byproductCrystalAmount/byproductFireOilAmount（尾插，旧档缺→默认 0 零 bump），
+/// 存档：BuildingSaveData.byproductCrystalAmount/byproductFireOilAmount/**byproductOreAmount**（尾插，旧档缺→默认 0 零 bump），
 /// Building.SaveState/LoadState 经 SaveByproductState/RestoreByproductState 读写。
 /// ResetState：随建筑 GameObject 销毁自然清（组件随建筑域既有清场链），无需 WorldLifecycle 新编排（列报确认）。
 /// </summary>
@@ -30,10 +31,13 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
     private Building _building;
     private StorageComponent _crystalStore;
     private StorageComponent _fireOilStore;
+    private StorageComponent _oreStore;            // T1.4（D609）：矿石伴生子仓
     private float _crystalAccumulator;
     private float _fireOilAccumulator;
+    private float _oreAccumulator;
     private bool _crystalFullLogged;   // 满仓停产分频：满时只记一次，消耗后复位（防逐秒刷屏）
     private bool _fireOilFullLogged;
+    private bool _oreFullLogged;
     private bool _registered;          // TaskScheduler 懒注册（调度器未就绪时跳过，首 Tick 补挂——TreeGatherSource 懒注册同语义）
 
     public void Init(Building building)
@@ -41,21 +45,25 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         _building = building;
         _crystalAccumulator = 0f;
         _fireOilAccumulator = 0f;
+        _oreAccumulator = 0f;
         _crystalFullLogged = false;
         _fireOilFullLogged = false;
+        _oreFullLogged = false;
         _registered = false;
         CreateSubStores();
     }
 
-    /// <summary>创建 2 个单资源副产子仓（仿 SiegeWorkshopBuilding.CreateSubStores/TreasureVault 子物体聚合）。</summary>
+    /// <summary>创建 3 个单资源副产子仓（仿 SiegeWorkshopBuilding.CreateSubStores/TreasureVault 子物体聚合）。
+    /// T1.4（D609）：第三仓=矿石（矿场伴生，Ore→Metal 链供给端）。</summary>
     void CreateSubStores()
     {
         if (_building == null) return;
         var config = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
         _crystalStore = CreateSubStore(ResourceType.Crystal, config != null ? config.byproductCrystalCapacity : 20);
         _fireOilStore = CreateSubStore(ResourceType.FireOil, config != null ? config.byproductFireOilCapacity : 20);
+        _oreStore = CreateSubStore(ResourceType.Ore, config != null ? config.byproductOreCapacity : 20);
         string defId = _building.def != null ? _building.def.id : "?";
-        Debug.Log("[MineByproduct] 副产仓就绪（" + defId + "）：水晶仓 cap=" + _crystalStore.capacity + "，火油仓 cap=" + _fireOilStore.capacity);
+        Debug.Log("[MineByproduct] 副产仓就绪（" + defId + "）：水晶仓 cap=" + _crystalStore.capacity + "，火油仓 cap=" + _fireOilStore.capacity + "，矿石仓 cap=" + _oreStore.capacity);
     }
 
     StorageComponent CreateSubStore(ResourceType type, int capacity)
@@ -72,7 +80,7 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         return sc;
     }
 
-    /// <summary>每秒 tick（ProductionSystem 调度）：水晶/火油双槽并行恒产，独立容量互不挤占。</summary>
+    /// <summary>每秒 tick（ProductionSystem 调度）：水晶/火油/矿石三槽并行恒产，独立容量互不挤占。</summary>
     public void Tick()
     {
         if (_building == null || !_building.IsActive) return;
@@ -80,6 +88,7 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         var config = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
         TickStore(_crystalStore, config != null ? config.byproductCrystalRate : 0.05f, ref _crystalAccumulator, ref _crystalFullLogged);
         TickStore(_fireOilStore, config != null ? config.byproductFireOilRate : 0.05f, ref _fireOilAccumulator, ref _fireOilFullLogged);
+        TickStore(_oreStore, config != null ? config.byproductOreRate : 0.05f, ref _oreAccumulator, ref _oreFullLogged);   // T1.4：矿石伴生
     }
 
     void TickStore(StorageComponent store, float rate, ref float accumulator, ref bool fullLogged)
@@ -111,18 +120,20 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
     {
         if (type == ResourceType.Crystal) return _crystalStore;
         if (type == ResourceType.FireOil) return _fireOilStore;
+        if (type == ResourceType.Ore) return _oreStore;   // T1.4（D609）
         return null;
     }
 
     // ===== 存档（Building.SaveState/LoadState 调；BuildingSaveData 尾插字段）=====
 
-    /// <summary>保存副产子仓存量（水晶量, 火油量）。</summary>
-    public (int crystal, int fireOil) SaveByproductState()
+    /// <summary>保存副产子仓存量（水晶量, 火油量, 矿石量）。T1.4（D609）：第三元=矿石。</summary>
+    public (int crystal, int fireOil, int ore) SaveByproductState()
         => (_crystalStore != null ? _crystalStore.storedAmount : 0,
-            _fireOilStore != null ? _fireOilStore.storedAmount : 0);
+            _fireOilStore != null ? _fireOilStore.storedAmount : 0,
+            _oreStore != null ? _oreStore.storedAmount : 0);
 
-    /// <summary>读档恢复副产子仓存量（超容量 clamp 不静默丢——对齐 SiegeWorkshopBuilding.RestoreLegacyAmmo 口径）。</summary>
-    public void RestoreByproductState(int crystal, int fireOil)
+    /// <summary>读档恢复副产子仓存量（超容量 clamp 不静默丢——对齐 SiegeWorkshopBuilding.RestoreLegacyAmmo 口径）。T1.4：第三参=矿石（旧档缺→0）。</summary>
+    public void RestoreByproductState(int crystal, int fireOil, int ore)
     {
         if (crystal > 0 && _crystalStore != null)
         {
@@ -135,6 +146,12 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
             int added = _fireOilStore.Add(fireOil);
             if (added < fireOil)
                 Debug.LogWarning($"[MineByproduct] 读档火油超容量 clamp {fireOil}→{added}");
+        }
+        if (ore > 0 && _oreStore != null)
+        {
+            int added = _oreStore.Add(ore);
+            if (added < ore)
+                Debug.LogWarning($"[MineByproduct] 读档矿石超容量 clamp {ore}→{added}");
         }
     }
 
@@ -152,9 +169,10 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         task = null;
         if (_building == null || !_building.IsValid) return false;
         float threshold = _building.transportThreshold;
-        // 两仓分别判达标（存量≥capacity×threshold），一次只发先达标的一个（同 source 串行，互挤限制见类注释）
+        // 三仓分别判达标（存量≥capacity×threshold），一次只发先达标的一个（同 source 串行，互挤限制见类注释）
         if (TryAdvertiseStore(_crystalStore, threshold, out task)) return true;
         if (TryAdvertiseStore(_fireOilStore, threshold, out task)) return true;
+        if (TryAdvertiseStore(_oreStore, threshold, out task)) return true;   // T1.4（D609）：矿石伴生搬运
         return false;
     }
 
@@ -216,7 +234,9 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
             TaskScheduler.Instance.Unregister(this);
         if (_crystalStore != null) WarehouseRegistry.Unregister(_crystalStore);
         if (_fireOilStore != null) WarehouseRegistry.Unregister(_fireOilStore);
+        if (_oreStore != null) WarehouseRegistry.Unregister(_oreStore);   // T1.4（D609）：矿石子仓同清
         _crystalStore = null;
         _fireOilStore = null;
+        _oreStore = null;
     }
 }

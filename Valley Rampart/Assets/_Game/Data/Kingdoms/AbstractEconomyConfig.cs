@@ -26,7 +26,7 @@ public class AbstractEconomyConfig : ScriptableObject
     public float mineDaily = 4f;
     [Tooltip("农田日产量（sim FarmDaily=6）")]
     public float farmDaily = 6f;
-    [Tooltip("铁匠铺日产量（石→Metal 就地加工 D200；sim 无对应建筑，Unity 对齐量级）")]
+    [Tooltip("铁匠铺日产量（矿石→Metal 就地加工 D200/D609；sim 无对应建筑，Unity 对齐量级）")]
     public float blacksmithDaily = 4f;
 
     [Header("税收（镜像 sim DailySettle 人头税）")]

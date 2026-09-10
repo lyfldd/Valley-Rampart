@@ -54,9 +54,12 @@ public class BuildingDef : ScriptableObject
     [Header("产能（3.3.4 批次5）")]
     [Tooltip("产出资源类型（producer.kind==Resource 时用）")]
     public ResourceType outputResource;
-    [Tooltip("是否为资源点（原始矿洞/树林/农田）。true=自身不产出，仅作工具放置前置（批次6）")]
+    [Tooltip("是否为资源点（原始矿洞/树林/农田）。true=自身不产出，仅作工具放置前置（批次6）。" +
+             "语义分两类（DZ-054/D617）：一次性探明矿点（ore_vein=1）vs 开局过渡堆积（stone_pile/wood_pile=0）——" +
+             "三者值不齐=语义差异非缺陷，不统一为 1（统一会使 stone/wood_pile 经 WanderStimulusProvider 新增 NPC 游荡锚点=行为漂移）。" +
+             "实盘 4 消费面=WanderStimulusProvider.IsResourceDef / BuildingPanel.canDemolish / Building.Demolish / BuildingFactory 产能分支")]
     public bool isResourceNode = false;
-    [Tooltip("是否为铁匠铺（2_12 步骤8，D199~D201）。true=挂 BlacksmithBuilding（石→Metal 就地加工 D200），跳过通用 ProducerComponent")]
+    [Tooltip("是否为铁匠铺（2_12 步骤8，D199~D201）。true=挂 BlacksmithBuilding（矿石→Metal 就地加工 D200/D609），跳过通用 ProducerComponent")]
     public bool isBlacksmith = false;
     [Tooltip("是否为投掷机厂（2_12 步骤9，D207~D212）。true=挂 SiegeWorkshopBuilding（弹药产出入厂级弹药仓，仿 BlacksmithBuilding 专属组件），跳过通用 ProducerComponent；弹仓容量取 producer.capacity（HH.19 A×4）")]
     public bool isSiegeWorkshop = false;

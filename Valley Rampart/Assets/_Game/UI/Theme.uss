@@ -270,12 +270,17 @@
     padding: 0 12px;
 }
 
-.form-select .unity-base-field__input {
-    color: var(--color-text-primary);
-}
-
-.form-select .unity-popup-field__input {
-    color: var(--color-text-primary);
+/* D240 下拉对比度（HH.133 件4）：选中值文本强制亮色 + 输入元素透明底（露 .form-select 深底）。
+   默认皮肤内部类名随版本变化（2022.3 DropdownField 实为 unity-base-popup-field__input），
+   故遍历 base-field / popup-field / text-element 全套并 !important 压过皮肤默认暗色文本。 */
+.form-select .unity-base-field__input,
+.form-select .unity-popup-field__input,
+.form-select .unity-base-popup-field__input,
+.form-select .unity-dropdown-field__input,
+.form-select .unity-text-element,
+.form-select Label {
+    color: var(--color-text-primary) !important;
+    background-color: rgba(0, 0, 0, 0) !important;
 }
 
 .form-select .unity-base-field__label {
@@ -305,13 +310,19 @@
 /* 选族卡（2_20 M10 / D431，HH.66 段A）：静态四卡横排，点击选中态高亮 */
 .race-card-row {
     flex-direction: row;
+    flex-wrap: wrap;              /* 兜底：极端窄窗可换行，禁水平超窗 */
     justify-content: space-between;
+    width: 1280px;                /* 四卡同排：PanelSettings 参考宽 1920（match width），1280 不超窗 */
+    max-width: 1280px;
 }
 
 .race-card {
+    width: 0;                     /* 四等份均分；原 flex-grow 被 96 字描述撑到 552px/卡=超窗根因 */
+    min-width: 0;
     flex-grow: 1;
+    min-height: 124px;            /* 描述最长 97 字（4 行）不裁切 */
     margin: 0 4px;
-    padding: 8px 6px;
+    padding: 10px;
     align-items: center;
     background-color: var(--color-bg-panel);
     border-width: 1px;
@@ -345,9 +356,9 @@
 
 .race-desc {
     font-size: 11px;
-    color: var(--color-text-secondary);
+    color: var(--color-text-secondary, rgb(205, 205, 212));
     white-space: normal;
-    text-anchor: upper-center;
+    -unity-text-align: middle-center;
 }
 
 .form-actions {

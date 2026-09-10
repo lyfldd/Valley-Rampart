@@ -56,6 +56,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
     public int Meat => GetResourceValue(ResourceType.Meat);
     // ===== 2_12 步骤8 铁（D199；真源同迁国库铁仓库）=====
     public int Metal => GetResourceValue(ResourceType.Metal);
+    // ===== T1.8（D609/D617）：矿石国库读口（Ore→Metal 链原料；真源同迁国库 Ore 桶，TreasureVault.Managed 已纳管）=====
+    public int Ore => GetResourceValue(ResourceType.Ore);
 
     // 统治者名字（新建游戏时玩家输入，存档恢复时从 RulerSaveData 读取）
     public string RulerName { get; private set; } = "无名君主";

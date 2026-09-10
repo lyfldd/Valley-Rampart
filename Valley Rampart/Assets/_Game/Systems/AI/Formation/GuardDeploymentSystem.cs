@@ -61,7 +61,8 @@ public struct GuardRegion
 /// <summary>
 /// 守卫部署系统（2_8 步骤6，§5.2B D190~D195）。守卫部署与资源点争夺的行为规则层。
 ///
-/// 交互入口（右键派兵驻守）归 2_13；本篇落行为规则 + 双接口输出：
+/// 交互入口（右键派兵驻守）=2_13 批B 已接线（SelectionController L175 → GuardDeploymentSystem.DeployGuard）；
+/// 原「归 2_13」注记已过时（DZ-083b 勘正）。本篇落行为规则 + 双接口输出：
 ///   - IsGuarded(GridCoord)->bool            （2_7 安全度/成本场守卫低点 D86 消费）
 ///   - GetGuardRegions()->IReadOnlyList       （2_6 成本场订阅 GuardRegionChangedEvent 消费）
 /// 守卫丢失（守卫被击退/资源点失去覆盖）→ 发 GuardRegionLostEvent 威胁升级（R4/D63）。

@@ -19,57 +19,68 @@ public static class WarehouseHelper
     /// <summary>
     /// 结算一次王国仓库资源成本（建造/升级/训练）。成功 true 并已从仓库扣减；失败 false 且**未做任何扣减**（整笔回滚）。
     /// </summary>
-    public static bool TrySettle(ResourcePack cost)
+    public static bool TrySettle(ResourcePack cost) => TrySettle(0, cost);
+
+    /// <summary>B1-5（2_24 批1，D605）：带主体参数重载——凑单仓按 kingdomId 主体匹配（0=玩家 / &gt;0=AI）。</summary>
+    public static bool TrySettle(int kingdomId, ResourcePack cost)
     {
         if (cost.IsZero) return true;
-        var warehouses = GatherWarehouses();
+        var warehouses = GatherWarehouses(kingdomId);
         var locked = new List<IWarehouse>();
 
-        // 金：货币直通。其余三资源走仓库凑单。
+        // 金：货币直通。其余四资源走仓库凑单（Metal 为 DZ-061 补入：含铁造价曾白嫖铁）。
         if (cost.gold > 0)
         {
             if (RulerController.Instance == null || !RulerController.Instance.CanAfford(new ResourcePack { gold = cost.gold }))
                 return false;
         }
 
-        // 预校验三资源是否凑得够（不足则直接失败，不动任何仓库）
+        // 预校验四资源是否凑得够（不足则直接失败，不动任何仓库）
         if (!TryCheckEnough(warehouses, ResourceType.Stone, cost.stone)) return false;
         if (!TryCheckEnough(warehouses, ResourceType.Wood, cost.wood)) return false;
         if (!TryCheckEnough(warehouses, ResourceType.Food, cost.food)) return false;
+        if (!TryCheckEnough(warehouses, ResourceType.Metal, cost.metal)) return false;
 
         // 真正扣减：先逐仓锁定实际可取的量（暂存不动），全部够才开始真正 Take
         int[] stoneTake = LockTakes(warehouses, ResourceType.Stone, cost.stone);
         int[] woodTake = LockTakes(warehouses, ResourceType.Wood, cost.wood);
         int[] foodTake = LockTakes(warehouses, ResourceType.Food, cost.food);
+        int[] metalTake = LockTakes(warehouses, ResourceType.Metal, cost.metal);
 
         // 执行减（先金，再仓库资源；仓库不减的成功不会被部分应用，因为已预校验足够）
         if (cost.gold > 0) RulerController.Instance.Spend(new ResourcePack { gold = cost.gold });
         ApplyTakes(warehouses, ResourceType.Stone, stoneTake);
         ApplyTakes(warehouses, ResourceType.Wood, woodTake);
         ApplyTakes(warehouses, ResourceType.Food, foodTake);
+        ApplyTakes(warehouses, ResourceType.Metal, metalTake);
         return true;
     }
 
     /// <summary>是否从王国仓库+国库负担得起这笔成本（原子判定，不改动）。</summary>
-    public static bool CanAfford(ResourcePack cost)
+    public static bool CanAfford(ResourcePack cost) => CanAfford(0, cost);
+
+    /// <summary>B1-5（2_24 批1，D605）：带主体参数重载（语义同 TrySettle）。</summary>
+    public static bool CanAfford(int kingdomId, ResourcePack cost)
     {
         if (cost.IsZero) return true;
         if (cost.gold > 0)
             if (RulerController.Instance == null || !RulerController.Instance.CanAfford(new ResourcePack { gold = cost.gold }))
                 return false;
-        var warehouses = GatherWarehouses();
+        var warehouses = GatherWarehouses(kingdomId);
         return TryCheckEnough(warehouses, ResourceType.Stone, cost.stone)
             && TryCheckEnough(warehouses, ResourceType.Wood, cost.wood)
-            && TryCheckEnough(warehouses, ResourceType.Food, cost.food);
+            && TryCheckEnough(warehouses, ResourceType.Food, cost.food)
+            && TryCheckEnough(warehouses, ResourceType.Metal, cost.metal);
     }
 
     // ===== 定位器（2_12 步骤8.4：仓库注册表替代 FindObjectsOfType 全场景扫描）=====
     // 调用频率红线：只许结算时点调用，禁入 Update/每帧路径（过渡实现安全边界）。
-    private static List<IWarehouse> GatherWarehouses()
+    private static List<IWarehouse> GatherWarehouses(int kingdomId)
     {
-        // 2_17 修复卡γ：王国凑单按"玩家王国(0)"匹配——玩家结算只凑玩家仓，绝不流入 AI 库。
+        // 2_17 修复卡γ：王国凑单按主体匹配——玩家(0)结算只凑玩家仓，绝不流入 AI 库。
         // （AI 王国结算由 2_17 步骤2b 日结转账路径以各自 kingdomId 调 GatherActive。）
-        return WarehouseRegistry.GatherActive(0);
+        // B1-5（2_24 批1，D605）：硬编码 0 → 入参 kingdomId（默认 0 由重载给出，现网调用零行为变化）。
+        return WarehouseRegistry.GatherActive(kingdomId);
     }
 
     /// <summary>校验所有仓库对该资源累计可取量是否达标。</summary>

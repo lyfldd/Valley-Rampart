@@ -22,7 +22,7 @@ MonoBehaviour:
     stone: 0
     wood: 0
     food: 0
-  footprint: {x: 1, y: 1}
+  footprint: {x: 2, y: 2}
   allowedTerrain: 
   moduleType: 1
   isObstacle: 0

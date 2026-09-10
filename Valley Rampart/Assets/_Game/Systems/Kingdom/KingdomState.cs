@@ -53,6 +53,8 @@ public class KingdomState
     public int crystal;
     /// <summary>副产火油存量（AI 国库台账；玩家(0) 不用此桶——玩家走 TreasureVault）。</summary>
     public int fireOil;
+    /// <summary>矿石存量（AI 国库台账；T1.8/D609：矿石复活链 AI 侧独立桶，照水晶/火油先例——玩家(0) 不用此桶，走 TreasureVault.Ore）。</summary>
+    public int ore;
 
     // ===== 科技解锁态 per-kingdom（2_17 步骤11 序0 schema 预留 + 序8 落地载体）=====
     // D330 第二步：CastleUnlockTable 解锁态 per-kingdom（动态立国科技不继承 D295）。
@@ -137,6 +139,7 @@ public class KingdomState
             case ResourceType.Metal: return resources.metal;
             case ResourceType.Crystal: return crystal;    // DZ-072a 副产台账
             case ResourceType.FireOil: return fireOil;    // DZ-072a 副产台账
+            case ResourceType.Ore: return ore;            // T1.8（D609）矿石台账桶
             default: return 0;
         }
     }

@@ -16,7 +16,7 @@ MonoBehaviour:
   - label: "\u5F00\u5C40\u6001"
     workers: 6
     warriors: 0
-    houses: 3
+    houses: 1
     buildings:
     - Well
     - farm
@@ -29,7 +29,7 @@ MonoBehaviour:
   - label: "\u4E2D\u671F\u6001"
     workers: 10
     warriors: 4
-    houses: 5
+    houses: 2
     buildings:
     - Well
     - farm
@@ -45,7 +45,7 @@ MonoBehaviour:
   - label: "\u519B\u4E8B\u671F"
     workers: 12
     warriors: 6
-    houses: 8
+    houses: 2
     buildings:
     - Well
     - farm

@@ -383,6 +383,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         // DZ-072a：副产两资源读档缓存（旧档缺字段=0）
         TreasuryCrystal = data.treasuryCrystal;
         TreasuryFireOil = data.treasuryFireOil;
+        // T1.8（D609/D617）：矿石国库槽读档缓存（旧档缺字段=0，零 bump）
+        TreasuryOre = data.treasuryOre;
 
         // 2_17 步骤11 批2：读档后把玩家解锁态镜像到 KingdomState[0]（若 Registry 已就绪；未就绪则 Registry 创建玩家态时回拉）
         MirrorPlayerUnlockToRegistry();
@@ -400,6 +402,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     // DZ-072a：副产两资源读档缓存（TreasureVault 就绪后恢复）
     public int TreasuryCrystal { get; private set; }
     public int TreasuryFireOil { get; private set; }
+    /// <summary>T1.8（D609/D617）：矿石国库槽读档缓存（TreasureVault 就绪后回填）。</summary>
+    public int TreasuryOre { get; private set; }
 
     /// <summary>把旧存档（7/9 档）额度数组扩展到当前 13 档（v1 兼容：缺档补初始额度）。</summary>
     private int[] ResizeQuotaArray(int[] old)
@@ -427,6 +431,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         // 2_12 步骤8.4：清国库读档缓存（防新建局读到上局残留）
         TreasuryStone = TreasuryWood = TreasuryFood = TreasurySpecialFood = TreasuryMeat = TreasuryMetal = 0;
         TreasuryCrystal = TreasuryFireOil = 0;   // DZ-072a：副产缓存同清
+        TreasuryOre = 0;                         // T1.8（D609/D617）：矿石缓存同清
         // 2_17 步骤11 批2：复位同步玩家解锁态镜像到 KingdomState[0]（随 Registry 重置后回拉一致）
         MirrorPlayerUnlockToRegistry();
     }

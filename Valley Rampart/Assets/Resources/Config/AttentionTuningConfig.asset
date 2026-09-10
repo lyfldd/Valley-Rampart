@@ -198,3 +198,4 @@ MonoBehaviour:
   heatSpreadThreshold: 0.6
   heatSpreadRatio: 0.4
   speedChaseBoost: 1
+  talkRaceChance: 0.4

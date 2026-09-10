@@ -332,8 +332,10 @@ public class LODSystem : Singleton<LODSystem>
             s.idleTimer = 0f;
         }
         // 发布热度变化（兼容旧订阅者 RegionHeatChangedEvent；中区块坐标语义）
+        // DZ-077：原 `s.threatHeat >= 0f ? 0 : 0` 恒 0 残式清理——本事件为旧兼容面（零消费者），
+        // RegionIndex 无消费语义，显式传 0（不保留无意义三元式）。
         if (EventBus.HasSubscribers<RegionHeatChangedEvent>())
-            EventBus.Publish(new RegionHeatChangedEvent(s.threatHeat >= 0f ? 0 : 0, s.threatHeat, s.Level));
+            EventBus.Publish(new RegionHeatChangedEvent(0, s.threatHeat, s.Level));
     }
 
     // ===== 外部注入/注册 =====

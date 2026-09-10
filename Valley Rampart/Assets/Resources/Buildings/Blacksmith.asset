@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: Blacksmith
   displayName: "\u94C1\u5320\u94FA"
-  description: "\u77F3\u2192Metal"
+  description: "\u77FF\u2192Metal"
   faction: 1
   role: 1
   cost:
@@ -26,7 +26,7 @@ MonoBehaviour:
     stoneAmmo: 0
     fireballAmmo: 0
     magicAmmo: 0
-  footprint: {x: 2, y: 1}
+  footprint: {x: 2, y: 2}
   allowedTerrain: 
   heightLayer: 0
   canPlaceOnWater: 0

@@ -50,7 +50,13 @@ public static class P1Observer
         // HH.107/DZ-072a：矿洞副产链观测（产出入仓/满仓停产/读档 clamp）
         "[MineByproduct]",
         // HH.109/DZ-074：箱子读档重建观测（先清后建幂等/重建计数）
-        "[ChestManager]"
+        "[ChestManager]",
+        // HH.131 件2 / D589 列报4：combat 死亡 tag + GameOver tag 补条（六考实证野怪杀 Worker 两段不可统计=
+        // 镜像白名单无 combat tag；GameOver「河谷失守」行不入镜像）。只加不删 + 本名单集中管理（D563② 口径）。
+        //   [UnitController] 死亡行=UnitController.Die L651「[UnitController] {faction}_{occupation} 死亡。」
+        //     （同 tag 另有回血/读档兜底少量低量行，随并入=可接受；无独立 combat 死亡 tag，此即致死落地日志）
+        //   [ThroneAnchor] L86「工人全灭，王国覆灭 → GameOver」判负行；[GameOverPanel] L71「显示结算面板」结算行
+        "[UnitController]", "[ThroneAnchor]", "[GameOverPanel]"
         // 注：[VagrantCamp 无右括号前缀=[VagrantCampSystem]/[VagrantCamp] 双匹配（HH.78 修正：原 "[VagrantCamp]" 带括号漏 [VagrantCampSystem] 前缀）
     };
 

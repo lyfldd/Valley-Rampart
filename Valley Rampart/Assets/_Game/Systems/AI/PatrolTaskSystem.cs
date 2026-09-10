@@ -13,7 +13,8 @@ using UnityEngine;
 /// 视野并集揭迷雾消费 2_7 VisionSystem 副作用（各单位 NPCBrain.UpdatePerception 已每 tick
 /// MarkExplored，D262；本系统另按固定半径主动补标，确保探路即揭雾）。
 ///
-/// 交互入口（框选士兵→右键未知区）归 2_13；本篇落行为规则，StartPatrol 为脚本化/debug 入口。
+/// 交互入口：DZ-081（HH.133 件2，2026-09-10）落地玩家入口——单位操作 UI「巡逻」→
+/// StartPatrol(brain, IReadOnlyList&lt;Vector2&gt;) 路径点循环巡逻；方向重载=脚本化/debug/AI 姿态域既有入口（不动）。
 /// </summary>
 public static class PatrolTaskSystem
 {
@@ -22,9 +23,11 @@ public static class PatrolTaskSystem
     {
         public NPCBrain Brain;
         public UnitController Unit;
-        public Vector2 Direction;      // 推进方向（世界单位）
+        public Vector2 Direction;      // 推进方向（世界单位；路径点模式不使用）
         public Vector2 NextWaypoint;   // 当前目标点
         public float StepCells = 6f;   // 每步推进距离（格）
+        public List<Vector2> Waypoints;   // 路径点循环模式（null=方向模式；DZ-081 玩家入口）
+        public int WaypointIndex;         // 当前路径点下标
     }
 
     private static readonly List<PatrolTask> _tasks = new List<PatrolTask>();
@@ -104,6 +107,51 @@ public static class PatrolTaskSystem
         Debug.Log($"[PatrolTaskSystem] 发布巡逻: 单位 {unit.npcId} 方向 {dir}");
     }
 
+    /// <summary>
+    /// 发布路径点巡逻（DZ-081 玩家入口）：单位按 waypoints 顺序**循环**移动（到末点回绕首点）。
+    /// 遇敌由威胁刺激天然压过任务刺激 → 转交战；敌灭后任务刺激续发 → 自动回巡逻（走既有行为链，不另造）。
+    /// waypoints 建议 2~4 个；起止同一单位幂等（替换既有巡逻路径）。AI 侧零接线——仅玩家入口消费本重载。
+    /// </summary>
+    public static void StartPatrol(NPCBrain brain, IReadOnlyList<Vector2> waypoints)
+    {
+        if (brain == null) return;
+        if (waypoints == null || waypoints.Count < 2)
+        {
+            Debug.LogWarning("[PatrolTaskSystem] StartPatrol(waypoints) 失败：路径点需 ≥2 个");
+            return;
+        }
+        EnsureRunner();
+
+        var unit = brain.GetComponent<UnitController>();
+        if (unit == null || !unit.IsAlive) return;
+
+        var path = new List<Vector2>(waypoints.Count);
+        for (int i = 0; i < waypoints.Count; i++) path.Add(waypoints[i]);
+
+        // 幂等：已有该单位的巡逻任务则复用（替换路径点，回到首点）
+        for (int i = 0; i < _tasks.Count; i++)
+        {
+            if (ReferenceEquals(_tasks[i].Unit, unit))
+            {
+                _tasks[i].Brain = brain;
+                _tasks[i].Waypoints = path;
+                _tasks[i].WaypointIndex = 0;
+                _tasks[i].NextWaypoint = path[0];
+                return;
+            }
+        }
+
+        _tasks.Add(new PatrolTask
+        {
+            Brain = brain,
+            Unit = unit,
+            Waypoints = path,
+            WaypointIndex = 0,
+            NextWaypoint = path[0],
+        });
+        Debug.Log($"[PatrolTaskSystem] 发布路径点巡逻: 单位 {unit.npcId} 路径点 {path.Count} 个（循环）");
+    }
+
     /// <summary>按位置发布巡逻（debug 入口）：就近取 <paramref name="pos"/> 附近的己方士兵。</summary>
     public static void StartPatrol(Vector2 pos)
     {
@@ -156,10 +204,22 @@ public static class PatrolTaskSystem
             VisionSystem.MarkExplored(pos, cs * 4f);
 
             float stepWorld = StepToWorld(t.StepCells);
-            // 到达当前目标点 → 沿方向续推下一探路点（持续推进探索）
-            if (Vector2.Distance(pos, t.NextWaypoint) < stepWorld * 0.5f)
+            if (t.Waypoints != null)
             {
-                t.NextWaypoint += t.Direction * stepWorld;
+                // 路径点循环模式（DZ-081）：到点切下一个，末点回绕首点
+                if (Vector2.Distance(pos, t.NextWaypoint) < cs * 1.5f)
+                {
+                    t.WaypointIndex = (t.WaypointIndex + 1) % t.Waypoints.Count;
+                    t.NextWaypoint = t.Waypoints[t.WaypointIndex];
+                }
+            }
+            else
+            {
+                // 方向模式（原有语义，行为零变化）：到达当前目标点 → 沿方向续推下一探路点
+                if (Vector2.Distance(pos, t.NextWaypoint) < stepWorld * 0.5f)
+                {
+                    t.NextWaypoint += t.Direction * stepWorld;
+                }
             }
 
             // 注入任务刺激（5 秒刷新；威胁刺激更高 → 自动遇敌转战斗）

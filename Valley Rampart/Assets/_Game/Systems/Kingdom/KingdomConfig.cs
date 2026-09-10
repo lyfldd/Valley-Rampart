@@ -85,6 +85,14 @@ public class KingdomConfig : ScriptableObject
     public float byproductCrystalRate = 0.05f;
     [Tooltip("矿洞副产产率（DZ-072a，D562）：火油 个/秒。慢 rate 保稀缺（副产无等级门槛，原 Lv3 门槛不适用）；终值 P0 调优批调")]
     public float byproductFireOilRate = 0.05f;
+    [Tooltip("矿场矿石伴生产率（D609·1d / T1.4）：矿石 个/秒。慢 rate 保稀缺（矿石复活链：mine 伴生 + 矿脉主产）；终值 P0 调优批调")]
+    public float byproductOreRate = 0.05f;
+    [Tooltip("矿场矿石伴生子仓容量（D609·1d / T1.4）：本地待运出缓冲上限")]
+    public int byproductOreCapacity = 20;
+
+    [Header("房屋容量（§13.14 / D614：房容 ×4=12/20/32，SO 化唯一真源）")]
+    [Tooltip("房屋各级人口容量，索引 0=Lv1（D614：12/20/32——保密度 12÷4格=3人/格=旧 3÷1格；递进比吻合 House.asset statScale 1.67/1.6）。读口=HappinessSystem.GetHouseCapacity")]
+    public int[] houseCapacityByLevel = { 12, 20, 32 };
 
     [Header("牧场养殖（§13.10，占位）")]
     public int ranchCapacity = 10;                // 牧场容量（动物总数上限）

@@ -80,7 +80,7 @@ public struct AbstractEconomyParams
     public float MineDaily;
     /// <summary>农田日产量（sim FarmDaily=6）。</summary>
     public float FarmDaily;
-    /// <summary>铁匠铺日产量（石→Metal 就地加工 D200；sim 无对应建筑，Unity 侧对齐量级）。</summary>
+    /// <summary>铁匠铺日产量（矿石→Metal 就地加工 D200/D609；sim 无对应建筑，Unity 侧对齐量级）。</summary>
     public float BlacksmithDaily;
     /// <summary>人头税（金/人口/日；sim HeadTaxGold=0.5）。</summary>
     public float HeadTaxGold;

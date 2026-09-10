@@ -73,7 +73,9 @@ public static class CampUpgrader
 
     /// <summary>吞并出口B 执行端（D306 + D469 修订，HH.51 批B）：营地中心格有主 →
     /// 同族营：成员转该国工人 + 移除 Camp 记录；异族营：不解散不转化，就地敌对野人营（清剿交现有战斗链或自行逃离，
-    /// 敌对行为由 D468 野性敌意承接——无国×异族无条件攻击）。触发端归 2_17 步骤12；本片判定恒假。</summary>
+    /// 敌对行为由 D468 野性敌意承接——无国×异族无条件攻击）。
+    /// 接线状态（DZ-083a 勘正）：本片为**真判定**（ResolveOwnerCampCell），由 CampUpgrader 日 tick 前置调用；
+    /// 原「触发端归 2_17 步骤12；本片判定恒假」注记已过时（2_17 步骤12 已联测销账）。</summary>
     static bool TryAnnex(VagrantCampSystem vcs, Camp camp)
     {
         int ownerKingdomId = ResolveOwnerCampCell(camp);   // 真判定（2_17 步骤12）

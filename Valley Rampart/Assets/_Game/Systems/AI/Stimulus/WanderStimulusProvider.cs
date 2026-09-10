@@ -178,6 +178,9 @@ public class WanderStimulusProvider
 
     // 资源点（废墟/采集点）= 原始资源节点标记（矿洞/树林/农田）；def.producer 为 struct 不可判空，
     // 不能靠 producer.kind 判断（其默认枚举值恰是 ProduceKind.Resource），故只用 isResourceNode 可靠标记。
+    // DZ-054/D617 注记：isResourceNode 实盘 4 消费面（本处 / BuildingPanel.canDemolish / Building.Demolish /
+    // BuildingFactory 产能分支）；三资产值不齐（ore_vein=1 一次性探明矿点 vs stone_pile/wood_pile=0 开局过渡堆积）
+    // =语义差异非缺陷，不统一为 1——本处消费即「成为 NPC 游荡锚点候选」（真行为），统一会造成批内行为漂移。
     static bool IsResourceDef(BuildingDef def) => def.isResourceNode;
 
     public void Reset()

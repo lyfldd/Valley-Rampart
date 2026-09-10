@@ -83,11 +83,17 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
                 * _building.LevelScale();
     }
 
-    /// <summary>按当前建筑等级刷新副产配置（升级后自动切换水晶→火油）。</summary>
+    /// <summary>按当前建筑等级刷新副产配置（升级后自动切换水晶→火油）。
+    /// ⚠️ DZ-054/T7.3（D617 裁决：死分支降级留注，未硬删，台账登记）：本判据「outputResource==Ore 判矿洞」
+    /// 在 **D562 后已不可达**——mine 已改 outputResource=Stone + 独立 MineByproductComponent（恒产水晶/火油），
+    /// 且 mine 为 isResourceNode=1 被 BuildingFactory 产能分支排除故不挂本组件。**未硬删缘于牵连面超预期**：
+    /// `BuildingSaveData.byproductType/byproductAmount` 存档字段 + `Building.SaveState/LoadState` L623-624/L678
+    /// + `BuildingFactory` L409 `RestoreByproduct` 调用点（硬删涉存档兼容面）——归建筑体系重构批统清。
+    /// **勿据此判据新增矿洞副产**（副产真源=MineByproductComponent）。</summary>
     private void UpdateByproductConfig()
     {
         if (_building == null || _building.def == null) { _hasByproduct = false; return; }
-        // 仅矿洞（主产矿）有副产
+        // 仅矿洞（主产矿）有副产 —— 死分支（D562 后不可达，见上注记）
         if (_building.def.outputResource != ResourceType.Ore) { _hasByproduct = false; return; }
 
         var config = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;

@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 823300563ec8b32478c911c8cd9fc779, type: 3}
   m_Name: BlacksmithDef
   m_EditorClassIdentifier: 
-  stoneToMetalRatio: 2
+  oreToMetalRatio: 2

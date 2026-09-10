@@ -18,7 +18,8 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
     {
         ResourceType.Stone, ResourceType.Wood, ResourceType.Food,
         ResourceType.SpecialFood, ResourceType.Meat, ResourceType.Metal,
-        ResourceType.Crystal, ResourceType.FireOil
+        ResourceType.Crystal, ResourceType.FireOil,
+        ResourceType.Ore   // D609/T1.8（D617）：矿石国库槽——Ore→Metal 链原料真源（原缺=Deposit(Ore) 静默丢，HH.164 实盘证伪）
     };
 
     /// <summary>全局访问（主城装配后可用；仅一处）。</summary>
@@ -69,6 +70,7 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
             Deposit(ResourceType.Metal, km.TreasuryMetal);
             Deposit(ResourceType.Crystal, km.TreasuryCrystal);   // DZ-072a：副产两桶读档恢复
             Deposit(ResourceType.FireOil, km.TreasuryFireOil);
+            Deposit(ResourceType.Ore, km.TreasuryOre);           // T1.8（D609/D617）：矿石桶读档恢复
         }
         if (RulerController.Instance != null) RulerController.Instance.EnsureTreasuryMigration();
     }
@@ -115,6 +117,8 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
             case ResourceType.Stone: pack.stone = amount; break;
             case ResourceType.Wood: pack.wood = amount; break;
             case ResourceType.Food: pack.food = amount; break;
+            // DZ-063① 注记（待数值批裁）：特食/肉溢出装箱只能按「粮」面值折算（ResourcePack 无特食/肉桶），
+            // 故溢出处存在品质折损（特食饱食+8 / 肉+20 → 折为粮+5）；折损口径待数值批裁，本批不扩 ResourcePack 语义。
             case ResourceType.SpecialFood: pack.food = amount; break;
             case ResourceType.Meat: pack.food = amount; break;
             case ResourceType.Metal: pack.metal = amount; break;

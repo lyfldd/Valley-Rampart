@@ -480,7 +480,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             // 2_12 步骤7 / D156/D159：废墟重建完成 → 满血回原级（不升级）。hp 已在此前置 0，恢复满。
             hp = maxHp;
             _pendingRepair = false;
-            EventBus.Publish(new BuildingRepairedEvent(this));
+            if (EventBus.HasSubscribers<BuildingRepairedEvent>())   // DZ-077：无订阅者不广播
+                EventBus.Publish(new BuildingRepairedEvent(this));
         }
         state = BuildingState.Active;
         UpdateVisual();
@@ -602,9 +603,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         var storage = GetComponent<StorageComponent>();
         var producer = GetComponent<ProducerComponent>();
-        // DZ-072a：矿洞副产组件双仓存量（无组件=零值元组）
+        // DZ-072a：矿洞副产组件双仓存量（无组件=零值元组）；T1.4（D609）：第三元=矿石
         var mineByprod = GetComponent<MineByproductComponent>();
-        var mineByprodSaved = mineByprod != null ? mineByprod.SaveByproductState() : (crystal: 0, fireOil: 0);
+        var mineByprodSaved = mineByprod != null ? mineByprod.SaveByproductState() : (crystal: 0, fireOil: 0, ore: 0);
         var data = new BuildingSaveData
         {
             defId = def != null ? def.id : "",
@@ -624,6 +625,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             // DZ-072a：矿洞副产组件双仓存量入档（旧档缺字段→默认 0 零 bump）
             byproductCrystalAmount = mineByprodSaved.crystal,
             byproductFireOilAmount = mineByprodSaved.fireOil,
+            // T1.4（D609/D617）：矿石伴生子仓存量入档（尾插，旧档缺→0 零 bump）
+            byproductOreAmount = mineByprodSaved.ore,
             grade = (int)grade,   // QQQ.3 B8-5 / LC-B2：grade 入档
             totalInvested = totalInvested,  // 2_12 步骤7 / D155：累计投入入档
             kingdomId = kingdomId   // 2_16 步骤8：王国归属入档（读档恢复 AI/玩家归属）
@@ -676,9 +679,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var producer = GetComponent<ProducerComponent>();
         if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
 
-        // DZ-072a：矿洞副产组件双仓存量恢复（旧档缺字段=0，零恢复=新产链起点）
+        // DZ-072a：矿洞副产组件双仓存量恢复（旧档缺字段=0，零恢复=新产链起点）；T1.4（D609）：第三参=矿石
         var mineByprod = GetComponent<MineByproductComponent>();
-        if (mineByprod != null) mineByprod.RestoreByproductState(data.byproductCrystalAmount, data.byproductFireOilAmount);
+        if (mineByprod != null) mineByprod.RestoreByproductState(data.byproductCrystalAmount, data.byproductFireOilAmount, data.byproductOreAmount);
 
         // 网格占用恢复（Spawning 已占用，此处兜底幂等；2_2：footprint w×h）
         if (GridSystem.Instance != null)
@@ -759,7 +762,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
 
         UpdateVisual();
-        EventBus.Publish(new BuildingRuinedEvent(this));
+        if (EventBus.HasSubscribers<BuildingRuinedEvent>())   // DZ-077：无订阅者不广播
+            EventBus.Publish(new BuildingRuinedEvent(this));
     }
 
     /// <summary>

@@ -650,6 +650,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             case ResourceType.Metal: pack.metal = amount; break;
             case ResourceType.Crystal: k.crystal += amount; return;   // DZ-072a：副产台账桶（HH.107 件2）
             case ResourceType.FireOil: k.fireOil += amount; return;   // DZ-072a：副产台账桶
+            case ResourceType.Ore: k.ore += amount; return;           // T1.8（D609/D617）：矿石 AI 独立桶（照副产先例，不进五经济 ResourcePack）
             default:
                 Debug.Log($"[TaskScheduler] 采集溢出丢弃：{type} 非国库五资源/副产桶（AI 台账无此桶），×{amount}");
                 return;

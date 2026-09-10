@@ -31,6 +31,15 @@ public class SelectionController : Singleton<SelectionController>
     /// <summary>是否正拖拽（框选候选）。</summary>
     public bool IsDragging { get; private set; }
 
+    // ===== 巡逻设定模式（DZ-081 / HH.133 件2，玩家侧入口；AI 侧零接线）=====
+    private bool _patrolSetup;
+    private readonly List<Vector2> _patrolWaypoints = new List<Vector2>();
+    private const int PatrolMaxPoints = 4;
+    private const int PatrolMinPoints = 2;
+
+    /// <summary>是否处于巡逻路径点设定模式（单位操作 UI 按钮读口）。</summary>
+    public bool IsPatrolSetupActive => _patrolSetup;
+
     public bool HasSelection => Selected.Count > 0 || SelectedBuilding != null;
 
     /// <summary>框选阈值（像素；SelectionConfig SO，so-data-driven）。</summary>
@@ -69,6 +78,8 @@ public class SelectionController : Singleton<SelectionController>
     private void OnLeftClickPressed(LeftClickPressedEvent evt)
     {
         if (IsInteractionBlocked()) return;
+        if (IsOverPatrolButton(evt.screenPos)) return;                   // 点 HUD 按钮不由世界层处理
+        if (_patrolSetup) { AddPatrolWaypoint(evt.screenPos); return; }   // 设定模式：左键=记路径点
         IsDragging = true;
         _dragStartScreen = evt.screenPos;
     }
@@ -77,6 +88,8 @@ public class SelectionController : Singleton<SelectionController>
     private void OnLeftClickReleased(LeftClickReleasedEvent evt)
     {
         if (IsInteractionBlocked()) return;
+        if (_patrolSetup) { IsDragging = false; return; }                 // 路径点在按下时已记录
+        if (IsOverPatrolButton(evt.screenPos)) { IsDragging = false; return; }
         if (!IsDragging) return;
         IsDragging = false;
         if (Vector2.Distance(_dragStartScreen, evt.screenPos) < DragThresholdPx)
@@ -88,8 +101,9 @@ public class SelectionController : Singleton<SelectionController>
     /// <summary>右键事件入口（批A InputManager 发布）：屏幕坐标 → 世界坐标 → 统一指令分派。</summary>
     private void OnRightClickPressed(RightClickPressedEvent evt)
     {
-        if (!IsInteractionBlocked())
-            IssueRightClick(ScreenToWorld(evt.screenPos));
+        if (IsInteractionBlocked()) return;
+        if (_patrolSetup) { ConfirmPatrolSetup(); return; }               // 设定模式：右键=确认巡逻
+        IssueRightClick(ScreenToWorld(evt.screenPos));
     }
 
     /// <summary>交互是否被面板/模式阻断（与左键自治轮询同守门）。</summary>
@@ -119,6 +133,94 @@ public class SelectionController : Singleton<SelectionController>
     {
         Selected.Clear();
         SelectedBuilding = building;
+    }
+
+    // ===== 巡逻设定模式（DZ-081 / HH.133 件2）=====
+
+    /// <summary>
+    /// 进入巡逻设定模式（单位操作 UI「巡逻」按钮调用）：左键依次点 2~4 个路径点，满 4 点自动确认；
+    /// 或再点「巡逻」按钮/右键提前确认（≥2 点才生效）。仅作用于已选中己方单位——AI 侧零接线。
+    /// </summary>
+    public bool BeginPatrolSetup()
+    {
+        if (Selected.Count == 0)
+        {
+            Debug.LogWarning("[Selection] 巡逻：未选中己方单位，忽略");
+            return false;
+        }
+        _patrolSetup = true;
+        _patrolWaypoints.Clear();
+        Debug.Log("[Selection] 进入巡逻设定模式：依次点击 2~4 个路径点（右键或再点「巡逻」确认）");
+        return true;
+    }
+
+    /// <summary>确认发布巡逻：≥2 点则对每个已选中单位（有 NPCBrain）发路径点循环巡逻令，否则取消。</summary>
+    public void ConfirmPatrolSetup()
+    {
+        if (!_patrolSetup) return;
+        _patrolSetup = false;
+        if (_patrolWaypoints.Count < PatrolMinPoints)
+        {
+            Debug.LogWarning($"[Selection] 巡逻取消：路径点不足 {PatrolMinPoints}（实际 {_patrolWaypoints.Count}）");
+            _patrolWaypoints.Clear();
+            return;
+        }
+
+        int issued = 0;
+        for (int i = 0; i < Selected.Count; i++)
+        {
+            var u = Selected[i];
+            if (u == null || !u.IsAlive) continue;
+            var brain = u.GetComponent<NPCBrain>();
+            if (brain == null) continue;
+            PatrolTaskSystem.StartPatrol(brain, _patrolWaypoints);
+            issued++;
+        }
+        Debug.Log($"[Selection] 巡逻令发布：{issued} 单位 × {_patrolWaypoints.Count} 路径点（遇敌自动转交战、敌清续巡）");
+        _patrolWaypoints.Clear();
+        ClearSelection();
+    }
+
+    /// <summary>取消巡逻设定模式（不发令）。</summary>
+    public void CancelPatrolSetup()
+    {
+        if (!_patrolSetup) return;
+        _patrolSetup = false;
+        _patrolWaypoints.Clear();
+        Debug.Log("[Selection] 巡逻设定已取消");
+    }
+
+    private void AddPatrolWaypoint(Vector2 screenPos)
+    {
+        if (_patrolWaypoints.Count >= PatrolMaxPoints)
+        {
+            Debug.LogWarning($"[Selection] 巡逻路径点已达上限 {PatrolMaxPoints}");
+            return;
+        }
+        Vector2 world = ScreenToWorld(screenPos);
+        _patrolWaypoints.Add(world);
+        Debug.Log($"[Selection] 巡逻路径点 {_patrolWaypoints.Count}/{PatrolMaxPoints}：({world.x:F1}, {world.y:F1})");
+        if (_patrolWaypoints.Count == PatrolMaxPoints)
+        {
+            Debug.Log("[Selection] 路径点满 4 → 自动确认巡逻");
+            ConfirmPatrolSetup();
+        }
+    }
+
+    /// <summary>指针是否落在 TopLeftHUD「巡逻」按钮上（面板↔屏幕像素归一；避免点按钮被当作路径点）。</summary>
+    private static bool IsOverPatrolButton(Vector2 screenPos)
+    {
+        var hud = TopLeftHUD.Active;
+        var btn = hud != null ? hud.PatrolButton : null;
+        if (btn == null) return false;
+        var panel = btn.panel;
+        if (panel == null) return false;
+        // 鼠标坐标为屏幕像素（底朝上），UI 为面板坐标（顶朝下）；ScaleWithScreenSize 下按面板实际尺寸归一
+        var panelRect = panel.visualTree.worldBound;
+        float sx = panelRect.width > 0f ? panelRect.width / Mathf.Max(1f, Screen.width) : 1f;
+        float sy = panelRect.height > 0f ? panelRect.height / Mathf.Max(1f, Screen.height) : 1f;
+        var panelPos = new Vector2(screenPos.x * sx, (Screen.height - screenPos.y) * sy);
+        return btn.worldBound.Contains(panelPos);
     }
 
     /// <summary>
@@ -151,7 +253,8 @@ public class SelectionController : Singleton<SelectionController>
             && (targetUnit.kingdomId == 0 || targetUnit.EffectiveOccupation == Occupation.Vagrant)
             && !alive.Contains(targetUnit))
         {
-            EventBus.Publish(new FollowCommand(alive, targetUnit));
+            if (EventBus.HasSubscribers<FollowCommand>())   // DZ-077：无订阅者不广播
+                EventBus.Publish(new FollowCommand(alive, targetUnit));
             // 保底：直移到目标当前位；持续跟随语义归 2_8 编队层（挂账）
             foreach (var u in alive)
             {
@@ -171,7 +274,8 @@ public class SelectionController : Singleton<SelectionController>
         // 2) DeployGuard（D116）：士兵 + 高价值点
         if (hasSoldier && nearResource)
         {
-            EventBus.Publish(new GuardDeployCommand(alive, world));
+            if (EventBus.HasSubscribers<GuardDeployCommand>())   // DZ-077：无订阅者不广播
+                EventBus.Publish(new GuardDeployCommand(alive, world));
             GuardDeploymentSystem.DeployGuard(world);   // 消费端已就绪=真部署（2_13 预埋护栏接口）
             Debug.Log($"[Selection] D116 守卫部署：{alive.Count} 单位 → {world}");
             ClearSelection();
@@ -181,7 +285,8 @@ public class SelectionController : Singleton<SelectionController>
         // 3) PrioritizeHarvest（D115）：全工人 + 资源点
         if (allWorkers && nearResource)
         {
-            EventBus.Publish(new PrioritizeHarvestCommand(alive, world));
+            if (EventBus.HasSubscribers<PrioritizeHarvestCommand>())   // DZ-077：无订阅者不广播
+                EventBus.Publish(new PrioritizeHarvestCommand(alive, world));
             Debug.Log($"[Selection] D115 优先采集：{alive.Count} 工人 → {world}（2_8 TaskScheduler 消费挂账）");
             ClearSelection();
             return;
@@ -193,7 +298,9 @@ public class SelectionController : Singleton<SelectionController>
             var pf = u.GetComponent<PathFollower>();
             if (pf != null) pf.SetDestination(world);
         }
-        EventBus.Publish(new UnitCommandEvent(alive, world));
+        // DZ-077：无订阅者不广播（发事件，2_8 TaskScheduler 接管后以事件为准；直移保底在上）
+        if (EventBus.HasSubscribers<UnitCommandEvent>())
+            EventBus.Publish(new UnitCommandEvent(alive, world));
         Debug.Log($"[Selection] 右键移动指令：{alive.Count} 单位 → {world}");
         ClearSelection();
     }

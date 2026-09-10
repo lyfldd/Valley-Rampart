@@ -26,7 +26,7 @@ MonoBehaviour:
     stoneAmmo: 0
     fireballAmmo: 0
     magicAmmo: 0
-  footprint: {x: 2, y: 1}
+  footprint: {x: 2, y: 2}
   allowedTerrain: 
   heightLayer: 0
   canPlaceOnWater: 0

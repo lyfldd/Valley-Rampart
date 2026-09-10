@@ -178,10 +178,8 @@ public class SatietySystem : Singleton<SatietySystem>
             SimMode mode = modes.TryGetValue(kid, out var m) ? m : SimMode.Fine;
             if (mode == SimMode.Abstract) continue;   // Abstract 王国实体冻结，跳过逐位结
 
-            // 国库源：玩家(id=0)=null → RulerController.Food；AI Fine → KingdomState.resources.Food（D453）
-            KingdomState k = kid == 0 || KingdomRegistry.Instance == null
-                ? null : KingdomRegistry.Instance.Get(kid);
-            SettleUnit(unit, cfg, k);
+            // 国库源（B1-3 主体判定）：kid=0 → RulerController.Food；kid>0 → KingdomState.resources.Food（D453）
+            SettleUnit(unit, cfg, kid);
         }
 
         // 2_17 步骤11 批2 + 步骤14 批B：每王国均饱食写入分桶——玩家桶=玩家实时均值；
@@ -202,19 +200,21 @@ public class SatietySystem : Singleton<SatietySystem>
         Debug.Log($"[SatietySystem] 每日饱食结算完成（>>> 见各单位日志）");
     }
 
-    /// <summary>单个单位每日饱食结算。kingdom=null → 玩家国库源（RulerController）；非空 → AI 王国国库源（D460）。</summary>
-    private void SettleUnit(UnitController unit, KingdomConfig cfg, KingdomState kingdom)
+    /// <summary>单个单位每日饱食结算。kingdomId=0 → 玩家国库源（RulerController）；&gt;0 → AI 王国国库源（D460）。
+    /// B1-3（2_24 批1，D605）：原以 `kingdom == null` 作玩家哨兵=隐性 0 特权；改显式 kingdomId 主体判定。</summary>
+    private void SettleUnit(UnitController unit, KingdomConfig cfg, int kingdomId)
     {
+        var kingdom = kingdomId > 0 && KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
         int dailyFoodCost = cfg.GetDailyFoodByOccupation(unit.EffectiveOccupation);
 
         // 1. 进食（数据层）：饱食不满阈值 且 国库粮足 → 消耗粮恢复饱食
-        bool hasFood = kingdom == null
+        bool hasFood = kingdomId <= 0
             ? (RulerController.Instance != null && RulerController.Instance.GetResource(ResourceType.Food) >= dailyFoodCost)
-            : kingdom.resources.food >= dailyFoodCost;
+            : (kingdom != null && kingdom.resources.food >= dailyFoodCost);
         bool fed = false;
         if (unit.Satiety < cfg.feedSatietyThreshold && hasFood)
         {
-            if (kingdom == null)
+            if (kingdomId <= 0)
                 RulerController.Instance.ModifyResource(ResourceType.Food, false, dailyFoodCost);
             else
                 kingdom.resources.food -= dailyFoodCost;   // AI 扣本国国库（D453）
@@ -237,7 +237,8 @@ public class SatietySystem : Singleton<SatietySystem>
         {
             int heal = cfg.satietyRegenPerDay;
             // 医院存在加速受伤恢复（3.5 P2，§13.3 医院：恢复 + 幸福）
-            if (HappinessSystem.HasBuilding("Hospital"))
+            // DZ-079：改 per-kingdom 口径——原全场景 HasBuilding 会让玩家医院给 AI 单位加回血（DZ-046 残留）。
+            if (HappinessSystem.HasBuilding("Hospital", unit.kingdomId))
                 heal += cfg.hospitalRecoveryBonus;
             if (heal > 0)
                 unit.Heal(heal);

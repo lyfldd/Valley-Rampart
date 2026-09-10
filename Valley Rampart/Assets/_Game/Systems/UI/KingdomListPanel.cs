@@ -7,9 +7,9 @@ using UnityEngine.UIElements;
 ///         2_10 D452（名单点击→临时显色+高亮+聚焦）。
 /// 数据源：KingdomRegistry.GetAll()（2_16 步骤1 现役，只读）。
 /// 行为：行点击 → FocusOnKingdom 聚焦 + OpenKingdomIntel 推送情报面板。
-/// 让渡登记（HH.46）：①染色高亮（D452 HighlightKingdom 半边）——TerritoryOverlay（2_10 步骤13）未实施，
-/// 接口位预留（2_13实施 L137）；②"播报点击展开"入口——ToastManager 点击回调扩展未建，
-/// 现行入口=TopLeftHUD「列国」按钮；③AI 抽象国（无实体）聚焦跳过。
+/// 让渡登记（HH.46）：①染色高亮（D452 HighlightKingdom 半边）——已缝合（HH.133 件3 / DZ-082a：
+/// 行点击→TerritoryOverlay.HighlightKingdom，本类只消费端口不改端口）；②"播报点击展开"入口——ToastManager
+/// 点击回调扩展未建，现行入口=TopLeftHUD「列国」按钮；③AI 抽象国（无实体）聚焦跳过。
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class KingdomListPanel : MonoBehaviour, IUIPanel
@@ -131,8 +131,21 @@ public class KingdomListPanel : MonoBehaviour, IUIPanel
 
     private void OnRowClicked(int kingdomId)
     {
+        HighlightKingdom(kingdomId);
         FocusOnKingdom(kingdomId);
         OpenKingdomIntel(kingdomId);
+    }
+
+    /// <summary>染色高亮联动（HH.133 件3 / DZ-082a 缝合）：消费 TerritoryOverlay D452 高亮端口（本类不改端口）。</summary>
+    public void HighlightKingdom(int kingdomId)
+    {
+        var overlay = TerritoryOverlay.Instance;
+        if (overlay == null)
+        {
+            Debug.LogWarning("[KingdomListPanel] TerritoryOverlay 不在场，染色高亮跳过");
+            return;
+        }
+        overlay.HighlightKingdom(kingdomId);
     }
 
     private void OnKingdomFounded(KingdomFoundedEvent evt)

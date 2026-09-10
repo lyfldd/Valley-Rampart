@@ -29,4 +29,6 @@ public class KingdomSaveData
     // 尾插+旧档缺字段 → JsonUtility 默认 0 向前兼容，零 bump（M10）。
     public int treasuryCrystal;
     public int treasuryFireOil;
+    // T1.8（D609/D617）：矿石国库槽入档（TreasureVault.Managed 再扩面配套；尾插零 bump，旧档缺→0）
+    public int treasuryOre;
 }
