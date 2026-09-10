@@ -34,6 +34,7 @@ public class KingdomListPanel : MonoBehaviour, IUIPanel
     {
         _visible = false;
         SetVisible(false);
+        HighlightKingdom(-1);   // HH.159 件9（D619 派生）：面板关闭=取消选中 → 清上一国染色高亮（防滞留）
     }
 
     /// <summary>重建名单行（打开时/立国事件时调用）。</summary>

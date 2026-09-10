@@ -4,6 +4,7 @@
     --color-bg-panel: rgb(35, 35, 50);
     --color-text-primary: rgb(230, 230, 230);
     --color-text-muted: rgb(150, 150, 160);
+    --color-text-secondary: rgb(205, 205, 212);   /* HH.159 件9/D619 派生：原变量缺失致 .race-desc/.form-hint 只能吃 fallback，此处补正解 */
     --color-accent: rgb(220, 170, 80);
     --color-accent-hover: rgb(240, 200, 120);
     --color-button: rgb(60, 60, 80);

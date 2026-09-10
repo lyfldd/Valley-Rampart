@@ -55,6 +55,7 @@ public static class WorldLifecycle
 
         // ⑥ 注册表清空 + 世界清空（清 ActiveMap，解锁二次建局）
         if (UnitRegistry.Instance != null) UnitRegistry.Instance.Clear();
+        PatrolTaskSystem.Clear();   // HH.159 件9（D619 派生）：巡逻任务静态表跨局清空——原零调用方，_tasks 会残留已销毁单位的陈旧引用
         if (WorldManager.Instance != null) WorldManager.Instance.ResetState();
 
         // ⑦ 会话级状态（槽位/自动存档计数；不清存档文件）

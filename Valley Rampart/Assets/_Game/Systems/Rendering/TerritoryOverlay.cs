@@ -554,6 +554,14 @@ public class TerritoryOverlay : Singleton<TerritoryOverlay>
             return;
         }
 
+        // HH.159 件9（D619 派生）：切换目标国时先复原**上一国**的 mid 浓度——
+        // 原实现只重绘新国（下方 foreach），旧国高亮会滞留到下一次全量重绘，形成"两国同时高亮"假象。
+        if (_highlightKid >= 0 && _highlightKid != kingdomId)
+        {
+            int prev = _highlightKid;
+            foreach (var kv in _painted)
+                if (kv.Value == prev) SetMidColor(kv.Key, kv.Value, -1f, 0f);
+        }
         _highlightKid = kingdomId;
         EnsureTilemap();
         if (territoryTilemap != null && !territoryTilemap.gameObject.activeSelf && _visible)
