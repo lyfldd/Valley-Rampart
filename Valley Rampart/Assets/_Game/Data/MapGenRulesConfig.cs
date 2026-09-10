@@ -39,8 +39,10 @@ public class MapGenRulesConfig : ScriptableObject
     public int featureScanRadiusCells = 8;
     [Tooltip("ForestDense 命中阈值：候选点所在大区块(16×16)林木(Tree)格占比 ≥ 该值")]
     [Range(0f, 1f)] public float forestDensityThreshold = 0.10f;
-    [Tooltip("MineralRich 命中阈值：候选点所在大区块矿(Mine)格占比 ≥ 该值")]
-    [Range(0f, 1f)] public float mineralDensityThreshold = 0.05f;
+    [Tooltip("MineralRich 命中阈值：候选点所在大区块(16×16)矿(Mine)格占比 ≥ 该值。" +
+             "D621③ 重标定（件12 矿山簇化后）：原 0.05（≥13 矿格/区块）在簇化分布下命中率降约 18%（196.5→160.8/256）；" +
+             "0.039（≥10 矿格/区块）实测 205.8/256，与改前 196.5 最近（+4.7%，优于 0.040 的 -5.6%）。")]
+    [Range(0f, 1f)] public float mineralDensityThreshold = 0.039f;
     [Tooltip("BarrenRich 命中阈值：候选点所在大区块开阔地(Plain)格占比 ≥ 该值")]
     [Range(0f, 1f)] public float barrenDensityThreshold = 0.60f;
 
