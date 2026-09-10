@@ -25,6 +25,9 @@ public class CoreBootstrap : MonoBehaviour
         var __ = InputManager.Instance;
         var ___ = SaveManager.Instance;
         var ____ = WorldManager.Instance;
+        // E1 存档面（2_22 P0 批E）：王国脑运行时状态存档模块须先于一切 Save/Load 存在
+        // （读档路径王国尚未诞生、KingdomBrainRegistry 未创建，靠此处兜底注册 ISaveable）
+        var _____ = KingdomBrainSave.Instance;
 
         // 只在 GameStateManager 是首次创建（CurrentState 还是默认的 Booting 且从未切换过）时
         // 才设 Booting。跨场景切换时 GameStateManager 是 DontDestroyOnLoad 的 Singleton，

@@ -172,6 +172,44 @@ public class KingdomBrain
         InterruptFocus(day);
     }
 
+    // ===== E1 存档面（2_22 P0 批E）：兵种表现统计=损毁流水入档/恢复 =====
+
+    /// <summary>收集本国损毁流水（_lossLog 追加序，含未并入的 pending；确定性=存读同序）。
+    /// 供 KingdomBrainSave.SaveState 入档（TTL 窗口连续性=读档后统计恢复）。</summary>
+    public void CollectLosses(System.Collections.Generic.List<KingdomBrainSaveLossEntry> into)
+    {
+        if (into == null) return;
+        for (int i = 0; i < _lossLog.Count; i++)
+        {
+            var l = _lossLog[i];
+            into.Add(new KingdomBrainSaveLossEntry { day = l.Day, isBuilding = l.IsBuilding, occupationId = l.OccupationId });
+        }
+        for (int i = 0; i < _pendingLosses.Count; i++)
+        {
+            var l = _pendingLosses[i];
+            into.Add(new KingdomBrainSaveLossEntry { day = l.Day, isBuilding = l.IsBuilding, occupationId = l.OccupationId });
+        }
+    }
+
+    /// <summary>恢复本国损毁流水（KingdomBrainSave.ApplyPendingRestore 调）：清空现流水后按存序回填
+    /// ——读档后日 tick 窗口聚合产出与存档时刻一致（兵种表现统计恢复）。</summary>
+    public void RestoreSavedState(MilitaryPosture posture, int postureLastChangeDay,
+        System.Collections.Generic.List<KingdomBrainSaveLossEntry> losses)
+    {
+        Posture.Restore(posture, postureLastChangeDay);   // 姿态档位+滞回基准（E1 件②）
+        _lossLog.Clear();
+        _pendingLosses.Clear();
+        if (losses != null)
+        {
+            for (int i = 0; i < losses.Count; i++)
+            {
+                var e = losses[i];
+                _lossLog.Add(new LossEntry { Day = e.day, IsBuilding = e.isBuilding, OccupationId = e.occupationId });
+            }
+        }
+        _dirtyDay = -1;   // 恢复后不残留事件脏标记（存读无事件在途）
+    }
+
     /// <summary>本国存活编队计数（实时查询；军覆判定面）。</summary>
     private int CountOwnFormations()
     {

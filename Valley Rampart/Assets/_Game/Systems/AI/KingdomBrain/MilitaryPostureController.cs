@@ -58,7 +58,21 @@ public class MilitaryPostureController
     /// <summary>上次档位变更日（hysteresisDays 天数滞回基准）。</summary>
     private int _lastChangeDay = int.MinValue / 2;
 
+    /// <summary>上次档位变更日（E1 存档面读口；读档恢复滞回基准）。</summary>
+    public int LastChangeDay => _lastChangeDay;
+
     public MilitaryPostureController(int kingdomId) { _kingdomId = kingdomId; }
+
+    /// <summary>
+    /// 读档恢复（E1）：档位+滞回基准直接落（含 PostureHub 静态槽同步）。
+    /// 语义=回到存档时刻的档位态；防抖窗从 _lastChangeDay 续算（存档后首 tick 不误切档）。
+    /// </summary>
+    public void Restore(MilitaryPosture posture, int lastChangeDay)
+    {
+        Current = posture;
+        _lastChangeDay = lastChangeDay;
+        PostureHub.Put(_kingdomId, Current);
+    }
 
     /// <summary>
     /// 每日档位评估（KingdomBrain.Tick 子步③后；消费当日快照+国库军力）。

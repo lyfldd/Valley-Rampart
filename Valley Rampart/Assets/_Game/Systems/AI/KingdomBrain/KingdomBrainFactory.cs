@@ -17,8 +17,14 @@ public static class KingdomBrainFactory
     {
         if (kingdomId <= 0) return null;   // 玩家无脑（D338，短路①）
 
+        // E1 存档面（2_22 P0 批E）：存档模块先于脑诞生注册（Save/Load 前就位）
+        var _ = KingdomBrainSave.Instance;
+
         var brain = new KingdomBrain(kingdomId);
         brain.Subscribe();   // 订阅被攻击事件（D340；Unsubscribe 由 Unregister 成对）
+
+        // E1：王国脑创建钩子——读档 pending 有该王国即落实例态（姿态滞回基准+损毁流水）
+        KingdomBrainSave.ApplyPendingRestore(brain);
 
         var registry = KingdomBrainRegistry.Instance;
         if (registry != null)

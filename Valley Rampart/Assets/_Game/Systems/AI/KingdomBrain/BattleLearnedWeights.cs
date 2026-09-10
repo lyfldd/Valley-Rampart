@@ -85,6 +85,32 @@ public static class BattleLearnedWeights
         return deltas;
     }
 
+    /// <summary>快照某国全部权重（E1 存档面；无记录返回 false=中性 1.0 不用入档）。</summary>
+    public static bool TrySnapshot(int kingdomId, out System.Collections.Generic.Dictionary<int, float> map)
+    {
+        if (_w.TryGetValue(kingdomId, out map))
+        {
+            // 拷贝快照，防调用方改写枢纽（存档面只读纪律）
+            var copy = new System.Collections.Generic.Dictionary<int, float>(map);
+            map = copy;
+            return true;
+        }
+        map = null;
+        return false;
+    }
+
+    /// <summary>写回某国某兵种权重（E1 读档恢复；按安全栏 clamp 防越界=与 UpdateFromLosses 同口径）。</summary>
+    public static void SetWeight(int kingdomId, int occupationId, float w)
+    {
+        if (!_w.TryGetValue(kingdomId, out var map))
+        {
+            map = new System.Collections.Generic.Dictionary<int, float>();
+            _w[kingdomId] = map;
+        }
+        w = w < WeightFloor ? WeightFloor : (w > WeightCap ? WeightCap : w);
+        map[occupationId] = w;
+    }
+
     /// <summary>王国灭亡/退订清槽（对齐 SituationHub.Remove 先例）。</summary>
     public static void Remove(int kingdomId) => _w.Remove(kingdomId);
 
