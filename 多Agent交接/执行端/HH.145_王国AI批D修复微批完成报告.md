@@ -94,3 +94,20 @@ FindIdleSoldiers 全库调用方=仅 RecruitStandard（L193）/RecruitReinforcem
 ## 九、批E 前置状态
 
 两件修复兑现+回归收口=批E 解锁前置达成；批E（存档+sim 镜像+冒烟收口+E3 factor_registry+B4 15_账本注记）待策划端验收本批后签发。
+
+## 十、策划裁决区（D600，2026-09-10 已回写）
+
+**验收成立销号**（HH.144/145，commit 067b9a5+2559c35）：实盘复核全过=①构成 diff-tree 7 文件 585+/12- 吻合+**AI.Core 零命中**②件1 FindIdleSoldiers ownKid=ResolveKingdomId() 锚+faction 过滤保留双重收紧+ownKid<0 fallback faction-only 兼容（代码直读 L230/239）③件2 f1Denom=max(Chebyshev(castleSub,threatAnchor),maxR×div) 环带外一次计算（L89-91）+castleSub/threatAnchor 均 cell×div→sub 同源（L77/83）+威胁≈0 置 0+F2/F3 分母不动④六调用方=FindIdleSoldiers 全库仅 RecruitStandard/RecruitReinforcement 两入口无绕过+**玩家 debug 空守军 fallback 可达核对义务达成**（AIDebugUIManager L760 OnGarrisonClicked→InitGarrison→RecruitStandard，空编队无将军未 override→ResolveKingdomId()=-1→faction-only 保留路径，未擅改）⑤探针 r5=12/12 实读（P1a 守军 kid1=1 成员=6 异籍=0/P1c L-21 双断言守军=1 空壳=0/P2a denom=180=max(城锚距180,带径32)/P2b 带外局 F1=0.022>0=旧口径恒 0 病灶复现验证/P2d 双跑逐字段+分解自洽 0.8972）⑥回归 2_20B 六轮 6/6+Smoke_5 ALL PASS+三容器零改动声明免跑合规⑦阶段机零触碰（diff 无 PhaseMachine）。
+
+**P7c 固化口径复核=认可公式级校验**（不要求补硬值）：Score==w1·F1+w2·F2+w3·F3 分解重算容差 1e-3+双跑逐字段 ToString("R") 一致=比硬编码地形绝对值更稳（同 seed 局内布局随探针前序段资源注入/SetWarriors 变化，绝对值易碎）；且 P2a 已给 denom=180 具体数值锚+P2b F1=0.022 数值留痕，公式级+数值锚双保险。
+
+**⚠️「河谷失守」事故裁决**：
+- **定性=双层成立，以容器基建缺口为主**——①执行端探针纪律缺陷（P1d 转职副作用未纳入收尾复原考量，守卫 ON 掩盖撤守卫裸奔）为直接诱因；②**容器基建缺「撤守卫前世界复原终检」硬性防线**（EnterTestRun/ExitTestRun 只有守卫开关，无收尾复原终检模板项）=根因。本批三件套（快照复原+P1f 安全阀+Finish 终检）把基建缺口补在探针实例层=**正面样本嘉奖**。
+- **红线复盘核查=否**：独立新模式，不触发 L-21 红线复盘（L-21=目标驱动循环计数面可达性，机理不同）；**属于 L-17 家族语义扩展**（L-17=入口纪律裸跑判负，本条=入口正确但副作用跨守卫边界泄漏），L-17 已二次实证 D585，本条同族不同维不升级二次红线，作为 **L-17 家族新变体增补入册**（不新开 L-22 防库膨胀）。
+- **存量关联列报=裁另立测试基建微批**（HH.150）：SmokeApi.EnterGame 裸局存量 9 处实锤（2_20B/2_20C/2_20_Smoke_Race/HH73/HH76/HH78/HH80_Scout/HH81/HH89），L-17 入库时「存量容器补改」只覆盖 HH.107 未全量扫描=策划端签发侧完整性缺口（防范动作补记「存量容器全量 grep 清单化」）；范围=9 处迁正门 EnterTestRun+ExitTestRun 收尾，或至少 ExitTestRun 后强制退 Play；排期=批E 之后（测试基建收口微批）。执行端不擅动触碰面外容器=守界嘉奖。
+
+**批E 解锁生效**（前置 HH.144 微批完成达成）：**批E 任务书=HH.148 签发**（E1 存档/E2 sim 镜像+15_账本 S-1/S-2+B8 机器语义注记/E3 factor_registry S-3/E4 Smoke_2_22P0 冒烟九项+同 seed 双跑+既有冒烟零退化）；**E4 行旧口径勘正**=2_22 §五 E4「真实进局容器挂 SmokeApi.EnterGame」按 L-17 二次实证（D585）升级为正门 EnterTestRun（test-harness-first 铁律1）；L-21 硬引用（E4 涉评分/目标驱动面需计数面翻转+失败终止断言）；L-17 变体引用（E4 冒烟涉玩家/清场副作用需快照复原+Finish 终检）。
+
+**教训核查**：L-17 家族新变体入册（守卫覆盖期≠副作用无害期）+L-17 防范动作补记（存量容器全量扫描）+L-21 维持（E4 硬引用）。验收三问=河谷失守根因=守卫覆盖期副作用泄漏认知（执行端直接诱因）+基建收尾终检缺位（策划端基建缺口）→非单次失误、非已有条；批E 任务书 L-21 列硬引用兑现 D598 红线复盘承诺。
+
+详见 0.6 §一百二十九。
