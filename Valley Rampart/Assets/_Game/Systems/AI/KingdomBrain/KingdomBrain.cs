@@ -334,7 +334,10 @@ public class KingdomBrain
             KingdomId = kingdomId,
             Day = day,
             OwnWarriorCount = k.warriorCount,
-            MachineCount = 0,   // B8 机器链落地后接线（D570 军力现状口径含机器；落地前恒 0）
+            // A2/D570 军力现状口径含机器（E4 冒烟 P9f 实锤接线缺口：B8 落地后恒 0 未接线——
+            // SiegeProductionSystem.GetPlacedMachineCountByKingdom 单源计数）
+            MachineCount = SiegeProductionSystem.Instance != null
+                ? SiegeProductionSystem.Instance.GetPlacedMachineCountByKingdom(kingdomId) : 0,
             Threats = new List<ThreatEntry>(),
             Losses = new List<LossEntry>(_lossLog),
             PeaceDays = _lastContactDay < 0 ? -1 : day - _lastContactDay,
