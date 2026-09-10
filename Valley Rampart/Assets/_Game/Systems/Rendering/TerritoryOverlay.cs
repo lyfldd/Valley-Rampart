@@ -559,6 +559,7 @@ public class TerritoryOverlay : Singleton<TerritoryOverlay>
         if (_highlightKid >= 0 && _highlightKid != kingdomId)
         {
             int prev = _highlightKid;
+            _highlightKid = -1;   // 先摘高亮态（与取消分支同序）：否则 ComputeTargetAlpha 仍按 kid==_highlightKid 判高亮浓度，复原无效
             foreach (var kv in _painted)
                 if (kv.Value == prev) SetMidColor(kv.Key, kv.Value, -1f, 0f);
         }
