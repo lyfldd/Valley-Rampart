@@ -77,8 +77,12 @@ public enum NeedKind : byte
     FormationGap,    // 缺编队：本国编队数 < needA 目标 → 缺口（读快照 FormationCount；成军链批B）
     UnitTypeGap,     // 缺兵种：军事训练域可训兵种多样性缺口（读快照 OwnedCombatOccupations；可训域=D570 口径 共通+本族）
     // ===== 2_22 P0 批B / B8 战争机器（D558→D570）=====
-    MachineDemand    // 造机器需求（㉕）：战争态势驱动=军事期(stage==3)+邻接威胁非空（快照 Threats）→ 需求分；
+    MachineDemand,   // 造机器需求（㉕）：战争态势驱动=军事期(stage==3)+邻接威胁非空（快照 Threats）→ 需求分；
                      // 守城需求=警戒/动员档（批C 接入位，P0 占位=军事期+威胁即驱动）；族门禁/上限在执行链 D558
+    // ===== HH.194/D656 建军链修复批（尾插，L-28 禁改中间位）=====
+    MilitaryBuildingGap // ⑰建军事建筑（id23/24）真实缺口（D656 案A）：该建筑不在场 ⇒ 三军事缺口 max
+                        //（GeneralGap/FormationGap/UnitTypeGap，各已内嵌 InternalDrive，max 后即含）；
+                        // 在场 ⇒ 0。忠实设计稿 2_22 L106「选型=种族+快照缺口」（原 ExclusiveGap 占位 0.5 弃用）
 }
 
 /// <summary>效用评分器（纯函数层，2_17 步骤9）。单入口 ScoreTop。</summary>
@@ -254,49 +258,21 @@ public static class UtilityScorer
             case NeedKind.ExclusiveGap:  // ⑱~㉑ 本国已有族专属建筑 → 0；无 → 占位底分 0.5（族门禁在 Feasible，M6 复用）
                 return KingdomRace.HasExclusiveBuilding(k.id, d.buildingId) ? 0f : 0.5f;
             // ===== 2_22 P0 批B / B2：训练将军（读 SituationHub 快照；快照缺席回退 0 分防 NRE）=====
-            case NeedKind.GeneralGap:    // 缺将军：GeneralCount < generalLimit → 缺口；叠加内源势能项（D590 增补节②：
-                                         // 缺口=内源基线、势能=连续叠加——无缺口时势能仍给行动压力=无袭扰环境不恒死滞）
-            {
-                if (!SituationHub.TryGet(k.id, out var sitG) || sitG == null) return 0f;
-                var mcfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
-                int limit = mcfg != null && mcfg.generalLimit > 0 ? mcfg.generalLimit : 2;   // 对齐 CanTrainGeneral 兜底
-                int haveG = sitG.GeneralCount;
-                float gapG = haveG >= limit ? 0f : Mathf.Clamp01((limit - haveG) / (float)limit);
-                return gapG + InternalDrive(k);
-            }
+            // HH.194/D656：三军事缺口体抽 helper（与 ⑰ MilitaryBuildingGap 同源，禁另抄漂移，L-31）
+            case NeedKind.GeneralGap:    // 缺将军：GeneralCount < generalLimit → 缺口＋内源势能（D590）
+                return GeneralGapScore(k);
             case NeedKind.FormationGap:  // 缺编队：FormationCount < needA 目标 → 缺口+内源势能叠加
-            {
-                if (!SituationHub.TryGet(k.id, out var sitF) || sitF == null) return 0f;
-                int wantF = (int)Mathf.Max(1, d.needA);
-                float gapF = sitF.FormationCount >= wantF ? 0f : Mathf.Clamp01((wantF - sitF.FormationCount) / (float)wantF);
-                return gapF + InternalDrive(k);
-            }
+                return FormationGapScore(k, (int)Mathf.Max(1, d.needA));
             case NeedKind.UnitTypeGap:   // 缺兵种：可训域战斗兵种（共通+本族，D570 口径）多样性缺口+内源势能叠加
+                return UnitTypeGapScore(k);
+            case NeedKind.MilitaryBuildingGap: // ⑰建军事建筑（D656 案A＝设计稿 2_22 L106「选型=种族+快照缺口」落实）：
+                                               // 该建筑已在本国在场 ⇒ 0（不重复建）；否则 = 三军事缺口 max
+                                               //（各 helper 已内嵌 InternalDrive，max 后即含）——有缺口且缺建筑 ⇒ ⑰ 高分
+                                               // 上位建前置；无缺口 ⇒ 0 不乱建；与 ⑦ Feasible 建筑前置同源咬合（L-31 双向）
             {
-                if (!SituationHub.TryGet(k.id, out var sitU) || sitU == null) return 0f;
-                // 可训域=TrainingDef（raceId==-1 共通 || ==本国族）且 IsCombat(toOccupation)，去重计数
-                var trainable = new HashSet<int>();
-                var tcfg = Resources.Load<TrainingConfig>("Config/TrainingConfig");
-                int myRace = KingdomRace.GetKingdomRace(k.id);
-                if (tcfg != null && tcfg.trainings != null)
-                {
-                    for (int i = 0; i < tcfg.trainings.Length; i++)
-                    {
-                        var t = tcfg.trainings[i];
-                        if (t.raceId != -1 && t.raceId != myRace) continue;   // D419 族门禁预过滤
-                        if (!MilitaryProfessions.IsCombat(t.toOccupation)) continue;
-                        trainable.Add((int)t.toOccupation);
-                    }
-                }
-                int totalT = trainable.Count;
-                if (totalT <= 0) return 0f;
-                // 拥有侧=快照 OwnedCombatOccupations 与可训域交集
-                int ownedT = 0;
-                if (sitU.OwnedCombatOccupations != null)
-                    for (int i = 0; i < sitU.OwnedCombatOccupations.Count; i++)
-                        if (trainable.Contains(sitU.OwnedCombatOccupations[i])) ownedT++;
-                float gapU = ownedT >= totalT ? 0f : Mathf.Clamp01((totalT - ownedT) / (float)totalT);
-                return gapU + InternalDrive(k);
+                if (CountActiveDef(k.id, d.buildingId) >= 1) return 0f;
+                return Mathf.Max(GeneralGapScore(k),
+                       Mathf.Max(FormationGapScore(k, (int)Mathf.Max(1, d.needA)), UnitTypeGapScore(k)));
             }
             case NeedKind.MachineDemand: // ㉕ 造机器（B8）：战争态势驱动=军事期+守城/攻城需求域。
                                           // 批C 姿态层细化（批B 占位口径兑现）：需求域=邻接威胁非空（攻城向）
@@ -312,6 +288,58 @@ public static class UtilityScorer
             }
             default: return 0f;
         }
+    }
+
+    // ===== 三军事缺口单值（HH.194/D656 同源抽取：GeneralGap/FormationGap/UnitTypeGap 三 case 与
+    //      ⑰ MilitaryBuildingGap 共用本组 helper——禁另抄逻辑漂移，L-31 同源纪律）=====
+
+    /// <summary>缺将军：GeneralCount &lt; generalLimit → 缺口＋内源势能（D590：缺口=内源基线、势能=连续叠加，
+    /// 无缺口时势能仍给行动压力=无袭扰环境不恒死滞）。快照缺席回退 0 防 NRE。</summary>
+    private static float GeneralGapScore(KingdomState k)
+    {
+        if (!SituationHub.TryGet(k.id, out var sitG) || sitG == null) return 0f;
+        var mcfg = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
+        int limit = mcfg != null && mcfg.generalLimit > 0 ? mcfg.generalLimit : 2;   // 对齐 CanTrainGeneral 兜底
+        int haveG = sitG.GeneralCount;
+        float gapG = haveG >= limit ? 0f : Mathf.Clamp01((limit - haveG) / (float)limit);
+        return gapG + InternalDrive(k);
+    }
+
+    /// <summary>缺编队：FormationCount &lt; wantF 目标 → 缺口＋内源势能叠加。快照缺席回退 0 防 NRE。</summary>
+    private static float FormationGapScore(KingdomState k, int wantF)
+    {
+        if (!SituationHub.TryGet(k.id, out var sitF) || sitF == null) return 0f;
+        float gapF = sitF.FormationCount >= wantF ? 0f : Mathf.Clamp01((wantF - sitF.FormationCount) / (float)wantF);
+        return gapF + InternalDrive(k);
+    }
+
+    /// <summary>缺兵种：可训域战斗兵种（共通+本族，D570 口径）多样性缺口＋内源势能叠加。快照缺席回退 0 防 NRE。</summary>
+    private static float UnitTypeGapScore(KingdomState k)
+    {
+        if (!SituationHub.TryGet(k.id, out var sitU) || sitU == null) return 0f;
+        // 可训域=TrainingDef（raceId==-1 共通 || ==本国族）且 IsCombat(toOccupation)，去重计数
+        var trainable = new HashSet<int>();
+        var tcfg = Resources.Load<TrainingConfig>("Config/TrainingConfig");
+        int myRace = KingdomRace.GetKingdomRace(k.id);
+        if (tcfg != null && tcfg.trainings != null)
+        {
+            for (int i = 0; i < tcfg.trainings.Length; i++)
+            {
+                var t = tcfg.trainings[i];
+                if (t.raceId != -1 && t.raceId != myRace) continue;   // D419 族门禁预过滤
+                if (!MilitaryProfessions.IsCombat(t.toOccupation)) continue;
+                trainable.Add((int)t.toOccupation);
+            }
+        }
+        int totalT = trainable.Count;
+        if (totalT <= 0) return 0f;
+        // 拥有侧=快照 OwnedCombatOccupations 与可训域交集
+        int ownedT = 0;
+        if (sitU.OwnedCombatOccupations != null)
+            for (int i = 0; i < sitU.OwnedCombatOccupations.Count; i++)
+                if (trainable.Contains(sitU.OwnedCombatOccupations[i])) ownedT++;
+        float gapU = ownedT >= totalT ? 0f : Mathf.Clamp01((totalT - ownedT) / (float)totalT);
+        return gapU + InternalDrive(k);
     }
 
     /// <summary>
@@ -412,11 +440,16 @@ public static class UtilityScorer
             case UtilityAction.RecruitWarrior:
             {
                 // ⑦ 招战士：金粮 ≥ 直转成本 && 有工人可转款 && 未达兵力目标
+                // HH.194/D656 辅修（硬条款1）：镜像建筑前置——与 ExecuteRecruitArmy 的候选集**同源 helper**
+                //（KingdomBrain.HasRecruitCandidate=CollectRecruitCandidates().Count>0，禁手搓近似）：
+                // 无可训军事建筑（或在场建筑 minBuildingLevel 不足）⇒ 不可行，让位 ⑰ MilitaryBuildingGap
+                // ——消除"评分可执行→执行空转"（HH.193 根因同型，L-31 双向咬合）。
                 var bcfg = KingdomBrain.LoadConfig();
                 return k.GetResourceValue(ResourceType.Gold) >= Mathf.Max(1, bcfg.recruitWarriorCostGold)
                        && k.GetResourceValue(ResourceType.Food) >= Mathf.Max(1, bcfg.recruitWarriorCostFood)
                        && k.workerCount > 0
-                       && k.warriorCount < MilitaryTarget(k, bcfg);
+                       && k.warriorCount < MilitaryTarget(k, bcfg)
+                       && KingdomBrain.HasRecruitCandidate(k.id);
             }
             case UtilityAction.Tech:
             {

@@ -24,9 +24,29 @@ using UnityEngine;
 public static class P1Observer
 {
     private const string LogDir = "Logs/P1";
-    private const string MainSlot = "p1_run7";     // P1 七考段（HH.185/D647 裁 B′；六考原值 p1_run6b 可由 git 复原——p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段 原封勿覆盖=证据链）
+    // HH.194/D656 硬条款2：MainSlot 参数化（修槽覆盖事故 HH.193 列报①）——**禁回落硬编码**：
+    // 未显式 SetMainSlot ⇒ 检查点 fail-fast 跳过写档（宁缺检查点，不覆盖错误槽）；
+    // 槽位由各跑局容器 Run() 显式传入（容器级配置，D647 裁 B′ 允许）。
+    // 七考原值 p1_run7 可由 git 复原（p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段 原封勿覆盖=证据链）。
+    private static string MainSlot;
     private const int CheckpointIntervalDays = 5;   // 每 5 游戏日一检查点（HH.71 §三）
     private const int ExtinctStreakDays = 3;        // 灭绝监测连续零人口天数
+
+    /// <summary>显式设置观测主槽（D656 硬条款2：空/空白串拒绝；须由跑局容器在进局前调用）。</summary>
+    public static void SetMainSlot(string slot)
+    {
+        if (string.IsNullOrWhiteSpace(slot))
+        {
+            Debug.LogError("[P1观察] ✗ SetMainSlot 收到空槽——拒绝设置（D656 硬条款：禁回落硬编码）。");
+            return;
+        }
+        if (MainSlot != slot)
+            Debug.LogWarning("[P1观察] 主槽设置: " + (MainSlot ?? "(未设)") + " → " + slot);
+        MainSlot = slot;
+    }
+
+    /// <summary>主槽是否已显式设置（容器 fail-fast 断言用）。</summary>
+    public static bool HasMainSlot => !string.IsNullOrEmpty(MainSlot);
 
     private static StreamWriter _logWriter;
     private static StreamWriter _csvWriter;
@@ -251,6 +271,12 @@ public static class P1Observer
         if (day <= 0) return;
         if (day % CheckpointIntervalDays != 0) return;
         if (day == _lastCheckpointDay) return;   // 同日幂等
+        // D656 硬条款2 fail-fast：主槽未显式设置 ⇒ 报错跳过写档（禁回落硬编码——宁缺检查点，不覆盖错误槽）
+        if (string.IsNullOrEmpty(MainSlot))
+        {
+            Debug.LogError("[P1观察] ✗ 检查点失败: MainSlot 未设置（D656 硬条款禁回落硬编码）——请由跑局容器 SetMainSlot(slot)。跳过写档（D" + day + "）");
+            return;
+        }
         _lastCheckpointDay = day;
         var sm = SaveManager.Instance;
         if (sm == null) { Debug.LogError("[P1观察] 检查点失败: SaveManager 未就绪（D" + day + "）"); return; }

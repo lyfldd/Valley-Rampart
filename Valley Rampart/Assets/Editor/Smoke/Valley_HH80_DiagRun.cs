@@ -16,8 +16,9 @@ using UnityEditor;
 public static class Valley_HH80_DiagRun
 {
     private const int SEED = 48903;              // 短程诊断 seed（HH.192 口径三问③；非历史/冒烟/七考）
-    private const string SLOT = "p1_diag";       // 诊断专用槽（不覆盖 p1_run6/6b/7）
-    private const int DIAG_DAYS = 30;            // 短程窗口（≈12 现实分钟 @15x）
+    private const string SLOT = "p1_diag2";      // 诊断专用槽（D656：回归探针新槽；禁覆盖 p1_run6/6b/7/p1_diag）
+    private const int DIAG_DAYS = 60;            // 短程窗口（HH.194 run1 实测 30 日不足：兵营 D28 才竣工⇒⑦可行窗口仅 2 日且金尽；
+                                                 // 60 日≈24 现实分钟 @15x。容器级观测配置，非游戏机制参数——D563③ 不适用）
 
     [MenuItem("Valley/验证/HH80_诊断跑")]
     public static void Run()
@@ -34,6 +35,8 @@ public static class Valley_HH80_DiagRun
             Debug.LogError("[Diag跑] ✗ 建军链诊断探针未启动——请先点「Valley/诊断/启动建军链诊断」。已中止。");
             return;
         }
+        // D656 硬条款2：显式传槽（观测器 MainSlot 已参数化，禁回落硬编码）——进局前设置
+        P1Observer.SetMainSlot(SLOT);
         new GameObject("HH80_DiagRunHost").AddComponent<DiagRunHost>().Host(RunCoroutine());
     }
 

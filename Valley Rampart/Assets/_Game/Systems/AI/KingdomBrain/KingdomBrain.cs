@@ -851,6 +851,8 @@ public class KingdomBrain
     }
 
     /// <summary>⑦招战士真实通道（D348 兵力目标）：直转本国一个活工人为战士（直转模式，成本 SO）。</summary>
+    /// 【墓碑·HH.194/D656】死码保留：批B(<see cref="ExecuteRecruitArmy"/>)已由双环选招+建筑前置取代本工人直转路径
+    /// （2_22 §0.2.1 工人直转断点已修，勿复接线）；全库零调用点；全量删除已挂账（D656 遗留，不单立批）。
     private void ExecuteRecruitWarrior(KingdomState kingdom, KingdomBrainConfig cfg)
     {
         int gold = Mathf.Max(1, cfg.recruitWarriorCostGold);
@@ -879,10 +881,43 @@ public class KingdomBrain
     }
 
     /// <summary>
+    /// ⑦招兵候选集（HH.194/D656 硬条款1 同源 helper）：可训域 ∩ 建筑在场 ∩ 军事职业 ∩ 非 General（确定性升序）。
+    /// 评分侧（UtilityScorer.Feasible RecruitWarrior）与执行侧（<see cref="ExecuteRecruitArmy"/>）**共用本 helper**
+    /// ⇒ "评分可执行 ⇔ 执行候选非空"单源——禁两侧各自手搓近似漂移（HH.193 根因同型，L-31）。
+    /// 候选域（D570 细化）：TrainingDef raceId∈{-1,本族} 且 IsCombat 且 非 General（⑯专属域）；
+    /// 建筑前置联动：兵种训练建筑不在场/等级不足 → 该兵种不入候选（由 ⑰ MilitaryBuildingGap 缺口评分导向先建——双向咬合）。
+    /// </summary>
+    internal static List<(TrainingDef def, Building b, float score)> CollectRecruitCandidates(int kingdomId)
+    {
+        var result = new List<(TrainingDef def, Building b, float score)>();
+        var tcfg = Resources.Load<TrainingConfig>("Config/TrainingConfig");
+        int myRace = KingdomRace.GetKingdomRace(kingdomId);
+        if (tcfg == null || tcfg.trainings == null) return result;
+
+        var seen = new HashSet<Occupation>();
+        for (int i = 0; i < tcfg.trainings.Length; i++)
+        {
+            var t = tcfg.trainings[i];
+            if (t.raceId != -1 && t.raceId != myRace) continue;                    // D419/D570 族门禁预过滤
+            if (t.toOccupation == Occupation.General) continue;                    // ⑯专属域
+            if (!MilitaryProfessions.IsCombat(t.toOccupation)) continue;           // 军事域
+            if (!seen.Add(t.toOccupation)) continue;                               // 同兵种多条目去重（首个=优先）
+            var b = FindKingdomBuilding(kingdomId, t.buildingId);                  // 建筑前置联动
+            if (b == null) continue;                                               // 缺建筑→本轮不可选招（防空转）
+            if (t.minBuildingLevel > 0 && b.level < t.minBuildingLevel) continue;  // 建筑等级未到（⑰升级导向）
+            result.Add((t, b, 0f));
+        }
+        return result;
+    }
+
+    /// <summary>⑦ 评分侧建筑前置（D656 硬条款1）：与执行侧候选集同源（=CollectRecruitCandidates 非空）。</summary>
+    internal static bool HasRecruitCandidate(int kingdomId)
+        => CollectRecruitCandidates(kingdomId).Count > 0;
+
+    /// <summary>
     /// ⑦招兵扩多兵种（2_22 P0 批B / B6，§3.4 双环内环消费端）：按双环权重选招，不再是 Warrior 直转。
     /// 招募分 = 出厂倾向(B4 RaceDef.unitPriors) × 性格调制(好战轴) × 局内环学习权重(B5) × 经济可负担 ÷ 多样性惩罚。
-    /// 候选域（D570 细化）：TrainingDef raceId∈{-1,本族} 且 IsCombat 且 非 General（⑯专属域）；
-    /// 建筑前置联动：兵种训练建筑不在场 → 本轮不可选招（由 ⑰建军事建筑缺口评分导向先建——两行动自然咬合）。
+    /// 候选域见 <see cref="CollectRecruitCandidates"/>（D656 起评分/执行同源共用）。
     /// 执行=TryTrainFromKingdomPool（B1 系统级入口，AI 与玩家同链：国库扣费/族门禁/建筑等级）；
     /// 兵源池=Resident（训练链 fromOccupation 源）；池空时 Worker 先转 Resident（AI 编制内调配，如实列报）。
     /// 确定性：候选按 Occupation int 升序遍历，同分取小 id。
@@ -895,26 +930,11 @@ public class KingdomBrain
             return;   // 已达兵力目标（D348 门控兜底）
         }
 
-        // 候选集：可训域 ∩ 建筑在场 ∩ 军事职业 ∩ 非 General（确定性升序）
-        var tcfg = Resources.Load<TrainingConfig>("Config/TrainingConfig");
         var raceDef = KingdomRace.GetKingdomRaceDef(kingdomId);
-        int myRace = KingdomRace.GetKingdomRace(kingdomId);
-        if (tcfg == null || tcfg.trainings == null || raceDef == null) { Bump(kingdomId, train: true, ok: false); return; }
+        if (raceDef == null) { Bump(kingdomId, train: true, ok: false); return; }
 
-        var candidates = new List<(TrainingDef def, Building b, float score)>();
-        var seen = new HashSet<Occupation>();
-        for (int i = 0; i < tcfg.trainings.Length; i++)
-        {
-            var t = tcfg.trainings[i];
-            if (t.raceId != -1 && t.raceId != myRace) continue;                    // D419/D570 族门禁预过滤
-            if (t.toOccupation == Occupation.General) continue;                    // ⑯专属域
-            if (!MilitaryProfessions.IsCombat(t.toOccupation)) continue;           // 军事域
-            if (!seen.Add(t.toOccupation)) continue;                               // 同兵种多条目去重（首个=优先）
-            var b = FindKingdomBuilding(kingdomId, t.buildingId);                  // 建筑前置联动
-            if (b == null) continue;                                               // 缺建筑→本轮不可选招（防空转）
-            if (t.minBuildingLevel > 0 && b.level < t.minBuildingLevel) continue;  // 建筑等级未到（⑰升级导向）
-            candidates.Add((t, b, 0f));
-        }
+        // 候选集（D656 同源 helper：评分侧 Feasible 同用，禁本地手搓）
+        var candidates = CollectRecruitCandidates(kingdomId);
         if (candidates.Count == 0)
         {
             Bump(kingdomId, train: true, ok: false);

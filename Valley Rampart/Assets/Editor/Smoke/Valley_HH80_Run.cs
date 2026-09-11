@@ -35,6 +35,8 @@ public static class Valley_HH80_Run
             Debug.LogError("[HH80跑] ✗ 观测器未启动——请先点「Valley/观测/P1_启动观测」再起跑（D647 异议2 fail-fast）。已中止。");
             return;
         }
+        // D656 硬条款2：显式传槽（观测器 MainSlot 已参数化，禁回落硬编码）——进局前设置
+        P1Observer.SetMainSlot(SLOT);
         _military.Clear(); _done = false;
         Application.logMessageReceived += WatchMilitary;
         new GameObject("HH80_RunRunner").AddComponent<RunHost>().Host(RunCoroutine());
