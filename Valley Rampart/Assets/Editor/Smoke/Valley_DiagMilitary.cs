@@ -46,6 +46,9 @@ public static class DiagMilitary
     [MenuItem("Valley/诊断/立即取一次建军链三面")]
     public static void DumpNow() => Dump("手动");
 
+    /// <summary>HH.204/D658 A′：带 tag 的**同步**快照入口（供阶段注入夹具在本帧内取证用）。</summary>
+    public static void DumpNow(string tag) => Dump(tag);
+
     private static void OnDaySettled(DaySettledEvent evt)
     {
         try { Dump("D" + (Application.isPlaying && TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : -1)); }
@@ -105,6 +108,10 @@ public static class DiagMilitary
         DumpAction(tag, k, acfg, UtilityAction.BuildBarracks, "⑰a建兵营", st);
         DumpAction(tag, k, acfg, UtilityAction.BuildTrainingCamp, "⑰b建训练营", st);
         DumpAction(tag, k, acfg, UtilityAction.TrainGeneral, "⑯训练将军", st);
+        // HH.204/D658（A′ 授权）：三军事向专属营逐条明细（minStage=3 军事期；族门禁在 Feasible）
+        DumpAction(tag, k, acfg, UtilityAction.BuildWarAcademy, "⑰c建战争学院", st);
+        DumpAction(tag, k, acfg, UtilityAction.BuildWarCamp, "⑰d建兽人战营", st);
+        DumpAction(tag, k, acfg, UtilityAction.BuildArcheryRange, "⑰e建精灵射箭场", st);
 
         // 评分淘汰构成普查（HH.115 件E#6 既有公开口）
         UtilityScorer.ScoreCensus census;

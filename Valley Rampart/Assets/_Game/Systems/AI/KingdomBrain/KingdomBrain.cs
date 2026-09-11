@@ -850,36 +850,6 @@ public class KingdomBrain
             Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招工人落地：流浪汉#{vagrant.npcId} → Worker（粮-{cost}）");
     }
 
-    /// <summary>⑦招战士真实通道（D348 兵力目标）：直转本国一个活工人为战士（直转模式，成本 SO）。</summary>
-    /// 【墓碑·HH.194/D656】死码保留：批B(<see cref="ExecuteRecruitArmy"/>)已由双环选招+建筑前置取代本工人直转路径
-    /// （2_22 §0.2.1 工人直转断点已修，勿复接线）；全库零调用点；全量删除已挂账（D656 遗留，不单立批）。
-    private void ExecuteRecruitWarrior(KingdomState kingdom, KingdomBrainConfig cfg)
-    {
-        int gold = Mathf.Max(1, cfg.recruitWarriorCostGold);
-        int food = Mathf.Max(1, cfg.recruitWarriorCostFood);
-        if (kingdom.GetResourceValue(ResourceType.Gold) < gold || kingdom.GetResourceValue(ResourceType.Food) < food)
-        {
-            Bump(kingdomId, train: true, ok: false);
-            return;
-        }
-        var w = FindOwnWorker();
-        if (w == null)
-        {
-            Bump(kingdomId, train: true, ok: false);
-            return;   // 无本国工人可转战士（人口不足），明日再试
-        }
-        if (kingdom.warriorCount >= UtilityScorer.MilitaryTarget(kingdom, cfg))
-        {
-            Bump(kingdomId, train: true, ok: false);
-            return;   // 已达兵力目标：无需再招（评分门控兜底）
-        }
-
-        kingdom.Spend(new ResourcePack { gold = gold, food = food });
-        w.SetOccupation(Occupation.Warrior);
-        Bump(kingdomId, train: true, ok: true);
-        Debug.Log($"[KingdomBrain] k{kingdomId} ⑦招战士落地：工人#{w.npcId} → Warrior（金-{gold} 粮-{food}，兵力 {kingdom.warriorCount}）");
-    }
-
     /// <summary>
     /// ⑦招兵候选集（HH.194/D656 硬条款1 同源 helper）：可训域 ∩ 建筑在场 ∩ 军事职业 ∩ 非 General（确定性升序）。
     /// 评分侧（UtilityScorer.Feasible RecruitWarrior）与执行侧（<see cref="ExecuteRecruitArmy"/>）**共用本 helper**
