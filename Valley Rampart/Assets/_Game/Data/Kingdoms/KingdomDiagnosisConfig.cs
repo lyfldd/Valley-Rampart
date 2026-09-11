@@ -41,8 +41,28 @@ public class KingdomDiagnosisConfig : ScriptableObject
     public int grainConsumptionPerPop = 1;
 
     [Header("严重度排序（批C 消费；本批只落字段，2_23 §2.2 多资源同时断裂按断供严重度排序）")]
-    [Tooltip("断供严重度序（EcoResource int：0金 1石 2木 3粮 4铁）——出厂=粮→金→石→木 前置（铁尾随，D531① 原文未列铁）")]
+    [Tooltip("断供严重度序（EcoResource int：0金 1石 2木 3粮 4铁）——出厂=粮→金→石→木 前置（铁尾随，D531① 原文未列铁；D639：铁不参与触发=预留不生效）")]
     public int[] shortageSeverityOrder = new int[] { 3, 0, 1, 2, 4 };
+
+    [Header("⑤三通道分诊·通道A 产能反查表（R-C1/R-C2，D639 列报8）")]
+    [Tooltip("per 资源→可建产能 def（缺什么产能建什么，不再恒 quarry）。缺省（未配置）的资源=该资源不触发通道A 建产能（落到通道B/C）。出厂只配 Food→farm/Stone→quarry（既有可建实体产能；Wood/Gold/Metal 无实体产能建筑=缺省）。def 在场性由 R-C4 交付 grep 断言（D639）。")]
+    public TriageCapacityDef[] triageCapacityDefs = new TriageCapacityDef[]
+    {
+        new TriageCapacityDef { resource = EcoResource.Food,  buildingId = "farm" },
+        new TriageCapacityDef { resource = EcoResource.Stone, buildingId = "quarry" },
+    };
+
+    /// <summary>按资源查通道A 可建产能 def（未配置 → null=不参与）。确定性：数组顺序固定。</summary>
+    public string FindTriageDef(EcoResource r)
+    {
+        if (triageCapacityDefs == null) return null;
+        for (int i = 0; i < triageCapacityDefs.Length; i++)
+        {
+            var e = triageCapacityDefs[i];
+            if (e != null && e.resource == r && !string.IsNullOrEmpty(e.buildingId)) return e.buildingId;
+        }
+        return null;
+    }
 
     /// <summary>载入诊断配置（缺 asset 时回退默认占位实例；对齐 SituationConfig.Load 先例）。</summary>
     public static KingdomDiagnosisConfig Load()
@@ -50,4 +70,15 @@ public class KingdomDiagnosisConfig : ScriptableObject
         var cfg = Resources.Load<KingdomDiagnosisConfig>("Config/KingdomDiagnosisConfig");
         return cfg != null ? cfg : CreateInstance<KingdomDiagnosisConfig>();
     }
+}
+
+/// <summary>⑤三通道·通道A 产能反查条目（R-C1/R-C2，D639 列报8：缺什么建什么，SO 可配禁硬编码）。</summary>
+[System.Serializable]
+public class TriageCapacityDef
+{
+    [Tooltip("资源（EcoResource：0金 1石 2木 3粮 4铁）")]
+    public EcoResource resource;
+
+    [Tooltip("可建产能建筑 def id（对齐 BuildingDef.id；须在场=交付 grep 断言）")]
+    public string buildingId;
 }

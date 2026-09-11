@@ -149,6 +149,29 @@ public static class UtilityScorer
         float food = k.GetResourceValue(ResourceType.Food);
         float grainDays = pop > 0 ? food / (float)Mathf.Max(1, pop * PerPopGrain) : 0f;
 
+        // ===== 2_23 资源 P0 批C / R-C3（D639：断链缺口注入；§3.2 不设第五底线级）=====
+        // MustHave 缺失（批A 日 tick 比对进快照）→ 对应建造行动 NeedScore 拉满（need=1.0）——
+        // 经 ScoreTop argmax 被焦点自然选中（非强制，不动 ExecuteFocus 底线序列）。
+        // 消费点：NeedScore→ScoreTop（R-C4 探针断言对应行动 need==1.0 且常设底线 grep 无第五级）。
+        if (k != null && SituationHub.TryGet(k.id, out var missSnap) && missSnap != null
+            && missSnap.Economy != null && missSnap.Economy.MissingMustHave != null
+            && missSnap.Economy.MissingMustHave.Count > 0)
+        {
+            var missing = missSnap.Economy.MissingMustHave;
+            for (int i = 0; i < missing.Count; i++)
+            {
+                var m = missing[i];
+                bool hit =
+                    // kind0=Farm：产能类（③ 建产能 种类化后反查可能出 farm；④ 强化采集=farm）
+                    (m.RequiredKind == 0 && (d.need == NeedKind.CapacityGap || d.buildingId == "farm")) ||
+                    // kind1=Warehouse：② 建仓
+                    (m.RequiredKind == 1 && d.need == NeedKind.WarehouseGap) ||
+                    // kind2=Fortification：⑨ 修工事城墙
+                    (m.RequiredKind == 2 && d.need == NeedKind.WallGap);
+                if (hit) return 1f;
+            }
+        }
+
         switch (d.need)
         {
             case NeedKind.HouseGap:      // HH.86 件3a②：本国房容 vs 本国人口（旧=人口/needA 纯代理与房容无关→有房仍建=连轴帮凶之一）；房容≥人口 → 0 不缺
@@ -161,9 +184,17 @@ public static class UtilityScorer
             case NeedKind.WarehouseGap:  // 储量越接近容量基线越需加仓
                 float maxRes = Mathf.Max(Mathf.Max(food, k.resources.gold), Mathf.Max(k.resources.stone, Mathf.Max(k.resources.wood, 0f)));
                 return Mathf.Clamp01(maxRes / Mathf.Max(1f, d.needA));
-            case NeedKind.CapacityGap:   // 产能建筑不足
-                int cap = CountActiveBuildings(k.id);
+            case NeedKind.CapacityGap:   // 产能建筑不足（2_23 资源 P0 批C/R-C2：③评分输入改读快照产能缺口=A4 承接）
+            {
+                // 数据源优先快照（批A EconomyBlock.CapacityBuildingCount=Σ 产能建筑数）；
+                // 无快照回退既有 CountActiveBuildings 口径（读档首日/玩家无快照=零行为差异）。
+                int cap;
+                if (SituationHub.TryGet(k.id, out var cSnap) && cSnap != null && cSnap.Economy != null)
+                    cap = cSnap.Economy.CapacityBuildingCount;
+                else
+                    cap = CountActiveBuildings(k.id);
                 return Mathf.Clamp01((d.needA - cap) / Mathf.Max(1f, d.needA));
+            }
             case NeedKind.HarvestGap:    // 粮裕日不足则强化采集（needB=粮裕日阈值）
                 return Mathf.Clamp01(1f - grainDays / Mathf.Max(1f, d.needB));
             case NeedKind.GrainGap:      // 粮储日低于底线（needA=底线日）

@@ -551,9 +551,7 @@ public class KingdomBrain
                 break;
             case UtilityAction.BuildHouse:
             case UtilityAction.BuildWarehouse:
-            case UtilityAction.BuildCapacity:
             case UtilityAction.BoostHarvest:
-            case UtilityAction.Grain:
             case UtilityAction.BuildWall:
             // HH.86 件3b/3c 六新建造行动：路由到同一 ExecuteBuildFocus（SO buildingId 通用通道）
             case UtilityAction.BuildWell:
@@ -563,6 +561,16 @@ public class KingdomBrain
             case UtilityAction.BuildLeyForge:
             case UtilityAction.BuildArcheryRange:
                 ExecuteBuildFocus(kingdom, cfg);
+                break;
+            // 2_23 资源 P0 批C（R-C2，D639 列报8）：③建产能种类诊断化——不再恒 quarry，
+            // 执行时按快照产能缺口动态解最缺产能 def（反查表 SO 驱动；无缺口/表缺省 → null=沿用 SO buildingId）
+            case UtilityAction.BuildCapacity:
+                ExecuteBuildFocus(kingdom, cfg, ResolveTriageDefId(kingdom.id));
+                break;
+            // 2_23 资源 P0 批C（R-C1，D639 全列报）：⑤屯粮改根因三通道分诊
+            //   （触发→A→B→C 固定序→断供严重度 粮→金→石→木；单通道响应不叠加；铁不参与触发）
+            case UtilityAction.Grain:
+                ExecuteGrainTriage(kingdom, cfg);
                 break;
             case UtilityAction.RecruitWarrior:
                 ExecuteRecruitArmy(kingdom, cfg);
@@ -1156,8 +1164,14 @@ public class KingdomBrain
         return best;
     }
 
-    /// <summary>建造类焦点真实通道：SO buildingId → 主城螺旋选址 → BuildController.TryBuild（门面校验/扣费一体）。</summary>
-    private void ExecuteBuildFocus(KingdomState kingdom, KingdomBrainConfig cfg)
+    // ===== 建造类焦点真实通道 =====
+
+    /// <summary>
+    /// 建造焦点执行（SO buildingId 通用通道）。2_23 资源 P0 批C（R-C1/R-C2）：
+    /// overrideBuildingId 非空时**覆盖 def0.buildingId**（⑤三通道分诊/BuildCapacity 种类化
+    /// 传实参；null=沿用 SO）——选址/成本/可行性全走被覆盖目标 def（ExecuteBuildFocus 后续同链）。
+    /// </summary>
+    private void ExecuteBuildFocus(KingdomState kingdom, KingdomBrainConfig cfg, string overrideBuildingId = null)
     {
         var def0 = UtilityActionConfig.LoadConfig().Find((UtilityAction)kingdom.focus);
         if (def0 == null || string.IsNullOrEmpty(def0.Value.buildingId))
@@ -1165,11 +1179,12 @@ public class KingdomBrain
             Bump(kingdomId, train: false, ok: false);
             return;
         }
-        var bdef = BuildingFactory.FindDefById(def0.Value.buildingId);
+        string bid = overrideBuildingId ?? def0.Value.buildingId;   // R-C1/R-C2：动态目标 def
+        var bdef = BuildingFactory.FindDefById(bid);
         if (bdef == null)
         {
             Bump(kingdomId, train: false, ok: false);
-            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 行动 {(UtilityAction)kingdom.focus} 的 buildingId={def0.Value.buildingId} 未找到 def");
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 行动 {(UtilityAction)kingdom.focus} 的 buildingId={bid} 未找到 def");
             return;
         }
 
@@ -1195,6 +1210,146 @@ public class KingdomBrain
         else
             // HH.88 件3：TryBuild=false 静默点观测口（门面校验/扣费未过；细分原因看 [BuildController] 拒绝日志）
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点 TryBuild=false：{def0.Value.buildingId} @ ({spotCell.x},{spotCell.y})（门面校验/扣费未过，细分原因见 [BuildController] 拒绝日志）");
+    }
+
+    // ===== ⑤三通道分诊 + ③种类解析（2_23 资源 P0 批C / R-C1·R-C2，D639 全列报最终口径）=====
+
+    /// <summary>
+    /// ⑤屯粮根因三通道分诊（R-C1）：触发（粮=底线日告警既有；金/石/木=净流量为负+水位<基线 单日判定）
+    /// → 断供严重度 粮→金→石→木 取首发（铁不参与 D639 列报3）→ A→B→C 固定序、命中即止、单通道不叠加。
+    /// 通道A：无对应产能建筑（Production[r].Count==0 且反查表有 def）→ 建对应产能（D639 列报4）；
+    /// 通道B：实际日产出/人口低（Flow.In(r)/pop &lt; 阈值，D639 列报5 改裁=非 RateSum 潜在产出率）
+    ///   → 派工偏向（批B）即时生效，⑤不建（Bump ok 不空转）；
+    /// 通道C：仓储占用溢出 → 粮建 Granary／非粮建 Warehouse（D639 列报6）；
+    /// 全不命中 → 正常态不空转（Bump ok）。所有信号来自批A EconomyBlock（无跨日状态=无持久态红线）。
+    /// </summary>
+    private void ExecuteGrainTriage(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        if (!SituationHub.TryGet(kingdomId, out var sit) || sit == null || sit.Economy == null)
+        {
+            // 诊断块未就绪（读档后首日）：当日跳过，明日重建后重试（非失败，避免异常刷屏）
+            Bump(kingdomId, train: false, ok: true);
+            return;
+        }
+        var eco = sit.Economy;
+        var dcfg = KingdomDiagnosisConfig.Load();
+
+        int r = ResolveTriageResource(eco, dcfg);
+        if (r < 0) { Bump(kingdomId, train: false, ok: true); return; }   // 无触发=正常态
+        var er = (EcoResource)r;
+
+        // A→B→C 固定序决策（纯函数 DecideTriage；R-C4 探针同输入同输出断言=确定性）
+        switch (DecideTriage(eco, dcfg, er))
+        {
+            case TriageDecision.BuildCapacity:   // 通道A 建对应产能（D639 列报4）
+                ExecuteBuildFocus(kingdom, cfg, dcfg.FindTriageDef(er));
+                break;
+            case TriageDecision.BuildGranary:    // 通道C 粮→Granary（D639 列报6）
+                ExecuteBuildFocus(kingdom, cfg, "Granary");
+                break;
+            case TriageDecision.BuildWarehouse:  // 通道C 非粮→Warehouse（D639 列报6）
+                ExecuteBuildFocus(kingdom, cfg, "Warehouse");
+                break;
+            case TriageDecision.NoOp:            // 通道B（偏向批B 生效）/全不命中=正常态，⑤ 不建不空转
+            default:
+                Bump(kingdomId, train: false, ok: true);
+                break;
+        }
+    }
+
+    /// <summary>⑤三通道 A→B→C 固定序决策（D639 全列报；纯函数=R-C4 确定性断言锚）。
+    /// A 通道：无对应产能建筑且反查表有 def → 建对应产能（D639 列报4）；
+    /// B 通道：实际日产出/人口低（Flow.In(r)/pop&lt;阈值，D639 列报5）→ 偏向批B 生效，no-op；
+    /// C 通道：仓储占用溢出 → 粮 Granary／非粮 Warehouse（D639 列报6）；
+    /// 全不命中 → no-op（正常态不空转）。命中即止、单通道响应不叠加（D639 列报7）。</summary>
+    internal static TriageDecision DecideTriage(EconomyBlock eco, KingdomDiagnosisConfig dcfg, EcoResource er)
+    {
+        // A：无对应产能建筑且反查表有 def → 建对应产能
+        if (CountProductionOf(eco, er) == 0)
+        {
+            string capDef = dcfg != null ? dcfg.FindTriageDef(er) : null;
+            if (!string.IsNullOrEmpty(capDef)) return TriageDecision.BuildCapacity;
+        }
+        // B：实际日产出/人口低 → 派工偏向（批B）即时生效，⑤ 不建（Bump ok）
+        int pop = eco.Population;
+        float dailyInPerPop = pop > 0 ? eco.Flow.In(er) / (float)pop : 0f;
+        if (dailyInPerPop < (dcfg != null ? dcfg.channelBOutputPerPop : 1f)) return TriageDecision.NoOp;
+        // C：仓储占用溢出 → 粮 Granary／非粮 Warehouse
+        if (eco.StorageOccupancy >= (dcfg != null ? dcfg.storageOccupancyThreshold : 0.9f))
+            return er == EcoResource.Food ? TriageDecision.BuildGranary : TriageDecision.BuildWarehouse;
+        return TriageDecision.NoOp;
+    }
+
+    /// <summary>触发判定+断供严重度取首发（粮→金→石→木；铁跳过=D639 列报3）。
+    /// 粮：GrainReserveDays&lt;grainReserveDaysFloor（既有底线日，底线机制不动，D639 列报2）；
+    /// 金/石/木：Flow.Net(r)&lt;0 且 Stock(r)&lt;reserveTargetDaysOther×max(1,Out(r))（单日判定 D639 列报1）。
+    /// 返回 EcoResource int；无触发 → -1。纯函数（读快照无随机）。</summary>
+    private static int ResolveTriageResource(EconomyBlock eco, KingdomDiagnosisConfig dcfg)
+    {
+        int floor = dcfg != null ? dcfg.grainReserveDaysFloor : 2;
+        int reserveDays = dcfg != null ? dcfg.reserveTargetDaysOther : 3;
+        var order = dcfg != null ? dcfg.shortageSeverityOrder : null;
+        if (order == null || order.Length == 0) return -1;
+        for (int i = 0; i < order.Length; i++)
+        {
+            int r = order[i];
+            if (r == (int)EcoResource.Metal) continue;   // 铁不参与触发（D639 列报3：心跳四成员）
+            if (r == (int)EcoResource.Food)
+            {
+                if (eco.GrainReserveDays < floor) return r;
+            }
+            else
+            {
+                float net = eco.Flow.Net((EcoResource)r);
+                if (net < 0f)
+                {
+                    int stock = eco.StockOf((EcoResource)r);
+                    int outAmt = eco.Flow.Out((EcoResource)r);
+                    if (stock < reserveDays * Mathf.Max(1, outAmt)) return r;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>按资源取产能建筑数（EconomyBlock.Production 聚合；无 → 0）。
+    /// 口径沿用批A MapProduceToEco（含带 producer 的仓储类=批A 既有验收口径，本批不改——如实注记）。</summary>
+    private static int CountProductionOf(EconomyBlock eco, EcoResource r)
+    {
+        if (eco.Production == null) return 0;
+        var list = eco.Production;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].Resource == r) return list[i].Count;
+        return 0;
+    }
+
+    /// <summary>R-C2 ③种类解析（D639 列报8）：按产能缺口（Count/pop 升序）解最缺资源 → 反查表 def（SO）。
+    /// 无快照/表内缺省（Wood/Gold/Metal 无实体产能）→ null=沿用 SO buildingId（③ 恒 quarry 退化态）。
+    /// 确定性：Production 已是 EcoResource 升序聚合；比例计算纯函数。</summary>
+    private string ResolveTriageDefId(int forKingdom)
+    {
+        if (!SituationHub.TryGet(forKingdom, out var sit) || sit == null || sit.Economy == null) return null;
+        var eco = sit.Economy;
+        var dcfg = KingdomDiagnosisConfig.Load();
+        if (dcfg == null || dcfg.triageCapacityDefs == null) return null;
+
+        int pop = Mathf.Max(1, eco.Population);
+        int bestR = -1; float bestRatio = float.MaxValue;
+        var list = eco.Production;
+        if (list != null)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                float ratio = list[i].Count / (float)pop;
+                if (ratio < bestRatio) { bestRatio = ratio; bestR = (int)list[i].Resource; }
+            }
+        }
+        if (bestR >= 0)
+        {
+            string def = dcfg.FindTriageDef((EcoResource)bestR);
+            if (!string.IsNullOrEmpty(def)) return def;
+        }
+        return null;
     }
 
     /// <summary>
@@ -1225,4 +1380,13 @@ public class KingdomBrain
         }
         return null;
     }
+}
+
+/// <summary>⑤三通道分诊响应决策（R-C1，D639；R-C4 探针确定性断言对象）。</summary>
+public enum TriageDecision : byte
+{
+    NoOp,            // 通道B（偏向批B 生效）/全不命中=正常态不空转（⑤ Bump ok）
+    BuildCapacity,   // 通道A：建对应产能（反查表 SO def）
+    BuildGranary,    // 通道C·粮：建 Granary
+    BuildWarehouse   // 通道C·非粮：建 Warehouse
 }
