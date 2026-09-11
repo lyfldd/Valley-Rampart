@@ -21,6 +21,12 @@ using UnityEngine;
 /// 建筑不注册、任务永不派发、ProducerComponent.HasWorkerAssigned 恒 false 停产。
 /// 改为继承 Singleton&lt;TaskScheduler&gt;（首次访问 Instance 自动创建，DontDestroyOnLoad），
 /// 无需场景挂载，任务调度立即可用。
+///
+/// 2_23 资源 P0 批B（R-B1，D529/D634）：排序键升级为三段式＝死表（S/A/B/C 保留不动）×
+/// 资源偏向活权重（诊断层缺口信号）→ 距离；权重出自 ResourceBiasConfig SO（出厂 1.0 占位）。
+/// 边界注记（R-B3 / 2_23 §八 S-B4 / D525 打分器同型）：**活权重住本类（Unity 侧执行层）
+/// 零镜像、不进 AI.Core**——sim 无空间/派工调度概念；权重若归 champion，则由训练仓
+/// `15_账本`登记「Unity 单侧消费」形态（**登记面属训练仓，本仓不代提**）。
 /// </summary>
 // QQQ.2 T17 / QQQ.3 B1-7
 public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
@@ -55,6 +61,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 
     private float _tickTimer;
     private TaskPriorityConfig _priorityConfig;
+    private ResourceBiasConfig _biasConfig;   // 2_23 资源 P0 批B/R-B1（D529）：资源偏向活权重（SO 可配）
 
     // ===== 单例 =====
 
@@ -64,6 +71,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         _priorityConfig = Resources.Load<TaskPriorityConfig>("Config/TaskPriorityConfig");
         if (_priorityConfig == null)
             Debug.LogWarning("[TaskScheduler] 未找到 TaskPriorityConfig（Resources/Config/TaskPriorityConfig），优先级回退 B。");
+
+        // 2_23 资源 P0 批B/R-B1（D529/D634）：资源偏向活权重配置（缺 asset → 出厂 1.0 占位实例=零行为差异）
+        _biasConfig = ResourceBiasConfig.Load();
 
         // QQQ.3 B1-1：订阅 NPC 死亡事件清指派
         UnitController.OnUnitDied += OnNpcDied;
@@ -252,8 +262,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         }
         if (jobs.Count == 0 || idle.Count == 0) { UpdateAssignedTasks(); return; }
 
-        // ④ 优先级（S>A>B>C）排序，高优先先派；同优先按距离升序（DR-17）
-        jobs.Sort((a, b) => GetPriority(b.type).CompareTo(GetPriority(a.type)));
+        // ④ 有效优先级排序（2_23 资源 P0 批B/R-B1，D529/D634）：
+        //    死表（S/A/B/C 保留不动）× 资源偏向活权重（诊断层缺口信号）→ 距离（下方循环，DR-17）。
+        //    有效优先级 = 死表值 × clamp(bias[r]×(1+k×缺口率), minWeight, maxWeight)；
+        //    S 级（死表最高档）不乘权重（保命硬红线）+ 非 S 硬上界 < S 值（防配置越界架空死表）。
+        //    ⚠ 确定性（补-5，HH.172 §五）：同有效优先级 → 确定性次级键（源坐标 y→x→任务类型）
+        //    ＝严格全序，消除 List.Sort 不稳 + _sources(HashSet) 枚举序不可保证的潜在乱序。
+        jobs.Sort(CompareByEffectivePriority);
 
         var used = new bool[idle.Count];
         for (int j = 0; j < jobs.Count; j++)
@@ -939,6 +954,134 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private TaskPriority GetPriority(KingdomTaskType type)
     {
         return _priorityConfig != null ? _priorityConfig.Get(type) : TaskPriority.B;
+    }
+
+    // ===== 资源偏向活权重（2_23 资源 P0 批B/R-B1，D529/D634）=====
+
+    /// <summary>
+    /// 排序比较器：有效优先级降序（死表 × 活权重）→ 确定性次级键（源坐标 y→x→任务类型）。
+    /// 严格全序 ⇒ 同 seed 同诊断信号 → 同排序（确定性红线；比 List.Sort 不稳+HSet 枚举序可靠）。
+    /// </summary>
+    private int CompareByEffectivePriority(KingdomTask a, KingdomTask b)
+    {
+        float pa = EffectivePriority(a);
+        float pb = EffectivePriority(b);
+        if (pa > pb) return -1;   // 高优先先派
+        if (pa < pb) return 1;
+
+        // 次级键：全序（与注册序/收集序无关；⑤-3 同款纪律）
+        Vector2 sa = a.SourcePos, sb = b.SourcePos;
+        if (sa.y != sb.y) return sa.y.CompareTo(sb.y);
+        if (sa.x != sb.x) return sa.x.CompareTo(sb.x);
+        return ((int)a.type).CompareTo((int)b.type);
+    }
+
+    /// <summary>
+    /// 有效优先级 = 死表值 × 活权重（clamp bias×(1+k×缺口率), min, max）。
+    /// 保命硬红线（D634）：S 级不乘权重（原值）；非 S 结果硬上界 = S 值 − ε（防配置越界架空死表）。
+    /// 玩家源（无 AI 快照）/无映射/缺参 → 权重 1.0 ⇒ 有效优先级 == 死表值（出厂零差异）。
+    /// 纯函数：只读 SO/快照，无随机无时间。
+    /// </summary>
+    private float EffectivePriority(KingdomTask task)
+    {
+        float baseP = (float)GetPriority(task.type);
+
+        // S 级修复保命：不参与偏向（红线）
+        if (baseP >= (float)TaskPriority.S) return baseP;
+
+        float w = ResolveBiasWeight(task, out _);
+        float eff = baseP * w;
+
+        // 非 S 硬上界 < S（防 maxWeight 配置过大导致低档架空死表 S）
+        float cap = (float)TaskPriority.S - 0.001f;
+        return eff > cap ? cap : eff;
+    }
+
+    /// <summary>
+    /// 计算任务活权重（纯函数）。缺口信号（D634①）＝批A 经济诊断块 Flow.Net(r) 负值；
+    /// 缺口率（补-1）＝clamp01(max(0,−Net(r)) / max(1, Out(r)))；公式（D634② 线性）＝
+    /// clamp(bias[r]×(1+k×缺口率), minWeight, maxWeight)。
+    /// </summary>
+    private float ResolveBiasWeight(KingdomTask task, out int resIdx)
+    {
+        resIdx = -1;
+        if (task == null) return 1f;
+
+        int kingdom = SourceKingdom(task);
+        if (kingdom <= 0) return 1f;   // 玩家源：无 AI 快照 ⇒ 零改动
+        if (_biasConfig == null) return 1f;
+
+        int r = ResolveTaskBiasResource(task);
+        if (r < 0) return 1f;          // 无映射（如建造/搬运等无资源语义）→ 不参与偏向
+        resIdx = r;
+
+        float shortage = ShortageRate(kingdom, (EcoResource)r);
+        if (shortage <= 0f) return 1f; // 无缺口 → 出厂等价
+
+        float raw = _biasConfig.BiasOf((EcoResource)r) * (1f + _biasConfig.k * shortage);
+        float lo = _biasConfig.minWeight, hi = _biasConfig.maxWeight;
+        if (hi < lo) hi = lo;
+        return raw < lo ? lo : (raw > hi ? hi : raw);
+    }
+
+    /// <summary>
+    /// 缺口率(r)＝clamp01( max(0, −Net(r)) / max(1, Out(r)) )（补-1，HH.172 §五）。
+    /// 数据源＝批A EconomyBlock（SituationHub；无快照/无经济块 → 0=无缺口）。
+    /// </summary>
+    private static float ShortageRate(int kingdomId, EcoResource r)
+    {
+        if (!SituationHub.TryGet(kingdomId, out var snap) || snap == null || snap.Economy == null) return 0f;
+        var flow = snap.Economy.Flow;
+        int net = flow.Net(r);
+        if (net >= 0) return 0f;
+        int outAmt = flow.Out(r);
+        float rate = (-net) / (float)Mathf.Max(1, outAmt);
+        return Mathf.Clamp01(rate);
+    }
+
+    /// <summary>
+    /// 任务→资源解析（D634③：SO 可配表，禁硬编码映射）。分两类：
+    ///   ① **采集/生产活**（Gather/Production）＝§2.2 通道B 的「对应资源采集活」——先读 args 实参
+    ///      （最精确），缺参再读源建筑产出（须 producer.kind==Resource，防 outputResource 默认值 0
+    ///      把无产出建筑误判为产金；口径对齐批A EconomyDiagnosis.MapProduceToEco）。
+    ///   ② 其余任务类型＝读 ResourceBiasConfig 兜底表（如 GoldMine→金、Rancher→粮；
+    ///      水/弹药等非五元在表中 enabled=false）。
+    /// -1 ＝ 不参与偏向（有效优先级退化为死表值＝出厂等价）。
+    /// 注：搬运（Transport）**不参与**偏向——§2.2 通道B 语义为「采集活权重↑」，搬运属独立工作类
+    /// （且已为 B 档）；是否扩面归策划端（HH.173 §列报）。
+    /// </summary>
+    private int ResolveTaskBiasResource(KingdomTask task)
+    {
+        switch (task.type)
+        {
+            case KingdomTaskType.Gather:
+            case KingdomTaskType.Production:
+                if (task.args is GatherTaskArgs ga) return MapResourceType(ga.resourceType);
+                if (task.source is Building b && b.def != null
+                    && b.def.producer.kind == ProduceKind.Resource)
+                {
+                    if (b.def.isBlacksmith) return (int)EcoResource.Metal;   // 铁匠铺 矿石→Metal（D200/D609）
+                    return MapResourceType(b.def.outputResource);
+                }
+                return -1;
+
+            default:
+                return _biasConfig != null ? _biasConfig.ResourceOfTaskType(task.type) : -1;
+        }
+    }
+
+    /// <summary>ResourceType → 五元 EcoResource（非五元如 Ore/Crystal/Meat/弹药 → -1=不参与偏向）。</summary>
+    private static int MapResourceType(ResourceType t)
+    {
+        switch (t)
+        {
+            case ResourceType.Gold: return (int)EcoResource.Gold;
+            case ResourceType.Stone: return (int)EcoResource.Stone;
+            case ResourceType.Wood: return (int)EcoResource.Wood;
+            case ResourceType.Food: return (int)EcoResource.Food;
+            case ResourceType.Metal: return (int)EcoResource.Metal;
+            default: return -1;
+        }
     }
 
     /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0；
