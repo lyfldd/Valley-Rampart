@@ -89,6 +89,15 @@ public static class DiagMilitary
     {
         var bcfg = KingdomBrain.LoadConfig();
         int target = bcfg != null ? UtilityScorer.MilitaryTarget(k, bcfg) : -1;
+        // HH.217 治本批：内源势能读数（只读反射；正/负探针实读通道——weight=0 ⇒ drive≡0）
+        float drive = -1f;
+        try
+        {
+            var mi = typeof(UtilityScorer).GetMethod("InternalDrive",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (mi != null) drive = (float)mi.Invoke(null, new object[] { k });
+        }
+        catch { }
         string stage = k.scriptPhase.ToString();
         ScriptStage st = k.scriptPhase ?? ScriptStage.Survive;   // k.scriptPhase 为可空；未设时按存活期（与 ScoreTop 调用面一致）
 
@@ -101,7 +110,8 @@ public static class DiagMilitary
           .Append(" food=").Append(k.GetResourceValue(ResourceType.Food))
           .Append(" stone=").Append(k.GetResourceValue(ResourceType.Stone))
           .Append(" wood=").Append(k.GetResourceValue(ResourceType.Wood))
-          .Append(" militaryTarget=").Append(target);
+          .Append(" militaryTarget=").Append(target)
+          .Append(" drive=").Append(drive >= 0f ? drive.ToString("F4") : "n/a");   // HH.217：内源势能实读（正/负探针通道）
         Debug.LogWarning(sb.ToString());
 
         DumpAction(tag, k, acfg, UtilityAction.RecruitWarrior, "⑦招战士", st);

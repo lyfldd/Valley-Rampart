@@ -17,10 +17,14 @@ using UnityEditor;
 public static class Valley_HH80_Run
 {
     // P1 七考重验（HH.203/D657；D661 放行）：六考原值 SEED=69496 / SLOT="p1_run6b"、七考原值 SEED=73621 / SLOT="p1_run7"
-    // 均已 git 留证（`git log -p -- Assets/Editor/Smoke/Valley_HH80_Run.cs` 可复原；p1_run6/p1_run6b/p1_run7 原封勿覆盖）。
-    private const int SEED = 64513;          // HH.203 七考重验 seed（2026-09-11 侦察定案：4 AI[密林 r1 精灵/磐石 r2 矮人/铁蹄 r3 兽人/霜岩 r2 矮人]+国距 42.9/70.7/89.0/92.2/110.5/122.6 均衡无口袋+领土 mid 16~19+营地 2+流浪 6；候选 70403[3 AI·min 41.7 次优]备选、82007[min 25.0 过近]否决；见 Logs/P1/hh80_scout_result.log）
-    private const string SLOT = "p1_run8";   // 七考重验段独立命名（禁覆盖 p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段 / p1_run7=七考段）
-    private const int CIRCUIT_BREAK_DAY = 120;
+    // 均已 git 留证（`git log -p -- Assets/Editor/Smoke/Valley_HH80_Run.cs` 可复原；p1_run6/p1_run6b/p1_run7/p1_run8 原封勿覆盖）。
+    // HH.217 治本批（D663 裁 A+ / D664 放行）：**短局机制自证**——同 seed（64513，HH.214 定案）对照、槽 p1_fix1、
+    // 90 日窗口（D664 裁：k3 每兵 ~7~10 日 ⇒ warrior=4 ≈ D67~70，60 日不足）、**见 1 军事实达即提前收工**（MILITARY_STOP_COUNT=1）。
+    // ⚠️后续七考重验批须复原：SEED=新定案值 / SLOT=新槽 / CIRCUIT_BREAK_DAY=120 / MILITARY_STOP_COUNT=2。
+    private const int SEED = 64513;          // HH.217 短局：复用 HH.214 定案 seed（同世界修前/修后对照；D664 裁准）
+    private const string SLOT = "p1_fix1b";   // 治本批独立槽（禁覆盖 p1_run6/6b/7/8；p1_fix1=正向 / p1_fix1b=负探针 weight=0）
+    private const int CIRCUIT_BREAK_DAY = 90;
+    private const int MILITARY_STOP_COUNT = 1;   // HH.217：短局机制自证 ⇒ 1 个 AI 达军事期即收工（七考须复原为 2）
 
     private static readonly List<int> _military = new List<int>();
     private static volatile bool _done;
@@ -93,7 +97,7 @@ public static class Valley_HH80_Run
                     if (all[i].workerCount + all[i].warriorCount > 0) aiAlive++;
                 }
             }
-            if (_military.Count >= 2) { Finish("达标收工：≥2 AI 军事期（" + string.Join(",", _military) + "）@D" + day); break; }
+            if (_military.Count >= MILITARY_STOP_COUNT) { Finish("达标收工：≥" + MILITARY_STOP_COUNT + " AI 军事期（" + string.Join(",", _military) + "）@D" + day); break; }
             if (day >= CIRCUIT_BREAK_DAY) { Finish("熔断：D" + CIRCUIT_BREAK_DAY + " 无 ≥2 AI 军事期（已达标=" + string.Join(",", _military) + "，AI 存活 " + aiAlive + "/" + aiTotal + "）"); break; }
             if (reg != null && aiTotal > 0 && aiAlive == 0) { Finish("灭绝停跑：AI 全灭 @D" + day + "（已达标=" + string.Join(",", _military) + "）"); break; }
         }

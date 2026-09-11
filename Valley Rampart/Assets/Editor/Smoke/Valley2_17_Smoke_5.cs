@@ -25,6 +25,7 @@ public static class Valley2_17_Smoke_5
         pass &= SoftCapAndFloor(cfg, sb);
         pass &= WarriorGapRises(cfg, sb);
         pass &= PopFloorGuard(cfg, sb);   // 人口底线（决策①修复）探针
+        pass &= InternalDriveToGate(cfg, sb);   // HH.217 治本批：内源势能接入 D348Target 正负例
         Debug.Log($"[2_17_5冒烟] {sb}");
         Debug.Log($"[2_17_5冒烟] ===== {(pass ? "ALL PASS" : "HAS FAIL")}（威胁上调→目标升→⑦分数升，D348）=====");
     }
@@ -112,6 +113,35 @@ public static class Valley2_17_Smoke_5
         if (!altOk) ok = false;
         sb.Append($"人口底线={(ok ? "OK" : "FAIL")}(门槛=max({cfg.popFloor},{cfg.developToExpand_workersMin})={floor},村落6<{floor}✓,要塞8<{floor}=不倒灌,needA≤{workerNeed},=>⑥) ");
         sb.Append($"份额轮替={(altOk ? "OK" : "FAIL")}(cap={cfg.popAlarmFocusCapDays} 周期={(cap + 1)} 相位⑥…B轮替) ");
+        return ok;
+    }
+
+    // ---- HH.217 治本批（D663 裁 A+ / D664 放行）：内源势能（D590 InternalDrive）接入兵力目标 D348 的正负例 ----
+    //  语义：drive 与威胁同量纲相加后取整（⌈⌉），威胁面数学不变；drive 是阶跃项（⌈ε⌉=1）⇒权重量级不敏感（D664 注记）。
+    private static bool InternalDriveToGate(KingdomBrainConfig cfg, System.Text.StringBuilder sb)
+    {
+        bool ok = true;
+        int sf = cfg.militaryExpandStageFactor;   // 扩张期 +1
+        // 正例①：零威胁 Expand 期 + drive=0.1（数值禁区下沿）⇒ floor2 + ⌈0+0.1⌉1 + 1 = 4 ≥ 门
+        int pos = UtilityScorer.D348Target(0, 10, 0f, sf, cfg, 0.1f);
+        if (pos < cfg.expandToMilitary_warriorsMin) ok = false;
+        // 正例②：drive 极小（1e-4）仍 +1（阶跃项语义，D664 注记：权重不敏感）
+        int eps = UtilityScorer.D348Target(0, 10, 0f, sf, cfg, 0.0001f);
+        if (eps < cfg.expandToMilitary_warriorsMin) ok = false;
+        // 负例（死滞复现锚）：drive=0 ⇒ 2+0+1 = 3 < 门
+        int neg = UtilityScorer.D348Target(0, 10, 0f, sf, cfg, 0f);
+        if (neg != 3 || neg >= cfg.expandToMilitary_warriorsMin) ok = false;
+        // 回归①：drive=0 时旧语义保持（floor 点，stageFactor=0）
+        if (UtilityScorer.D348Target(4, 10, 0f, 0, cfg, 0f) != FLOOR) ok = false;
+        // 回归②：威胁面仍有效（drive=0，威胁↑ ⇒ 目标单调不降；worker=20 避软帽）
+        int prevT = -1;
+        for (int nei = 0; nei <= 30; nei += 10)
+        {
+            int t = UtilityScorer.D348Target(4, 20, nei, sf, cfg, 0f);
+            if (t < prevT) ok = false;
+            prevT = t;
+        }
+        sb.Append($"内源势能接入={(ok ? "OK" : "FAIL")}(零威胁Expand: drive0.1={pos}≥{cfg.expandToMilitary_warriorsMin} / drive1e-4={eps} / drive0={neg}=3<门 / 威胁面回归) ");
         return ok;
     }
 }

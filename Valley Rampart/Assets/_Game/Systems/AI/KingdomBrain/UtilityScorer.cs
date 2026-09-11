@@ -348,7 +348,7 @@ public static class UtilityScorer
     /// 邻国兵力真源=KingdomRegistry 其它非玩家王国战士（D348：从领土表+Registry 实时拉取为演进目标）。
     /// </summary>
     public static int MilitaryTarget(KingdomState k, KingdomBrainConfig cfg)
-        => MilitaryTargetFromThreat(k, NeighborMilitary(k.id), cfg);
+        => MilitaryTargetFromThreat(k, NeighborMilitary(k.id), cfg, InternalDrive(k));   // HH.217：内源势能项接入（D663 裁 A+，同源 helper）
 
     /// <summary>城堡该级可达到的目标模块上限（CastleUnlockTable 静态表共享；2_17 批3b TechGap 读解锁态）。</summary>
     private static int GetTargetCap(ModuleType module, int castleLevel)
@@ -357,24 +357,31 @@ public static class UtilityScorer
         return table != null ? table.GetModuleLevel(module, castleLevel) : 0;
     }
 
-    /// <summary>纯威胁注入版兵力目标（冒烟#5 探针）：直接给威胁兵力，可脱离世界确定性测试 D348 公式与⑧⑪⑫缺口。</summary>
-    public static int MilitaryTargetFromThreat(KingdomState k, int neighborMilitary, KingdomBrainConfig cfg)
+    /// <summary>纯威胁注入版兵力目标（冒烟#5 探针）：直接给威胁兵力，可脱离世界确定性测试 D348 公式与⑧⑪⑫缺口。
+    /// HH.217：**尾插** `internalDrive`（默认 0 ⇒ 纯探针语义不变），世界版由 `MilitaryTarget` 传内源势能。</summary>
+    public static int MilitaryTargetFromThreat(KingdomState k, int neighborMilitary, KingdomBrainConfig cfg, float internalDrive = 0f)
     {
         int stageFactor = k.scriptPhase == ScriptStage.Military ? cfg.militaryStageFactor
             : k.scriptPhase == ScriptStage.Expand ? cfg.militaryExpandStageFactor : 0;
-        return D348Target(k.warriorCount, k.workerCount, neighborMilitary, stageFactor, cfg);
+        return D348Target(k.warriorCount, k.workerCount, neighborMilitary, stageFactor, cfg, internalDrive);
     }
 
     /// <summary>
     /// D348 兵力目标纯整数核心（冒烟#5 直接测，零世界耦合）：clamp(floor + ⌈威胁×scale⌉ + 阶段系数, floor, 2+工人数)。
     /// 威胁 = neighborMilitary / max(warrior, 分母下限)（D339 分母零保护）；软帽 2+工人数=军力受经济人口约束。
+    /// HH.217 治本批（D663 裁 A+ / D664 放行）：**尾插** `internalDrive`（默认 0 ⇒ 既有 5 参调用零退化），
+    /// 内源势能项（D590 `InternalDrive`，同源 helper 禁另抄 L-31）与威胁**同量纲相加后取整**——
+    /// 威胁面数学不变（非调参/非改 K）；零威胁 Expand 期 drive∈(0,0.1] ⇒ 2+⌈0+drive⌉+1=**4 ≥ 门**(expandToMilitary_warriorsMin)。
+    /// ⚠️语义（D664 注记）：drive 是**阶跃项**（⌈ε⌉=1），`internalDriveWeight` 数值量级对该项**不敏感** ⇒「0.1 不足报裁」为 moot、**禁据此调权**。
     /// </summary>
     public static int D348Target(int warrior, int worker, float neighborMilitary,
-        int stageFactor, KingdomBrainConfig cfg)
+        int stageFactor, KingdomBrainConfig cfg, float internalDrive = 0f)
     {
         int denom = Mathf.Max(warrior, cfg.militaryThreatDenominatorMin);
         float threat = denom > 0 ? neighborMilitary / (float)denom : 0f;
-        int target = cfg.militaryTargetFloor + Mathf.CeilToInt(threat * cfg.militaryThreatScale) + stageFactor;
+        int target = cfg.militaryTargetFloor
+            + Mathf.CeilToInt(threat * cfg.militaryThreatScale + Mathf.Max(0f, internalDrive))
+            + stageFactor;
         return Mathf.Clamp(target, cfg.militaryTargetFloor, cfg.militaryTargetFloor + worker);
     }
 
