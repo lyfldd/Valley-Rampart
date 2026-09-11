@@ -84,6 +84,35 @@
 - HH.129：🔵预留→🟡已落盘（本报告，待策划端验收销号）
 - D 水位维持 D589（本批无新裁决）
 
-## 十、策划裁决区（验收时回写）
+## 十、策划裁决区（D592，2026-09-09 策划端验收）
 
-（预留——验收结论/列报裁决/销号回写）
+**验收结论=成立销号**（HH.128/129 ✅D592；0.6 §一百二十一；**批B 建军链解锁**）。
+
+### 实盘复核（七点全过）
+
+1. **构成吻合**：fb65eb2 文件级（diff-tree）=11 施工件（5 新含 meta+6 改）+账本+HH.128/129+2_17 回注，与报告 §一逐项吻合；**AI.Core 文件级零命中**+玩家侧/底线三级零触碰（复核注：git show --stat 的 message 自含"AI.Core 零触碰"声明文字，首次 Select-String 命中系 message 自身——文件级复核以 diff-tree 为准）。
+2. **A1 纯 C#**：SituationSnapshot.cs 165 行 `using UnityEngine`=0 实锤。
+3. **A4 内源节拍评分域**：NeedKind 尾插三枚举（GeneralGap/FormationGap/UnitTypeGap）+NeedScore 三 case 注释「缺口即评分不乘威胁门控」diff 直读实锤；ExclusiveGap 既有 case 逐字未动=零行为漂移口径成立。
+4. **A5 邻接 API**：`_adjacencyCache` 懒构建+中区块 4 邻共享边口径（D515/D339+与 ExpandTick D283/D326 同族）+同国恒 false+2_17 §3.1.3 回注随 commit 落盘。
+5. **SituationConfig.asset 六字段**=3/10/7/1/2/4 逐字对上（threat/perf/lossTtl/dirtyTtl/crisis/recovery）。
+6. **探针容器纪律**：EnterTestRun/ExitTestRun（L-17 正门）+try/catch 捕获器（L-16）在场直读。
+7. **Smoke_9 归因③直读实锤**：FocusController 占位轮 `recruitedTurn→SetFocus(⑥); return;` 不跑评分不设 LastTop（注释明示「份额式修正（策划纠偏裁决）」=HH.86 形态）+让位日才 `LastTop=popTop`；FocusController 不在批A 施工件=零交集成立。
+
+### 列报 4 项裁决
+
+1. **Smoke_9 #19 存量红：裁 a=断言分型**（占位轮相位断「焦点=FocusRecruitWorker」+让位轮断「LastTop≠None」+非 popAlarm 态维持原断言）——HH.86 份额式纠偏=已裁产品形态，断言分型=对齐已裁形态而非放宽（占位轮断焦点⑥仍是强行为断言）；b 否（占位轮补设 LastTop=语义失真，占位轮未跑评分）。**承接=搭 HH.131 零碎包件3**（Smoke_9 红着污染后续每批回归判读，随零碎包尽快清）。
+2. **2_17 §3.1.3 回注**：确认落盘（D515 承诺兑现）。
+3. **观察器白名单零追加**：知悉（L-05 核对通过；挂账池 combat/GameOver tag 行维持=HH.131 件2 承接）。
+4. **性能备注**：知悉采纳（邻接懒缓存 O(N)+UnitTypeGap 扫 TrainingConfig——七考 120 日长局列性能观察项，现信号再议缓存）。
+
+### 批B 前置注记（重要）
+
+P4a 三缺口=1.00 为**缺口存在度**（NeedScore 维度分值），非行动权重——批B 落行动条目接线时，内源项在行动总分中的**权重按 D590 增补节③取保守量级（0.1~0.2）**，实值归 P0 调优后续轮（数值禁区延续）；负探针（内源项置 0→死滞复现自证）随批B 行动落地一并补。
+
+### 教训核查（钩子2/3）
+
+L-02/L-13/L-15/L-17 四教训正面执行在案；L-15 锚点漂移 1 笔（NeighborMilitary L206→L254）+缺口 1 笔（邻接 API 不存在转施工件）如实列报=承接实体化正面样本；r1 12/14→r2 14/14 自纠链（选格策略缺陷复刻实证 linked=0+同 seed 确定性旁证）=方法论正面。**无新增条提案**。
+
+### 批B 解锁
+
+建军链（⑯训练将军/⑰建军事建筑/⑦多兵种扩+双环权重/B8 机器双行动[D570 口径+prefab 预检]）依队列解锁；开工回执取号先读账本（跳过预留号）。

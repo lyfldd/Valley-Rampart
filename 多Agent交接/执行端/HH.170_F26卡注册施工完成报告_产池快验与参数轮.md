@@ -29,7 +29,7 @@ TD-001 §六 执行序 **8 步全数完成**：2 项勘正已回写 → 生成�
 | 2 | `--kf26 <count>` CLI 开关（仅限 `--card F26`；照 `--kf30` 先例） | `harness/Program.cs:2097`（受理）· `:2107`（调模板）· `:2113`（统计） |
 | 3 | `CardPool` F26 池 | `harness/Sim/CardPool.cs:539`（`CardId = "F26"`） |
 | 4 | `cardIds` 追加 `"F26"` **+ 通用路径守卫** | `harness/Program.cs:2041`（清单）· `:2126`（`cid=="F26" ⇒ skip`） |
-| **5** | **（追加）模板 `maxDuration` 90.0 → 120.0** | `harness/Sim/ScenarioGenV2.cs:992` |
+| **5** | **（追加）模板 `maxDuration` 90.0 → 120.0** | `harness/Sim/ScenarioGenV2.cs:**L1004**`（**TD-002 校正 A 勘正**：原报 L992 系强侧变体分支 `else {` 行首，L-02/L-25 家族锚偏） |
 
 - **产池实锚**：`harness/Cards/F26/scenarios/KF26_2_0.json`（3988B）/ `_1.json`（4171B）/ `_2.json`（4117B）；`worldModel=v9`、`maxDuration=120.0`、我方 5 散兵 `formationGid=-1`、敌 **3 群独立 gid**、**`intentScript: []`**（实读 `KF26_2_1.json` L5/L9-12/L34-36）。
 - **与 TD-001 ⑫ 的三处偏差（请追认）**：

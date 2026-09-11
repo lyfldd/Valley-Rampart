@@ -75,6 +75,40 @@
 - D 水位维持 D592（本批无新裁决）
 - 批C 姿态层解锁预告：C1 三档消费 SituationConfig.crisisLine/recoveryLine（批A 已落字段）+㉕ MachineDemand 批C 警戒/动员档细化（注释锚在 case 内）
 
-## 十、策划裁决区（验收时回写）
+## 十、策划裁决区（D594，2026-09-09 策划端验收）
 
-（预留——验收结论/列报裁决/销号回写）
+**验收结论=成立销号（HH.137/138 ✅D594）+B8 prefab 预检整改令（批C 搭车硬条款）+批C/批D 解锁**。
+
+### 实盘复核（七点全过）
+
+1. **构成吻合**：32396c7 diff-tree=21 文件（Assets 18：3 新含 meta+15 改+四族 Race asset；文档 3）与报告 §一吻合；**AI.Core 文件级零命中**+玩家侧/底线三级/阶段机零触碰。
+2. **B5 局内环自整定直读**：更新律 `wᵢ←wᵢ×exp(η×(perf−1))` 中心化+WeightFloor=0.2/WeightCap=2.5 安全栏 const（注释明示"结构参数非调值面，SO 化归 P0 调优后续轮列报"）+纯 C#（UnityEngine=0，93 行）——**D519 局内环产品级落地，同 seed 逐字节一致红线由 P2a 断言承载**。
+3. **B1 同链+玩家零触碰**：`TryTrainFromKingdomPool(kingdomId,…)` 首行 `kingdomId<=0 return false`=AI 桶专属入口，玩家桶 TryTrain 路径未动。
+4. **内源四参 SO 落值**：internalDriveWeight=0.1+driveEcon/Pop/StorageShare=0.5/0.3/0.2（asset 直读）——**增补节③保守下沿 0.1 合规，三输入份额内部归一**；叠加不整体 clamp=无缺口时势能独立驱动（增补节②核心）。
+5. **unitPriors 四资产**：Race_Orc unitPriors 块 prior 0.8/0.6/0.6/0.2/0.2 在场（P1 断言 Berserker=0.80 吻合）——D519 权重归训练合规（占位推导+训练自会改写）。
+6. **B8 本族选型同源**：ExecuteProduceMachine=厂前置守卫+IsMachineAllowed 同源选型（Occupation int 升序确定性）+found 守卫。
+7. **DZ-083c 注释义务**：SiegeProductionSystem L184 过时注释更新随 commit（±1 行）。
+
+### 🔴 B8 prefab 预检=未兑现（D582② 条款）→批C 搭车硬条款
+
+**复核发现**：ExecuteProduceMachine 本体=厂前置守卫+本族选型，**无 prefab 在场预检**（KingdomBrain/UtilityScorer 全文 prefab/IsPrefabMissing 零命中）；VineCatapult prefab 仍不在盘（D558 口径，仅 Human_Player_Ballista 在场）。**P5b"成"=ProduceMachine 返回 true=国库扣费成功语义**（报告括号已自标，非实体生成——D582① 认可的既有语义）。
+
+**风险定性**：玩家侧"扣费无生成"=单次点击（D582① 接受）；**AI 侧=评分驱动持续循环**——本族机器 prefab 缺失时 NeedScore 缺口驱动持续选中→反复扣费→placed count 不涨→上限守卫永不触发→**资源持续流失黑洞**。D582②「缺失机器不进行动池评分」的设计意图正是防此。
+
+**整改令（批C 搭车硬条款）**：评分侧门控——本族可造机器 prefab 全缺失时 ProduceMachine 行动不评/Feasible=false（IsPrefabMissing 同源口径）；执行侧防御性预检可选。验收=P 探针（缺失 prefab 本族→ProduceMachine 不评+零扣费；prefab 在场族不受影响）。批C 开工回执确认并入范围。
+
+### 列报 5 项裁决
+
+1. **兵源池兜底：裁接受为 AI 侧常态**——AI 无 Resident 待业层（人口结构差异=2_23 资源 P0 域），Worker→SetOccupation(Resident) 编制内调配+训练链=语义合规（TrainingSystem 同链 D545 对称达成）；资源 P0 生育链修复后复查收窄。
+2. **k1 空间竞争**：知悉——七考观察项（扩张自解 vs aiBuildRadius 调参归调优域）；⑰评分导向持续尝试=设计语义内。
+3. **B5 结算节拍**：知悉——日 tick 窗口结算 η=0.05 占位合规（P0 无战斗结算事件接口）；2_18 接入后切事件驱动（接口签名不变）=咬合注记，随 2_18 域登记。
+4. **B4 起步值**：**准 factor_registry S 行登记候选**+15_账本注记义务（unitPriors=Unity 侧 RaceDef 字段，sim 侧对齐=批E sim 镜像批一并；D519 出厂环 champion 演化初始基座——权重归训练 ✓）。
+5. **2_20C/2_13_C 未跑**：裁采信正交（SiegeProductionSystem 仅注释+UI 零触碰，改动面论证成立）；批C/D 收口回归补全量。
+
+### 教训核查（钩子2/3）+L-20 裁决
+
+L-02/L-13/L-15/L-17 正面执行在案（L-15 三处清单假设修正+BuildingIds 散点收口=正面样本）；r1→r5 五轮自纠链（资源门→施工态→族选型→空间竞争，每轮现场诊断实锤）=方法论正面延续。**L-20 裁准入册**：「TryBuild=施工启动非竣工——探针/容器断言『建筑在场/可用』必须等施工完成（Active 翻转），或断言施工启动语义」——测试基建知识，教训库随串 commit。
+
+### 批C/批D 解锁
+
+批C 姿态层（C1 三档消费 SituationConfig.crisisLine/recoveryLine+㉕ MachineDemand 批C 警戒/动员档细化）∥批D 选址打分器（D525+DZ-080）可并行（均只依赖批A2 威胁分布=D546 口径）；开工回执取号先读账本（跳过预留）。
