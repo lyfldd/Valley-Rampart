@@ -85,6 +85,50 @@
 
 ---
 
+## 十、D647 裁 B′ 落地记录（容器级改动面列报 · 四纪律兑现）
+
+> 依据 D647：**R10 澄清**＝「**业务代码（`Assets/_Game` 与产品资产/SO/场景）零改动**；**Editor-only 观测域容器（`Assets/Editor/*`）的容器级配置不受此限**，但**须列报改动面**」（`test-harness-first` 铁律4）；**裁 B′**＝原地改容器级配置（否 A／否 C）。
+
+### 10.1 纪律①：改前 git 留证（六考原值可复原）
+
+| 文件 | 常量 | **六考原值** | 七考新值 |
+|------|------|--------------|----------|
+| `Valley_HH80_Run.cs` | `SEED` | `69496` | **`73621`**（侦察定案） |
+| `Valley_HH80_Run.cs` | `SLOT` | `"p1_run6b"` | **`"p1_run7"`** |
+| `Valley_HH80_Scout.cs` | `SEEDS` | `{48271, 69496, 81203}` | **`{73621, 48903, 91777}`** |
+| `Valley_P1_Observer.cs` | `MainSlot` | `"p1_run6b"` | **`"p1_run7"`** |
+
+- **复原命令**＝`git log -p -- "Valley Rampart/Assets/Editor/Smoke/Valley_HH80_Run.cs"`（同理 Scout／Observer）。
+- **六考证据链保护**＝`p1_run6`（D45 袭扰段）／`p1_run6b`（六考正门重跑段）**均未覆盖**；七考封盘槽＝`p1_run7`（实跑日志第 25 行 `保存成功: …\Saves\p1_run7.json` 实证）。
+
+### 10.2 纪律②：只改常量（+异议2 授权断言），不碰容器逻辑
+
+- `Valley_HH80_Run.cs`：仅 `SEED`/`SLOT` 两常量（＋注释）；**运行逻辑一字未改**。
+- `Valley_HH80_Scout.cs`：仅候选数组。
+- `Valley_P1_Observer.cs`：`MainSlot` 常量 **＋新增 `public static bool IsRunning => _installed;`**（1 行只读访问器，供异议2 断言；**未改观测/检查点/镜像逻辑**）。
+- **⚠️ 追加发现（并入纪律④列报）**：观测器 `MainSlot` 亦为硬编码 **`"p1_run6b"`** ⇒ 若不改，七考检查点将**覆盖六考证据链**（违反裁决④「禁覆盖 `p1_run6/6b`」）⇒ 一并改 `"p1_run7"`。（另注：观测器检查点命名实为 `<MainSlot>_dayXXX`＋回正 `<MainSlot>`，与观察清单 §四文档口径 `p1_dayXXX`/`p1_main` 存在**命名漂移**——列报知悉，未擅改。）
+
+### 10.3 纪律③：列报改动面（本批 git 面）
+
+- **业务代码（`Assets/_Game`＋产品资产/SO/场景）＝零改动**（`git status` 可验证）。
+- **Editor-only 观测域容器＝3 文件**：`Valley_HH80_Run.cs`（2 常量＋注释＋6 行 fail-fast）／`Valley_HH80_Scout.cs`（1 候选数组＋注释）／`Valley_P1_Observer.cs`（1 常量＋1 只读访问器）。
+- 编译门：`start_compilation_pipeline` → **errors=0**／warnings=6（全为既有 Editor 冒烟基线，三个改动文件**零新警**）。
+
+### 10.4 纪律④：SLOT 必须新（已兑现）
+
+- `SLOT="p1_run7"`、观测器 `MainSlot="p1_run7"` ⇒ 检查点/封盘/镜像**全部落七考独立命名空间**；**未覆盖 `p1_run6`/`p1_run6b`**。
+
+### 10.5 异议2 断言落地（fail-fast）
+
+- `Valley_HH80_Run.Run()` 首部新增：`if (!P1Observer.IsRunning) { Debug.LogError("…观测器未启动…已中止。"); return; }` ⇒ **观测器未启即中止**，防 ≈48 分钟空跑无证据。
+- 起跑实证：先「`Valley/观测/P1_启动观测`」→「`P1_打印当前状态`」自检 → 再触发正式跑（**未触发中止**＝断言通过）；观测器在场证据＝`Logs/P1/p1_log_20260911_142147.log`（本跑局 session 镜像）。
+
+### 10.6 侦察定案（seed 报备，R2）
+
+- 三点位实读（`Logs/P1/hh80_scout_result.log`）：**`73621`＝4 AI〔森语 r1／寒晶 r2／战歌 r3／玄岩 r2〕＋国距 120.2/129.9/47.3/42.3/96.7/92.5 均衡无口袋＋领土 mid 16~21＋营地 2** ⇒ **定案**；`91777`（3~4 AI 但 min 27.6 **过近**→否决）／`48903`（3 AI、min 37.4 偏近→备选）。四点结构性检查①出生口袋②资源不可达③邻国过近④AI 模板/族分布——**①③无阻断，②无异常（各局粮 40/工 6 正常），④四族池覆盖良好**。按 R2 自定+报备（无结构性缺陷升级）。
+
+---
+
 ## 九、策划裁决（主策划端 · **D647**，2026-09-11）
 
 > **判据三直读＝已过**（①设计稿＝HH.186 全文＋HH.185 任务书；②代码实读＝`Valley_HH80_Run.cs` **L9 头注「EnterTestRun 正门(D585 全守卫)」/L19 `SEED=69496`/L20 `SLOT="p1_run6b"`（注释明示 `p1_run6`＝D45 袭扰段原封勿覆盖）/L66 实调 `EnterTestRun`/L97-98 `Save(SLOT)`＋`ExitTestRun`**；`Valley_HH80_Scout.cs` L16 `SEEDS{48271,69496,81203}`；`WorldConfig.asset` L22 `testSpeedMultiplier: 15`；③字段直读＝协议六项逐值吻合）。

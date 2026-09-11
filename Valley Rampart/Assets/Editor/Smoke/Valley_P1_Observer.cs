@@ -24,7 +24,7 @@ using UnityEngine;
 public static class P1Observer
 {
     private const string LogDir = "Logs/P1";
-    private const string MainSlot = "p1_run6b";     // 六考正门重跑段（D585；p1_run6=D45 袭扰段检查点 day005~045 原封勿覆盖=袭扰面证据链）
+    private const string MainSlot = "p1_run7";     // P1 七考段（HH.185/D647 裁 B′；六考原值 p1_run6b 可由 git 复原——p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段 原封勿覆盖=证据链）
     private const int CheckpointIntervalDays = 5;   // 每 5 游戏日一检查点（HH.71 §三）
     private const int ExtinctStreakDays = 3;        // 灭绝监测连续零人口天数
 
@@ -114,6 +114,9 @@ public static class P1Observer
 
     [MenuItem("Valley/观测/P1_打印当前状态")]
     public static void DumpNow() => SnapshotNow("手动快照");
+
+    /// <summary>观测器是否在跑（D647 异议2：供跑局容器 fail-fast 断言；Editor-only 观测域，不入运行时）。</summary>
+    public static bool IsRunning => _installed;
 
     // ── 日志镜像 + 军事期达标检测 ──
     private static void OnLog(string condition, string stackTrace, LogType type)

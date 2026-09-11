@@ -16,8 +16,10 @@ using UnityEditor;
 // ============================================================================
 public static class Valley_HH80_Run
 {
-    private const int SEED = 69496;          // HH.122 六考正门重跑 seed（侦察定案 2026-09-09 D585：3 AI[密林 r1/寒晶 r2/战歌 r3]+国距 64.7~175.5 均衡无口袋+营地 2+非历史局；候选 48271[33.3 近]/81203[18.7 近]弃；73311=D45 袭扰段报废，见 Logs/P1/hh80_scout_result.log）
-    private const string SLOT = "p1_run6b";  // 六考正门重跑段独立命名（p1_run6=D45 袭扰段检查点 day005~045 原封勿覆盖=D585 袭扰面证据链）
+    // P1 七考（HH.185/D646；D647 裁 B′ 原地改容器级配置）：六考原值 SEED=69496 / SLOT="p1_run6b"
+    // 已由 git 留证（`git log -p -- Assets/Editor/Smoke/Valley_HH80_Run.cs` 可复原；六考段 p1_run6/p1_run6b 原封勿覆盖）。
+    private const int SEED = 73621;          // HH.185 七考 seed（2026-09-11 侦察定案：4 AI[森语 r1/寒晶 r2/战歌 r3/玄岩 r2]+国距 120.2/129.9/47.3/42.3/96.7/92.5 均衡无口袋+领土 mid 16~21+营地 2；候选 91777[min 27.6 过近]否决、48903[min 37.4 偏近/3 AI]备选；见 Logs/P1/hh80_scout_result.log）
+    private const string SLOT = "p1_run7";   // 七考段独立命名（禁覆盖 p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段）
     private const int CIRCUIT_BREAK_DAY = 120;
 
     private static readonly List<int> _military = new List<int>();
@@ -27,6 +29,12 @@ public static class Valley_HH80_Run
     public static void Run()
     {
         if (!EditorApplication.isPlaying) { Debug.LogError("[HH80跑] 须先 GameScene 进 Play（且先启动 P1 观测器）。"); return; }
+        // D647 异议2 fail-fast：观测器未启则中止（防 ≈48 分钟空跑无证据/无检查点）
+        if (!P1Observer.IsRunning)
+        {
+            Debug.LogError("[HH80跑] ✗ 观测器未启动——请先点「Valley/观测/P1_启动观测」再起跑（D647 异议2 fail-fast）。已中止。");
+            return;
+        }
         _military.Clear(); _done = false;
         Application.logMessageReceived += WatchMilitary;
         new GameObject("HH80_RunRunner").AddComponent<RunHost>().Host(RunCoroutine());
