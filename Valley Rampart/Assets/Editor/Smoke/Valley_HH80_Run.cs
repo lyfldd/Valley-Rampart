@@ -16,10 +16,10 @@ using UnityEditor;
 // ============================================================================
 public static class Valley_HH80_Run
 {
-    // P1 七考（HH.185/D646；D647 裁 B′ 原地改容器级配置）：六考原值 SEED=69496 / SLOT="p1_run6b"
-    // 已由 git 留证（`git log -p -- Assets/Editor/Smoke/Valley_HH80_Run.cs` 可复原；六考段 p1_run6/p1_run6b 原封勿覆盖）。
-    private const int SEED = 73621;          // HH.185 七考 seed（2026-09-11 侦察定案：4 AI[森语 r1/寒晶 r2/战歌 r3/玄岩 r2]+国距 120.2/129.9/47.3/42.3/96.7/92.5 均衡无口袋+领土 mid 16~21+营地 2；候选 91777[min 27.6 过近]否决、48903[min 37.4 偏近/3 AI]备选；见 Logs/P1/hh80_scout_result.log）
-    private const string SLOT = "p1_run7";   // 七考段独立命名（禁覆盖 p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段）
+    // P1 七考重验（HH.203/D657；D661 放行）：六考原值 SEED=69496 / SLOT="p1_run6b"、七考原值 SEED=73621 / SLOT="p1_run7"
+    // 均已 git 留证（`git log -p -- Assets/Editor/Smoke/Valley_HH80_Run.cs` 可复原；p1_run6/p1_run6b/p1_run7 原封勿覆盖）。
+    private const int SEED = 64513;          // HH.203 七考重验 seed（2026-09-11 侦察定案：4 AI[密林 r1 精灵/磐石 r2 矮人/铁蹄 r3 兽人/霜岩 r2 矮人]+国距 42.9/70.7/89.0/92.2/110.5/122.6 均衡无口袋+领土 mid 16~19+营地 2+流浪 6；候选 70403[3 AI·min 41.7 次优]备选、82007[min 25.0 过近]否决；见 Logs/P1/hh80_scout_result.log）
+    private const string SLOT = "p1_run8";   // 七考重验段独立命名（禁覆盖 p1_run6=D45 袭扰段 / p1_run6b=六考正门重跑段 / p1_run7=七考段）
     private const int CIRCUIT_BREAK_DAY = 120;
 
     private static readonly List<int> _military = new List<int>();
@@ -103,7 +103,8 @@ public static class Valley_HH80_Run
     {
         _done = true;
         Application.logMessageReceived -= WatchMilitary;
-        if (TimeManager.Instance != null) TimeManager.Instance.SetGameSpeed(0f);
+        // L-32 条文3（D657 入库·HH.203 §二.7）：禁以 `SetGameSpeed(0f)` 当暂停（SnapToSpeed 吸附 0.5x 非暂停）⇒ 真暂停用 timeScale
+        Time.timeScale = 0f;
         bool saved = SaveManager.Instance != null && SaveManager.Instance.Save(SLOT);
         TestHarnessApi.ExitTestRun();   // 正门收尾：考跑态/maximumDeltaTime/渲染全量恢复（D585；封盘在后不丢档）
         var sb = new System.Text.StringBuilder();
@@ -117,6 +118,8 @@ public static class Valley_HH80_Run
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "hh80_run_status.log"), sb.ToString());
         }
         catch (System.Exception e) { Debug.LogError("[HH80跑] 状态写文件失败: " + e.Message); }
-        Debug.LogWarning("[HH80跑] ★ " + why + "——终速 0+封盘 " + SLOT + "=" + saved + "（现场保留：观测器镜像/CSV 在案，待会话侧停观测+收工）");
+        Debug.LogWarning("[HH80跑] ★ " + why + "——真暂停(TS=0)+封盘 " + SLOT + "=" + saved + "（现场保留：观测器镜像/CSV 在案；收工退 Play，L-32）");
+        // L-32 条文1（D657 入库）：收工禁留「已恢复 1x」余留世界 ⇒ 容器末尾直接退 Play（同 SmokeApi.QuitSmoke 先例）
+        EditorApplication.ExitPlaymode();
     }
 }
