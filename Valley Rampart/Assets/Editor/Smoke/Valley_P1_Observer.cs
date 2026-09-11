@@ -56,7 +56,14 @@ public static class P1Observer
         //   [UnitController] 死亡行=UnitController.Die L651「[UnitController] {faction}_{occupation} 死亡。」
         //     （同 tag 另有回血/读档兜底少量低量行，随并入=可接受；无独立 combat 死亡 tag，此即致死落地日志）
         //   [ThroneAnchor] L86「工人全灭，王国覆灭 → GameOver」判负行；[GameOverPanel] L71「显示结算面板」结算行
-        "[UnitController]", "[ThroneAnchor]", "[GameOverPanel]"
+        "[UnitController]", "[ThroneAnchor]", "[GameOverPanel]",
+        // HH.190/D651【T1 观测口补口】：建军链三面 + P0 行为面 + Vault（只加不删，集中管理口径不变）
+        //   · [P1观察]：**修 HH.189 §二④ 勘正根因**——观测器检查点行原为 Log 级且 tag 未在白名单 ⇒ 镜像 0 行
+        //     （存档实际在场 `Saves/p1_run7_day*.json`×24）。补 tag 使「检查点」行可见（观测域增量，不改业务）。
+        //   · [DiagMilitary]/[DiagTriage]/[DiagCapacity]/[DiagBias]/[DiagChain]：由 Editor-only 只读探针
+        //     `Valley_DiagMilitary.cs` 输出（反射只读；业务代码零改动）。
+        //   · [TreasureVault]：D569/D579 Vault 积压观测口。
+        "[P1观察]", "[DiagMilitary]", "[DiagTriage]", "[DiagCapacity]", "[DiagBias]", "[DiagChain]", "[TreasureVault]"
         // 注：[VagrantCamp 无右括号前缀=[VagrantCampSystem]/[VagrantCamp] 双匹配（HH.78 修正：原 "[VagrantCamp]" 带括号漏 [VagrantCampSystem] 前缀）
     };
 
