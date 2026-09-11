@@ -1,7 +1,7 @@
 # HH.183｜2_23 资源 P0 批C · C′ 补笔 完成报告（D644 裁 A 收敛版）
 
 > 执行端（Unity 轨）· 2026-09-11
-> 状态：⏳ 待策划端验收（批 commit 已落盘，**未 push**）
+> 状态：✅ 已验收成立（D645，2026-09-11 主策划端；C′ 销号＋资源 P0 收官＋七考前置解除）
 > 锚点：**D644（0.6 §一百七十三，2026-09-11）**＝HH.181 三条勘正全成立＋**裁 A（C′ 收敛版）**＋姊妹项立 **DZ-089** 挂账；上游 D643（批C 销号）／HH.181 §六（裁决规格）／HH.182（开工回执）
 > 编号：**HH.183**（并行会话已在 HH.184 行备注「HH.183 为批C 预计完成报告」＝vr-id-ledger 防撞号预留；水位线维持 HH.184）
 
@@ -115,3 +115,23 @@ PASS=27 FAIL=0 时间=13:32:37
 ## 七、下一步（C′ 落盘 → 收官）
 
 策划端验收 HH.183 ⇒ **「2_23 资源 P0」收官** ⇒ **P1 七考放行**（D644：「C′ 落盘 → 验收 → 收官 → 七考放行」）。
+
+---
+
+## 八、策划裁决（主策划端 · **D645**，2026-09-11）
+
+> **判据三直读＝已过**（①设计稿＝D644 裁 A 规格＋HH.183 全文；②代码实读＝**`MapProduceToEco` 守卫源码实读**（`if (def == null || def.producer.kind != ProduceKind.Resource || def.producer.rate <= 0f || def.isResourceNode) return -1;   // C′：真产能守卫（D644）`）／`fd6d248` **8 文件 251+/5−**／`AI.Core`·死表·资产 `git status` **空**／`Smoke_2_23RP0` **`EnterTestRun` L75＋`ExitTestRun` L459**（test-harness-first 铁律1 满足）／探针 `smoke_2_23rp0_run1·run2` **同字节 2440B**＋`smoke_2_22p0_run1` 2422B；③字段直读＝`well.asset` `producer: kind:0/rate:4`＋`outputResource: 0`＋`isResourceNode: 0`）。
+
+**判决：验收成立销号** ✅ —— R-C′1（守卫**逐字对齐 `BuildingFactory.cs:295`**）／R-C′2（正/负探针，**正例走真实管线**＝清场→真建 Granary→反射 `BuildEconomyBlock`→`CountProductionOf(Food)=0`→`DecideTriage=BuildCapacity`＝**强证据**）／R-C′3（契约 §六 口径同步）**全兑现**；门禁＝编译 0 错＋`Smoke_2_23RP0` **27/0 ×2**＋`Smoke_2_22P0` **32/0**＋AI.Core/死表/资产 空/零动/零改。**零行为漂移成立**（工厂侧早已同口径）。
+
+| 列报 | 裁决 |
+|---|---|
+| ① Well 越守卫仍计 Gold | ✅**属实** → **立 `DZ-090`**（`outputResource` **未显式声明**⇒默认 0＝Gold，属 **L-28 家族**；与 `AbstractEconomySettlement.cs:198` **硬编码 skip Well** 属同族口径漂移；**无下游效应**〔Gold 无 triage def〕＝**低优挂账**） |
+| ② 姊妹项 `DZ-089` 未动 | ✅**知悉**（遵裁未动 ✓） |
+
+**验收三问（钩子2，前置＝判据三直读已过）**：①本批**零缺陷**；②N/A；③教训核查＝**无新增**（Well 归 **L-28 实例注记**）。
+
+**嘉奖**＝**列报① Well 自曝**（本可沉默）＋**`Packages/manifest.json` 重序列化痕迹按纪律未提交**（正面样本）。
+
+**⇒ 「2_23 资源 P0」批A~C 全收口收官 ⇒ P1 七考前置解除（放行）。**
+**边界**＝策划端零代码/零资产动；**执行端下串**＝P1 七考（起跑令由策划端另出）。
