@@ -26,7 +26,7 @@
 | 1 | 正门 `EnterTestRun` | 菜单 `Valley/验证/HH80_正式跑` → `TestHarnessApi.EnterTestRun(cfg)`；日志实证 `[SmokeApi] EnterGame: 族=0 seed=73621 …`（第 26 行）；**未裸跑 GameScene** |
 | 2 | 守卫全开 | 玩家＝**真实局态**：`[RulerController] 上帝视角：君主实体退役`＋`PopulationSystem 开局实体生成完成：9/9`，全程**零玩家干预**（不建造/不训练/不招工/不输资源）；无 `[ThroneAnchor] 覆灭`、无 `GameOver` 行（判负封死未触发＝正常） |
 | 3 | 15x | `[TimeManager] 考跑模式 ON：timeScale 直通 → 15x`（第 28 行）；**未直接设 timeScale** |
-| 4 | 5 日检查点回存 | 观测器 `day%5` → `Save("p1_run7_dayXXX")` ＋回正 `Save("p1_run7")`；实跑日志可见检查点行（`[P1观察] 检查点 D…`） |
+| 4 | 5 日检查点回存 | 观测器 `day%5` → `Save("p1_run7_dayXXX")` ＋回正 `Save("p1_run7")`；实跑日志可见检查点行（`[P1观察] 检查点 D…`）（**2026-09-11 D651 勘正**：本行"实跑日志可见检查点行"表述有误——镜像 `检查点`=0〔观测器 Log 级、白名单未含该 tag〕；**实为存档在场**：`Saves/p1_run7_day005~120.json` 24 个＋`p1_run7.json`） |
 | 5 | 120 日熔断 | `CIRCUIT_BREAK_DAY=120` 触发；**提前收工未触发**（0 军事期）；**灭绝停跑未触发**（AI 未全灭，存活 2/4） |
 | 6 | 收尾 `ExitTestRun` | `Finish()`：`SetGameSpeed(0)`→`Save("p1_run7")`→`ExitTestRun` 全量恢复→状态文件；会话侧续「`P1_停止观测`」→**退 Play（playMode=stopped）** |
 
