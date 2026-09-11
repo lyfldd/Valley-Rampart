@@ -2,7 +2,7 @@
 param([switch]$Execute)
 
 $ErrorActionPreference = 'Stop'
-$root = 'C:\Users\trs\Desktop\美术资源文件夹'
+$root = 'C:\Users\trs\Desktop\Valley Rampart\美术资源文件夹'
 
 $raceDir = @{ '人类' = 'human'; '兽人' = 'orc'; '矮人' = 'dwarf'; '精灵' = 'elf' }
 
@@ -148,7 +148,7 @@ if (Test-Path $dWall) {
 Add-Item (Join-Root '普通建筑\矿脉石堆枯木\矿脉.png')   (Join-Root 'Buildings\neutral\features\feat_orevein.png')
 Add-Item (Join-Root '普通建筑\矿脉石堆枯木\石堆.png')   (Join-Root 'Buildings\neutral\features\feat_stone_pile.png')
 Add-Item (Join-Root '普通建筑\矿脉石堆枯木\枯木.png')   (Join-Root 'Buildings\neutral\features\feat_deadwood.png')
-Add-Item (Join-Root '普通建筑\流浪汉营地\流浪汉营地.png') (Join-Root 'Buildings\neutral\features\feat_vagrant_camp.png')
+Add-Item (Join-Root '普通建筑\流浪汉营地\流浪汉营地.png') (Join-Root 'Buildings\neutral\building_vagrant_camp.png')
 
 $treeMap = @{ '热带' = 'tropical'; '亚热带' = 'subtropical'; '温带' = 'temperate'; '寒带' = 'cold' }
 $dTree = Join-Root '普通建筑\树木'
