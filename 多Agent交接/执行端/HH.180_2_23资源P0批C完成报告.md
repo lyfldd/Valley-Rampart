@@ -1,7 +1,7 @@
 # HH.180｜2_23 资源 P0 批C 完成报告（R-C1~R-C5）
 
 > 执行端（Unity 轨）· 2026-09-11
-> 状态：⏳ 待策划验收（批 commit 已随本报告落盘，未 push）
+> 状态：✅ 已验收成立（D643，2026-09-11 主策划端；附条 C′）
 > 锚点：D638（0.6 §一百六十七，2026-09-11）=批B 验收成立+批C 解锁；D639（0.6 §一百六十八，2026-09-11）=批C 开工准+列报1~8 逐裁（通道B 信号=`Flow.In(r)/pop`、铁不参与触发）
 > 编号：**HH.177 撞号顺延 HH.180**（美术端 09-10 先落盘占用 HH.177 且 D641 已裁决；HH.178=训练轨 F26、HH.179=美术端；D639 顺延裁定漏见此号，用户拍板顺延 HH.180——撞号纪要见 §八）
 
@@ -95,3 +95,31 @@
 
 - 回写：`_编号登记.md`（水位线 HH→HH.180＋HH.175 行状态→已交付待验收＋新增 HH.180 行）／`_交接索引.md`（HH.175 行完成报告指控 HH.176→HH.180＋新增 HH.180 行）／`_任务队列.md`（2_23 资源 P0 批C 行「完成报告=HH.177」→HH.180＋状态→🚧交付待验收）／`河谷防线_开发计划书.md` 工作日志插行（本行）
 - commit 范围（只提本批）：KingdomBrain.cs / UtilityScorer.cs / KingdomDiagnosisConfig.cs / Smoke_2_23RP0.cs（+.meta）＋本报告＋四回写文件；禁 `git add -A`；**未 push**
+
+---
+
+## 十、策划裁决（主策划端 · **D643**，2026-09-11）
+
+> **判据三直读＝已过**（①设计稿＝2_23 清单 §三 批C R-C1~R-C5＋§四/§八 S-B1；②代码实读＝`dd73ef2` 10 文件 746+/13− 构成吻合／`ExecuteGrainTriage` L1226／`DecideTriage` L1265（纯函数）／`ResolveTriageResource` L1287／`TriageDecision` L1386／**D639 列报5 改裁真落地** L1276 `dailyInPerPop < channelBOutputPerPop`／`ExecuteBuildFocus(…, overrideBuildingId)` L1174／`ResolveTriageDefId` L1329／`NeedScore` 前置块 L153-160／`MapProduceToEco` L494／`CountProductionOf` L1317；③字段直读＝`shortageSeverityOrder={3,0,1,2,4}`（粮→金→石→木→铁跳过）、`channelBOutputPerPop=1`、`storageOccupancyThreshold=0.9`、`reserveTargetDaysOther=3`、**`ProduceKind{Resource,Unit}`（Resource=0＝默认值）**）。**门禁复核**＝`AI.Core` git status 空 ✅／死表不在变更面 ✅／FocusController 三级序（粮→人口→被攻）**未动** ✅／探针 `Smoke_2_23RP0` run1·run2 **同字节 1773B** ＋ `Smoke_2_22P0` 2422B 在场 ✅／**批 commit 已落盘（#9 交付即 commit 兑现）** ✅。
+
+**判决：验收成立销号** ✅（R-C1~R-C5 核心全兑现；D639 列报 1~8 逐条落实经 §七 对照＋本裁复核）
+
+| 列报 | 裁决 |
+|---|---|
+| 1 `triageCapacityDefs` 只配 Food→farm / Stone→quarry | ✅**认可**——Wood/Gold/Metal 无实体产能建筑＝事实；缺省自然落 通道B/C；**如需 Wood 产能（lumber）另立项**（不在本批） |
+| 2 `CountProductionOf` 含仓储类 | 🔴**改裁 B′（口径必须收窄）**——见下 |
+| 3 P5 集成探针用临时删建筑构造 | ✅**知悉**（构造性动作；执行端已声明未隐含生产行为假设） |
+
+### 列报2 改裁详情（C′ 补笔）
+
+- **实证根因**：`MapProduceToEco`（KingdomBrain.cs L494）只卡 `def.producer.kind != ProduceKind.Resource → -1`；而 **`ProduceKind { Resource, Unit }` 的第 0 值＝`Resource` 是默认值** ⇒ **仓储类（`granary.asset`/`warehouse.asset` 无 `producer:` 段、`kind` 默认＝0）被判为产能建筑**（granary→Food／warehouse→Wood）。
+- **后果（真缺陷，非纯潜在）**：**通道A**（`Count(Production[r])==0`）与 **R-C2**（`ResolveTriageDefId` 按 `Count/pop` 挑最缺）均被仓储**掩蔽** ⇒ **Farm 被摧毁后不会重建粮产能**（wartime 恢复路径断裂）。
+- **为何现在改最便宜**：R-C5 只是**对拍契约**（sim 侧未实施）⇒ 此刻收窄口径＝**零跨仓返工成本**；一旦训练仓按旧口径实施再改＝跨仓返工。
+- **裁 C′ 补笔（规格）**：①`ProduceKind` **尾部追加 `None`**（`{Resource, Unit, None}`——**禁改中间位**，int 序列化铁律）②**全库清点**「带五元 `outputResource` 但非产能」的建筑并显式 `producer.kind = None`（**禁凭名单**，至少 granary/warehouse，须复扫 market/税务所等同类）③探针加**正例**「有 Granary 无 Farm 时 通道A/R-C2 仍选建 farm」④契约 §六 同步注明"产能计数＝真产能建筑（排除 `None`）"。
+- **承接与阻塞**：**C′＝「资源 P0 收口」的最后一步 ⇒ 七考前置附条**（批C 销号不阻塞；**七考放行**需 C′ 落盘）。
+
+**验收三问（钩子2，前置＝判据三直读已过）**：①**发生**＝批A（D632）验收时**只核 R-A1 四件真值"在场"、未直读产能建筑的判定字段**（`MapProduceToEco` 的 `kind==Resource`）⇒ **枚举默认值陷阱**未察；②**定性＝策划侧验收漏洞**（判据三直读未及「判定口径字段」这一维度）；③**教训核查＝L-24/L-25 家族实例注记**（判据未直读的"判定字段"变体）。
+
+**嘉奖**＝执行端**如实上报列报2（本可沉默）**＋**容器迭代 14/7→22/0 全为夹具/时序缺陷、产品代码零改动**（正面样本）。
+
+**边界**＝策划端**零代码/零资产动**（仅裁决＋文档回写）；**执行端下串**＝C′ 补笔（`ProduceKind.None`＋全库清点＋正例探针），七考放行以其落盘为准。
