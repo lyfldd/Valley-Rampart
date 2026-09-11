@@ -107,6 +107,8 @@
 
 **实盘澄清（D659 勘正①）**：`feat_vagrant_camp`（§三⑦ 流浪汉营地）——**设计与实体均在场**（`VagrantCamp.asset` def：displayName 流浪汉营地／描述含招募机制／role=4／sourceType=12；`VagrantCampSystem`：生成＋补员＋招募＋HomePoint；`MapGenRules` 生成；文档 `3.5.1 §4.1` 决策11/13＋§9.1）。**真缺口＝美术「占位/键」层**：渲染走 `BuildingVisual.GetPlaceholderKey`→`Core/PlaceholderSprites.cs` 1D key 表，**该表与等轴 artId 表均无 camp 条目**⇒当前走兜底占位。**用户裁定（2026-09-11）**：营地＝**与矿洞锚点 `feat_mine` 同性质的地图预设生成物 ⇒ 前缀归 `feat_`**（`feat_vagrant_camp` 成立）；**美术素材已就绪**，接入批挂接即可，**占位/兜底不立债**。
 
+**D662 勘正（2026-09-11，承 HH.209 裁决）**：营地前缀由 `feat_` **改为 `building_`**（**`building_vagrant_camp`**）——判据直读 `BuildingType.VagrantCamp`（`GridTypes.cs:163`）＝**建筑实体**（非 `FeatureType`）、渲染走 `BuildingVisual` 建筑路径 ⇒ 归 `building_` 域（对齐 ⑥ 普通建筑）；映射表 §十.2→§十.1。**D659 决策3（弓箭手待机）**亦补注：彼判「非漏交付」正确，但**尺寸异类（96×102 vs 族内 114×114）⇒ 需重出，归批5**（HH.209 T3①）。
+
 ### 衍生产物
 - **更新文档**：HH.103《美术资源接入映射表》§三（后缀 `_l`→`_lv`）＋ §十（命名规范总表 + ⑥普通建筑/⑦自然资源/⑧脚手架 待接入行）
 - **派生执行任务（执行端，非美术端）**：`PlaceholderSprites.cs:46` 键 `feat_wood_pile`→`feat_deadwood`（HH.103 接入批搭车，1 行、零消费键、零风险）
