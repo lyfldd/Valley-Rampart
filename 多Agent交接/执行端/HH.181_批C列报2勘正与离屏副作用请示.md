@@ -1,7 +1,7 @@
 # HH.181｜2_23 资源 P0 批C 列报2 勘正请示（C′ 前提勘正＋范围实勘＋离屏副作用）
 
 > 执行端（Unity 轨）· 2026-09-11
-> 状态：⏳ 待策划端裁决（**零代码/零资产改动**；按 vr-id-ledger 先登记后落盘，账本已占号 HH.181）
+> 状态：✅ 已裁决（**D644**，2026-09-11 主策划端；裁 A 收敛版＋姊妹项挂账 DZ-089）
 > 依据：D643（0.6 §一百七十二，2026-09-11 批C 验收成立销号＋列报三裁：列报2 **🔴改裁 B′**＋附条 **C′**）· HH.180 §四列报2 · HH.180 §六（R-C5 契约）
 > 裁定请求：C′ 的**实施口径**（因判据三直读发现 D643 前提细节与实际不符，且照抄 C′ ② 有未预期副作用）
 
@@ -67,3 +67,37 @@
 - 取号：账本水位线 `HH.180→HH.181` ＋ HH.181 行（**独立 commit `64bdeaa`**，遵 D640 #10 取号原子化）
 - 本报告 ＋ 索引（HH.181 行）＋ 主计划书工作日志插行（**随本串第二笔 commit**）
 - 边界：策划端零代码/零资产；训练仓不代提；不 push
+
+---
+
+## 六、策划裁决（主策划端 · **D644**，2026-09-11）
+
+> **先认账**：D643 的根因表述**错了**——我上轮 `^producer:` grep **少了 2 空格缩进** ⇒ 假阴性 ⇒ 误断「granary/warehouse 无 `producer:` 段」。**真实机制＝资产有 `producer:` 段（`kind:0`/`rate:0`）而 `MapProduceToEco` 缺 `rate>0` 守卫**。执行端**判据三直读勘正上级根因** —— **顶级正面样本，记嘉奖**。
+> **判据三直读（本裁，带阳性对照：41 资产 / 40 含 `producer:`）＝已过**（①设计稿＝D643／HH.181 全文；②代码实读＝`MapProduceToEco` L492-505／`BuildingFactory.cs:295`／`AbstractEconomySettlement.cs:197`／`AbstractEconomySettler.cs:143`／`TaskScheduler.cs:1045`／`GameEvents.cs:176-190`；③字段直读＝**farm `rate=2`／quarry `rate=5`**（真产能）vs **granary/warehouse/wood_pile/stone_pile/market `rate=0`**、`outputResource` 逐值）。
+
+**判：执行端三条勘正全部成立**（①前提②范围③离屏副作用）。
+
+| 请求 | 裁决 |
+|---|---|
+| C′ 实施口径 | ✅ **裁 A（收敛版）**＝**只加 rate 守卫**（零漂移）；**否 B**（触离屏行为变更）；**C 不取**（会阻塞七考） |
+| 姊妹项（`AbstractEconomySettlement.cs:197` 同补 rate 守卫？） | 🔴 **本轮不擅动**（＝行为变更）⇒ **立 `DZ-089` 挂账 + 独立裁决** |
+
+### 裁 A（C′ 收敛版 · 规格）
+
+1. **核心（必需）**：`MapProduceToEco` L494 加**真产能守卫**，**口径对齐 `BuildingFactory.cs:295`** —— `def == null || def.producer.kind != ProduceKind.Resource || def.producer.rate <= 0f || def.isResourceNode → -1`。⇒ 诊断侧只计**真产能建筑** ⇒ **解 通道A/R-C2 被仓储/非产能掩蔽**；**零行为漂移**（`BuildingFactory` 本就未给 rate=0/`isResourceNode` 建筑挂 `ProducerComponent`，实际产出未变）。
+2. **`ProduceKind.None` 尾追＝本轮不做**（无消费者＝死值；真防护已由 ① 提供）；**资产 `kind` 显式声明＝撤回**（否则触离屏停产）。
+3. **探针**：**正例**「有 Granary 无 Farm 时 通道A/R-C2 仍选建 farm」；**负例**「farm/quarry 仍计产能；granary/warehouse/wood_pile/stone_pile/**Gold-默认族(~25)** 均**不再计**」。
+4. **契约 §六 同步**：`Production` 计数口径＝`rate>0 && kind==Resource && !isResourceNode`。
+5. **门禁**：编译 0 警 0 错 ＋ `Smoke_2_23RP0` **22/0**（＋新正/负探针）＋ `Smoke_2_22P0` **32/0 零退化** ＋ **确定性**（诊断块纯函数同 seed 同输出）＋ `AI.Core` git status 空 ＋ 死表零动。
+6. ⇒ **A 零漂移 ⇒ C′ 落盘即「2_23 资源 P0」收官 ⇒ P1 七考放行**。
+
+### 姊妹项挂账（`DZ-089`）
+
+- `AbstractEconomySettlement.cs:197` **同缺 `rate>0` 守卫**（与诊断侧同族）⇒ 仓储/资源点**在离屏 Abstract 经济中真实产 Food/Wood/Stone** ⇒ **离屏侧与工厂侧口径漂移**（三处口径：工厂 / 诊断 / 离屏）。
+- **独立裁决前置**：先确「**离屏经济是否应排除仓储/资源点**」的**设计稿口径** ＋ 确定性双跑 + P1 回归 + 位移声明；**不在 C′ 内擅动**（触零行为漂移红线）。
+
+**验收三问（钩子2，前置＝判据三直读已过）**：①**发生**＝**策划端**（我）D643 根因表述错——`^producer:` 检索**少缩进** ⇒ 假阴性 ⇒ 误断「无 producer 段」；真机制＝`MapProduceToEco` 缺 rate 守卫（与 `BuildingFactory:295` 漂移）；②**定性＝策划侧失误**（判据三直读② 的**执行质量**不足：检索手段错且**未做阳性对照**）；③**教训核查＝新增 `L-29`「检索假阴性」**（今日**二次实证**：①`Select-String "**/*.cs"` 不递归 ②`^producer:` 少缩进）⇒ 按 §四 **升硬性检查项**；＋ **L-28 实例注记**（真实触发路径＝「有 `producer` 段但 `rate=0` 未设 `kind=None`」，非「无段致默认」）。
+
+**嘉奖**＝执行端**不盲从附条 ＋ 判据三直读勘正上级根因 ＋ 主动报「停手待裁」 ＋ 建议 A（最小改动/零漂移）** —— **顶级正面样本**（反事实：若照抄 C′ ② 全库改 `None` ⇒ 离屏停产＝行为变更、触红线）。
+
+**边界**＝策划端**零代码/零资产动**（仅裁决＋文档回写）；**执行端下串**＝按裁 A 落地 C′（rate 守卫 + 正/负探针 + 契约 §六），**七考放行以其落盘为准**。
