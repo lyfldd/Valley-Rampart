@@ -105,7 +105,7 @@
 
 **勘正 1 笔**：HH.206 §三① 中精灵鹿骑 `_deerider` → **`_deerrider`**（对齐映射表 §二 约定＝Occupation 去驼峰连写，同 `wolfrider`/`windwalker`；代码 `Occupation.DeerRider`＝Deer+Rider）——本信两处（§三①、§三②示例 `unit_elf_deerider_run.png`）同勘正。
 
-**实盘提示（非决策）**：`feat_vagrant_camp`（§三⑦ 流浪汉营地）**代码内无对应 artId**（营地 def id＝`VagrantCamp`）⇒ 接入批需新建该 artId（或沿用 def displayName），请在 §十 行内标注。
+**实盘澄清（D659 勘正①）**：`feat_vagrant_camp`（§三⑦ 流浪汉营地）——**设计与实体均在场**（`VagrantCamp.asset` def：displayName 流浪汉营地／描述含招募机制／role=4／sourceType=12；`VagrantCampSystem`：生成＋补员＋招募＋HomePoint；`MapGenRules` 生成；文档 `3.5.1 §4.1` 决策11/13＋§9.1）。**真缺口＝美术「占位/键」层**：渲染走 `BuildingVisual.GetPlaceholderKey`→`Core/PlaceholderSprites.cs` 1D key 表，**该表与等轴 artId 表均无 camp 条目**⇒当前走兜底占位。**用户裁定（2026-09-11）**：营地＝**与矿洞锚点 `feat_mine` 同性质的地图预设生成物 ⇒ 前缀归 `feat_`**（`feat_vagrant_camp` 成立）；**美术素材已就绪**，接入批挂接即可，**占位/兜底不立债**。
 
 ### 衍生产物
 - **更新文档**：HH.103《美术资源接入映射表》§三（后缀 `_l`→`_lv`）＋ §十（命名规范总表 + ⑥普通建筑/⑦自然资源/⑧脚手架 待接入行）
