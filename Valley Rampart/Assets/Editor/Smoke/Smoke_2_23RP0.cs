@@ -321,6 +321,81 @@ public static class Smoke_2_23RP0
         Log("P5b 正常态 no-op（无触发→⑤ 不动工，同帧比数 " + bBefore + "→" + bAfter + "）", bAfter == bBefore);
         SituationHub.Remove(1);
 
+        // ================= C′ 探针（2_23 批C·C′，D644 裁 A：真产能守卫） =================
+        // 背景：MapProduceToEco 缺 rate>0/isResourceNode 守卫 ⇒ 仓储类与非产能建筑（~25 个 outputResource 默认 0=Gold、
+        // wood_pile/stone_pile）被计入产能盘点 ⇒ 掩蔽 通道A/R-C2。C′ 收口：只计真产能建筑（口径对齐 BuildingFactory.cs:295）。
+        var _mapMi = tKB.GetMethod("MapProduceToEco", BindingFlags.NonPublic | BindingFlags.Static);
+        var _bebMi = tKB.GetMethod("BuildEconomyBlock", BindingFlags.NonPublic | BindingFlags.Static);
+        var _cpoMi = tKB.GetMethod("CountProductionOf", BindingFlags.NonPublic | BindingFlags.Static);
+        var _execBuildMi = tKB.GetMethod("ExecuteBuildFocus", BindingFlags.NonPublic | BindingFlags.Instance);
+        Log("P6a C′ 反射面在场（MapProduceToEco/BuildEconomyBlock/CountProductionOf/ExecuteBuildFocus）="
+            + (_mapMi != null && _bebMi != null && _cpoMi != null && _execBuildMi != null),
+            _mapMi != null && _bebMi != null && _cpoMi != null && _execBuildMi != null);
+
+        if (_mapMi != null)
+        {
+            // 负例①：真产能**仍计**（farm→Food=3／quarry→Stone=1／Blacksmith→Metal=9）
+            int mFarm = (int)_mapMi.Invoke(null, new object[] { BuildingFactory.FindDefById("farm") });
+            int mQuarry = (int)_mapMi.Invoke(null, new object[] { BuildingFactory.FindDefById("quarry") });
+            int mSmith = (int)_mapMi.Invoke(null, new object[] { BuildingFactory.FindDefById("Blacksmith") });
+            Log("P6b 负例 真产能仍计（farm→Food=" + mFarm + "／quarry→Stone=" + mQuarry + "／Blacksmith→Metal=" + mSmith + "）",
+                mFarm == (int)EcoResource.Food && mQuarry == (int)EcoResource.Stone && mSmith == (int)EcoResource.Metal);
+
+            // 负例②：rate=0 建筑**不再计**（含仓储 2 座 + 木石堆 + Gold-默认族抽样）
+            string[] zeroRateIds = { "Granary", "Warehouse", "wood_pile", "stone_pile", "castle", "House", "market" };
+            bool zOk = true; string zLog = "";
+            for (int i = 0; i < zeroRateIds.Length; i++)
+            {
+                int v = (int)_mapMi.Invoke(null, new object[] { BuildingFactory.FindDefById(zeroRateIds[i]) });
+                zLog += zeroRateIds[i] + "=" + v + " ";
+                if (v != -1) zOk = false;
+            }
+            Log("P6c 负例 rate=0 建筑不再计产能（" + zLog + "）", zOk);
+
+            // 负例③：资源点（isResourceNode）**不再计**（tree/farmland/mine/ore_vein）
+            string[] nodeIds = { "tree", "farmland", "mine", "ore_vein" };
+            bool nOk = true; string nLog = "";
+            for (int i = 0; i < nodeIds.Length; i++)
+            {
+                int v = (int)_mapMi.Invoke(null, new object[] { BuildingFactory.FindDefById(nodeIds[i]) });
+                nLog += nodeIds[i] + "=" + v + " ";
+                if (v != -1) nOk = false;
+            }
+            Log("P6d 负例 资源点(isResourceNode)不再计产能（" + nLog + "）", nOk);
+
+            // 观测（列报，不判）：Well rate=4>0 越守卫 + outputResource 默认 0=Gold ⇒ 仍计 Gold —— 同族残留
+            int mWell = (int)_mapMi.Invoke(null, new object[] { BuildingFactory.FindDefById("Well") });
+            _log.AppendLine("[列报] Well 映射=" + mWell + "（rate=4 越守卫；outputResource 默认 0=Gold＝同族残留，供 DZ-089 家族处置）");
+        }
+
+        // 正例（真实管线端到端）：有 Granary 无 Farm → 诊断 Food 产能=0 → 通道A 仍选建 farm
+        if (_bebMi != null && _cpoMi != null && _execBuildMi != null && _decideMi != null)
+        {
+            RemoveBuilding(1, "farm"); RemoveBuilding(1, "Granary"); RemoveBuilding(1, "farmland");
+            yield return null;   // 清场落地
+            int gBefore = CountBuilding(1, "Granary");
+            if (gBefore == 0)
+            {
+                // 真实建 1 座 Granary（走生产门面；Granary cost=wood4，前面已注资）
+                int focusG = k1.focus;
+                k1.focus = (int)UtilityAction.BoostHarvest;
+                int radiusG = bcfg.aiBuildRadius; bcfg.aiBuildRadius = 48;
+                _execBuildMi.Invoke(brain, new object[] { k1, bcfg, "Granary" });
+                bcfg.aiBuildRadius = radiusG;
+                k1.focus = focusG;
+                yield return new WaitForEndOfFrame();
+            }
+            int gAfter = CountBuilding(1, "Granary");
+            // 真实诊断管线（注：BuildEconomyBlock 内含 TakeFlow 读后清零＝生产同款语义，探针窗口内一次性消费）
+            var ecoReal = (EconomyBlock)_bebMi.Invoke(null, new object[] { k1, TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0 });
+            int foodCnt = ecoReal != null ? (int)_cpoMi.Invoke(null, new object[] { ecoReal, EcoResource.Food }) : -1;
+            TriageDecision dReal = ecoReal != null
+                ? (TriageDecision)_decideMi.Invoke(null, new object[] { ecoReal, dcfg, EcoResource.Food })
+                : TriageDecision.NoOp;
+            Log("P6e 正例 有 Granary(" + gAfter + ")无 Farm → 诊断 Food 产能=" + foodCnt + " → 通道A 决策=" + dReal,
+                gAfter >= 1 && foodCnt == 0 && dReal == TriageDecision.BuildCapacity);
+        }
+
         // 恢复探针前快照语义（交回真实日 tick；AI 王国演化正常化）
         Log("P1d 恢复：SituationHub 交回日 tick（Remove 已清注入）", true);
 

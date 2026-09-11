@@ -488,10 +488,16 @@ public class KingdomBrain
         return EconomyDiagnosis.Build(input);
     }
 
-    /// <summary>产能建筑 → 五元资源映射（对齐 AIEconomySettlement.MapToPack/AbstractEconomySettlement 口径）；-1=非五元跳过。</summary>
+    /// <summary>产能建筑 → 五元资源映射（对齐 AIEconomySettlement.MapToPack/AbstractEconomySettlement 口径）；-1=非五元跳过。
+    /// 2_23 资源 P0 批C·C′（D644 裁 A）：加**真产能守卫**——口径对齐 BuildingFactory.cs:295
+    /// （rate>0 && kind==Resource && !isResourceNode），只计真产能建筑。
+    /// 修前缺陷：缺守卫致仓储类（Granary→Food／Warehouse→Wood）与非产能建筑（~25 个 outputResource 默认 0=Gold、
+    /// wood_pile/stone_pile）被计入产能盘点 ⇒ 掩蔽 ⑤通道A 与 ③R-C2 产能缺口判定（Farm 被摧毁后不重建粮产能）。
+    /// 零行为漂移：工厂侧本就未给 rate=0 / isResourceNode 建筑挂 ProducerComponent（实际产出未变），本改仅收口诊断口径。</summary>
     private static int MapProduceToEco(BuildingDef def)
     {
-        if (def == null || def.producer.kind != ProduceKind.Resource) return -1;
+        if (def == null || def.producer.kind != ProduceKind.Resource
+            || def.producer.rate <= 0f || def.isResourceNode) return -1;   // C′：真产能守卫（D644）
         if (def.isBlacksmith) return (int)EcoResource.Metal;   // 铁匠铺 矿石→Metal（D200/D609）
         switch (def.outputResource)
         {

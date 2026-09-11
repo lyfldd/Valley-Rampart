@@ -63,7 +63,8 @@
 
 **① EconomyInput 五元口径（sim 侧需与 Unity 侧逐元对齐）**
 - 五资源：金 Gold=0 / 石 Stone=1 / 木 Wood=2 / 粮 Food=3 / 铁 Metal=4（EcoResource int）
-- 输入元：`In(r)` 日入（当日窗口累计入账）、`Out(r)` 日出（当日窗口累计消耗）、`Net(r)=In−Out`、`Population`、`Production.List<{Resource,Count,LevelSum,RateSum,WorkersSum}>`（产能建筑按资源聚合计数）、`GrainReserveDays=粮储备/日耗（口=人口×grainConsumptionPerPop）`、`Stock(r)` 国库存量、`StorageUsed/StorageCapacity/StorageOccupancy=Used/Capacity clamp01`
+- 输入元：`In(r)` 日入（当日窗口累计入账）、`Out(r)` 日出（当日窗口累计消耗）、`Net(r)=In−Out`、`Population`、`Production.List<{Resource,Count,LevelSum,RateSum,WorkersSum}>`（**真产能建筑**按资源聚合计数；**口径＝`rate>0 && kind==Resource && !isResourceNode`**〔D644 裁 A 收口；对照 `BuildingFactory.cs:295`〕——仓储类〔Granary/Warehouse〕、资源点〔tree/farmland/mine/ore_vein〕、非产能建筑〔rate=0〕**均不计**）、`GrainReserveDays=粮储备/日耗（口=人口×grainConsumptionPerPop）`、`Stock(r)` 国库存量、`StorageUsed/StorageCapacity/StorageOccupancy=Used/Capacity clamp01`
+  - **〔2026-09-11 同步（D644 C′／HH.182-183）〕**：本口径为 C′ 补笔落盘后的**正式对拍口径**，训练仓 sim 镜像请以此为准（收窄前口径〔含仓储/非产能〕已作废）。落地与探针见 HH.183。
 - 日入/日出口径＝日结路由当日窗口累计、每日重建清零、无持久态（D630 A+）
 
 **② 触发判定规格（ResolveTriageResource，纯函数）**
