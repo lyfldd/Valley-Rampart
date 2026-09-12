@@ -145,4 +145,41 @@
 5. **读数字段**：`[DiagMilitary]` 状态行新增 `avoid=<action:factor,…>`（口径§4.3）是否准？J6 依赖它。
 
 ---
+
 *执行端 2026-09-12（HH.225 开工回执，取号 `3a159d1`）。本回执＝只读核查＋方案报审，**未改业务码、未跑局、未 push**；停手待策划确认。*
+
+---
+
+## 九、策划端裁决（D675，2026-09-12）
+
+**结论：回执验收成立 → 准予实施。** 判据三直读已过（`KingdomBrain.cs:69/78/80-86/1190-1195/1200/1202`＋`UtilityScorer.cs:227-232`）。
+
+### 逐项裁（5＋1）
+
+| # | 请确认项 | 裁决 |
+|---|---|---|
+| 1 | 退避状态载体＝静态字典 | ✅ **准**（对齐 `s_dispatch` 先例「运行时态不入档」）。⚠️**勘正**：`Bump(id, train, ok)`（`:80`）**只有 train/build 二元维、无 action 维** ⇒ **不可直接复用** ⇒ 须建 **per-action 退避表**（`Dictionary<int,Dictionary<int,BackoffStat>>`，键＝`kingdomId × actionId`）；**禁 per-call-site 粒度**（过细会掩盖根因） |
+| 2 | 参数 SO 落点 | **新建 `ActionBackoffConfig.asset`**（**不并入** `SituationConfig`/`KingdomBrainConfig`）——单职责＋`so-data-driven`＋`ResourceBiasConfig` 先例（R-B2） |
+| 3 | "通用"边界 | **含非建造类 ⑥⑦⑯**（**是**统一适用全部行动）——退避是**机制级**问题（"选中但执行失败不降权"与行动类型无关）；只做建造类＝重犯 `DZ-123`/`D672`「改全局条律前未枚举全适用面」之误。**但实施前须先给"各行动失败落点清单"**（本回执只列了建造类） |
+| 4 | `DIAG_CIRCUIT_DAY=60`＋槽 `p1_fix2` | ✅ **准**（**禁回改主档 120/2**） |
+| 5 | `avoid=<action:factor,…>` | ✅ **准**（口径＝`ScoreTop` 实乘因子快照；**排除项＝不含 `NeedScore`/`Feasible`**，`L-35`） |
+| ⑥ | 训练仓门禁（红线②） | ✅ **准"仅跑 Unity 侧回归"**（`Smoke_2_22P0` 32/0 ＋ `Smoke_2_23RP0` 27/0 ＋ `2_17_Smoke_5`）——**但交付报告须写明"本批未经 sim 门禁，因 `AI.Core` 零命中＋域分离"**；**若后续任何改动触及 `AI.Core` ⇒ 回补 sim-sync 规定序** |
+
+### 🔴 判据三直读新增（执行端漏项）
+
+**修三处，非两处**：
+- `:1194`　选址无落位 → `Bump(false,false); return;`（回执已列）
+- **`:1200`　`BuildController.Instance == null` → `Bump(false,false); return;`（回执漏列）** ⇒ **须补观测日志**（现为零日志静默失败；同 `HH.88 件3` 静默点观测口精神）
+- `:1202`　`TryBuild=false`（回执已列）
+
+### 硬约束（采信升硬＋我补一条）
+
+- **①** 退避**只乘 `score`**、**禁**落进 `NeedScore`/`Feasible`（否则 `2_23RP0` P4 必 FAIL＋违 `D525 §3.7` 分层）。
+- **②** 退避状态须有 **`Reset` 入口**并与 **`ResetDispatchStats` 同点清零**（`Valley2_17_Smoke_P0.cs:179/211` 已在调）；**并须核 `SituationSnapshot.Clear()` 同族先例**（`SituationSnapshot.cs:138` 自注"对齐 KingdomBrain.ResetDispatchStats 先例"）。
+- **③（我补）** 退避须**自愈**（状态变化即复位）**且有上限**；达上限仍失败 ⇒ **写 `verdict` 升级报裁**——防"永久弃建"（把死循环改成静默放弃）。
+
+### 下一步
+
+按批序：**实施**（三处失败点＋per-action 退避表＋新 SO＋`avoid=` 读数）→ **同 seed 对照**（`p1_fix2`，D1~D60）→ **在线判据表 J6/J7/J8**（三列齐，照 §七）→ **交付报告**（按水位线取号；须含：三处落点清单／未经 sim 门禁声明／自愈与上限证据／回归三容器）。
+
+**教训核查：无新增条目**（`L-33` 在场性核查做得扎实——含阳性对照＋明确排除 `HitCooldownStateMachine` 不作等价路径论证）；`L-24` 家族核查＝无新实例。
