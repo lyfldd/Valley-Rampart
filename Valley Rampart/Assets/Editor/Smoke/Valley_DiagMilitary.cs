@@ -48,35 +48,44 @@ public static class DiagMilitary
     /// <summary>清判据状态（跑局容器起跑时调用；防跨局/跨批污染）。</summary>
     public static void ResetJudges() => _judge.Clear();
 
-    private static bool Has(JudgeKind[] arr, JudgeKind j)
+    /// <summary>容器早停用：查询**单个**判据是否命中该 AI。
+    /// 作用域（全批任意国 / 指定国）由容器按「判据须与其服务验收句**同级＋同作用域**」决定（D666 追加裁①②）。</summary>
+    public static bool TryJudgeOne(int kId, JudgeKind kind, int day, out string detail)
     {
-        if (arr == null) return false;
-        for (int i = 0; i < arr.Length; i++) if (arr[i] == j) return true;
-        return false;
-    }
-
-    /// <summary>容器早停用：该 AI 是否命中「enabled 内」任一判据。
-    /// 优先级＝死滞 ＞ 石链僵死（止损）＞ 零入库 ＞ 通道未落地 ＞ 机制面已证（§8.2 机制 1+3）。</summary>
-    public static bool TryJudge(int kId, JudgeKind[] enabled, int day, out JudgeKind kind, out string detail)
-    {
-        kind = JudgeKind.None; detail = "";
+        detail = "";
         JudgeState s;
         if (!_judge.TryGetValue(kId, out s)) return false;
-        if (Has(enabled, JudgeKind.Deadlock) && s.belowGateDays >= JudgeDeadlockDays)
-        { kind = JudgeKind.Deadlock; detail = "drive≤0 且 target<门 连续" + s.belowGateDays + "日"; return true; }
-        if (Has(enabled, JudgeKind.StoneCold) && s.noGainDays >= JudgeStoneColdDays)
-        { kind = JudgeKind.StoneCold; detail = "stone=" + s.prevStone + " 连续" + s.noGainDays + "日未增且石入库=0（ANOMALY:stoneChain）"; return true; }
-        if (Has(enabled, JudgeKind.NoIncome) && s.noIncomeDays >= JudgeNoIncomeDays)
-        { kind = JudgeKind.NoIncome; detail = "六资源全零入库连续" + s.noIncomeDays + "日（ANOMALY）"; return true; }
-        if (Has(enabled, JudgeKind.ChannelAbsent) && day >= JudgeChannelMinDay && CountWorldResourceSources() <= 0)
-        { kind = JudgeKind.ChannelAbsent; detail = "世界资源点任务源注册数=" + CountWorldResourceSources() + "（通道未落地）"; return true; }
-        if (Has(enabled, JudgeKind.TargetGateHit) && s.gateHit)
-        { kind = JudgeKind.TargetGateHit; detail = "target≥门 首达 @D" + s.gateHitDay; return true; }
-        return false;
+        switch (kind)
+        {
+            case JudgeKind.Deadlock:
+                if (s.belowGateDays >= JudgeDeadlockDays) { detail = "drive≤0 且 target<门 连续" + s.belowGateDays + "日"; return true; }
+                return false;
+            case JudgeKind.StoneCold:
+                if (s.noGainDays >= JudgeStoneColdDays) { detail = "stone=" + s.prevStone + " 连续" + s.noGainDays + "日未增且石入库=0（ANOMALY:stoneChain）"; return true; }
+                return false;
+            case JudgeKind.NoIncome:
+                if (s.noIncomeDays >= JudgeNoIncomeDays) { detail = "六资源全零入库连续" + s.noIncomeDays + "日（ANOMALY）"; return true; }
+                return false;
+            case JudgeKind.ChannelAbsent:
+                if (day >= JudgeChannelMinDay && CountGatherSources() <= 0)
+                { detail = "世界资源点采集源注册数=" + CountGatherSources() + "（通道未落地；副产源=" + CountByproductSources() + " 不计）"; return true; }
+                return false;
+            case JudgeKind.TargetGateHit:
+                if (s.gateHit) { detail = "target≥门 首达 @D" + s.gateHitDay; return true; }
+                return false;
+            default: return false;
+        }
     }
 
-    /// <summary>世界资源点任务源注册数（HH.221 资源对等批判据③；只读反射 `TaskScheduler._sources`；-1=不可达）。</summary>
-    public static int CountWorldResourceSources()
+    /// <summary>世界资源点**采集源**注册数（HH.221 资源对等批判据③口径；只读反射 `TaskScheduler._sources`；-1=不可达）。
+    /// 口径修订（HH.222 负探针实测发现）：原按 `Gather/Byproduct/Resource` 混合计数会被**矿洞副产搬运源**（`MineByproductComponent`）灌水
+    /// （实测 `chSrc=4` 全部来自副产）⇒ 判据③会漏报"AI 采集通道未落地"。现**只数采集源**（类型名含 `Gather`）。</summary>
+    public static int CountGatherSources() => CountSourcesByKeyword("Gather");
+
+    /// <summary>矿洞副产搬运源注册数（`Byproduct`；打点用，不参与判据③）。</summary>
+    public static int CountByproductSources() => CountSourcesByKeyword("Byproduct");
+
+    private static int CountSourcesByKeyword(string kw)
     {
         try
         {
@@ -90,8 +99,7 @@ public static class DiagMilitary
             foreach (var o in col)
             {
                 if (o == null) continue;
-                string tn = o.GetType().Name;
-                if (tn.Contains("Gather") || tn.Contains("Byproduct") || tn.Contains("Resource")) n++;
+                if (o.GetType().Name.Contains(kw)) n++;
             }
             return n;
         }
@@ -192,7 +200,7 @@ public static class DiagMilitary
           .Append(" militaryTarget=").Append(target)
           .Append(" drive=").Append(drive >= 0f ? drive.ToString("F4") : "n/a")   // HH.217：内源势能实读（正/负探针通道）
           .Append(" verdict=").Append(verdict)                                     // HH.222：在线判据打标（跑局容器命中即停）
-          .Append(" chSrc=").Append(CountWorldResourceSources());                  // HH.221 判据③：世界资源点任务源注册数
+          .Append(" chSrc=").Append(CountGatherSources()).Append('/').Append(CountByproductSources());   // HH.221 判据③：采集源/副产源（口径已分离）
         Debug.LogWarning(sb.ToString());
 
         DumpAction(tag, k, acfg, UtilityAction.RecruitWarrior, "⑦招战士", st);
@@ -203,6 +211,10 @@ public static class DiagMilitary
         DumpAction(tag, k, acfg, UtilityAction.BuildWarAcademy, "⑰c建战争学院", st);
         DumpAction(tag, k, acfg, UtilityAction.BuildWarCamp, "⑰d建兽人战营", st);
         DumpAction(tag, k, acfg, UtilityAction.BuildArcheryRange, "⑰e建精灵射箭场", st);
+        // HH.222（D666 裁）：(B)(C) 正式诊断取证件——③建产能（石链自愈唯一行动·axis=Belligerence）＋⑨修工事城墙（焦点霸占主嫌疑·axis=Defense）＋强化采集
+        DumpAction(tag, k, acfg, UtilityAction.BuildCapacity, "③建产能", st);
+        DumpAction(tag, k, acfg, UtilityAction.BuildWall, "⑨建城墙", st);
+        DumpAction(tag, k, acfg, UtilityAction.BoostHarvest, "⑩强化采集", st);
 
         // 评分淘汰构成普查（HH.115 件E#6 既有公开口）
         UtilityScorer.ScoreCensus census;

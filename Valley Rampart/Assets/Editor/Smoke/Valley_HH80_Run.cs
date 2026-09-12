@@ -30,14 +30,24 @@ public static class Valley_HH80_Run
 
     // HH.222（D666 已裁 / test-harness-first §八 机制 1+3；教训 L-34）＝**在线判据·命中即停**：
     //   支撑/目标日志每日在流（探针 `verdict=`）⇒ 容器每轮检查，命中即 Finish("判据命中：X @D??")，不跑满窗口。
-    //   本批（负探针 weight=0）启用＝死滞（drive≤0 且 target<门 ≥5 日）＋石链僵死止损（stone ≥10 日不增且石入库=0）＋零入库异常（≥15 日）。
-    //   关闭＝TargetGateHit（机制面已证·正向批按需开；本批 drive≡0 不可能触发）／ChannelAbsent（HH.221 资源对等批用；本批预期"通道未落地"，开则误停）。
     //   ⚠️机制 4（≥30 日每 10 日阶段小结）本批不做，随七考重验批强制（D666）。
-    private static readonly DiagMilitary.JudgeKind[] JUDGES = new[]
+    //
+    // 🔴 HH.222 追加裁（D666 §①②·策划端）＝「判据须与其服务验收句**同级 ＋ 同作用域**」：
+    //   · 同级＝机制级验收句才配 J5（TargetGateHit）；端到端级（如「→军事」）不配 ⇒ 故本批 J5 关。
+    //   · 同作用域＝判据判定范围须与验收句范围一致（全批级 / 指定国级）⇒ 由下表 `OnlyKingdom` 表达。
+    //   ⚠️正向批陷阱（策划端抓到）：k1/k2/k4 石链本就死（HH.220 实证）⇒ 若 J2 为「全批任一」会在 ~D10 停掉全批、
+    //     切掉 k3 的「→军事」证据（D664 验收句②）⇒ 故 **J2 固定为「指定国」= JUDGE_FOCUS_KINGDOM（本 seed 唯一可至军事期者）**。
+    private struct JudgeCfg { public DiagMilitary.JudgeKind Kind; public bool OnlyKingdom; public int Kingdom; }
+
+    /// <summary>本 seed（64513）唯一可至军事期的 AI＝k3（HH.220 实证：D65 →军事）；**换 seed 须一并改**。</summary>
+    private const int JUDGE_FOCUS_KINGDOM = 3;
+
+    private static readonly JudgeCfg[] JUDGES = new[]
     {
-        DiagMilitary.JudgeKind.Deadlock,
-        DiagMilitary.JudgeKind.StoneCold,
-        DiagMilitary.JudgeKind.NoIncome,
+        // 判据 ／ 作用域（OnlyKingdom=false ⇒ 全批任一 AI；true ⇒ 仅该王国） ／ 服务的验收句
+        new JudgeCfg { Kind = DiagMilitary.JudgeKind.Deadlock,  OnlyKingdom = false, Kingdom = 0 },                    // 负探针「死滞复现」＝全批级
+        new JudgeCfg { Kind = DiagMilitary.JudgeKind.StoneCold, OnlyKingdom = true,  Kingdom = JUDGE_FOCUS_KINGDOM },   // 止损；指定国级（避免切掉他国的端到端证据）
+        new JudgeCfg { Kind = DiagMilitary.JudgeKind.NoIncome,  OnlyKingdom = false, Kingdom = 0 },                    // 异常即停＝全批级
     };
 
     private static readonly List<int> _military = new List<int>();
@@ -121,22 +131,29 @@ public static class Valley_HH80_Run
     }
 
     /// <summary>HH.222（D666 裁 / §8.2 机制 1+3）：在线判据检查——命中即返回停跑原因。
-    /// 判据源＝DiagMilitary 每日 streak 快照（单源，禁另抄）；已灭绝国不判（灭绝有独立停条）。</summary>
+    /// 判据源＝DiagMilitary 每日 streak 快照（单源，禁另抄）；已灭绝国不判（灭绝有独立停条）。
+    /// 作用域（D666 追加裁①②）：**外层遍历判据、内层按 `OnlyKingdom` 限定王国范围**——
+    /// 全批级判据（OnlyKingdom=false）任一 AI 命中即停；指定国级（=true）仅该王国命中才停（防切掉他国端到端证据）。</summary>
     private static bool CheckJudges(KingdomRegistry reg, int day, out string why)
     {
         why = null;
         if (reg == null) return false;
         var all = reg.GetAll();
-        for (int i = 0; i < all.Count; i++)
+        for (int j = 0; j < JUDGES.Length; j++)
         {
-            var k = all[i];
-            if (k == null || k.IsPlayer) continue;
-            if (k.workerCount + k.warriorCount <= 0) continue;
-            DiagMilitary.JudgeKind jk; string jd;
-            if (DiagMilitary.TryJudge(k.id, JUDGES, day, out jk, out jd))
+            var cfg = JUDGES[j];
+            for (int i = 0; i < all.Count; i++)
             {
-                why = "判据命中：" + jk + "（k" + k.id + " " + jd + "）@D" + day;
-                return true;
+                var k = all[i];
+                if (k == null || k.IsPlayer) continue;
+                if (cfg.OnlyKingdom && k.id != cfg.Kingdom) continue;   // 作用域过滤：指定国级
+                if (k.workerCount + k.warriorCount <= 0) continue;
+                string jd;
+                if (DiagMilitary.TryJudgeOne(k.id, cfg.Kind, day, out jd))
+                {
+                    why = "判据命中：" + cfg.Kind + "（k" + k.id + " " + jd + "）@D" + day;
+                    return true;
+                }
             }
         }
         return false;
