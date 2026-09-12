@@ -26,6 +26,7 @@ public static class Valley2_17_Smoke_5
         pass &= WarriorGapRises(cfg, sb);
         pass &= PopFloorGuard(cfg, sb);   // 人口底线（决策①修复）探针
         pass &= InternalDriveToGate(cfg, sb);   // HH.217 治本批：内源势能接入 D348Target 正负例
+        pass &= ActionBackoffGuard(cfg, sb);    // HH.224/D670 治本批：通用「执行失败退避」正负例
         Debug.Log($"[2_17_5冒烟] {sb}");
         Debug.Log($"[2_17_5冒烟] ===== {(pass ? "ALL PASS" : "HAS FAIL")}（威胁上调→目标升→⑦分数升，D348）=====");
     }
@@ -142,6 +143,66 @@ public static class Valley2_17_Smoke_5
             prevT = t;
         }
         sb.Append($"内源势能接入={(ok ? "OK" : "FAIL")}(零威胁Expand: drive0.1={pos}≥{cfg.expandToMilitary_warriorsMin} / drive1e-4={eps} / drive0={neg}=3<门 / 威胁面回归) ");
+        return ok;
+    }
+
+    // ---- HH.224/D670 治本批：通用「执行失败退避」正负例（编辑态确定性；纯表级，不涉世界） ----
+    //  覆盖：中性等价 / 未达门槛不生效 / 达门槛生效且不破下限 / 读数口径 / 三条自愈 / 硬上限升级报裁。
+    private static bool ActionBackoffGuard(KingdomBrainConfig cfg, System.Text.StringBuilder sb)
+    {
+        var bcfg = ActionBackoffConfig.Load();
+        bool ok = true;
+        const int K = 901;                          // 探针专用王国 id（不撞真实 1~4）
+        const UtilityAction A = UtilityAction.BuildWall;
+        int th = Mathf.Max(1, bcfg.ThresholdOf((int)A));
+        float lo = Mathf.Clamp01(bcfg.MinFactorOf((int)A));
+
+        // ① 中性起步：零失败记录 ⇒ 1.0（出厂等价）
+        ActionBackoff.Reset();
+        bool neutral = Mathf.Approximately(ActionBackoff.Factor(K, A, 1f), 1f);
+
+        // ② 未达门槛（threshold−1 次）⇒ 仍 1.0
+        for (int i = 0; i < th - 1; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        bool belowTh = Mathf.Approximately(ActionBackoff.Factor(K, A, 1f), 1f);
+
+        // ③ 达门槛 ⇒ <1 且 ≥ 下限
+        ActionBackoff.ReportFail(K, A, 1, 1f);
+        float fTh = ActionBackoff.Factor(K, A, 1f);
+        bool onTh = fTh < 1f && fTh >= lo - 1e-4f;
+
+        // ④ 读数口径（avoid= 非空且含该行动）
+        string rd = ActionBackoff.Readout(K);
+        bool readout = !string.IsNullOrEmpty(rd) && rd.Contains(A.ToString());
+
+        // ⑤ 自愈①：need 变化超容差 ⇒ 复位 1.0
+        bool healNeed = Mathf.Approximately(
+            ActionBackoff.Factor(K, A, 1f + ActionBackoff.NeedSelfHealEps + 0.01f), 1f);
+
+        // ⑥ 自愈②：成功上报 ⇒ 复位 1.0
+        ActionBackoff.Reset();
+        for (int i = 0; i < th + 2; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        bool fellBack = ActionBackoff.Factor(K, A, 1f) < 1f;
+        ActionBackoff.ReportSuccess(K, A);
+        bool healOk = Mathf.Approximately(ActionBackoff.Factor(K, A, 1f), 1f);
+
+        // ⑦ 自愈③：冷却到期（日推进跨 cooldownDays）⇒ 复位 1.0
+        ActionBackoff.Reset();
+        for (int i = 0; i < th + 2; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        ActionBackoff.OnDayTick(K, 1 + Mathf.Max(1, bcfg.cooldownDays));
+        bool healCd = Mathf.Approximately(ActionBackoff.Factor(K, A, 1f), 1f);
+
+        // ⑧ 硬上限：达 cap 次 ⇒ 升级报裁标记；因子不破下限
+        ActionBackoff.Reset();
+        int cap = Mathf.Max(1, bcfg.hardCapFails);
+        for (int i = 0; i < cap; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        bool capped = ActionBackoff.AnyAtHardCap(K);
+        float fCap = ActionBackoff.Factor(K, A, 1f);
+        bool inRange = fCap >= lo - 1e-4f && fCap <= 1f;
+
+        ActionBackoff.Reset();   // 清场（防污染后续用例/后续跑局）
+        ok = neutral && belowTh && onTh && readout && healNeed && fellBack && healOk && healCd && capped && inRange;
+        sb.Append($"退避正负例={(ok ? "OK" : "FAIL")}(中性{neutral}/未达门槛{belowTh}/达门槛{onTh}(f={fTh:F2}≥{lo:F2})/读数{readout}/"
+            + $"自愈={healNeed && healOk && healCd}/硬上限{capped}(f={fCap:F2})/下限护栏{inRange}) ");
         return ok;
     }
 }

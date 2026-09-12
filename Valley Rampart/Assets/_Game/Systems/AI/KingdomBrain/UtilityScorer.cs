@@ -140,6 +140,9 @@ public static class UtilityScorer
             if (stageW <= 0f) { census.axisFiltered++; continue; }
 
             float score = need * axis * stageW;
+            // HH.224/D670 治本批：通用「执行失败退避」乘子（硬约束①——只乘 score，不入 NeedScore/Feasible；
+            // 无记录/未达门槛 ⇒ 1.0 出厂等价；KingdomState 缺省（null）时亦为 1.0）
+            if (k != null) score *= ActionBackoff.Factor(k.id, def.id, need);
             if (score > best) { best = score; top = def.id; }
         }
         census.top = top;

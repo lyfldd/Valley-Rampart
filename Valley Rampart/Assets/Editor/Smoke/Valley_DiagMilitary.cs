@@ -200,7 +200,8 @@ public static class DiagMilitary
           .Append(" militaryTarget=").Append(target)
           .Append(" drive=").Append(drive >= 0f ? drive.ToString("F4") : "n/a")   // HH.217：内源势能实读（正/负探针通道）
           .Append(" verdict=").Append(verdict)                                     // HH.222：在线判据打标（跑局容器命中即停）
-          .Append(" chSrc=").Append(CountGatherSources()).Append('/').Append(CountByproductSources());   // HH.221 判据③：采集源/副产源（口径已分离）
+          .Append(" chSrc=").Append(CountGatherSources()).Append('/').Append(CountByproductSources())   // HH.221 判据③：采集源/副产源（口径已分离）
+          .Append(" avoid=").Append(ActionBackoff.Readout(k.id));   // HH.224/D670：退避因子读数（口径=ScoreTop 实乘快照；排除项=不含 NeedScore/Feasible）
         Debug.LogWarning(sb.ToString());
 
         DumpAction(tag, k, acfg, UtilityAction.RecruitWarrior, "⑦招战士", st);
@@ -265,6 +266,8 @@ public static class DiagMilitary
         if (s.noGainDays > 0) v.Append("|stoneCold:").Append(s.noGainDays);
         if (ecoOk && s.noIncomeDays > 0) v.Append("|noIncome:").Append(s.noIncomeDays);
         if (ecoOk && stoneIn == 0 && s.noGainDays >= JudgeStoneColdDays) v.Append("|ANOMALY:stoneChain");
+        // HH.224/D670 硬约束③：退避达硬上限仍失败 ⇒ 升级报裁标记（防「死循环→静默永久弃建」被藏住）
+        if (ActionBackoff.AnyAtHardCap(k.id)) v.Append("|").Append(ActionBackoff.CapMarker);
         return v.ToString();
     }
 

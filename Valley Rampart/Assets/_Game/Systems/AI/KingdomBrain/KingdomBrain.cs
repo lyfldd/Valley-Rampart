@@ -74,8 +74,12 @@ public class KingdomBrain
         return s_dispatch.TryGetValue(kingdomId, out var s) ? (s.trainOk, s.buildOk, s.trainTry, s.buildTry) : (0, 0, 0, 0);
     }
 
-    /// <summary>清空全部派遣计数（harness 两轮间/新开局归零用）。</summary>
-    public static void ResetDispatchStats() => s_dispatch.Clear();
+    /// <summary>清空全部派遣计数（harness 两轮间/新开局归零用）；**同点清空退避表**（HH.224/D670 硬约束②）。</summary>
+    public static void ResetDispatchStats()
+    {
+        s_dispatch.Clear();
+        ActionBackoff.Reset();   // HH.224/D670：退避表须与派遣计数同点清零（否则 P0 B4 轮间一致滑落）
+    }
 
     private static void Bump(int kingdomId, bool train, bool ok)
     {
@@ -83,6 +87,31 @@ public class KingdomBrain
         if (train) { s.trainTry++; if (ok) s.trainOk++; }
         else { s.buildTry++; if (ok) s.buildOk++; }
         s_dispatch[kingdomId] = s;
+    }
+
+    // ===== HH.224/D670 治本批：通用「执行失败退避」上报口 =====
+    /// <summary>行动**真失败**上报（退避表；键＝kingdomId×行动id，与 `s_dispatch` 同点清零）。
+    /// 🔴**仅"真失败"可调**——"已达目标/正常态"的 `Bump(ok:false)`（如 ⑦ warrior≥target／⑧ 已上限）**不得**上报，
+    /// 否则会把达标误判为失败（HH.225 §一 落点清单分流）。</summary>
+    private void ReportActionFail(KingdomState kingdom)
+    {
+        if (kingdom == null) return;
+        var a = (UtilityAction)kingdom.focus;
+        if (a == UtilityAction.None) return;
+        int day = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : -1;
+        float need = 0f;
+        var d = UtilityActionConfig.LoadConfig().Find(a);
+        if (d.HasValue) need = UtilityScorer.NeedScore(kingdom, d.Value);
+        ActionBackoff.ReportFail(kingdomId, a, day, need);
+    }
+
+    /// <summary>行动**成功落地**上报 ⇒ 退避计数清零（自愈之一）。</summary>
+    private void ReportActionOk(KingdomState kingdom)
+    {
+        if (kingdom == null) return;
+        var a = (UtilityAction)kingdom.focus;
+        if (a == UtilityAction.None) return;
+        ActionBackoff.ReportSuccess(kingdomId, a);
     }
 
     public KingdomBrain(int kingdomId)
@@ -247,6 +276,7 @@ public class KingdomBrain
         var cfg = KingdomBrain.LoadConfig();
         var ucfg = UtilityActionConfig.LoadConfig();
         kingdom.simMode = mode;   // 同步真实模式（原恒写 Fine 会覆写 Abstract 态；GetMode 读同字段=幂等）
+        ActionBackoff.OnDayTick(kingdomId, day);   // HH.224/D670：退避冷却自愈（连续 N 日无新失败 ⇒ 复位）
 
         // ① 态势层重建（2_22 P0 批A / A2，D517：日 tick 全量重建=纯函数聚合；事件只置脏标记
         // 已在 handler 侧完成。子步序断言锚=①重建→②剧本（下方 StageMachine.Tick）→③评分（Focus.Update））
@@ -814,6 +844,7 @@ public class KingdomBrain
         if (vagrant == null)
         {
             Bump(kingdomId, train: true, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：⑥真失败（无候选）⇒ 退避计数
             // HH.81/D542 件1 静默双坑修（P0 调优观测口）：无候选时打诊断——流浪池活体+守卫拒绝计数。
             // 口径注记：pool=Vagrant 职业活体总数；拒绝计数按 ⑥守卫序分桶（已入籍/已招募/异族），
             // 与 FindRecruitableVagrant 的 alive→kingdomId→Vagrant→Recruited→race 过滤序等价自洽（观测非判定）。
@@ -837,6 +868,7 @@ public class KingdomBrain
         if (kingdom.GetResourceValue(ResourceType.Food) < cost)
         {
             Bump(kingdomId, train: true, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：⑥真失败（粮不足）
             Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招粮不足（需{cost}）");
             return;
         }
@@ -846,6 +878,7 @@ public class KingdomBrain
             new List<int> { vagrant.npcId }, kingdomId);
         bool ok = converted > 0;
         Bump(kingdomId, train: true, ok: ok);
+        if (ok) ReportActionOk(kingdom); else ReportActionFail(kingdom);   // HH.224/D670：⑥成败上报
         if (ok)
             Debug.Log($"[KingdomBrain] k{kingdomId} ⑥招工人落地：流浪汉#{vagrant.npcId} → Worker（粮-{cost}）");
     }
@@ -901,13 +934,14 @@ public class KingdomBrain
         }
 
         var raceDef = KingdomRace.GetKingdomRaceDef(kingdomId);
-        if (raceDef == null) { Bump(kingdomId, train: true, ok: false); return; }
+        if (raceDef == null) { Bump(kingdomId, train: true, ok: false); ReportActionFail(kingdom); return; }
 
         // 候选集（D656 同源 helper：评分侧 Feasible 同用，禁本地手搓）
         var candidates = CollectRecruitCandidates(kingdomId);
         if (candidates.Count == 0)
         {
             Bump(kingdomId, train: true, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：⑦真失败（无可选招兵种）
             return;   // 无可选招兵种（缺建筑/缺 def）→ ⑰建造缺口评分导向
         }
 
@@ -934,6 +968,7 @@ public class KingdomBrain
         if (bestIdx < 0)
         {
             Bump(kingdomId, train: true, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：⑦真失败（无可负担候选）
             Debug.Log($"[KingdomBrain] k{kingdomId} ⑦选招无可负担候选（资源不足），明日再试");
             return;
         }
@@ -951,6 +986,7 @@ public class KingdomBrain
                  && TrainingSystem.Instance.TryTrainFromKingdomPool(kingdomId, chosenB, chosen.toOccupation);
         }
         Bump(kingdomId, train: true, ok: ok);
+        if (ok) ReportActionOk(kingdom); else ReportActionFail(kingdom);   // HH.224/D670：⑦成败上报
         if (ok)
             Debug.Log($"[KingdomBrain] k{kingdomId} ⑦多兵种选招落地：→ {chosen.toOccupation}（先验{raceDef.GetUnitPrior(chosen.toOccupation):F2}×性格{militant:F2}×学习{BattleLearnedWeights.Get(kingdomId, (int)chosen.toOccupation):F2}，@{chosenB.def.id}）");
     }
@@ -965,6 +1001,7 @@ public class KingdomBrain
         if (barracks == null)
         {
             Bump(kingdomId, train: true, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：⑯真失败（无兵营）
             return;   // 无兵营 → ⑰建兵营缺口评分导向先建
         }
         bool ok = TrainingSystem.Instance != null
@@ -977,6 +1014,7 @@ public class KingdomBrain
                  && TrainingSystem.Instance.TryTrainFromKingdomPool(kingdomId, barracks, Occupation.General);
         }
         Bump(kingdomId, train: true, ok: ok);
+        if (ok) ReportActionOk(kingdom); else ReportActionFail(kingdom);   // HH.224/D670：⑯成败上报
         if (ok) Debug.Log($"[KingdomBrain] k{kingdomId} ⑯训练将军入队（兵营，队列中）");
     }
 
@@ -989,10 +1027,11 @@ public class KingdomBrain
     private void ExecuteProduceMachine(KingdomState kingdom, KingdomBrainConfig cfg)
     {
         var sps = SiegeProductionSystem.Instance;
-        if (sps == null) { Bump(kingdomId, train: false, ok: false); return; }
+        if (sps == null) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom); return; }
         if (FindKingdomBuilding(kingdomId, BuildingIds.SiegeWorkshop) == null)
         {
             Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：㉕真失败（无厂前置）
             return;   // 厂前置守卫：无投掷机厂不可造（评分侧 ㉔ 建厂缺口导向先建——两行动咬合）
         }
         // 本族机器选型（确定性：Occupation int 升序首个本族可造机器——IsRaceAllowedMachine 同源校验）
@@ -1004,21 +1043,23 @@ public class KingdomBrain
         {
             if (SiegeProductionSystem.IsMachineAllowed(myRace, machines[i])) { pick = machines[i]; found = true; break; }
         }
-        if (!found) { Bump(kingdomId, train: false, ok: false); return; }
+        if (!found) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom); return; }
         // D594 整改令·执行侧防御预检（可选条款一并落）：prefab 缺失扣费前拦截——
         // 双保险第二层（第一层=评分侧 Feasible 不评）；口径同源 MachinePanel.IsPrefabMissing（HH.111 P5）
         if (MachinePanel.IsPrefabMissing(pick, out string whyMissing))
         {
             Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：㉕真失败（prefab 缺失）
             Debug.Log($"[KingdomBrain] k{kingdomId} ㉕造机器拦截：{pick} prefab 缺失（{whyMissing}）——扣费前防御预检（D594）");
             return;
         }
 
         var anchor = FindCastleCell(kingdomId);
-        if (!anchor.HasValue) { Bump(kingdomId, train: false, ok: false); return; }
+        if (!anchor.HasValue) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom); return; }
         var spawnPos = new Vector2(anchor.Value.x + 1.5f, anchor.Value.y + 1.5f);   // 主城旁近点（厂/城产出惯例位）
         bool ok = sps.ProduceMachine(pick, spawnPos, kingdomId);
         Bump(kingdomId, train: false, ok: ok);
+        if (ok) ReportActionOk(kingdom); else ReportActionFail(kingdom);   // HH.224/D670：㉕成败上报
         if (ok) Debug.Log($"[KingdomBrain] k{kingdomId} ㉕造机器落地：{pick} @ {spawnPos}");
     }
 
@@ -1049,6 +1090,7 @@ public class KingdomBrain
         if (kingdom.GetResourceValue(ResourceType.Gold) < cost)
         {
             Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：⑧真失败（金不足）
             return;
         }
 
@@ -1071,6 +1113,7 @@ public class KingdomBrain
         kingdom.Spend(new ResourcePack { gold = cost });
         kingdom.moduleLevels[idx]++;
         Bump(kingdomId, train: false, ok: true);
+        ReportActionOk(kingdom);   // HH.224/D670：⑧成功落地 ⇒ 退避清零
         Debug.Log($"[KingdomBrain] k{kingdomId} ⑧科技升级落地：{target} → Lv{kingdom.moduleLevels[idx]}（金-{cost}；城堡{kingdom.castleLevel}上限{cap}）");
     }
 
@@ -1173,6 +1216,7 @@ public class KingdomBrain
         if (def0 == null || string.IsNullOrEmpty(def0.Value.buildingId))
         {
             Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点①（focus def 缺失/无 buildingId）
             return;
         }
         string bid = overrideBuildingId ?? def0.Value.buildingId;   // R-C1/R-C2：动态目标 def
@@ -1180,6 +1224,7 @@ public class KingdomBrain
         if (bdef == null)
         {
             Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点②（buildingId 无 def）
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 行动 {(UtilityAction)kingdom.focus} 的 buildingId={bid} 未找到 def");
             return;
         }
@@ -1192,20 +1237,34 @@ public class KingdomBrain
             // HH.88 件3：选址无落位静默点观测口（HH.87 列报 10）——失败原因+kingdomId
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点选址失败：{bdef.id} 半径 {cfg.aiBuildRadius} 内无合法落位（明日再试）");
             Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点③（选址无落位＝DZ-107 主病灶）
             return;   // 半径内无合法落位：明日再试
         }
         var spotCell = pickB.Sub;
 
         var bc = BuildController.Instance;
-        if (bc == null) { Bump(kingdomId, train: false, ok: false); return; }
+        if (bc == null)
+        {
+            // HH.224/D670 补观测（D675 抓漏）：原为**零日志静默失败** ⇒ 按 HH.88 件3 静默点观测口精神补齐
+            Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点④（门面未就绪）
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点投放中止：BuildController 实例缺失（门面未就绪，明日再试）");
+            return;
+        }
         bool ok = bc.TryBuild(bdef, spotCell, GateOrientation.Horizontal, kingdomId);
         Bump(kingdomId, train: false, ok: ok);
         if (ok)
+        {
+            ReportActionOk(kingdom);   // HH.224/D670：建造落地 ⇒ 退避清零（自愈）
             Debug.Log($"[KingdomBrain] k{kingdomId} 建造焦点落地：{def0.Value.buildingId} @ ({spotCell.x},{spotCell.y})" +
                       $"（打分 {pickB.Score:F3}=F1 {pickB.F1:F2}+F2 {pickB.F2:F2}+F3 {pickB.F3:F2}，候选 {pickB.Candidates}）");
+        }
         else
+        {
+            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点⑤（TryBuild=false 门面校验/扣费未过）
             // HH.88 件3：TryBuild=false 静默点观测口（门面校验/扣费未过；细分原因看 [BuildController] 拒绝日志）
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点 TryBuild=false：{def0.Value.buildingId} @ ({spotCell.x},{spotCell.y})（门面校验/扣费未过，细分原因见 [BuildController] 拒绝日志）");
+        }
     }
 
     // ===== ⑤三通道分诊 + ③种类解析（2_23 资源 P0 批C / R-C1·R-C2，D639 全列报最终口径）=====

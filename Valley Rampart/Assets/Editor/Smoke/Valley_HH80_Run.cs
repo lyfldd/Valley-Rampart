@@ -27,9 +27,21 @@ public static class Valley_HH80_Run
     //    ⚠️仍属"每批定案"项（非档位）：SEED/SLOT 保持 64513/p1_fix1b，下一批起跑前须按任务书设新 seed/槽
     //    （**换 seed 须同步改 `JUDGE_FOCUS_KINGDOM`**，见下方注释）。
     private const int SEED = 64513;          // HH.217 短局：复用 HH.214 定案 seed（同世界修前/修后对照；D664 裁准）
-    private const string SLOT = "p1_fix1b";   // 治本批独立槽（禁覆盖 p1_run6/6b/7/8；p1_fix1=正向 / p1_fix1b=负探针 weight=0）
+    private const string SLOT = "p1_fix2";    // HH.224 对照跑独立槽（禁覆盖 p1_run6/6b/7/8、p1_fix1/1b）
     private const int CIRCUIT_BREAK_DAY = 120;
     private const int MILITARY_STOP_COUNT = 2;   // ✅已复原（DZ-136）：长局判定档=≥2 AI 军事期（HH.217 短局自证档 1 已废止）
+
+    // HH.224（D670/D675 裁）：**对照/诊断跑专用窗口**——独立常量，**不回改上表主档位**（防 DZ-136 复发）。
+    //   本批（修前/修后同 seed 对照，对照段 D1~D60）= USE_DIAG_WINDOW=true；
+    //   ⚠️**长局判定跑（七考重验）起跑前须置 false**（否则 120 日判定线被 60 截断＝D585/D589 截断混淆同族）。
+    private const int DIAG_CIRCUIT_DAY = 60;
+    private const bool USE_DIAG_WINDOW = true;
+    private static int ActiveCircuitDay => USE_DIAG_WINDOW ? DIAG_CIRCUIT_DAY : CIRCUIT_BREAK_DAY;
+
+    // HH.224 同 seed 修前基线（源＝`p1_fix1` seed64513 D1~D60，**同日志源口径**；HH.225 §四 实测）：
+    //   census top=BuildWall 日数 k1 37／k2 47／k3 9／k4 47（census 段 59 日）；建造焦点落地总数 32。
+    private static readonly int[] BASE_WALL_TOP = { 0, 37, 47, 9, 47 };   // 索引=kingdomId
+    private const int BASE_BUILD_OK = 32;
 
     // HH.222（D666 已裁 / test-harness-first §八 机制 1+3；教训 L-34）＝**在线判据·命中即停**：
     //   支撑/目标日志每日在流（探针 `verdict=`）⇒ 容器每轮检查，命中即 Finish("判据命中：X @D??")，不跑满窗口。
@@ -56,6 +68,12 @@ public static class Valley_HH80_Run
     private static readonly List<int> _military = new List<int>();
     private static volatile bool _done;
 
+    // HH.224/D675 在线判据 J6/J7/J8 状态（口径＝**日志源**，与修前基线同源 ⇒ L-35 口径一致）
+    private static readonly int[] _wallTopDays = new int[5];   // census top=BuildWall 日数（索引=kingdomId）
+    private static readonly int[] _censusSamples = new int[5];  // census 采样数（分母；索引=kingdomId）
+    private static int _buildOkDays;                            // 建造焦点落地总数
+    private static bool _avoidSeen;                             // J6：退避因子读数首次出现（机制面已证）
+
     [MenuItem("Valley/验证/HH80_正式跑")]
     public static void Run()
     {
@@ -69,6 +87,9 @@ public static class Valley_HH80_Run
         // D656 硬条款2：显式传槽（观测器 MainSlot 已参数化，禁回落硬编码）——进局前设置
         P1Observer.SetMainSlot(SLOT);
         _military.Clear(); _done = false;
+        System.Array.Clear(_wallTopDays, 0, _wallTopDays.Length);      // HH.224：J7/J8 证据清零（防跨批污染）
+        System.Array.Clear(_censusSamples, 0, _censusSamples.Length);
+        _buildOkDays = 0; _avoidSeen = false;
         DiagMilitary.ResetJudges();   // HH.222：清在线判据 streak（防跨局/跨批污染；探针未启时全部判据自然 NoData）
         Application.logMessageReceived += WatchMilitary;
         new GameObject("HH80_RunRunner").AddComponent<RunHost>().Host(RunCoroutine());
@@ -81,17 +102,50 @@ public static class Valley_HH80_Run
 
     private static void WatchMilitary(string condition, string stackTrace, LogType type)
     {
-        if (condition == null || !condition.Contains("剧本阶段 → 军事")) return;
-        int idx = condition.IndexOf(" k", System.StringComparison.Ordinal);
-        if (idx < 0) return;
-        int start = idx + 2; int end = start;
-        while (end < condition.Length && char.IsDigit(condition[end])) end++;
-        int kid;
-        if (int.TryParse(condition.Substring(start, end - start), out kid) && kid > 0 && !_military.Contains(kid))
+        if (condition == null) return;
+
+        // ── HH.224/D675：J7/J8 证据累计（口径＝日志源，与修前基线同源）──
+        if (condition.Contains("建造焦点落地：")) _buildOkDays++;
+        if (condition.Contains("[DiagMilitary]") && condition.Contains(" top="))
+        {
+            int ck = ParseKingdomId(condition);
+            if (ck > 0 && ck < _censusSamples.Length)
+            {
+                _censusSamples[ck]++;
+                if (condition.Contains("top=BuildWall")) _wallTopDays[ck]++;
+            }
+        }
+        if (!_avoidSeen && condition.Contains("avoid=") && condition.Contains("[DiagMilitary]"))
+        {
+            int i = condition.IndexOf("avoid=", System.StringComparison.Ordinal);
+            string rest = i >= 0 ? condition.Substring(i + 6) : "";
+            int sp = rest.IndexOf(' ');
+            if (sp > 0) rest = rest.Substring(0, sp);
+            if (!string.IsNullOrEmpty(rest.Trim()))
+            {
+                _avoidSeen = true;
+                Debug.LogWarning("[HH80跑] ⚑ J6 退避机制面已证（首次 avoid 非空：" + rest.Trim() + "）");
+            }
+        }
+
+        if (!condition.Contains("剧本阶段 → 军事")) return;
+        int kid = ParseKingdomId(condition);
+        if (kid > 0 && !_military.Contains(kid))
         {
             _military.Add(kid);
             Debug.LogWarning("[HH80跑] ⚑ 军事期达标 k" + kid + "（累计 " + _military.Count + "）");
         }
+    }
+
+    /// <summary>从日志行取 ` k<id>` 中的 id（无 ⇒ -1）。</summary>
+    private static int ParseKingdomId(string s)
+    {
+        int idx = s.IndexOf(" k", System.StringComparison.Ordinal);
+        if (idx < 0) return -1;
+        int start = idx + 2; int end = start;
+        while (end < s.Length && char.IsDigit(s[end])) end++;
+        int kid;
+        return int.TryParse(s.Substring(start, end - start), out kid) ? kid : -1;
     }
 
     private static IEnumerator RunCoroutine()
@@ -128,7 +182,8 @@ public static class Valley_HH80_Run
             if (_military.Count >= MILITARY_STOP_COUNT) { Finish("达标收工：≥" + MILITARY_STOP_COUNT + " AI 军事期（" + string.Join(",", _military) + "）@D" + day); break; }
             string judgeWhy;
             if (CheckJudges(reg, day, out judgeWhy)) { Finish(judgeWhy); break; }   // HH.222：在线判据命中即停（§8.2 机制 1+3）
-            if (day >= CIRCUIT_BREAK_DAY) { Finish("熔断：D" + CIRCUIT_BREAK_DAY + " 无 ≥2 AI 军事期（已达标=" + string.Join(",", _military) + "，AI 存活 " + aiAlive + "/" + aiTotal + "）"); break; }
+            if (CheckBackoffJudges(day, out judgeWhy)) { Finish(judgeWhy); break; } // HH.224：J7 霸占解除／J8 防退化（§八判据表）
+            if (day >= ActiveCircuitDay) { Finish("窗口满：D" + ActiveCircuitDay + "（DIAG窗口=" + USE_DIAG_WINDOW + "）AI 存活 " + aiAlive + "/" + aiTotal + "，已达标=" + string.Join(",", _military) + "；J6 退避机制面=" + _avoidSeen + " wallTop(k1/k2/k4)=" + _wallTopDays[1] + "/" + _wallTopDays[2] + "/" + _wallTopDays[4] + " 落地=" + _buildOkDays + " ⇒ 取对照证据"); break; }
             if (reg != null && aiTotal > 0 && aiAlive == 0) { Finish("灭绝停跑：AI 全灭 @D" + day + "（已达标=" + string.Join(",", _military) + "）"); break; }
         }
     }
@@ -157,6 +212,40 @@ public static class Valley_HH80_Run
                     why = "判据命中：" + cfg.Kind + "（k" + k.id + " " + jd + "）@D" + day;
                     return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>HH.224/D675：J7（霸占解除·端到端）/ J8（防退化·负向）在线判据。
+    /// 口径＝**日志源**（与修前基线 `p1_fix1` 同源）；J7 作用域＝**指定国 k1/k2/k4**；样本 &lt;30 不判（防早停误裁）。</summary>
+    private static bool CheckBackoffJudges(int day, out string why)
+    {
+        why = null;
+        for (int k = 1; k <= 4; k++)
+        {
+            if (k == 3) continue;                       // J7 排除 k3（其 wall 占比本就低 9/59）
+            if (BASE_WALL_TOP[k] <= 0) continue;
+            int n = _censusSamples[k];
+            if (n < 30) continue;
+            float now = _wallTopDays[k] / (float)n;
+            float half = 0.5f * (BASE_WALL_TOP[k] / 60f);
+            if (now <= half)
+            {
+                why = "判据命中：J7 霸占解除（k" + k + " wallTop " + _wallTopDays[k] + "/" + n + "=" + now.ToString("F2")
+                    + " ≤ 基线半值 " + half.ToString("F2") + "）@D" + day;
+                return true;
+            }
+        }
+        int nn = _censusSamples[1];
+        if (nn >= 30)
+        {
+            float exp = BASE_BUILD_OK * (nn / 60f);
+            if (_buildOkDays <= 0.5f * exp)
+            {
+                why = "判据命中：J8 防退化报警（建造落地 " + _buildOkDays + " ≤ 基线同段半值 " + (0.5f * exp).ToString("F1")
+                    + "，样本 " + nn + "）⇒ 停手报裁 @D" + day;
+                return true;
             }
         }
         return false;
