@@ -27,7 +27,7 @@ public static class Valley_HH80_Run
     //    ⚠️仍属"每批定案"项（非档位）：SEED/SLOT 保持 64513/p1_fix1b，下一批起跑前须按任务书设新 seed/槽
     //    （**换 seed 须同步改 `JUDGE_FOCUS_KINGDOM`**，见下方注释）。
     private const int SEED = 64513;          // HH.217 短局：复用 HH.214 定案 seed（同世界修前/修后对照；D664 裁准）
-    private const string SLOT = "p1_fix3";    // HH.226 ①-b 追加项对照跑独立槽（禁覆盖 p1_run6/6b/7/8、p1_fix1/1b/2）
+    private const string SLOT = "p1_fix3";    // ✅HH.228 收工已复原（临时取证槽 p1_fix4 用毕；禁覆盖 p1_run6/6b/7/8、p1_fix1/1b/2）
     private const int CIRCUIT_BREAK_DAY = 120;
     private const int MILITARY_STOP_COUNT = 2;   // ✅已复原（DZ-136）：长局判定档=≥2 AI 军事期（HH.217 短局自证档 1 已废止）
 
@@ -35,7 +35,7 @@ public static class Valley_HH80_Run
     //   本批（修前/修后同 seed 对照，对照段 D1~D60）= USE_DIAG_WINDOW=true；
     //   ⚠️**长局判定跑（七考重验）起跑前须置 false**（否则 120 日判定线被 60 截断＝D585/D589 截断混淆同族）。
     private const int DIAG_CIRCUIT_DAY = 60;
-    private const bool USE_DIAG_WINDOW = false;   // ✅HH.226 ①-b 收尾已置 false（回主档 120/2；D678 勘正⑥ 兑现）
+    private const bool USE_DIAG_WINDOW = false;   // ✅HH.228 收工已复原 false（短窗取证用毕；回主档 120/2 ⇒ ②七考重验前置②复位）
     private static int ActiveCircuitDay => USE_DIAG_WINDOW ? DIAG_CIRCUIT_DAY : CIRCUIT_BREAK_DAY;
 
     // HH.226 追加项②（D678 裁）：J7 **同段基线**——修复假阳性根因（原＝全窗 37/59 vs 判据早窗＝**不同段比较**）。

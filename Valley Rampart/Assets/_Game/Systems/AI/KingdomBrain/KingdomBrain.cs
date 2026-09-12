@@ -935,7 +935,7 @@ public class KingdomBrain
         }
 
         var raceDef = KingdomRace.GetKingdomRaceDef(kingdomId);
-        if (raceDef == null) { Bump(kingdomId, train: true, ok: false); ReportActionFail(kingdom); return; }
+        if (raceDef == null) { Bump(kingdomId, train: true, ok: false); ReportActionFail(kingdom, ActionBackoff.FailKind.Env); return; }   // HH.228／D680 追记：⑦RaceDef **数据/资产缺失**（`KingdomRace.cs:50-66`＝kingdomId<0 或 `Config/Races` 无该 raceId 资产）⇒ 配置/资产给定物（Env）
 
         // 候选集（D656 同源 helper：评分侧 Feasible 同用，禁本地手搓）
         var candidates = CollectRecruitCandidates(kingdomId);
@@ -1028,7 +1028,7 @@ public class KingdomBrain
     private void ExecuteProduceMachine(KingdomState kingdom, KingdomBrainConfig cfg)
     {
         var sps = SiegeProductionSystem.Instance;
-        if (sps == null) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom); return; }
+        if (sps == null) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom, ActionBackoff.FailKind.Env); return; }   // HH.228／D680 追记：㉕门面单例未就绪（`SiegeProductionSystem.Instance==null`）⇒ Env
         if (FindKingdomBuilding(kingdomId, BuildingIds.SiegeWorkshop) == null)
         {
             Bump(kingdomId, train: false, ok: false);
@@ -1044,19 +1044,19 @@ public class KingdomBrain
         {
             if (SiegeProductionSystem.IsMachineAllowed(myRace, machines[i])) { pick = machines[i]; found = true; break; }
         }
-        if (!found) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom); return; }
+        if (!found) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom, ActionBackoff.FailKind.Env); return; }   // HH.228／D680 追记：㉕本族无可造机器（`IsMachineAllowed` 全否＝族属/配置给定，AI 不可自消）⇒ Env
         // D594 整改令·执行侧防御预检（可选条款一并落）：prefab 缺失扣费前拦截——
         // 双保险第二层（第一层=评分侧 Feasible 不评）；口径同源 MachinePanel.IsPrefabMissing（HH.111 P5）
         if (MachinePanel.IsPrefabMissing(pick, out string whyMissing))
         {
             Bump(kingdomId, train: false, ok: false);
-            ReportActionFail(kingdom);   // HH.224/D670：㉕真失败（prefab 缺失）
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // HH.228／D680 追记：㉕prefab **资产缺失**（`MachinePanel.IsPrefabMissing`）⇒ Env（HH.224/D670 ㉕真失败·prefab 缺失）
             Debug.Log($"[KingdomBrain] k{kingdomId} ㉕造机器拦截：{pick} prefab 缺失（{whyMissing}）——扣费前防御预检（D594）");
             return;
         }
 
         var anchor = FindCastleCell(kingdomId);
-        if (!anchor.HasValue) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom); return; }
+        if (!anchor.HasValue) { Bump(kingdomId, train: false, ok: false); ReportActionFail(kingdom, ActionBackoff.FailKind.Env); return; }   // HH.228／D680 追记：㉕主城锚点缺失（`FindCastleCell` 无值＝世界/门面未提供）⇒ Env
         var spawnPos = new Vector2(anchor.Value.x + 1.5f, anchor.Value.y + 1.5f);   // 主城旁近点（厂/城产出惯例位）
         bool ok = sps.ProduceMachine(pick, spawnPos, kingdomId);
         Bump(kingdomId, train: false, ok: ok);
@@ -1238,7 +1238,7 @@ public class KingdomBrain
             // HH.88 件3：选址无落位静默点观测口（HH.87 列报 10）——失败原因+kingdomId
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点选址失败：{bdef.id} 半径 {cfg.aiBuildRadius} 内无合法落位（明日再试）");
             Bump(kingdomId, train: false, ok: false);
-            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点③（选址无落位＝DZ-107 主病灶）
+            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点③（选址无落位＝DZ-107 主病灶）｜HH.228 实读后判：**维持 `Self`**（含 AI 自身可调 `aiBuildRadius` 影响，非"无论怎么决策都无法自消"）
             return;   // 半径内无合法落位：明日再试
         }
         var spotCell = pickB.Sub;
@@ -1248,7 +1248,7 @@ public class KingdomBrain
         {
             // HH.224/D670 补观测（D675 抓漏）：原为**零日志静默失败** ⇒ 按 HH.88 件3 静默点观测口精神补齐
             Bump(kingdomId, train: false, ok: false);
-            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点④（门面未就绪）
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // HH.228／D680 追记：建造链④**门面未就绪**（`BuildController.Instance==null`）⇒ Env（HH.224/D670 建造链失败点④）
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 建造焦点投放中止：BuildController 实例缺失（门面未就绪，明日再试）");
             return;
         }

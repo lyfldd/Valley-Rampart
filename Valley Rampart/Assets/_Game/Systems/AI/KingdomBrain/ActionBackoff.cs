@@ -38,7 +38,10 @@ public static class ActionBackoff
 
     /// <summary>失败分型（HH.226 追加项③／D678 裁：退避**不问归因**照常计数，仅在 `avoid=` 读数标注分型）。
     /// <para>`Env`＝**环境让渡型**（如 ⑥「流浪池无同族可招」——HH.28 裁决① 归让渡，AI 无法以自身行动消除）；
-    /// `Self`＝**行动自身型**（资源不足／前置建筑缺失／无合法落点／门面校验未过 等）。</para></summary>
+    /// `Self`＝**行动自身型**（资源不足／前置建筑缺失／无合法落点／门面校验未过 等）。</para>
+    /// <para>**判定原则（HH.228／D680 追记）**：失败原因落在「AI **无论怎么决策都无法自消**」的**世界/门面/资产/配置给定物**上
+    /// （资产缺失／单例·门面未就绪／世界未提供／族属·配置给定）＝`Env`；否则＝`Self`（资源不足＝可自采、前置建筑缺失＝可自建）。
+    /// **边界反例**：含 AI 自身可调参数影响者（如 建造链③ 选址无落位含 `aiBuildRadius`）判 `Self`。</para></summary>
     public enum FailKind { Self = 0, Env = 1 }
 
     private static readonly Dictionary<long, State> _t = new Dictionary<long, State>();
