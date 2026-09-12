@@ -65,4 +65,54 @@ SO `SituationConfig.asset` `internalDriveWeight` 临时置 **0** ⇒ 槽 `p1_fix
 | 红线自检 | 业务改动仅 `UtilityScorer.cs`（3 处·结构接线非调参）；AI.Core 零触碰；未 push；SO/枚举无新增（L-28 N/A） |
 
 ---
-*执行端 2026-09-11 夜（HH.220）。明日从 §二-1 起续。*
+
+## 四、会话追加实证与报裁项（用户追问「王国 AI 到底能不能消费一次性资源」引发 · **全部代码级取证**）
+
+> 定位：本节由收工后一次**纯代码/存档取证**产生（**未跑局、未改任何业务代码**），含 **1 项报裁**。承 §二-2（(B)(C) 正式诊断）并入明日交付报告。
+
+### 4.1 一次性资源**已实装且大量生成**（更正我先前口误）
+- **资产层**（`Assets/Resources/Buildings/`）：`stone_pile`（石堆，`isConsumable: 1`）｜`ore_vein`（矿脉，`isConsumable: 1` **＋** `isResourceNode: 1`）｜`wood_pile`（木材堆，`isConsumable: 1`）｜`treasure_box`（宝箱，`isConsumable: 1`）｜`tree`（树木，`isResourceNode: 1`）｜`farmland`（农田，`isResourceNode: 1`）｜`mine`（**矿洞**，`isResourceNode: 1` **＋ `isMineByproduct: 1`**，`outputResource: 1`(Stone)，`producer.rate 0.3`）
+- **存档层**（`Saves/p1_fix1.json` 全图 defId 计数，实测）：**`stone_pile` 780｜`ore_vein` 1188｜`wood_pile` 644**；`mine` 4｜`quarry` 3｜`farm` 5｜`wall` 12｜`Barracks` 2｜`TrainingCamp` 3；**`tree` 0｜`farmland` 0｜`treasure_box` 0**（→ §4.5 落差）
+- **矿洞副产实装**：开局日志 `[MineByproduct] 副产仓就绪（mine）：水晶仓/火油仓/矿石仓 cap=20`
+- ⚠️**更正（HH.214 §(B) 口误）**：我引 `ResourceNodeMapping`（`quarry→矿洞`／`farm→农田`，注释「资源点自身不产出，工具建筑激活后才产出」）并表述为「**石材唯一产出路径＝在矿点上盖 quarry**」⇒ **该表述不成立**。现行**石源 ≥4 条**：①石堆（一次性）②矿脉（一次性＋资源点）③矿洞（锚点主产＋副产）④采石场（工具建筑·建在矿洞上）；**木**＝树木/木材堆（**设计上无产能建筑**）；**粮**＝农田节点＋农场（工具建筑）
+
+### 4.2 `Stone:prod=0/in=0` 的**精确口径**（防误读）
+- `[DiagCapacity]` 的 `prod` ＝ `KingdomBrain.CountProductionOf`（[KingdomBrain.cs:1313-1320](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/KingdomBrain/KingdomBrain.cs#L1313-L1320)）→ `eco.Production[i].Count` ⇒ **「在产产能建筑数」**，**不是石头总量**；`in` 才是入库
+- ⇒ k1 的真命题 ＝ **「无在产采石场」＋「零石入库」**，**≠「世界上没石头」**（石堆 780／矿脉 1188 在册）
+
+### 4.3 🔴 **硬证据：AI 目前无法消费世界一次性资源（能力缺口）**
+| 入口 | 调用者实读 | 结论 |
+|---|---|---|
+| [`Building.StartGather()`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L856-L866)（摘要原文：「**玩家确认采集**一次性资源点（BuildingPanel 采集按钮调）」） | **全库唯一调用者 ＝ [BuildingPanel.cs:590](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildingPanel.cs#L590)**（UI 按钮回调） | **零 AI 调用者** |
+| [`ResourceRespawnSystem.ConfirmTreeGather()`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/ResourceRespawnSystem.cs#L104-L121)（摘要原文：「**玩家点击地图树格**（2_13 交互入口）经此调用」） | **全库零调用者**（仅定义处） | **连 UI 都未接**（现仅测试/程序化可触发） |
+| [`TreeGatherSource`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/TreeGatherSource.cs#L6-L9)（「懒注册——**仅玩家确认**砍某棵树时才创建」） | 冒烟亦标注「**玩家源**…玩家采集真实载体」（`Smoke_2_23RB.cs:161-166`） | 玩家通道 |
+- **AI 可自动消费的仅两条**：①自建建筑产能（`StorageComponent`→搬运闭环 `IHarvestable`/`HarvestCarry`）②**矿洞副产**（`MineByproductComponent` 实现 `ITaskSource` 自动广告搬运，`:158`）
+- **对照实证**：k3 `quarry×3`＋`Stone prod=1/in=100`（走"建筑产能＋矿洞副产"这条 AI 能消费的通道）⇒ 通路本身可用；k1/k2/k4 两样都无 ⇒ 石永久 0
+- ⇒ **石堆/矿脉/树 对 AI ＝ 看得见、吃不着**；k1 `Stone:prod=0/in=0` 的**主因候选＝该能力缺口**（与「in=0 是否另有采集/入账口径问题」由 §4.6 事件级探针一次闭合）
+- **归属**：**设计面新功能缺口**（给 AI 加"确认采集"行动或任务源）⇒ **超本批授权，报裁（不擅动）**，见 §4.7
+
+### 4.4 口径/日志覆盖度（对「我们的日志展现 AI 的选择了吗」的回答）
+- **已有**：`[DiagMilitary] Dxx kX census defTotal=26 stageFiltered=… noNeed=… infeasible=… axisFiltered=… top=…`（每日**第一名**＋四类过滤计数）；⑯⑰ **逐行动** `need/feasible/feasibleReachable/score`
+- **缺口**：census 只记**第一名**；**逐行动读数只覆盖 ⑯⑰**——③建产能、⑨建墙等**无逐行动行** ⇒ 故「③ 65 天未登顶」**当前无法区分**「被 `stageFiltered/noNeed/infeasible` 拦掉」与「进池但分不够」（D663「禁预设」的落点）
+- **已实读旁证**（k1 D30）：⑦招战士 `feasible=False feasibleReachable=True cost 0/0/0/0`（卡**前置建筑**，非资源成本）＋⑰a 建兵营 `cost stone=10` vs k1 `stone=3` ⇒ 与 §4.3 首尾相接
+
+### 4.5 文档↔资产落差（列报，不擅断）
+- 「**枯木**」：Assets 全库 grep `deadwood|dead_tree|枯木` ⇒ **零命中**。若文档要求其为独立实体，属**文档↔资产落差**（按 `doc-management` 立账）
+- 存档 `tree 0｜farmland 0｜treasure_box 0`：可能**未生成／未入存档／文档命名与资产 id 不一致**（例：树可能并入 `wood_pile`）⇒ 待核
+
+### 4.6 测试方法论修正（**用户批评成立，认账**）
+| 问题 | 正确取证件 | 所需窗口 |
+|---|---|---|
+| AI **有无**采集通道（能力缺口） | **代码级 grep 调用者**（本 §4.3 即纯代码取证）＋**事件级断言**（`Gather` 派发数／`ITaskSource` 注册数／`HarvestCarry` 入账数） | **D1~D3 或纯代码** |
+| 门槛机制是否生效（本批 A′） | 夹具／阶段注入 ＋ 逐日 `target` 实读 | D5~D15（夹具≈5 分钟） |
+| AI **自主**至军事期（D589 判定线） | 自然长局 | 90~120 日（**唯一必须长跑的**） |
+- **认账**：HH.214 把 (B) 资源链与"自主至军事期"**混进同一 90 日窗口**，导致产生"看 `in` 涨不涨"这种别扭的取证件；**能力缺口类问题不该用长跑发现**
+- **明日待补探针**（观测域，成本低）：①③⑨ 逐行动读数（接现成机制）②`Gather` 事件计数（派发／注册／入账）③k1 领土内 `stone_pile/ore_vein` 计数（世界实体 × 可达范围对照）
+
+### 4.7 🔴 报裁项（随明日交付报告一并呈）
+1. **AI 采集世界一次性资源的能力缺口是否立项**（设计面）——三选：①给 AI 加「确认采集」**行动**（AI 行动表**尾插**，L-28）②给 AI 加**自动任务源**（世界资源点对 AI 自动广告，类比矿洞副产 `MineByproductComponent`）③**暂不改**（把石贫国视为设计取舍）。影响面：AI 决策核（**不在 `AI.Core`**，可直改）＋任务派工面；若触及决策核口径 ⇒ 需走 `sim-sync` 对账
+2. **口径分流是否升为项目纪律**（能力缺口→代码/事件级；机制自证→短程/夹具；仅"自主性"→长跑）
+3. **「枯木」落差**与 `tree/farmland/treasure_box` 存档 0 的归属（立账／核文档）
+
+---
+*执行端 2026-09-11 夜（HH.220）。§一~三 为收工前落盘；§四 为收工后追加（纯代码/存档取证，未跑局、未改业务代码）。明日从 §二-1 起续，§4.6 待补探针与 §4.7 报裁项并入交付报告。*
