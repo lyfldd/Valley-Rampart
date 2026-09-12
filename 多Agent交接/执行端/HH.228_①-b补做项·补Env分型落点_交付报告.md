@@ -304,3 +304,24 @@ if (!DiagMilitary.IsRunning)
 ---
 
 *主策划端 2026-09-12（D682 裁决，取号 `ed0f5ca`）。*
+
+### ① 闭环验收（D682 追记·2026-09-12）
+
+**结论＝①-b 补做项（含补遗 A/B）全部收口 ⇒ ① 闭环成立 ⇒ 放行 ②。**
+
+| 项 | 实读/实测证据 | 裁决 |
+|---|---|---|
+| **补遗 A（Env 落点 7→9）** | `KingdomBrain.cs` `FailKind.Env` 落点 **9 处**（`848／938／1031／1047／1053／1059／1220／1228／1251`）实读一致；`：1220`／`：1228` 均已写成 `ReportActionFail(kingdom, ActionBackoff.FailKind.Env)` | **✅ 已办证** |
+| 行为面零改复证 | 全仓 `kind` 仅 3 引用：形参 `ActionBackoff.cs:103`／唯一写 `s.lastEnv:116`／枚举 `:45`；`Factor:54-77` 与 `IsCapped:83-99` 均不读 `lastEnv` | **✅ 成立（T 级）** |
+| **补遗 B（容器探针在场 fail-fast）** | `Valley_HH80_Run.cs:121-125` 新增 `if (!DiagMilitary.IsRunning) { LogError+return; }`（紧随 P1Observer fail-fast `:114-118`，口径同 `HH80_DiagRun:39-43`） | **✅ 已办证** |
+| B 正负例实测 | 负例＝探针关 ⇒ `LogError`＋`HH80_RunRunner=ABSENT`；正例＝`IsRunning=True` ⇒ `PRESENT` 进入 `RunCoroutine` | **✅ 成立** |
+
+**笔误勘正（`D682` 补遗令）**：补遗令中写的 `Valley_DiagMilitary.IsRunning` **系文件名误作类名**，实际类名＝`DiagMilitary`（`Valley_DiagMilitary.cs:18` 声明／`:110` 属性），执行端已按实际类名接线——**根因＝策划侧指令引用标识符未实读**（凭名称推断当事实）⇒ **`L-24` 家族实例＋1**（不新立）。
+
+**门禁**：编译 0 错（21 warning 全既有无关、本批 3 文件零 warning）＋`Smoke_5` ALL PASS（`让位门=True/回池=True/分型True(BuildWall:0.75(Env))`）＋收工退 Play（`isPlaying=False`）。
+
+**列报裁决 2 项**：①`p1_snap.csv` 多 1 行全局启动快照（正例起跑即退 Play 之残留，无逐国行/无检查点）＝**准**（无害·结构探针验证产物）；②**命名勘正**＝**准**（见上）。
+
+**执行端自曝并发疏漏裁决**：追加追记时**未在改前重读磁盘**（`agent-handoff §六` 红线#1），因锚点唯一未致覆盖 ⇒ **验收三问**：①撞位 ②**流程漏洞（自曝·零损失）** ③规则已在 `agent-handoff §六` ⇒ **家族实例＋1，不新立**；**纪律提醒**＝共享文档改前必重读。
+
+**放行 ②**（`HH.203` 七考重验；起跑前置＝关 `J7`＋重定 `SEED/SLOT`＝73621/p1_run8＋`JUDGE_FOCUS_KINGDOM` 侦察定值＋`L-34` 五列在线判据表＋日志两层＋≥30 日每 10 日小结＋收工退 Play）。**本追记不新取号**（属 D682 同批闭环）。
