@@ -27,7 +27,7 @@ public static class Valley_HH80_Run
     //    ⚠️仍属"每批定案"项（非档位）：SEED/SLOT 保持 64513/p1_fix1b，下一批起跑前须按任务书设新 seed/槽
     //    （**换 seed 须同步改 `JUDGE_FOCUS_KINGDOM`**，见下方注释）。
     private const int SEED = 73621;          // HH.230（D680 裁）：② 七考重验正跑档＝73621（七考原 seed 复用；HH.189 七考/`p1_run7` 同 seed）
-    private const string SLOT = "p1_run8";    // HH.230（D680 裁）：② 定案槽＝p1_run8（⚠️HH.214 七考重验首次曾用本槽＝seed 64513；本轮将覆盖该存档槽，日志/CSV/镜像证据已留 Logs/P1）
+    private const string SLOT = "p1_run9";    // HH.230／D683 裁 D：② 定案槽＝p1_run9（**不动 p1_run8／HH.214 存档槽**）
     private const int CIRCUIT_BREAK_DAY = 120;
     private const int MILITARY_STOP_COUNT = 2;   // ✅已复原（DZ-136）：长局判定档=≥2 AI 军事期（HH.217 短局自证档 1 已废止）
 
@@ -82,6 +82,12 @@ public static class Valley_HH80_Run
     //   ⇒ 后续批若需石链止损：置 true 启用，并**先解决"开局无产能期"口径**（否则以既有常态误停）。
     //   （用 static readonly 而非 const：const=false 会使 `if` 分支变"不可达代码"触发 CS0162 警告）
     private static readonly bool ENABLE_J2_STONECOLD = false;
+
+    // HH.230／D683（②七考重验裁示 B）：**关 J8（防退化）**——J8 基线取自 seed **64513** 修前 `p1_fix1`（`BASE_BUILD_OK_D31=22`／`_D60=32`），
+    //   本批 seed＝**73621** ⇒ **跨种子比较**（与 D678 修 J7 **同一病根**）；D680「保留 J8」的前提（同 seed／同段）**已破**
+    //   ⇒ 本批必须关（维持则可能以"他世界既有常态"误停整批 ≈45 分钟）。**否**重取基线（D683 裁）。
+    //   （用 static readonly 而非 const：避免 `if` 分支不可达触发 CS0162）
+    private static readonly bool ENABLE_J8_BUILDOK = false;
 
     private static readonly JudgeCfg[] JUDGES = BuildJudges();
 
@@ -288,15 +294,19 @@ public static class Valley_HH80_Run
             }
         }
         // J8（防退化·负向）：同段基线（修前累计落地数按日插值）⇒ 全批级
-        int nn = _censusSamples[1];
-        if (nn >= 30)
+        //   ⚠️HH.230／D683：**本批关闭**（见 `ENABLE_J8_BUILDOK` 注：基线源 seed 64513、本批 seed 73621 ⇒ 跨种子比较）
+        if (ENABLE_J8_BUILDOK)
         {
-            float baseCnt2 = BaseBuildOkAt(nn + 1);
-            if (_buildOkDays <= 0.5f * baseCnt2)
+            int nn = _censusSamples[1];
+            if (nn >= 30)
             {
-                why = "判据命中：J8 防退化报警（建造落地 " + _buildOkDays + " ≤ 修前同段 " + baseCnt2.ToString("F0")
-                    + " 的半值，样本 " + nn + "）⇒ 停手报裁 @D" + day;
-                return true;
+                float baseCnt2 = BaseBuildOkAt(nn + 1);
+                if (_buildOkDays <= 0.5f * baseCnt2)
+                {
+                    why = "判据命中：J8 防退化报警（建造落地 " + _buildOkDays + " ≤ 修前同段 " + baseCnt2.ToString("F0")
+                        + " 的半值，样本 " + nn + "）⇒ 停手报裁 @D" + day;
+                    return true;
+                }
             }
         }
         return false;
