@@ -12,6 +12,8 @@ using UnityEditor;
 //  接口纪律）→ 达标（≥2 AI 军事期）或熔断（day≥120）或灭绝全灭 → SetGameSpeed(0)
 //  停速+Save 封盘+ExitTestRun 全量恢复+写状态文件 Logs/P1/hh80_run_status.log（console 大缓冲教训）。
 //  每 20 日评审打点（协议）→ 镜像日志+CSV 承担，本容器只做终局三停（达标/熔断/灭绝）。
+//  HH.222（D666 裁 / test-harness-first §八 机制 1+3；L-34）：**在线判据·命中即停**已接入——
+//  每轮读 DiagMilitary 判据快照（死滞／石链僵死止损／零入库异常），命中即 Finish("判据命中：X @D??")（见 JUDGES 常量）。
 //  红线：零玩家干预（本容器只开考跑档+Save，不建造不训练不输资源）。
 // ============================================================================
 public static class Valley_HH80_Run
@@ -25,6 +27,18 @@ public static class Valley_HH80_Run
     private const string SLOT = "p1_fix1b";   // 治本批独立槽（禁覆盖 p1_run6/6b/7/8；p1_fix1=正向 / p1_fix1b=负探针 weight=0）
     private const int CIRCUIT_BREAK_DAY = 90;
     private const int MILITARY_STOP_COUNT = 1;   // HH.217：短局机制自证 ⇒ 1 个 AI 达军事期即收工（七考须复原为 2）
+
+    // HH.222（D666 已裁 / test-harness-first §八 机制 1+3；教训 L-34）＝**在线判据·命中即停**：
+    //   支撑/目标日志每日在流（探针 `verdict=`）⇒ 容器每轮检查，命中即 Finish("判据命中：X @D??")，不跑满窗口。
+    //   本批（负探针 weight=0）启用＝死滞（drive≤0 且 target<门 ≥5 日）＋石链僵死止损（stone ≥10 日不增且石入库=0）＋零入库异常（≥15 日）。
+    //   关闭＝TargetGateHit（机制面已证·正向批按需开；本批 drive≡0 不可能触发）／ChannelAbsent（HH.221 资源对等批用；本批预期"通道未落地"，开则误停）。
+    //   ⚠️机制 4（≥30 日每 10 日阶段小结）本批不做，随七考重验批强制（D666）。
+    private static readonly DiagMilitary.JudgeKind[] JUDGES = new[]
+    {
+        DiagMilitary.JudgeKind.Deadlock,
+        DiagMilitary.JudgeKind.StoneCold,
+        DiagMilitary.JudgeKind.NoIncome,
+    };
 
     private static readonly List<int> _military = new List<int>();
     private static volatile bool _done;
@@ -42,6 +56,7 @@ public static class Valley_HH80_Run
         // D656 硬条款2：显式传槽（观测器 MainSlot 已参数化，禁回落硬编码）——进局前设置
         P1Observer.SetMainSlot(SLOT);
         _military.Clear(); _done = false;
+        DiagMilitary.ResetJudges();   // HH.222：清在线判据 streak（防跨局/跨批污染；探针未启时全部判据自然 NoData）
         Application.logMessageReceived += WatchMilitary;
         new GameObject("HH80_RunRunner").AddComponent<RunHost>().Host(RunCoroutine());
     }
@@ -98,9 +113,33 @@ public static class Valley_HH80_Run
                 }
             }
             if (_military.Count >= MILITARY_STOP_COUNT) { Finish("达标收工：≥" + MILITARY_STOP_COUNT + " AI 军事期（" + string.Join(",", _military) + "）@D" + day); break; }
+            string judgeWhy;
+            if (CheckJudges(reg, day, out judgeWhy)) { Finish(judgeWhy); break; }   // HH.222：在线判据命中即停（§8.2 机制 1+3）
             if (day >= CIRCUIT_BREAK_DAY) { Finish("熔断：D" + CIRCUIT_BREAK_DAY + " 无 ≥2 AI 军事期（已达标=" + string.Join(",", _military) + "，AI 存活 " + aiAlive + "/" + aiTotal + "）"); break; }
             if (reg != null && aiTotal > 0 && aiAlive == 0) { Finish("灭绝停跑：AI 全灭 @D" + day + "（已达标=" + string.Join(",", _military) + "）"); break; }
         }
+    }
+
+    /// <summary>HH.222（D666 裁 / §8.2 机制 1+3）：在线判据检查——命中即返回停跑原因。
+    /// 判据源＝DiagMilitary 每日 streak 快照（单源，禁另抄）；已灭绝国不判（灭绝有独立停条）。</summary>
+    private static bool CheckJudges(KingdomRegistry reg, int day, out string why)
+    {
+        why = null;
+        if (reg == null) return false;
+        var all = reg.GetAll();
+        for (int i = 0; i < all.Count; i++)
+        {
+            var k = all[i];
+            if (k == null || k.IsPlayer) continue;
+            if (k.workerCount + k.warriorCount <= 0) continue;
+            DiagMilitary.JudgeKind jk; string jd;
+            if (DiagMilitary.TryJudge(k.id, JUDGES, day, out jk, out jd))
+            {
+                why = "判据命中：" + jk + "（k" + k.id + " " + jd + "）@D" + day;
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void Finish(string why)

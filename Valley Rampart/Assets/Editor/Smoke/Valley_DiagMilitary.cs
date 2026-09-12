@@ -22,6 +22,82 @@ public static class DiagMilitary
     private static MethodInfo _miFeasible, _miCountProd, _miDecideTriage;
     private static bool _warnedFeasible, _warnedTriage;
 
+    // ===== HH.222（D666 已裁 / test-harness-first §八 机制 1+2 落地；教训 L-34）=====
+    //  在线判据**单源**：探针每日 tick 更新 streak ＋ 状态行打 `verdict=`；跑局容器读快照做「命中即停」。
+    //  纪律（§8.1 支撑日志层）：支撑量（stone/in/prod…）一旦异常 ⇒ **当日**打 `verdict=`／`ANOMALY=` 并当场判定，不等跑完。
+    public enum JudgeKind { None = 0, Deadlock, StoneCold, TargetGateHit, NoIncome, ChannelAbsent }
+
+    private class JudgeState
+    {
+        public int prevStone = -1;
+        public int noGainDays;      // 石链僵死：stone 未增且石入库=0 的连续日数
+        public int belowGateDays;   // 死滞：drive≤0 且 target<门 的连续日数
+        public int noIncomeDays;    // 异常：六资源全零入库的连续日数
+        public bool gateHit;        // 机制面已证：曾达 target≥门
+        public int gateHitDay = -1;
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<int, JudgeState> _judge
+        = new System.Collections.Generic.Dictionary<int, JudgeState>();
+
+    public const int JudgeDeadlockDays = 5;    // §8.4 示例：负探针 D5~D10 死滞定论
+    public const int JudgeStoneColdDays = 10;  // §8.4 示例：stone 连续 ≥10 日不增且入库=0 ⇒ 石链僵死
+    public const int JudgeNoIncomeDays = 15;   // 异常即停：六资源全零入库 ≥15 日
+    public const int JudgeChannelMinDay = 3;   // 通道未落地（资源对等批判据③）：D≥3 仍 0 源
+
+    /// <summary>清判据状态（跑局容器起跑时调用；防跨局/跨批污染）。</summary>
+    public static void ResetJudges() => _judge.Clear();
+
+    private static bool Has(JudgeKind[] arr, JudgeKind j)
+    {
+        if (arr == null) return false;
+        for (int i = 0; i < arr.Length; i++) if (arr[i] == j) return true;
+        return false;
+    }
+
+    /// <summary>容器早停用：该 AI 是否命中「enabled 内」任一判据。
+    /// 优先级＝死滞 ＞ 石链僵死（止损）＞ 零入库 ＞ 通道未落地 ＞ 机制面已证（§8.2 机制 1+3）。</summary>
+    public static bool TryJudge(int kId, JudgeKind[] enabled, int day, out JudgeKind kind, out string detail)
+    {
+        kind = JudgeKind.None; detail = "";
+        JudgeState s;
+        if (!_judge.TryGetValue(kId, out s)) return false;
+        if (Has(enabled, JudgeKind.Deadlock) && s.belowGateDays >= JudgeDeadlockDays)
+        { kind = JudgeKind.Deadlock; detail = "drive≤0 且 target<门 连续" + s.belowGateDays + "日"; return true; }
+        if (Has(enabled, JudgeKind.StoneCold) && s.noGainDays >= JudgeStoneColdDays)
+        { kind = JudgeKind.StoneCold; detail = "stone=" + s.prevStone + " 连续" + s.noGainDays + "日未增且石入库=0（ANOMALY:stoneChain）"; return true; }
+        if (Has(enabled, JudgeKind.NoIncome) && s.noIncomeDays >= JudgeNoIncomeDays)
+        { kind = JudgeKind.NoIncome; detail = "六资源全零入库连续" + s.noIncomeDays + "日（ANOMALY）"; return true; }
+        if (Has(enabled, JudgeKind.ChannelAbsent) && day >= JudgeChannelMinDay && CountWorldResourceSources() <= 0)
+        { kind = JudgeKind.ChannelAbsent; detail = "世界资源点任务源注册数=" + CountWorldResourceSources() + "（通道未落地）"; return true; }
+        if (Has(enabled, JudgeKind.TargetGateHit) && s.gateHit)
+        { kind = JudgeKind.TargetGateHit; detail = "target≥门 首达 @D" + s.gateHitDay; return true; }
+        return false;
+    }
+
+    /// <summary>世界资源点任务源注册数（HH.221 资源对等批判据③；只读反射 `TaskScheduler._sources`；-1=不可达）。</summary>
+    public static int CountWorldResourceSources()
+    {
+        try
+        {
+            var ts = TaskScheduler.Instance;
+            if (ts == null) return -1;
+            var fi = typeof(TaskScheduler).GetField("_sources", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (fi == null) return -1;
+            var col = fi.GetValue(ts) as System.Collections.IEnumerable;
+            if (col == null) return -1;
+            int n = 0;
+            foreach (var o in col)
+            {
+                if (o == null) continue;
+                string tn = o.GetType().Name;
+                if (tn.Contains("Gather") || tn.Contains("Byproduct") || tn.Contains("Resource")) n++;
+            }
+            return n;
+        }
+        catch { return -1; }
+    }
+
     /// <summary>诊断器是否在跑（与 P1 观测器 IsRunning 同构，供跑局容器断言）。</summary>
     public static bool IsRunning => _installed;
 
@@ -101,6 +177,9 @@ public static class DiagMilitary
         string stage = k.scriptPhase.ToString();
         ScriptStage st = k.scriptPhase ?? ScriptStage.Survive;   // k.scriptPhase 为可空；未设时按存活期（与 ScoreTop 调用面一致）
 
+        // HH.222（D666 裁 / §8.1+§8.2）：在线判据 streak 更新（支撑量异常 ⇒ 当日打标并当场判定）
+        string verdict = UpdateJudges(k, bcfg, target, drive);
+
         // ── [DiagMilitary] 状态行 + ⑦⑯⑰ 三面 ──────────────────────────────
         var sb = new StringBuilder();
         sb.Append("[DiagMilitary] ").Append(tag).Append(" k").Append(k.id)
@@ -111,7 +190,9 @@ public static class DiagMilitary
           .Append(" stone=").Append(k.GetResourceValue(ResourceType.Stone))
           .Append(" wood=").Append(k.GetResourceValue(ResourceType.Wood))
           .Append(" militaryTarget=").Append(target)
-          .Append(" drive=").Append(drive >= 0f ? drive.ToString("F4") : "n/a");   // HH.217：内源势能实读（正/负探针通道）
+          .Append(" drive=").Append(drive >= 0f ? drive.ToString("F4") : "n/a")   // HH.217：内源势能实读（正/负探针通道）
+          .Append(" verdict=").Append(verdict)                                     // HH.222：在线判据打标（跑局容器命中即停）
+          .Append(" chSrc=").Append(CountWorldResourceSources());                  // HH.221 判据③：世界资源点任务源注册数
         Debug.LogWarning(sb.ToString());
 
         DumpAction(tag, k, acfg, UtilityAction.RecruitWarrior, "⑦招战士", st);
@@ -131,6 +212,48 @@ public static class DiagMilitary
             tag, k.id, census.defTotal, census.stageFiltered, census.noNeed, census.infeasible, census.axisFiltered, top));
 
         DumpEconomy(tag, k);
+    }
+
+    /// <summary>HH.222（D666 裁 / test-harness-first §八 机制 1+2）：逐日更新在线判据 streak 并返回 `verdict=` 打标串。
+    /// 支撑量口径＝ stone（存量）＋ Economy.In(Stone)（入库）＋ 六资源入库（异常面）；判据本身由容器消费（TryJudge）。</summary>
+    private static string UpdateJudges(KingdomState k, KingdomBrainConfig bcfg, int target, float drive)
+    {
+        JudgeState s;
+        if (!_judge.TryGetValue(k.id, out s)) { s = new JudgeState(); _judge[k.id] = s; }
+        int gate = bcfg != null ? bcfg.expandToMilitary_warriorsMin : 4;
+
+        // ── 支撑日志面（§8.1）：石链（存量+入库）/ 六资源全零入库 ──
+        int stoneNow = k.GetResourceValue(ResourceType.Stone);
+        int stoneIn = 0; bool ecoOk = false; bool allZero = true;
+        if (SituationHub.TryGet(k.id, out var sit) && sit != null && sit.Economy != null)
+        {
+            ecoOk = true;
+            stoneIn = sit.Economy.In(EcoResource.Stone);
+            foreach (EcoResource r in Enum.GetValues(typeof(EcoResource)))
+                if (sit.Economy.In(r) != 0) { allZero = false; break; }
+        }
+        if (ecoOk)
+        {
+            if (s.prevStone >= 0 && stoneNow <= s.prevStone && stoneIn == 0) s.noGainDays++; else s.noGainDays = 0;
+            if (allZero) s.noIncomeDays++; else s.noIncomeDays = 0;
+        }
+        s.prevStone = stoneNow;
+
+        // ── 目标日志面：死滞（负探针）/ 机制面已证 ──
+        if (drive <= 0f && target >= 0 && target < gate) s.belowGateDays++; else s.belowGateDays = 0;
+        if (target >= gate && !s.gateHit)
+        {
+            s.gateHit = true;
+            s.gateHitDay = Application.isPlaying && TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : -1;
+        }
+
+        var v = new StringBuilder("ok");
+        if (s.gateHit) v.Append("|targetGateHit@D").Append(s.gateHitDay);
+        if (s.belowGateDays > 0) v.Append("|deadlock:").Append(s.belowGateDays);
+        if (s.noGainDays > 0) v.Append("|stoneCold:").Append(s.noGainDays);
+        if (ecoOk && s.noIncomeDays > 0) v.Append("|noIncome:").Append(s.noIncomeDays);
+        if (ecoOk && stoneIn == 0 && s.noGainDays >= JudgeStoneColdDays) v.Append("|ANOMALY:stoneChain");
+        return v.ToString();
     }
 
     private static void DumpAction(string tag, KingdomState k, UtilityActionConfig acfg, UtilityAction id, string label, ScriptStage st)
