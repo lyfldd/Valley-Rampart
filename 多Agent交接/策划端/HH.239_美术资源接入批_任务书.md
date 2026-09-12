@@ -163,3 +163,20 @@ S1 清残留 → S2 建 SpriteRefTable 骨架 + 素材入库 + 配导入设置
 ### 8.3 三问裁示记录（2026-09-12 用户）
 
 ① monster 15 **并入本批**；② gate_open **用户补抽**（本批 closed 接线＋开门态临时复用 closed）；③ HH.233/234 **域内按 D686 对齐回写**（无新裁决点，回写已落两信 §五/§六）。
+
+### 8.4 动画架构定档与图集（2026-09-12 第二轮复审·用户两问全准）
+
+**H5（T13 验收口径·全配档）**
+
+- **架构**＝单管理器集中推进（ProjectileManager 同款）＋**结构体数组内联**（平铺 `struct{timer; frame; fps; spriteRef;}`——连续内存遍历、零虚调用、零装箱）＋**脏写跳过**（帧索引未变不写 sprite 属性）＋**不可见注销**（`OnBecameInvisible` 移出活跃表／`OnBecameVisible` 回表）；
+- **LOD 动画分层**：对接既有 `LodLevel`（`Systems/AI/LOD/MidChunkLodState.cs:11`；`Systems/AI/LOD/LODSystem.cs:23`；NPCBrain thinkHz 分档先例 `NPCBrain.cs:502-506`）——近档 12fps 全速／远档降半频或冻结静态帧；**查本单位已有档位，禁另建 LOD 系统**；
+- **状态注册表**：per `(race,occ,state)` 共享缓存 `Sprite[]`（400 单位共享 46 套 sheet，帧数组只建一份）；每状态 **playMode＝loop／once回落／once定格**（⚠️ 工人 attack＝工作循环、战斗 attack＝单次回落、death＝定格——三态必须分清）；**同状态重入＝打断重播**（第 0 帧重开）；**完成回调＝P0**（death 播完衔接既有死亡流程／attack 回落靠它）；**随机起始相位**（仅 loop 态进场随机帧，防全场齐步走）；**缺图回退静默化**（负查询缓存＋一次性告警，禁逐帧刷日志）；**icon 态排除**（UI/立绘用，不入运行时状态集）；fps per-state SO 可配＋局部 speedScale（非坐骑 run＝walk 加速）＋全局 `Time.deltaTime`（自动随倍速 0.5~3x 与 timeScale 冻结）；**零 GC／枚举状态／禁每帧字符串比较**；
+- **O(1) 注册/注销**：swap-remove 数组、禁 `List.Remove`；OnDestroy 必注销（防泄漏，池复位纪律延伸）；
+- **统一 pivot 双重收益**（切帧坑②延伸）：同 sheet 子帧同尺寸同 pivot ⇒ 换帧不改变 bounds ⇒ **排序稳定不重算**——写入验收理由；
+- **三档否决**（防自由发挥）：分桶时间分片（收益 <0.01ms）／Burst·Jobs（属性写须回主线程）／GPU·Shader 动画（破坏 SpriteRefTable 间接层＋缺图回退链＋排序稳定三件既有资产；记**远期备选**，P1 帧率红线不达标才议）；
+- **验收补充**：300~400 单位场景 **Profiler 证据**＝动画推进 <0.1ms 级＋混编四族帧率达标（对齐 0_总计划 §九⑥）。
+
+**H6（SpriteAtlas 图集·本批纳入）**
+
+- 建 Unity 内建 SpriteAtlas 收 **Units 全部帧**（含 monster）——防 300~400 混编单位换帧打断 dynamic batching（draw call 随可见纹理数膨胀）；随 T4/T5 落（切帧后入集）；`SpriteRefTable` 直接引用入集后 sprite **不失效**；
+- 验收：四族混编容器（2_20B）同屏 DrawCall 计数不随族数线性上涨（入集前后对照或机制说明）。
