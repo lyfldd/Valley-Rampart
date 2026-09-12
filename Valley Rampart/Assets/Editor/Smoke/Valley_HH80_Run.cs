@@ -26,8 +26,8 @@ public static class Valley_HH80_Run
     //    ⇒ **长局档已就绪**（未复原不得开长局：120 日判定线会被 90 截断＝D585/D589 截断混淆同族）。
     //    ⚠️仍属"每批定案"项（非档位）：SEED/SLOT 保持 64513/p1_fix1b，下一批起跑前须按任务书设新 seed/槽
     //    （**换 seed 须同步改 `JUDGE_FOCUS_KINGDOM`**，见下方注释）。
-    private const int SEED = 64513;          // HH.217 短局：复用 HH.214 定案 seed（同世界修前/修后对照；D664 裁准）
-    private const string SLOT = "p1_fix3";    // ✅HH.228 收工已复原（临时取证槽 p1_fix4 用毕；禁覆盖 p1_run6/6b/7/8、p1_fix1/1b/2）
+    private const int SEED = 73621;          // HH.230（D680 裁）：② 七考重验正跑档＝73621（七考原 seed 复用；HH.189 七考/`p1_run7` 同 seed）
+    private const string SLOT = "p1_run8";    // HH.230（D680 裁）：② 定案槽＝p1_run8（⚠️HH.214 七考重验首次曾用本槽＝seed 64513；本轮将覆盖该存档槽，日志/CSV/镜像证据已留 Logs/P1）
     private const int CIRCUIT_BREAK_DAY = 120;
     private const int MILITARY_STOP_COUNT = 2;   // ✅已复原（DZ-136）：长局判定档=≥2 AI 军事期（HH.217 短局自证档 1 已废止）
 
@@ -51,7 +51,7 @@ public static class Valley_HH80_Run
         new int[] { 24,25,28,29,30,56,57,58,59 },            // k3 共 9 日
         new int[] { 14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65 },   // k4 共 52 日
     };
-    private const bool ENABLE_J7_WALLTOP = true;   // 基线与本批 seed/窗口同段 ⇒ 启用（HH.203 120 档须重取基线或置 false）
+    private const bool ENABLE_J7_WALLTOP = false;  // HH.230（D680 裁②）：**关 J7**——120 档＋换 seed（73621）⇒ 无同段参照（`BASE_WALL_TOP_DAYS` 仅覆盖至 D65 且源 seed 64513）⇒ 开启＝跨段/跨世界比较＝误停风险
 
     // J8 防退化同段基线（源＝修前 `p1_fix1` 同日志源）：累计"建造焦点落地"数（D2~D31＝22 ／ D1~D60＝32）
     private const int BASE_BUILD_OK_D31 = 22;
@@ -68,8 +68,9 @@ public static class Valley_HH80_Run
     //     切掉 k3 的「→军事」证据（D664 验收句②）⇒ 故 **J2 固定为「指定国」= JUDGE_FOCUS_KINGDOM（本 seed 唯一可至军事期者）**。
     private struct JudgeCfg { public DiagMilitary.JudgeKind Kind; public bool OnlyKingdom; public int Kingdom; }
 
-    /// <summary>本 seed（64513）唯一可至军事期的 AI＝k3（HH.220 实证：D65 →军事）；**换 seed 须一并改**。</summary>
-    private const int JUDGE_FOCUS_KINGDOM = 3;
+    /// <summary>② 正跑档（seed 73621）的**侦察提议值**＝k1（HH.230：seed 73621 结构与 64513 同类；**本 seed 专属证据**＝HH.189 七考 @73621 中 **k1 为唯一跑满 D120 存活国**（工12／战0），k2/k3/k4 全灭 ⇒ 判 k1 为最可能首达军事期者）。
+    /// ⚠️**待策划端确认**；且**当前为 inert**——J2（`ENABLE_J2_STONECOLD`）已关（其服务句=HH.220 石链诊断已销号＋"开局无产能期"口径缺陷未解）⇒ 本值不参与启用判据集。</summary>
+    private const int JUDGE_FOCUS_KINGDOM = 1;
 
     // HH.224 批（D670/D675）：**本批判据启用集＝J6/J7/J8（见 CheckBackoffJudges）＋ J1/J3 兜底**。
     //   ⚠️ **J2（石链僵死·指定国 k3）本批关闭**（开关见下）：
@@ -105,6 +106,7 @@ public static class Valley_HH80_Run
     private static readonly int[] _censusSamples = new int[5];  // census 采样数（分母；索引=kingdomId）
     private static int _buildOkDays;                            // 建造焦点落地总数
     private static bool _avoidSeen;                             // J6：退避因子读数首次出现（机制面已证）
+    private static int _lastStageDay = int.MinValue;            // HH.230（D666 机制4）：阶段小结去重（每 10 日一次）
 
     [MenuItem("Valley/验证/HH80_正式跑")]
     public static void Run()
@@ -128,7 +130,7 @@ public static class Valley_HH80_Run
         _military.Clear(); _done = false;
         System.Array.Clear(_wallTopDays, 0, _wallTopDays.Length);      // HH.224：J7/J8 证据清零（防跨批污染）
         System.Array.Clear(_censusSamples, 0, _censusSamples.Length);
-        _buildOkDays = 0; _avoidSeen = false;
+        _buildOkDays = 0; _avoidSeen = false; _lastStageDay = int.MinValue;   // HH.230：阶段小结去重复位
         DiagMilitary.ResetJudges();   // HH.222：清在线判据 streak（防跨局/跨批污染；探针未启时全部判据自然 NoData）
         Application.logMessageReceived += WatchMilitary;
         new GameObject("HH80_RunRunner").AddComponent<RunHost>().Host(RunCoroutine());
@@ -222,6 +224,7 @@ public static class Valley_HH80_Run
             string judgeWhy;
             if (CheckJudges(reg, day, out judgeWhy)) { Finish(judgeWhy); break; }   // HH.222：在线判据命中即停（§8.2 机制 1+3）
             if (CheckBackoffJudges(day, out judgeWhy)) { Finish(judgeWhy); break; } // HH.224：J7 霸占解除／J8 防退化（§八判据表）
+            WriteStageIfDue(day, aiAlive, aiTotal);   // HH.230（D666 §8.4 机制4）：每 10 日阶段小结写档（长局"边跑边判"·禁跑完再看）
             if (day >= ActiveCircuitDay) { Finish("窗口满：D" + ActiveCircuitDay + "（DIAG窗口=" + USE_DIAG_WINDOW + "）AI 存活 " + aiAlive + "/" + aiTotal + "，已达标=" + string.Join(",", _military) + "；J6 退避机制面=" + _avoidSeen + " wallTop(k1/k2/k4)=" + _wallTopDays[1] + "/" + _wallTopDays[2] + "/" + _wallTopDays[4] + " 落地=" + _buildOkDays + " ⇒ 取对照证据"); break; }
             if (reg != null && aiTotal > 0 && aiAlive == 0) { Finish("灭绝停跑：AI 全灭 @D" + day + "（已达标=" + string.Join(",", _military) + "）"); break; }
         }
@@ -306,6 +309,26 @@ public static class Valley_HH80_Run
         if (day <= 31) return BASE_BUILD_OK_D31 * (day - 2) / 29f;
         if (day >= 60) return BASE_BUILD_OK_D60;
         return BASE_BUILD_OK_D31 + (BASE_BUILD_OK_D60 - BASE_BUILD_OK_D31) * (day - 31) / 29f;
+    }
+
+    /// <summary>HH.230（D666 §8.4 机制4·② 七考重验批**强制项**）：**每 10 日阶段小结写档**（追加 `Logs/P1/hh80_run_stage.log`）。
+    /// 目的＝长局"边跑边判、禁跑完再看"（`L-34`／`test-harness-first §八`）；内容＝当日存活/达标/霸占读数/落地/退避机制面。
+    /// 判据检查本身由每轮 `CheckJudges`/`CheckBackoffJudges` 承担（命中即停＋回报）。</summary>
+    private static void WriteStageIfDue(int day, int aiAlive, int aiTotal)
+    {
+        if (day <= 0 || day % 10 != 0 || day == _lastStageDay) return;
+        _lastStageDay = day;
+        try
+        {
+            var dir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Logs/P1");
+            System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "hh80_run_stage.log"),
+                "[" + System.DateTime.Now.ToString("HH:mm:ss") + "] seed=" + SEED + " 槽=" + SLOT + " D" + day
+                + " AI存活=" + aiAlive + "/" + aiTotal + " 已达标=[" + string.Join(",", _military) + "]"
+                + " J6退避机制面=" + _avoidSeen + " wallTop(k1/k2/k4)=" + _wallTopDays[1] + "/" + _wallTopDays[2] + "/" + _wallTopDays[4]
+                + " 建造落地=" + _buildOkDays + System.Environment.NewLine);
+        }
+        catch (System.Exception e) { Debug.LogError("[HH80跑] 阶段小结写文件失败: " + e.Message); }
     }
 
     private static void Finish(string why)
