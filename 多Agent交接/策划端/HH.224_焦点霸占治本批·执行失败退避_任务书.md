@@ -40,7 +40,7 @@
 | 2 | 改动＝**行为级（F 级）** ⇒ **双门禁**：编译 0 警 0 错 ＋ `benchmark --suite v9 --battles 100` **读锚对照**无场景退化 >5% ＋ holdout 不退 ＋ determinism 同 seed 逐字节 |
 | 3 | **正门** `TestHarnessApi.EnterTestRun` ＋ 守卫全开 ＋ **15x**；**收工退 Play**（L-32，实测 `isPlaying=False`） |
 | 4 | **同 seed 干净局**（L-22）；枚举新增须**尾插**（L-28） |
-| 5 | **长局起跑前必复原容器档位**（`CIRCUIT_BREAK_DAY 90→120`／`MILITARY_STOP_COUNT 1→2`，**DZ-136**）；开工回执须列**档位实读证据** |
+| 5 | **长局起跑前必复原容器档位**（`CIRCUIT_BREAK_DAY 90→120`／`MILITARY_STOP_COUNT 1→2`，**DZ-136**）；开工回执须列**档位实读证据**。**（D673 补·采纳执行端 D670 回执"边界确认"）短窗对照跑须用【独立常量】**（如 `DIAG_CIRCUIT_DAY`）**，禁回改主档位**——防遗忘致 DZ-136 复发 |
 | 6 | 业务码改动**仅限** AI 决策/执行域；**不碰** champion／训练仓禁改域（`harness/Scenarios`、`Holdout`、`AGENTS.md`、`factor_registry.example.json`） |
 
 ---
