@@ -22,11 +22,14 @@ public static class Valley_HH80_Run
     // 均已 git 留证（`git log -p -- Assets/Editor/Smoke/Valley_HH80_Run.cs` 可复原；p1_run6/p1_run6b/p1_run7/p1_run8 原封勿覆盖）。
     // HH.217 治本批（D663 裁 A+ / D664 放行）：**短局机制自证**——同 seed（64513，HH.214 定案）对照、槽 p1_fix1、
     // 90 日窗口（D664 裁：k3 每兵 ~7~10 日 ⇒ warrior=4 ≈ D67~70，60 日不足）、**见 1 军事实达即提前收工**（MILITARY_STOP_COUNT=1）。
-    // ⚠️后续七考重验批须复原：SEED=新定案值 / SLOT=新槽 / CIRCUIT_BREAK_DAY=120 / MILITARY_STOP_COUNT=2。
+    // ✅ DZ-136 已复原（HH.224 裁决回执 / D670 加硬条件）：CIRCUIT_BREAK_DAY **90→120**、MILITARY_STOP_COUNT **1→2**
+    //    ⇒ **长局档已就绪**（未复原不得开长局：120 日判定线会被 90 截断＝D585/D589 截断混淆同族）。
+    //    ⚠️仍属"每批定案"项（非档位）：SEED/SLOT 保持 64513/p1_fix1b，下一批起跑前须按任务书设新 seed/槽
+    //    （**换 seed 须同步改 `JUDGE_FOCUS_KINGDOM`**，见下方注释）。
     private const int SEED = 64513;          // HH.217 短局：复用 HH.214 定案 seed（同世界修前/修后对照；D664 裁准）
     private const string SLOT = "p1_fix1b";   // 治本批独立槽（禁覆盖 p1_run6/6b/7/8；p1_fix1=正向 / p1_fix1b=负探针 weight=0）
-    private const int CIRCUIT_BREAK_DAY = 90;
-    private const int MILITARY_STOP_COUNT = 1;   // HH.217：短局机制自证 ⇒ 1 个 AI 达军事期即收工（七考须复原为 2）
+    private const int CIRCUIT_BREAK_DAY = 120;
+    private const int MILITARY_STOP_COUNT = 2;   // ✅已复原（DZ-136）：长局判定档=≥2 AI 军事期（HH.217 短局自证档 1 已废止）
 
     // HH.222（D666 已裁 / test-harness-first §八 机制 1+3；教训 L-34）＝**在线判据·命中即停**：
     //   支撑/目标日志每日在流（探针 `verdict=`）⇒ 容器每轮检查，命中即 Finish("判据命中：X @D??")，不跑满窗口。
