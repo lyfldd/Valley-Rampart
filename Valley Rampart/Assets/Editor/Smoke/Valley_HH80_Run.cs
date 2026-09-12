@@ -57,13 +57,31 @@ public static class Valley_HH80_Run
     /// <summary>本 seed（64513）唯一可至军事期的 AI＝k3（HH.220 实证：D65 →军事）；**换 seed 须一并改**。</summary>
     private const int JUDGE_FOCUS_KINGDOM = 3;
 
-    private static readonly JudgeCfg[] JUDGES = new[]
+    // HH.224 批（D670/D675）：**本批判据启用集＝J6/J7/J8（见 CheckBackoffJudges）＋ J1/J3 兜底**。
+    //   ⚠️ **J2（石链僵死·指定国 k3）本批关闭**（开关见下）：
+    //   ① 规则依据：J2 的服务句＝HH.220「石链诊断」（该批已销号），与本批验收句（退避生效／wall 占比下降／
+    //      落地不降）**不同级、不服务** ⇒ 依 D669「判据须与其服务验收句同级＋同作用域」本不该在本批启用集；
+    //   ② 实测依据（HH.224 对照跑 p1_fix2 @D12 被 J2 止损）：同 seed **修前** `p1_fix1` k3 D2~D14 `stone` 恒 25、
+    //      `Stone prod=0/in=0`（D30 才开链）⇒ J2 的「可判定最早日 D10」**未排除"开局无产能期"常态**，
+    //      修前同样会 ~D11~D12 停 ⇒ **非修后回归**，属 J2 口径缺陷（已报裁）。
+    //   ⇒ 后续批若需石链止损：置 true 启用，并**先解决"开局无产能期"口径**（否则以既有常态误停）。
+    //   （用 static readonly 而非 const：const=false 会使 `if` 分支变"不可达代码"触发 CS0162 警告）
+    private static readonly bool ENABLE_J2_STONECOLD = false;
+
+    private static readonly JudgeCfg[] JUDGES = BuildJudges();
+
+    private static JudgeCfg[] BuildJudges()
     {
-        // 判据 ／ 作用域（OnlyKingdom=false ⇒ 全批任一 AI；true ⇒ 仅该王国） ／ 服务的验收句
-        new JudgeCfg { Kind = DiagMilitary.JudgeKind.Deadlock,  OnlyKingdom = false, Kingdom = 0 },                    // 负探针「死滞复现」＝全批级
-        new JudgeCfg { Kind = DiagMilitary.JudgeKind.StoneCold, OnlyKingdom = true,  Kingdom = JUDGE_FOCUS_KINGDOM },   // 止损；指定国级（避免切掉他国的端到端证据）
-        new JudgeCfg { Kind = DiagMilitary.JudgeKind.NoIncome,  OnlyKingdom = false, Kingdom = 0 },                    // 异常即停＝全批级
-    };
+        var list = new System.Collections.Generic.List<JudgeCfg>();
+        // J1 死滞（全批级）：负探针「死滞复现」；正向世界 drive>0 ⇒ 不触发（兜底）
+        list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.Deadlock, OnlyKingdom = false, Kingdom = 0 });
+        // J2 石链僵死（指定国 k3）：**本批关闭**（见上注）
+        if (ENABLE_J2_STONECOLD)
+            list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.StoneCold, OnlyKingdom = true, Kingdom = JUDGE_FOCUS_KINGDOM });
+        // J3 异常即停（全批级）：六资源全零入库 ≥15 日
+        list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.NoIncome, OnlyKingdom = false, Kingdom = 0 });
+        return list.ToArray();
+    }
 
     private static readonly List<int> _military = new List<int>();
     private static volatile bool _done;
