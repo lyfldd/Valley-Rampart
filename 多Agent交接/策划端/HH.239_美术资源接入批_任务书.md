@@ -134,3 +134,32 @@ S1 清残留 → S2 建 SpriteRefTable 骨架 + 素材入库 + 配导入设置
 ---
 
 > 版本：2026-09-12 签发（主策划端）。Gate=`G3-1`。完成报告＝按水位线取号。
+
+---
+
+## 八、增补节（子主策划·美术接入域 · 2026-09-12；三问已用户裁示）
+
+> 归属：美术接入域策划（D689 授权代理）。本节为**域内增补/勘正**，不改 §〇~§七 既有条款；与既有记载冲突处**以本节为准（更新）**。
+
+### 8.1 实盘勘正（对账时点 2026-09-12，磁盘为准）
+
+| # | 项 | 磁盘实况 | 处置 |
+|---|---|---|---|
+| E1 | 素材总量 | **≈328**（四族 313＝Portraits 46＋Units 137＋Buildings 105＋Machines 8＋Ammo 8＋Effects 3＋Ground 6；＋monster 15） | T3 计数勘正（原 46/137/107/8/8/3/6 → 46/152/105/8/8/3/6＋monster 15） |
+| E2 | neutral 建筑 | **57 张**（非 ~59） | 映射表头部/§十.1 已勘正 |
+| E3 | **monster 15 并入**（用户 2026-09-12 裁示） | `Units/monster/{raider,slinger,brute}/{idle,walk,attack,loot,icon}.png` | 并入 T3 入库＋T5 切帧；**接线面**（怪物渲染链 `MonsterDef`/`MonsterController`）由执行端**开工回执侦察后列报**，侦察前不动接线 |
+| E4 | 新弹种素材已在盘 | `ammo_musket/ammo_monster/ammo_mage_barrage.png`（HH.234「待产」记载过时） | **入库不接线**；接线挂 3.6.1 弹种转正批（见 H3） |
+| E5 | gate_open 缺图（用户裁示：**待补美术**） | 素材仅 `building_gate_closed.png` | 本批 closed 真图接线；**开门态临时复用 closed 图**；映射表登记缺图面（open 补抽后增量接入替换） |
+| E6 | T8 补键 def id 锚 | `Resources/Buildings/` **41 资产在场** | T8 十二项补键逐一挂实 def id（Barracks/Blacksmith/Church/CrossbowTower/Hospital/Ranch/SiegeWorkshop/VagrantCamp/portal/magic_tower/arrow_tower/Well＋scaffold 三档），**禁虚挂**（L-15） |
+| E7 | 残留目录边界 | `Art/Markers/`、`Art/UI/` 亦为空目录 | **保留**（mark_*/UI 图标目标位）；仅清 `Buildings.meta`/`Features.meta` 悬空 meta |
+
+### 8.2 硬条款（新增）
+
+- **H1（T1 引用枚举）**：`.meta` guid 为**密文**（实测文本互映零命中，阳性对照已做）⇒ GameScene 对残留 Ground Tile/`Palette1111` 的引用枚举**必须走编辑器侧**（unity-mcp-first：场景引用查找/FindReferences）；**禁以文本 grep 零命中判「无引用」**（L-29）。
+- **H2（树 3 变体选择机制·域内裁【美术接入】）**：`feat_tree_{climate}` 3 变体按**格坐标确定性哈希**选变体（`(gx*73856093 ^ gy*19349663) % 3` 级纯函数：同格恒定、同 seed 同局稳定、零 rng 流污染、零存档）；**禁接入地图生成 rng 流**。
+- **H3（弹种接线边界）**：T14 只挂现役 `ProjectileType`（`AI.Core/Config/ProjectileTypes.cs` 六值）可消费素材（Arrow/Bolt/Stone/Fireball/Magic；`ammo_heavybolt` 保留入库不接线＝3.6.1「退役/另用」）；musket/monster/mage_barrage 三张入库待 3.6.1 批。**`ProjectileType` 扩展属 AI.Core 域＝sim-sync 红线，本批禁触**。
+- **H4（T14 搭车）**：施工时顺带**编辑器坐实** 3.6.1 §一 的 4 组 guid 推断引用（弩炮/臼炮/法师/藤蔓），结果回写 3.6.1 取证边界（HH.234 余留待办①清偿）。
+
+### 8.3 三问裁示记录（2026-09-12 用户）
+
+① monster 15 **并入本批**；② gate_open **用户补抽**（本批 closed 接线＋开门态临时复用 closed）；③ HH.233/234 **域内按 D686 对齐回写**（无新裁决点，回写已落两信 §五/§六）。
