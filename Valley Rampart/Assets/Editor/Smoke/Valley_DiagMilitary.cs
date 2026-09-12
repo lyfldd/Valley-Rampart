@@ -25,7 +25,7 @@ public static class DiagMilitary
     // ===== HH.222（D666 已裁 / test-harness-first §八 机制 1+2 落地；教训 L-34）=====
     //  在线判据**单源**：探针每日 tick 更新 streak ＋ 状态行打 `verdict=`；跑局容器读快照做「命中即停」。
     //  纪律（§8.1 支撑日志层）：支撑量（stone/in/prod…）一旦异常 ⇒ **当日**打 `verdict=`／`ANOMALY=` 并当场判定，不等跑完。
-    public enum JudgeKind { None = 0, Deadlock, StoneCold, TargetGateHit, NoIncome, ChannelAbsent }
+    public enum JudgeKind { None = 0, Deadlock, StoneCold, TargetGateHit, NoIncome, ChannelAbsent, GatherStall, WorldGatherIncome }
 
     private class JudgeState
     {
@@ -33,8 +33,11 @@ public static class DiagMilitary
         public int noGainDays;      // 石链僵死：stone 未增且石入库=0 的连续日数
         public int belowGateDays;   // 死滞：drive≤0 且 target<门 的连续日数
         public int noIncomeDays;    // 异常：六资源全零入库的连续日数
+        public int gatherStallDays; // HH.221：采集源在册≥1 但六资源全零入库的连续日数（落地却僵死）
         public bool gateHit;        // 机制面已证：曾达 target≥门
         public int gateHitDay = -1;
+        public bool worldGatherHit; // HH.221：k1 型（无世界资源产能）石/木入库 >0 —— A 正向实证（资源对等达成）
+        public int worldGatherDay = -1;
     }
 
     private static readonly System.Collections.Generic.Dictionary<int, JudgeState> _judge
@@ -44,6 +47,7 @@ public static class DiagMilitary
     public const int JudgeStoneColdDays = 10;  // §8.4 示例：stone 连续 ≥10 日不增且入库=0 ⇒ 石链僵死
     public const int JudgeNoIncomeDays = 15;   // 异常即停：六资源全零入库 ≥15 日
     public const int JudgeChannelMinDay = 3;   // 通道未落地（资源对等批判据③）：D≥3 仍 0 源
+    public const int JudgeGatherStallDays = 10;// HH.221 判据③：源已在册 ≥1 但六资源仍全零入库 ≥10 日（通道僵死·止损）
 
     /// <summary>清判据状态（跑局容器起跑时调用；防跨局/跨批污染）。</summary>
     public static void ResetJudges() => _judge.Clear();
@@ -70,6 +74,18 @@ public static class DiagMilitary
                 if (day >= JudgeChannelMinDay && CountGatherSources() <= 0)
                 { detail = "世界资源点采集源注册数=" + CountGatherSources() + "（通道未落地；副产源=" + CountByproductSources() + " 不计）"; return true; }
                 return false;
+            case JudgeKind.GatherStall:
+                // HH.221 判据③（§0b）：源**已在册**（>0）却六资源连续全零入库 ≥10 日 ⇒ 通道僵死（止损）
+                if (CountGatherSources() > 0 && s.gatherStallDays >= JudgeGatherStallDays)
+                { detail = "采集源在册=" + CountGatherSources() + " 但六资源全零入库连续" + s.gatherStallDays + "日（ANOMALY:gatherStall 通道僵死）"; return true; }
+                return false;
+            case JudgeKind.WorldGatherIncome:
+                // HH.221 判据②（§0b 判据2，**A 正向实证**）：k1 型（该资源**本国无产能建筑**）却入库 >0 ⇒
+                // 该入库只能来自采集通道（世界资源点）⇒ 资源对等达成。口径诚实标注：诊断块只有总量 In，
+                // 故以"该资源产能=0"作为"非产能来源"的可判定前提（有产能国不判，防误判）。
+                if (s.worldGatherHit)
+                { detail = "k1 型（无该资源产能建筑）入库>0 首达 @D" + s.worldGatherDay + "（采集通道生效·资源对等达成）"; return true; }
+                return false;
             case JudgeKind.TargetGateHit:
                 if (s.gateHit) { detail = "target≥门 首达 @D" + s.gateHitDay; return true; }
                 return false;
@@ -84,6 +100,16 @@ public static class DiagMilitary
 
     /// <summary>矿洞副产搬运源注册数（`Byproduct`；打点用，不参与判据③）。</summary>
     public static int CountByproductSources() => CountSourcesByKeyword("Byproduct");
+
+    /// <summary>HH.221 判据②辅助：诊断块内某资源的**产能建筑数**（k1 型判定前提＝0）。
+    /// 口径与 `EconomyBlock.Production`（=批A R-A1 聚合，含 D644 真产能守卫）同源，禁另算。</summary>
+    private static int ProdCountOf(EconomyBlock eco, EcoResource r)
+    {
+        if (eco == null || eco.Production == null) return 0;
+        for (int i = 0; i < eco.Production.Count; i++)
+            if (eco.Production[i].Resource == r) return eco.Production[i].Count;
+        return 0;
+    }
 
     private static int CountSourcesByKeyword(string kw)
     {
@@ -216,6 +242,8 @@ public static class DiagMilitary
         DumpAction(tag, k, acfg, UtilityAction.BuildCapacity, "③建产能", st);
         DumpAction(tag, k, acfg, UtilityAction.BuildWall, "⑨建城墙", st);
         DumpAction(tag, k, acfg, UtilityAction.BoostHarvest, "⑩强化采集", st);
+        // HH.221/D685：㉗ 采集世界资源点（A② 决策出口·A① 通道）——需求/可行/评分三面实读件
+        DumpAction(tag, k, acfg, UtilityAction.GatherWorldResource, "㉗采集世界资源点", st);
 
         // 评分淘汰构成普查（HH.115 件E#6 既有公开口）
         UtilityScorer.ScoreCensus census;
@@ -250,6 +278,21 @@ public static class DiagMilitary
         {
             if (s.prevStone >= 0 && stoneNow <= s.prevStone && stoneIn == 0) s.noGainDays++; else s.noGainDays = 0;
             if (allZero) s.noIncomeDays++; else s.noIncomeDays = 0;
+            // HH.221 判据③（§0b）：源已在册却六资源全零入库 ⇒ 通道僵死 streak（与 noIncome 同证据源=支撑日志面）
+            if (allZero && CountGatherSources() > 0) s.gatherStallDays++; else s.gatherStallDays = 0;
+            // HH.221 判据②（§0b 判据2·A 正向实证）：k1 型＝该资源**本国产能建筑数=0** 却入库 >0
+            //   ⇒ 入库只能来自采集通道（世界资源点）。首达即记日（命中即停由容器消费）。
+            if (!s.worldGatherHit && sit.Economy != null)
+            {
+                var ecoJ = sit.Economy;
+                bool stoneK1 = ProdCountOf(ecoJ, EcoResource.Stone) == 0 && ecoJ.In(EcoResource.Stone) > 0;
+                bool woodK1 = ProdCountOf(ecoJ, EcoResource.Wood) == 0 && ecoJ.In(EcoResource.Wood) > 0;
+                if (stoneK1 || woodK1)
+                {
+                    s.worldGatherHit = true;
+                    s.worldGatherDay = Application.isPlaying && TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : -1;
+                }
+            }
         }
         s.prevStone = stoneNow;
 
@@ -267,6 +310,8 @@ public static class DiagMilitary
         if (s.noGainDays > 0) v.Append("|stoneCold:").Append(s.noGainDays);
         if (ecoOk && s.noIncomeDays > 0) v.Append("|noIncome:").Append(s.noIncomeDays);
         if (ecoOk && stoneIn == 0 && s.noGainDays >= JudgeStoneColdDays) v.Append("|ANOMALY:stoneChain");
+        if (ecoOk && s.gatherStallDays > 0) v.Append("|gatherStall:").Append(s.gatherStallDays);   // HH.221 判据③ 支撑日志
+        if (s.worldGatherHit) v.Append("|worldGatherIncome@D").Append(s.worldGatherDay);          // HH.221 判据② A 正向实证
         // HH.224/D670 硬约束③：退避达硬上限仍失败 ⇒ 升级报裁标记（防「死循环→静默永久弃建」被藏住）
         if (ActionBackoff.AnyAtHardCap(k.id)) v.Append("|").Append(ActionBackoff.CapMarker);
         return v.ToString();

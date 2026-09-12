@@ -38,6 +38,19 @@ public static class Valley_HH80_Run
     private const bool USE_DIAG_WINDOW = false;   // ✅HH.228 收工已复原 false（短窗取证用毕；回主档 120/2 ⇒ ②七考重验前置②复位）
     private static int ActiveCircuitDay => USE_DIAG_WINDOW ? DIAG_CIRCUIT_DAY : CIRCUIT_BREAK_DAY;
 
+    // HH.221（D685 裁⑤）：**本批短窗档**＝独立常量，**不回改上表主档位**（防 DZ-136 复发）。
+    //   复用 seed 64513 ＋新槽 p1_gather1；窗口 **D5~D15**（A 正向实证：k1 型 Stone/Wood in>0）。
+    //   ⚠️**长局判定跑（七考重验）起跑前须置 false**（否则 120 日档被 15 截断＝D585/D589 截断混淆同族）。
+    //   另注：本批容器**不复用** HH.228 的 DIAG_CIRCUIT_DAY（其 60 日档服务 HH.228 验收句，非同段）。
+    private const int GATHER_SEED = 64513;
+    private const string GATHER_SLOT = "p1_gather1";
+    private const int GATHER_CIRCUIT_DAY = 15;
+    private static readonly bool USE_GATHER_WINDOW = false;   // ✅HH.221 短窗跑已毕复原 false（回主档 120/2）
+                                                            //   （用 static readonly 而非 const：避免 `if` 分支不可达触发 CS0162）
+    private static int ActiveBreakDay => USE_GATHER_WINDOW ? GATHER_CIRCUIT_DAY : ActiveCircuitDay;
+    private static int ActiveSeed => USE_GATHER_WINDOW ? GATHER_SEED : SEED;
+    private static string ActiveSlot => USE_GATHER_WINDOW ? GATHER_SLOT : SLOT;
+
     // HH.226 追加项②（D678 裁）：J7 **同段基线**——修复假阳性根因（原＝全窗 37/59 vs 判据早窗＝**不同段比较**）。
     //   常量＝修前 `p1_fix1`（seed64513·65 日）**逐日** `census top=BuildWall` 日号序列（同日志源口径）。
     //   J7 判定＝`修后同段计数/样本 ≤ 0.5 × 修前同段计数/样本`（双方窗口均取 D2~当前日）。
@@ -101,6 +114,18 @@ public static class Valley_HH80_Run
             list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.StoneCold, OnlyKingdom = true, Kingdom = JUDGE_FOCUS_KINGDOM });
         // J3 异常即停（全批级）：六资源全零入库 ≥15 日
         list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.NoIncome, OnlyKingdom = false, Kingdom = 0 });
+        // HH.221（D685 裁⑤）：**本批短窗档专属判据**（仅 USE_GATHER_WINDOW 时启用）——
+        //   依据「判据须与其服务验收句同级＋同作用域」：此二条服务 A 正向实证（§0b 判据1/判据3），
+        //   **不得**进主档（长局）：修前 `CountGatherSources()` 恒 0 ⇒ 无条件启用会在 D3 当场停掉任何长局（截断混淆同族）。
+        if (USE_GATHER_WINDOW)
+        {
+            // §0b 判据1：世界资源点源注册数 ≥1（D1~D3 未注册 ⇒ "通道未落地"并停）
+            list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.ChannelAbsent, OnlyKingdom = false, Kingdom = 0 });
+            // §0b 判据2：k1 型 `Stone/Wood in > 0`（D5~D15；命中 ⇒ 资源对等达成·机制面可停）
+            list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.WorldGatherIncome, OnlyKingdom = false, Kingdom = 0 });
+            // §0b 判据3：采集通道全 0 且 in 连续 ≥10 日=0 ⇒ "通道僵死"并停（止损）
+            list.Add(new JudgeCfg { Kind = DiagMilitary.JudgeKind.GatherStall, OnlyKingdom = false, Kingdom = 0 });
+        }
         return list.ToArray();
     }
 
@@ -132,7 +157,7 @@ public static class Valley_HH80_Run
             return;
         }
         // D656 硬条款2：显式传槽（观测器 MainSlot 已参数化，禁回落硬编码）——进局前设置
-        P1Observer.SetMainSlot(SLOT);
+        P1Observer.SetMainSlot(ActiveSlot);
         _military.Clear(); _done = false;
         System.Array.Clear(_wallTopDays, 0, _wallTopDays.Length);      // HH.224：J7/J8 证据清零（防跨批污染）
         System.Array.Clear(_censusSamples, 0, _censusSamples.Length);
@@ -199,15 +224,15 @@ public static class Valley_HH80_Run
     {
         var cfg = new NewGameConfig
         {
-            worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = 2,
-            worldSize = WorldSize.Medium, selectedSlotId = SLOT, kingdomName = "河谷王国"
+            worldSeed = ActiveSeed, mapSeed = ActiveSeed, raceId = 0, difficulty = 2,
+            worldSize = WorldSize.Medium, selectedSlotId = ActiveSlot, kingdomName = "河谷王国"
         };
         // HH.150 清残留：删除迁正门时遗留的裸局 SmokeApi.EnterGame+服务性等就绪块
         // （双建局冗余；EnterTestRun 内置等就绪，直接正门进局）
         // 正门进局（test-harness-first 铁律①/D585：EnterTestRun 全守卫=判负封死+T11 野怪静默+考跑档直通
         // [speedOverride=null→读 WorldConfig.time.testSpeedMultiplier SO 缺省 15]；玩家真实局态=T10 OFF）
         yield return TestHarnessApi.EnterTestRun(cfg);
-        Debug.LogWarning("[HH80跑] 正门进局 seed=" + SEED + " 槽=" + SLOT + " 考跑守卫全开（D585 判负封死+T11 野怪静默，玩家真实局态挂机；P1 观测器须已在跑：镜像+CSV+检查点）");
+        Debug.LogWarning("[HH80跑] 正门进局 seed=" + ActiveSeed + " 槽=" + ActiveSlot + " 窗口=" + ActiveBreakDay + " 日（本批短窗档=" + USE_GATHER_WINDOW + "）考跑守卫全开（D585 判负封死+T11 野怪静默，玩家真实局态挂机；P1 观测器须已在跑：镜像+CSV+检查点）");
 
         // 终局三停监控：达标（≥2 AI 军事期）/熔断（D120）/灭绝（AI 全灭）
         while (!_done)
@@ -231,7 +256,7 @@ public static class Valley_HH80_Run
             if (CheckJudges(reg, day, out judgeWhy)) { Finish(judgeWhy); break; }   // HH.222：在线判据命中即停（§8.2 机制 1+3）
             if (CheckBackoffJudges(day, out judgeWhy)) { Finish(judgeWhy); break; } // HH.224：J7 霸占解除／J8 防退化（§八判据表）
             WriteStageIfDue(day, aiAlive, aiTotal);   // HH.230（D666 §8.4 机制4）：每 10 日阶段小结写档（长局"边跑边判"·禁跑完再看）
-            if (day >= ActiveCircuitDay) { Finish("窗口满：D" + ActiveCircuitDay + "（DIAG窗口=" + USE_DIAG_WINDOW + "）AI 存活 " + aiAlive + "/" + aiTotal + "，已达标=" + string.Join(",", _military) + "；J6 退避机制面=" + _avoidSeen + " wallTop(k1/k2/k4)=" + _wallTopDays[1] + "/" + _wallTopDays[2] + "/" + _wallTopDays[4] + " 落地=" + _buildOkDays + " ⇒ 取对照证据"); break; }
+            if (day >= ActiveBreakDay) { Finish("窗口满：D" + ActiveBreakDay + "（DIAG窗口=" + USE_DIAG_WINDOW + " 本批短窗=" + USE_GATHER_WINDOW + "）AI 存活 " + aiAlive + "/" + aiTotal + "，已达标=" + string.Join(",", _military) + "；J6 退避机制面=" + _avoidSeen + " wallTop(k1/k2/k4)=" + _wallTopDays[1] + "/" + _wallTopDays[2] + "/" + _wallTopDays[4] + " 落地=" + _buildOkDays + " ⇒ 取对照证据"); break; }
             if (reg != null && aiTotal > 0 && aiAlive == 0) { Finish("灭绝停跑：AI 全灭 @D" + day + "（已达标=" + string.Join(",", _military) + "）"); break; }
         }
     }
@@ -333,7 +358,7 @@ public static class Valley_HH80_Run
             var dir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Logs/P1");
             System.IO.Directory.CreateDirectory(dir);
             System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "hh80_run_stage.log"),
-                "[" + System.DateTime.Now.ToString("HH:mm:ss") + "] seed=" + SEED + " 槽=" + SLOT + " D" + day
+                "[" + System.DateTime.Now.ToString("HH:mm:ss") + "] seed=" + ActiveSeed + " 槽=" + ActiveSlot + " D" + day
                 + " AI存活=" + aiAlive + "/" + aiTotal + " 已达标=[" + string.Join(",", _military) + "]"
                 + " J6退避机制面=" + _avoidSeen + " wallTop(k1/k2/k4)=" + _wallTopDays[1] + "/" + _wallTopDays[2] + "/" + _wallTopDays[4]
                 + " 建造落地=" + _buildOkDays + System.Environment.NewLine);
@@ -347,12 +372,12 @@ public static class Valley_HH80_Run
         Application.logMessageReceived -= WatchMilitary;
         // L-32 条文3（D657 入库·HH.203 §二.7）：禁以 `SetGameSpeed(0f)` 当暂停（SnapToSpeed 吸附 0.5x 非暂停）⇒ 真暂停用 timeScale
         Time.timeScale = 0f;
-        bool saved = SaveManager.Instance != null && SaveManager.Instance.Save(SLOT);
+        bool saved = SaveManager.Instance != null && SaveManager.Instance.Save(ActiveSlot);   // HH.221 补：D656 硬条款2 显式传槽（短窗档曾误写死 SLOT ⇒ 污染 p1_run9）
         TestHarnessApi.ExitTestRun();   // 正门收尾：考跑态/maximumDeltaTime/渲染全量恢复（D585；封盘在后不丢档）
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("===== HH.80 三考收工 =====");
         sb.AppendLine(why);
-        sb.AppendLine("终速=0 存盘 " + SLOT + "=" + saved + " 时间=" + System.DateTime.Now.ToString("HH:mm:ss"));
+        sb.AppendLine("终速=0 存盘 " + ActiveSlot + "=" + saved + " 时间=" + System.DateTime.Now.ToString("HH:mm:ss"));
         try
         {
             var dir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Logs/P1");
@@ -360,7 +385,7 @@ public static class Valley_HH80_Run
             System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "hh80_run_status.log"), sb.ToString());
         }
         catch (System.Exception e) { Debug.LogError("[HH80跑] 状态写文件失败: " + e.Message); }
-        Debug.LogWarning("[HH80跑] ★ " + why + "——真暂停(TS=0)+封盘 " + SLOT + "=" + saved + "（现场保留：观测器镜像/CSV 在案；收工退 Play，L-32）");
+        Debug.LogWarning("[HH80跑] ★ " + why + "——真暂停(TS=0)+封盘 " + ActiveSlot + "=" + saved + "（现场保留：观测器镜像/CSV 在案；收工退 Play，L-32）");
         // L-32 条文1（D657 入库）：收工禁留「已恢复 1x」余留世界 ⇒ 容器末尾直接退 Play（同 SmokeApi.QuitSmoke 先例）
         EditorApplication.ExitPlaymode();
     }

@@ -54,7 +54,7 @@ MonoBehaviour:
   - id: 3
     name: "\u5EFA\u4EA7\u80FD"
     minStage: 0
-    axis: 0
+    axis: 1
     axisWeight: 1
     need: 2
     needA: 8
@@ -502,6 +502,25 @@ MonoBehaviour:
     - 0.5
     - 1
     buildingId: SiegeWorkshop
+    costGold: 0
+    costStone: 0
+    costWood: 0
+    costFood: 0
+    buildTargetCap: 0
+  - id: 27
+    name: "\u91C7\u96C6\u4E16\u754C\u8D44\u6E90\u70B9"
+    minStage: 0
+    axis: 1
+    axisWeight: 1
+    need: 23
+    needA: 0
+    needB: 0
+    stageWeight:
+    - 1
+    - 1
+    - 1
+    - 1
+    buildingId: 
     costGold: 0
     costStone: 0
     costWood: 0

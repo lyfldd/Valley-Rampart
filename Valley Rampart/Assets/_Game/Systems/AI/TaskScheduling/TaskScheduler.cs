@@ -630,6 +630,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 if (comp is Building b) b.OnGatherCompleted();
                 // HH.10 裁决三：数据格树采集源（非实体）完成 → 格翻 Plain + 记重生（TreeGatherSource.OnGatherCompletion 处理）
                 else if (task.source is TreeGatherSource tg) tg.OnGatherCompletion();
+                // HH.221/D685 A①：世界资源点采集源（AI）完成 → 树路径同 TreeGatherSource；实体路径走 Building.OnGatherCompleted
+                else if (task.source is WorldGatherSource wg) wg.OnGatherCompletion();
                 break;
         }
     }
@@ -1087,11 +1089,15 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0；
     /// 无主源 -1（自然建筑）在路由时降级为先到先得池，任何国可匹配）。
     /// DZ-072a：矿洞副产组件任务源（MineByproductComponent 挂 Building 本体）按父建筑归属国路由——
-    /// AI 领土内 mine 副产任务入 AI 池（旧逻辑非 Building 恒归 0=错入玩家池）。</summary>
+    /// AI 领土内 mine 副产任务入 AI 池（旧逻辑非 Building 恒归 0=错入玩家池）。
+    /// HH.221/D685 A①：世界资源点采集源（`WorldGatherSource`，非 Component）按**per-命令绑定王国**路由——
+    /// 否则非 Building 源恒落 0=玩家池 ⇒ AI 工人永不匹配（通道名义落地实则僵死）。
+    /// 非破坏性增支：只多认一个新类型，既有分支与 return 语义逐位不动（玩家侧零影响）。</summary>
     private int SourceKingdom(KingdomTask task)
     {
         if (task == null) return 0;
         if (task.source is Building b) return b.kingdomId;
+        if (task.source is WorldGatherSource wg) return wg.KingdomId;   // HH.221 A①：世界资源点采集源
         if (task.source is Component c)
         {
             var pb = c.GetComponentInParent<Building>();

@@ -50,6 +50,7 @@ public static class WorldLifecycle
         if (DamageSystem.Instance != null) DamageSystem.Instance.ResetState();   // T13（HH.92）：攻击注册三表跨轮残留清偿（THD R3 MissingReference 4586 次/轮实证：死塔注册+池化 target 存活）
         if (MapRenderService.Instance != null) MapRenderService.Instance.ClearAllTiles();
         if (TerritoryOverlay.Instance != null) TerritoryOverlay.Instance.ClearOverlay();   // 2_10 步骤13：清场同步清染色层（跨轮零残留）
+        if (WorldGatherRegistry.Instance != null) WorldGatherRegistry.Instance.ResetAll();   // HH.221/D685 A①：AI 世界资源点采集立案表跨轮清空（源已随世界失效，表须同步；防跨轮污染）
         // AttentionSystem 非全局单例（每 NPCBrain 私有成员 _attention，无 Instance）——
         // 随 TeardownScene 销毁全部单位自动清空（ClearAll/ClearThreats 仅 NPCBrain 内部用），无需显式清。
 

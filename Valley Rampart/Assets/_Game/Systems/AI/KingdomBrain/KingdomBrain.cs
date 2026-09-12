@@ -624,6 +624,12 @@ public class KingdomBrain
             case UtilityAction.ProduceMachine:
                 ExecuteProduceMachine(kingdom, cfg);
                 break;
+            // HH.221/D685 A②：㉗ 采集世界资源点——决策核**只出粗意图**（"缺 X → 下发采集"），
+            // 选点/可达/派工/距离一律归 WorldGatherRegistry + TaskScheduler（禁 O-3 决策核直选目标；
+            // 与建造类经门面同构：本处只调**门面**，不碰具体资源点）。
+            case UtilityAction.GatherWorldResource:
+                ExecuteWorldGatherFocus(kingdom, cfg);
+                break;
             case UtilityAction.Tech:
                 ExecuteTech(kingdom, cfg);
                 break;
@@ -1313,6 +1319,59 @@ public class KingdomBrain
         }
     }
 
+    // ===== ㉗ 采集世界资源点（HH.221/D685 A②；A① 通道的决策出口）=====
+
+    /// <summary>
+    /// 采集焦点执行（决策核**只出粗意图**；选点/可达/派工/距离归 A① 层）。
+    /// 触发资源＝2_23 三通道分诊首发断供资源（**单源**，避 DZ-118/DZ-128 双源）；
+    /// 落**通道B**（有产能但日产出低）才属本行动域（通道A/C 已由 ③/⑤ 承接；与评分 `NeedScore`/`Feasible` 同判据，L-31 同源）。
+    /// 执行＝调 `WorldGatherRegistry.Advertise`（**门面**）下发粗意图→本层选点并注册 `WorldGatherSource`。
+    /// 失败分型（HH.228/D680 口径）：
+    ///   · 快照缺席／无断供触发／非石木／非通道B ⇒ **正常态**（Bump ok，非失败——防灌退避）；
+    ///   · 领土内**无可达目标**（`candidates==0`）⇒ **Env**（世界未提供该资源点，AI 无法以自身行动消除）；
+    ///   · 在册满额／已全部在册 ⇒ **成功**（意图已落地，非失败）。
+    /// </summary>
+    private void ExecuteWorldGatherFocus(KingdomState kingdom, KingdomBrainConfig cfg)
+    {
+        if (!SituationHub.TryGet(kingdomId, out var sit) || sit == null || sit.Economy == null)
+        {
+            Bump(kingdomId, train: false, ok: true);   // 诊断块未就绪（读档后首日）：当日跳过，明日重建后重试
+            return;
+        }
+        var dcfg = KingdomDiagnosisConfig.Load();
+        int r = ResolveTriageResource(sit.Economy, dcfg);
+        if (r < 0 || !WorldGatherRegistry.TryMapWorldResource((EcoResource)r, out var rt))
+        {
+            Bump(kingdomId, train: false, ok: true);   // 无断供触发／该资源无世界采集通道 ⇒ 正常态不空转
+            return;
+        }
+        if (DecideTriage(sit.Economy, dcfg, (EcoResource)r) != TriageDecision.NoOp)
+        {
+            Bump(kingdomId, train: false, ok: true);   // 通道A/C 归 ③/⑤ ⇒ 本行动正常让位（非失败）
+            return;
+        }
+
+        var reg = WorldGatherRegistry.Instance;
+        if (reg == null)
+        {
+            Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // HH.228/D680：单例未就绪 ⇒ Env
+            return;
+        }
+        var (registered, candidates) = reg.Advertise(kingdomId, rt);
+        if (candidates <= 0)
+        {
+            Bump(kingdomId, train: false, ok: false);
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // 领土内无可达目标 ⇒ Env（世界给定物）
+            Debug.LogWarning($"[KingdomBrain] k{kingdomId} ㉗采集：本国领土内无可采 {rt} 资源点（明日再试／待推进拓土）");
+            return;
+        }
+        Bump(kingdomId, train: false, ok: true);
+        ReportActionOk(kingdom);   // 意图已落地（新立案或已在册），退避清零
+        Debug.Log($"[KingdomBrain] k{kingdomId} ㉗采集下发：{rt} 新立案 {registered} 个（候选 {candidates}，在册 {reg.CountOf(kingdomId)}）"
+                  + $"——选点/派工归 WorldGatherRegistry+TaskScheduler");
+    }
+
     /// <summary>⑤三通道 A→B→C 固定序决策（D639 全列报；纯函数=R-C4 确定性断言锚）。
     /// A 通道：无对应产能建筑且反查表有 def → 建对应产能（D639 列报4）；
     /// B 通道：实际日产出/人口低（Flow.In(r)/pop&lt;阈值，D639 列报5）→ 偏向批B 生效，no-op；
@@ -1339,8 +1398,10 @@ public class KingdomBrain
     /// <summary>触发判定+断供严重度取首发（粮→金→石→木；铁跳过=D639 列报3）。
     /// 粮：GrainReserveDays&lt;grainReserveDaysFloor（既有底线日，底线机制不动，D639 列报2）；
     /// 金/石/木：Flow.Net(r)&lt;0 且 Stock(r)&lt;reserveTargetDaysOther×max(1,Out(r))（单日判定 D639 列报1）。
-    /// 返回 EcoResource int；无触发 → -1。纯函数（读快照无随机）。</summary>
-    private static int ResolveTriageResource(EconomyBlock eco, KingdomDiagnosisConfig dcfg)
+    /// 返回 EcoResource int；无触发 → -1。纯函数（读快照无随机）。
+    /// HH.221/D685 A②：可见性 private → **internal**（`UtilityScorer.NeedKind.GatherShortageGap` 单源复用之需；
+    /// 行为/语义逐字不变，仅放宽可见性=禁另造第二套触发判据 DZ-118/DZ-128）。</summary>
+    internal static int ResolveTriageResource(EconomyBlock eco, KingdomDiagnosisConfig dcfg)
     {
         int floor = dcfg != null ? dcfg.grainReserveDaysFloor : 2;
         int reserveDays = dcfg != null ? dcfg.reserveTargetDaysOther : 3;

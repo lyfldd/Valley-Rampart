@@ -23,7 +23,7 @@ public class UtilityActionConfig : ScriptableObject
     {
         new UtilityActionDef { id = UtilityAction.BuildHouse,     name = "建住宅",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.HouseGap,        needA = 10, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "House",     costWood = 4 },
         new UtilityActionDef { id = UtilityAction.BuildWarehouse, name = "建仓库",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.WarehouseGap,     needA = 250, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "Warehouse", costGold = 4, costStone = 4, buildTargetCap = 4 },
-        new UtilityActionDef { id = UtilityAction.BuildCapacity,  name = "建产能",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.CapacityGap,      needA = 8, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "quarry",    costGold = 50 },
+        new UtilityActionDef { id = UtilityAction.BuildCapacity,  name = "建产能",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.CapacityGap,      needA = 8, needB = 0, stageWeight = new float[]{1,1,1,1}, buildingId = "quarry",    costGold = 50 },
         new UtilityActionDef { id = UtilityAction.BoostHarvest,   name = "强化采集", minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.HarvestGap,       needA = 0, needB = 3, stageWeight = new float[]{1,1,1,1}, buildingId = "farm",      costGold = 50 },
         new UtilityActionDef { id = UtilityAction.Grain,          name = "屯粮",     minStage = ScriptStage.Develop,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.GrainGap,         needA = 2, needB = 1, stageWeight = new float[]{1,1,1,1}, buildingId = "Granary",   costWood = 4, buildTargetCap = 4 },
         new UtilityActionDef { id = UtilityAction.RecruitWorker,  name = "招工人",   minStage = ScriptStage.Survive,  axis = (int)PersonalityAxis.Expansion,   axisWeight = 1f, need = NeedKind.RecruitWorkerGap, needA = 10, needB = 0, stageWeight = new float[]{1,1,1,1} },
@@ -43,6 +43,10 @@ public class UtilityActionConfig : ScriptableObject
         new UtilityActionDef { id = UtilityAction.BuildWarCamp,     name = "建兽人战营", minStage = ScriptStage.Military, axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0,0.5f,1}, buildingId = "WarCamp",     costGold = 10, costWood = 25 },
         new UtilityActionDef { id = UtilityAction.BuildLeyForge,    name = "建地脉熔炉", minStage = ScriptStage.Expand,  axis = (int)PersonalityAxis.Economy,     axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0.5f,1,1}, buildingId = "LeyForge",    costGold = 25, costStone = 30 },
         new UtilityActionDef { id = UtilityAction.BuildArcheryRange, name = "建精灵射箭场", minStage = ScriptStage.Military, axis = (int)PersonalityAxis.Belligerence, axisWeight = 1f, need = NeedKind.ExclusiveGap, needA = 1, needB = 0, stageWeight = new float[]{0,0,0.5f,1}, buildingId = "ArcheryRange", costGold = 15, costWood = 30 },
+        // ===== HH.221/D685 A②（尾插；非建造类，无 buildingId/成本）=====
+        //  ㉗ 采集世界资源点：需求/可行性/执行三处**同源**取 2_23 通道B 分诊（避 DZ-118/DZ-128 双源）；
+        //  needA/needB 不参与（缺口算法内读 EconomyBlock.Flow 与 KingdomDiagnosisConfig.channelBOutputPerPop 单源阈值）
+        new UtilityActionDef { id = UtilityAction.GatherWorldResource, name = "采集世界资源点", minStage = ScriptStage.Survive, axis = (int)PersonalityAxis.Economy, axisWeight = 1f, need = NeedKind.GatherShortageGap, needA = 0, needB = 0, stageWeight = new float[]{1,1,1,1} },
     };
 
     /// <summary>按 id 查行动定义（无 → null）。</summary>

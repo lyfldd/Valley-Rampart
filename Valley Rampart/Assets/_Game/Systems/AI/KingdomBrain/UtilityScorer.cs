@@ -45,7 +45,10 @@ public enum UtilityAction : byte
     BuildBarracks = 23,     // 2_22⑰a 建兵营（B3）：共通军事建筑（General/Warrior/Cavalry 训练入口）
     BuildTrainingCamp = 24, // 2_22⑰b 建训练营（B3）：共通军事建筑（Archer/Mage/Healer+本族专属兵训练入口）
     BuildSiegeWorkshop = 25, // 2_22㉔ 建投掷机厂（B8）：共通中性建筑（SiegeWorkshopBuilding 弹药厂）
-    ProduceMachine = 26     // 2_22㉕ 造战争机器（B8）：战争态势驱动（MachineDemand）；不进配兵双环（语义正交）
+    ProduceMachine = 26,    // 2_22㉕ 造战争机器（B8）：战争态势驱动（MachineDemand）；不进配兵双环（语义正交）
+    // ===== HH.221/D685 A② AI 资源权力对等批（**尾插**保持 int 稳定，L-28）=====
+    GatherWorldResource = 27 // ㉗ 采集世界资源点（A① 通道的决策出口）：本国断供（2_23 通道B 分诊首发，
+                             //   世界可采资源=石/木）→ 下发**粗意图**；选点/派工/距离归 WorldGatherRegistry+TaskScheduler（禁 O-3 直选）
 }
 
 /// <summary>需求强度缺口函数类型（D323 单调缺口；参数 needA/needB 语义见各 case）。</summary>
@@ -80,9 +83,14 @@ public enum NeedKind : byte
     MachineDemand,   // 造机器需求（㉕）：战争态势驱动=军事期(stage==3)+邻接威胁非空（快照 Threats）→ 需求分；
                      // 守城需求=警戒/动员档（批C 接入位，P0 占位=军事期+威胁即驱动）；族门禁/上限在执行链 D558
     // ===== HH.194/D656 建军链修复批（尾插，L-28 禁改中间位）=====
-    MilitaryBuildingGap // ⑰建军事建筑（id23/24）真实缺口（D656 案A）：该建筑不在场 ⇒ 三军事缺口 max
+    MilitaryBuildingGap, // ⑰建军事建筑（id23/24）真实缺口（D656 案A）：该建筑不在场 ⇒ 三军事缺口 max
                         //（GeneralGap/FormationGap/UnitTypeGap，各已内嵌 InternalDrive，max 后即含）；
                         // 在场 ⇒ 0。忠实设计稿 2_22 L106「选型=种族+快照缺口」（原 ExclusiveGap 占位 0.5 弃用）
+    // ===== HH.221/D685 A② AI 资源权力对等批（尾插，L-28 禁改中间位）=====
+    GatherShortageGap    // ㉗ 世界资源点采集缺口：本国断供首发资源（单源引 2_23 三通道分诊的
+                         // `ResolveTriageResource`）且该资源**世界可采**（石/木）且分诊落**通道B**
+                         //（通道A 建产能/通道C 建仓已由 ③/⑤ 承接，本行动不抢）⇒ 缺口=1−实际日产出/人口÷阈值；
+                         // 不重造第二套触发源（避 DZ-118/DZ-128 双源），阈值单源读 KingdomDiagnosisConfig.channelBOutputPerPop
 }
 
 /// <summary>效用评分器（纯函数层，2_17 步骤9）。单入口 ScoreTop。</summary>
@@ -304,6 +312,26 @@ public static class UtilityScorer
                 if (!threatM && !postureM) return 0f;
                 float wantM = Mathf.Max(1, d.needA);
                 return Mathf.Clamp01(wantM / (wantM + sitM.MachineCount)) * 0.8f; // 机器数越少需求越高（上限内）
+            }
+            // ===== HH.221/D685 A②（㉗ 采集世界资源点）=====
+            case NeedKind.GatherShortageGap:
+            {
+                // 触发源**单源**＝2_23 三通道分诊（`ResolveTriageResource` 首发断供资源 + `DecideTriage` 通道判定），
+                // 禁另造第二套"采集下单"判据（DZ-118/DZ-128 双源）；仅**通道B**（有产能但日产出低）属本行动域——
+                // 通道A（无产能→建）归 ③、通道C（仓储溢出→建仓）归 ⑤，本行动不抢（命中即止的单通道语义）。
+                if (!SituationHub.TryGet(k.id, out var sitG) || sitG == null || sitG.Economy == null) return 0f;
+                var ecoG = sitG.Economy;
+                var dcfgG = KingdomDiagnosisConfig.Load();
+                int rG = KingdomBrain.ResolveTriageResource(ecoG, dcfgG);
+                if (rG < 0) return 0f;                                    // 无断供触发
+                if (!WorldGatherRegistry.TryMapWorldResource((EcoResource)rG, out var rtG)) return 0f;  // 只覆盖石/木
+                var erG = (EcoResource)rG;
+                if (KingdomBrain.DecideTriage(ecoG, dcfgG, erG) != TriageDecision.NoOp) return 0f;  // 只有通道B 归本行动
+                int popG = ecoG.Population;
+                if (popG <= 0) return 0f;
+                float thrG = dcfgG != null ? dcfgG.channelBOutputPerPop : 1f;         // 阈值单源（与 DecideTriage 同参）
+                // 缺口＝距阈值多远（实际日产出/人口 越低越缺）；口径同 DecideTriage 的 B 通道判据，禁另设阈值
+                return Mathf.Clamp01(1f - (ecoG.Flow.In(erG) / (float)popG) / Mathf.Max(0.0001f, thrG));
             }
             default: return 0f;
         }
@@ -595,6 +623,19 @@ public static class UtilityScorer
             case UtilityAction.Defense:
                 // 姿态项全阶段可见、无硬门槛（D318）
                 return true;
+            case UtilityAction.GatherWorldResource:
+                // ㉗ 采集世界资源点（HH.221/D685 A②）：硬门槛＝**本国领土内存在可采该资源的点**
+                //（树=数据格 features；一次性实体=Building 注册表 isConsumable+产出匹配）——
+                // 来源与选点层**同源单函数**（`WorldGatherRegistry.HasCandidate`，禁另抄匹配逻辑 L-31）。
+                // 无候选 ⇒ 不评（防"评分选中→执行空转→退避灌满"的 HH.193 同型缺陷）。
+                {
+                    var dcfgF = KingdomDiagnosisConfig.Load();
+                    int rF = -1;
+                    if (SituationHub.TryGet(k.id, out var sitF) && sitF != null && sitF.Economy != null)
+                        rF = KingdomBrain.ResolveTriageResource(sitF.Economy, dcfgF);
+                    if (rF < 0 || !WorldGatherRegistry.TryMapWorldResource((EcoResource)rF, out var rtF)) return false;
+                    return WorldGatherRegistry.HasCandidate(k.id, rtF);
+                }
             default:
                 return false;
         }
