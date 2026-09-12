@@ -17,6 +17,13 @@ using UnityEngine;
 //                    → 与「生命周期登记表 §4」54 事件基线对账（差异列报）
 //   R2 存档覆盖对拍：A=Singleton×ISaveable 差集；B=WorldLifecycle.ResetWorldForNext 编排×全库 ResetState 差集
 //
+//  HH.240 重构（D691/ChainAudit）：本类已改造为 `ChainAuditCore` 的**调用方**——四件地基改走共用框架：
+//    · 扫描域纪律 → ChainAuditCore.ProductionAssembly / ProductionSourceRoot（反射只扫 Assembly-CSharp）
+//    · 豁免表机制 → ChainAuditCore.ExemptionTable（D561 硬红线不变：变更须策划端确认）
+//    · 幂等报告    → ChainAuditCore.WriteReports（稳定名＋时间戳副本）
+//    · 违规模型    → ChainAuditCore.Violation（R3~R6 校验器共用；本类 R1/R2 明细块**渲染保持逐字节不变**＝回归门）
+//  **回归门（硬条款）**：本重构不得改变 R1/R2 报告任何字节（同库重复运行逐字节等于重构前）。
+//
 //  接口纪律（D561 硬条款）：校验器**只报新违例**；豁免表=代码内静态清单（变更须策划端确认，本类不回写登记表）。
 //  反射域纪律（HH.132 排雷 R2）：只扫 Assembly-CSharp（Editor 程序集自身事件不入扫描，防自噪）。
 //  幂等：报告主体（lifecycle_audit_report.txt）不含时间戳/随机量，同库重复运行逐字节一致。
@@ -32,10 +39,11 @@ public static class LifecycleAudit
         "ExecutorMoveCompleteEvent", "ExecutorArrivedEvent", "GameSavedEvent"   // EventBus.WhitelistSeed（噪音静音）
     };
 
-    // ── 豁免表（设计内例外）· 代码内静态清单 ──────────────────────────────
+    // ── 豁免表（设计内例外）· 代码内静态清单（HH.240：载体改 ChainAuditCore.ExemptionTable）──
     // 依据 = 生命周期登记表 §4（HH.106，54 事件基线）；初始集来源=HH.132 §二件2。
     // 【D561 硬红线】豁免表变更需策划端确认——本清单只为登记表既有设计内例外，禁自行扩张。
-    private static readonly HashSet<string> ExemptEvents = new HashSet<string>
+    private static readonly ChainAuditCore.ExemptionTable ExemptEvents = new ChainAuditCore.ExemptionTable(
+        "R1 事件豁免", new[]
     {
         // ① 登记表 §4 B 组：无守卫零订阅噪音（DZ-077 组，13 项）
         "BuildingPlacedEvent", "GameSavedEvent", "GateStateChangedEvent", "BuildingRuinedEvent",
@@ -46,10 +54,11 @@ public static class LifecycleAudit
         "DifficultyChangedEvent",
         // ③ 守卫式设计内事件（登记表 §4 D：HasSubscribers 守卫 + 预留通道）
         "RegionHeatChangedEvent", "KingdomBrainCreatedEvent",
-    };
+    });
 
     // R2A 豁免：无状态 / 运行时态可重算的纯管理器（登记表 §3.2 设计态；显式清单+理由）。
-    private static readonly Dictionary<string, string> ExemptSingletons = new Dictionary<string, string>
+    private static readonly ChainAuditCore.ExemptionTable ExemptSingletons = new ChainAuditCore.ExemptionTable(
+        "R2A 单例豁免", null, new Dictionary<string, string>
     {
         { "InputManager", "输入采集器（无持久态）" },
         { "GameStateManager", "状态机（SetState=公开复位口，无跨轮数据）" },
@@ -86,14 +95,15 @@ public static class LifecycleAudit
         { "MachinePlacer", "机器放置入口（无持久态）" },
         { "MachinePanel", "UI 面板（只读展示）" },
         { "OverheadSpeechManager", "气泡表现层（ResetState 编排在位，表现层可丢弃）" },
-    };
+    });
 
     // R2B 豁免：编排面外但有合法消费链的 ResetState（登记表 §3.1 注记）。
-    private static readonly Dictionary<string, string> ExemptResetState = new Dictionary<string, string>
+    private static readonly ChainAuditCore.ExemptionTable ExemptResetState = new ChainAuditCore.ExemptionTable(
+        "R2B ResetState 豁免", null, new Dictionary<string, string>
     {
         // 说明：TimeManager.ResetState 已由 WorldLifecycle 编排（L32）直接调用，
         // 登记表 §3.1 提到的 "LoadState 消费链" 为冗余注记；若未来出现编排面外 ResetState 再入此表。
-    };
+    });
 
     // ── 「生命周期登记表 §4」54 事件基线（HH.106）─ 只读对账面 ──────────────
     private static readonly HashSet<string> Baseline54 = new HashSet<string>
@@ -137,8 +147,8 @@ public static class LifecycleAudit
         var sb = new StringBuilder();
         int r1a = 0, r1b = 0, r1c = 0, r2a = 0, r2b = 0;
 
-        Assembly asm = typeof(EventBus).Assembly;
-        if (asm.GetName().Name != "Assembly-CSharp")
+        Assembly asm = ChainAuditCore.ProductionAssembly("LifecycleAudit");
+        if (asm.GetName().Name != ChainAuditCore.ProductionAssemblyName)
             Debug.LogWarning($"[LifecycleAudit] 反射域=(EventBus).Assembly 名称={asm.GetName().Name}（预期 Assembly-CSharp，HH.132 排雷 R2）。");
 
         string dataPath = Application.dataPath;
@@ -218,13 +228,13 @@ public static class LifecycleAudit
         {
             if (typeof(ISaveable).IsAssignableFrom(t)) { r2aSaveable++; continue; }
             if (typeof(ISaveableSpawner).IsAssignableFrom(t)) { r2aSpawner++; r2aExempt.Add(t.Name + "（ISaveableSpawner 契约：承接实体重建）"); continue; }
-            if (ExemptSingletons.ContainsKey(t.Name)) { r2aExempt.Add(t.Name); continue; }
+            if (ExemptSingletons.Contains(t.Name)) { r2aExempt.Add(t.Name); continue; }
             r2aHits.Add(t.Name);
         }
         sb.AppendLine("   Singleton 全集=" + singletons.Count + "  其中 ISaveable=" + r2aSaveable + "  ISaveableSpawner=" + r2aSpawner);
         AppendSimpleBlock(sb, "  有状态单例未实现 ISaveable（违例）", r2aHits, "实现 ISaveable / 加入豁免表（需策划端确认）");
         sb.AppendLine("  豁免命中（无状态纯管理器 / Spawner 契约） = " + r2aExempt.Count + " 项");
-        foreach (var n in r2aExempt) sb.AppendLine("     [豁免] " + n + (ExemptSingletons.ContainsKey(n) ? "：" + ExemptSingletons[n] : ""));
+        foreach (var n in r2aExempt) sb.AppendLine("     [豁免] " + n + (ExemptSingletons.Contains(n) ? "：" + ExemptSingletons.ReasonOf(n) : ""));
         sb.AppendLine();
         r2a = r2aHits.Count;
 
@@ -238,7 +248,7 @@ public static class LifecycleAudit
         foreach (var n in resetTypes)
         {
             if (orchestrated.Contains(n)) { orchestratedNames.Add(n); continue; }
-            if (ExemptResetState.ContainsKey(n)) { r2bExempt.Add(n); continue; }
+            if (ExemptResetState.Contains(n)) { r2bExempt.Add(n); continue; }
             r2bHits.Add(n);
         }
         sb.AppendLine("  全库 ResetState 方法类型=" + resetTypes.Count + "  编排命中=" + orchestratedNames.Count);
@@ -248,7 +258,7 @@ public static class LifecycleAudit
         if (r2bExempt.Count > 0)
         {
             sb.AppendLine("  豁免命中 = " + r2bExempt.Count + " 项");
-            foreach (var n in r2bExempt) sb.AppendLine("     [豁免] " + n + "：" + ExemptResetState[n]);
+            foreach (var n in r2bExempt) sb.AppendLine("     [豁免] " + n + "：" + ExemptResetState.ReasonOf(n));
         }
         sb.AppendLine();
         r2b = r2bHits.Count;
@@ -261,29 +271,10 @@ public static class LifecycleAudit
         sb.AppendLine($"判定：{((r1a + r1b + r1c + r2a + r2b) == 0 ? "零违例" : "有违例 " + (r1a + r1b + r1c + r2a + r2b) + " 条")}");
 
         string report = sb.ToString();
-        foreach (var line in report.Split('\n'))
-            if (line.TrimEnd('\r').Length > 0) Debug.Log("[LifecycleAudit] " + line.TrimEnd('\r'));
+        ChainAuditCore.LogReport(report, "LifecycleAudit");
 
-        WriteReports(report);
-    }
-
-    // ========================================================================
-    //  落盘
-    // ========================================================================
-    private static void WriteReports(string report)
-    {
-        string dir = Path.Combine(Directory.GetCurrentDirectory(), LogDir);
-        Directory.CreateDirectory(dir);
-
-        // 稳定报告（幂等基准，无时间戳）
-        string stablePath = Path.Combine(dir, StableReportName);
-        File.WriteAllText(stablePath, report, new UTF8Encoding(false));
-
-        // 时间戳副本（随交付信=L-02 台账快照口径）
-        string stamped = "lifecycle_audit_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".log";
-        File.WriteAllText(Path.Combine(dir, stamped), report, new UTF8Encoding(false));
-
-        Debug.Log($"[LifecycleAudit] 落盘：{stablePath} + {stamped}");
+        // HH.240：落盘改走共用框架（稳定名＋时间戳副本；输出串逐字不变＝回归门）
+        ChainAuditCore.WriteReports(report, LogDir, StableReportName, "lifecycle_audit_", "LifecycleAudit");
     }
 
     // ========================================================================
@@ -369,7 +360,7 @@ public static class LifecycleAudit
     private static Dictionary<string, EventUsage> ScanEventUsage(string dataPath)
     {
         var map = new Dictionary<string, EventUsage>(StringComparer.Ordinal);
-        string prodRoot = Path.Combine(dataPath, "_Game");   // 仅生产代码面（Editor 冒烟订阅不计入运行时接线）
+        string prodRoot = ChainAuditCore.ProductionSourceRoot(dataPath);   // 仅生产代码面（Editor 冒烟订阅不计入运行时接线）
         if (!Directory.Exists(prodRoot)) return map;
 
         foreach (var file in Directory.GetFiles(prodRoot, "*.cs", SearchOption.AllDirectories))
