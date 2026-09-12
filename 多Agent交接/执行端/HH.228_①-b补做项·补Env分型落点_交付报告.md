@@ -4,6 +4,7 @@
 > 执行端（TraeCode·Unity 轨）· 2026-09-12 · **所属 Gate＝`G2-1`（军事期可达）**（R2）
 > 取号：遵 D640 #10（水位线 HH.227 → **HH.228**，独立单行 commit `4709998`）
 > 范围＝**只做 ①**（补 `Env` 分型落点）；**②（含 `JUDGE_FOCUS_KINGDOM` 侦察）不进本批**
+> 🟢 **D682 补遗 A/B 已办**（`:1220`/`:1228` 改判 `Env`（⇒落点 7→**9**）＋ `Valley_HH80_Run` 加探针在场 fail-fast）⇒ 见文末 **§追记（D682 补遗闭环）**
 
 ---
 
@@ -172,6 +173,76 @@ KingdomBrain.cs:848 / 938 / 1031 / 1047 / 1053 / 1059 / 1251   （生产调用�
 ---
 
 *执行端 2026-09-12（HH.228 交付报告，取号 `4709998`）。停手待策划端验收。*
+
+---
+
+## 追记（D682 补遗闭环）
+
+> 追加时点：2026-09-12 · 作业依据＝**HH.228 §裁决区（D682 两项补遗令）** · **不新取号**（遵令）· **Gate 不变＝`G2-1`**
+> 验收结论（D682）＝**实施忠实＋机制成立＋T 级零行为改**；本追记＝**补遗 A／B 已办证据** ⇒ **① 闭环**
+
+### A. `:1220`／`:1228` 改判 `Env`（⇒ Env 落点 **7 → 9**）
+
+| 落点 | 语义（实读） | 标注 |
+|---|---|---|
+| [KingdomBrain.cs:1220](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/KingdomBrain/KingdomBrain.cs#L1220) | 建造链① `def0 == null \|\| string.IsNullOrEmpty(def0.Value.buildingId)`＝**配置给定物缺失**（`UtilityActionConfig` 无该 action 条目／`buildingId` 未填） | **Self → `Env`（D682 准改）** |
+| [KingdomBrain.cs:1228](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/KingdomBrain/KingdomBrain.cs#L1228) | 建造链② `BuildingFactory.FindDefById(bid) == null`＝**资产缺失**（全仓无该 `BuildingDef`） | **Self → `Env`（D682 准改）** |
+
+**行为面零改**（同前）：`ReportActionFail(kingdom, ActionBackoff.FailKind.Env)` 只把 `kind` 落到 `s.lastEnv`（[ActionBackoff.cs:113](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/KingdomBrain/ActionBackoff.cs#L113)）；**不进** `fails`／`Factor`／`IsCapped`／`Readout` 的因子计算（判定原则已在 [ActionBackoff.cs:39-45](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/KingdomBrain/ActionBackoff.cs#L39-L45) 声明；本轮两处**严格落在该原则内**——你方判定与我方原判一致）。
+
+**`Select-String` 计数核对（全仓 `Assets/**/*.cs`，`FailKind.Env` 全量列举）**：
+
+```
+Valley2_17_Smoke_5.cs:222                                         （T 级夹具·构造调用）
+ActionBackoff.cs:116                                              （实现：s.lastEnv = kind == FailKind.Env）
+KingdomBrain.cs:848 / 938 / 1031 / 1047 / 1053 / 1059 / 1220 / 1228 / 1251
+                                                                  ⇒ 生产调用点 = 9 处 ✅（D682 要求 9 处核对通过）
+```
+
+### B. `Valley_HH80_Run` 加「探针在场」fail-fast（首跑事故治本）
+
+**落点**：[Valley_HH80_Run.cs:118-126](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/Editor/Smoke/Valley_HH80_Run.cs#L118-L126)（紧随 `P1Observer.IsRunning` fail-fast `:112-117`，同为进局前就绪检查）
+
+```csharp
+// HH.228 补遗B／D682 fail-fast：**DiagMilitary 探针未启则中止**——防"静默空跑到窗口满、avoid=/census 判据证据全空"
+//   （首跑事故：漏启探针 ⇒ J6=False、wallTop=0/0/0、avoid= 0 行 ⇒ 证据作废）。口径同 `HH80_诊断跑`（`:39-43`）。
+if (!DiagMilitary.IsRunning)
+{
+    Debug.LogError("[HH80跑] ✗ DiagMilitary 探针未启用，判据证据为空（avoid=/census/verdict 全空）——请先点「Valley/诊断/启动建军链诊断」再起跑（HH.228 补遗B fail-fast）。已中止。");
+    return;
+}
+```
+
+**⚠️ 命名勘正（如实列报）**：补遗令写作 `Valley_DiagMilitary.IsRunning`——`Valley_DiagMilitary` 是**文件名**，**实际类名＝`DiagMilitary`**（`Valley_DiagMilitary.cs:18`；容器内既有调用 `DiagMilitary.ResetJudges()` `:124` 同源）。已按**实际类名**接线（若照字面写则编译错）；**仅命名勘正、语义与令一致**。
+
+**正负例实测（结构探针·未长跑）**：
+
+| 例 | 前置 | 操作 | 实测结果 |
+|---|---|---|---|
+| **负例**（探针**关**） | Play 中；仅启 `P1_启动观测`；`DiagMilitary.IsRunning=False` | 菜单 `Valley/验证/HH80_正式跑` | **fail-fast 生效**：Console＝`[HH80跑] ✗ DiagMilitary 探针未启用，判据证据为空（avoid=/census/verdict 全空）——…已中止。`；`execute_code` 实测 `HH80_RunRunner=ABSENT`（**未起跑**）✅ |
+| **正例**（探针**开**） | Play 中；`P1_启动观测` ＋ `Valley/诊断/启动建军链诊断`（`IsRunning=True`） | 同上 | **正常起跑**：`execute_code` 实测 `HH80_RunRunner=PRESENT`（**已过两道 fail-fast 并进入 `RunCoroutine`**）⇒ 随即**人工退 Play** 终止（本项为结构探针，不取判定数据）✅ |
+
+### 门禁（T 级）
+
+| 项 | 结果 |
+|---|---|
+| 编译 | **0 错**；全量重载 21 条 warning **全在既有无关文件**，**本批 3 个改动文件（`KingdomBrain.cs`／`ActionBackoff.cs`／`Valley_HH80_Run.cs`）零 warning** |
+| `Smoke_5` | **ALL PASS**——`让位门=True／回池=True／分型True(BuildWall:0.75(Env))` 三组仍全过 |
+| A 计数核对 | `Select-String FailKind.Env` ⇒ 生产调用点 **9 处**（行号见上）✅ |
+| B 正负例 | 负例 fail-fast 生效（`LogError` ＋ `HH80_RunRunner=ABSENT`）／正例正常起跑（`HH80_RunRunner=PRESENT`）✅ |
+| 短窗 | **按令未重跑**（A 的两处属防御性守卫路径，短窗不触发属预期；分型可读性由 `Smoke_5` 夹具承担） |
+| 收工 | **已退 Play 实测** `isPlaying=False`；探针已停（`DiagMilitary.IsRunning=False`） |
+
+### 列报（本追记新增 2 项）
+
+1. **正例实测产生的观测域噪声（1 行）**：B 正例起跑后随即退 Play ⇒ `Logs/P1/p1_snap.csv` 增 **1 行全局启动快照**（`20260912_135537,1,-1,全局,…`）；**无逐国行、无 5 日检查点落盘**（未达保存周期）。属结构探针副产物，列报备查。
+2. **命名勘正 1 笔**（见上 B 节）：`Valley_DiagMilitary` → `DiagMilitary`（文件名 vs 类名）。
+
+### 红线自检（追记）
+
+设计文档／队列**零改动**（只读）｜`AI.Core` **零直改**｜**枚举零新增**（不涉 `L-28`）｜**行为零改**（`kind` 仅落 `lastEnv`）｜写-改-commit 同串·**只提本串·不 push**｜改前已重读磁盘｜共享文档**增量改**（本报告用 SearchReplace 追加）｜**已退 Play**｜本批**未经 sim 门禁**（纯标注＋容器就绪检查）。
+
+*执行端 2026-09-12（HH.228 §追记 D682 补遗闭环）。停手待验收。*
 
 ---
 

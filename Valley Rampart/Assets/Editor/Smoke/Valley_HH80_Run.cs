@@ -116,6 +116,13 @@ public static class Valley_HH80_Run
             Debug.LogError("[HH80跑] ✗ 观测器未启动——请先点「Valley/观测/P1_启动观测」再起跑（D647 异议2 fail-fast）。已中止。");
             return;
         }
+        // HH.228 补遗B／D682 fail-fast：**DiagMilitary 探针未启则中止**——防"静默空跑到窗口满、avoid=/census 判据证据全空"
+        //   （首跑事故：漏启探针 ⇒ J6=False、wallTop=0/0/0、avoid= 0 行 ⇒ 证据作废）。口径同 `HH80_诊断跑`（`:39-43`）。
+        if (!DiagMilitary.IsRunning)
+        {
+            Debug.LogError("[HH80跑] ✗ DiagMilitary 探针未启用，判据证据为空（avoid=/census/verdict 全空）——请先点「Valley/诊断/启动建军链诊断」再起跑（HH.228 补遗B fail-fast）。已中止。");
+            return;
+        }
         // D656 硬条款2：显式传槽（观测器 MainSlot 已参数化，禁回落硬编码）——进局前设置
         P1Observer.SetMainSlot(SLOT);
         _military.Clear(); _done = false;

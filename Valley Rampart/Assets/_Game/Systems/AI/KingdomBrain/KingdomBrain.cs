@@ -1217,7 +1217,7 @@ public class KingdomBrain
         if (def0 == null || string.IsNullOrEmpty(def0.Value.buildingId))
         {
             Bump(kingdomId, train: false, ok: false);
-            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点①（focus def 缺失/无 buildingId）
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // HH.228 补遗A／D682：建造链①**配置给定物缺失**（`UtilityActionConfig` 无该 action 条目／`buildingId` 未填）⇒ Env（HH.224/D670 建造链失败点①）
             return;
         }
         string bid = overrideBuildingId ?? def0.Value.buildingId;   // R-C1/R-C2：动态目标 def
@@ -1225,7 +1225,7 @@ public class KingdomBrain
         if (bdef == null)
         {
             Bump(kingdomId, train: false, ok: false);
-            ReportActionFail(kingdom);   // HH.224/D670：建造链失败点②（buildingId 无 def）
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // HH.228 补遗A／D682：建造链②**资产缺失**（全仓无该 `BuildingDef`）⇒ Env（HH.224/D670 建造链失败点②）
             Debug.LogWarning($"[KingdomBrain] k{kingdomId} 行动 {(UtilityAction)kingdom.focus} 的 buildingId={bid} 未找到 def");
             return;
         }
