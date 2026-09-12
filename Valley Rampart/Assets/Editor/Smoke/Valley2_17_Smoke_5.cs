@@ -199,10 +199,36 @@ public static class Valley2_17_Smoke_5
         float fCap = ActionBackoff.Factor(K, A, 1f);
         bool inRange = fCap >= lo - 1e-4f && fCap <= 1f;
 
+        // ⑨ HH.226 追加项①-b：**达上限强制让位**门线（选择层；未达 ⇒ 不让位）
+        ActionBackoff.Reset();
+        for (int i = 0; i < cap - 1; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        bool noEvictBeforeCap = !ActionBackoff.IsCapped(K, A, 1f);
+        ActionBackoff.ReportFail(K, A, 1, 1f);
+        bool evictAtCap = ActionBackoff.IsCapped(K, A, 1f);
+
+        // ⑩ 让位**自愈回池**三条（D678 追加项范围 1）：成功／need 变化／冷却 ⇒ 回池
+        ActionBackoff.ReportSuccess(K, A);
+        bool poolBackOk = !ActionBackoff.IsCapped(K, A, 1f);
+        ActionBackoff.Reset();
+        for (int i = 0; i < cap; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        bool poolBackNeed = !ActionBackoff.IsCapped(K, A, 1f + ActionBackoff.NeedSelfHealEps + 0.01f);
+        ActionBackoff.Reset();
+        for (int i = 0; i < cap; i++) ActionBackoff.ReportFail(K, A, 1, 1f);
+        ActionBackoff.OnDayTick(K, 1 + Mathf.Max(1, bcfg.cooldownDays));
+        bool poolBackCd = !ActionBackoff.IsCapped(K, A, 1f);
+
+        // ⑪ HH.226 追加项③：失败**分型标注**（Env/Self；仅标注不改行为）
+        ActionBackoff.Reset();
+        for (int i = 0; i < th; i++) ActionBackoff.ReportFail(K, A, 1, 1f, ActionBackoff.FailKind.Env);
+        string rdEnv = ActionBackoff.Readout(K);
+        bool kindTag = !string.IsNullOrEmpty(rdEnv) && rdEnv.Contains("(Env)");
+
         ActionBackoff.Reset();   // 清场（防污染后续用例/后续跑局）
-        ok = neutral && belowTh && onTh && readout && healNeed && fellBack && healOk && healCd && capped && inRange;
+        ok = neutral && belowTh && onTh && readout && healNeed && fellBack && healOk && healCd && capped && inRange
+             && noEvictBeforeCap && evictAtCap && poolBackOk && poolBackNeed && poolBackCd && kindTag;
         sb.Append($"退避正负例={(ok ? "OK" : "FAIL")}(中性{neutral}/未达门槛{belowTh}/达门槛{onTh}(f={fTh:F2}≥{lo:F2})/读数{readout}/"
-            + $"自愈={healNeed && healOk && healCd}/硬上限{capped}(f={fCap:F2})/下限护栏{inRange}) ");
+            + $"自愈={healNeed && healOk && healCd}/硬上限{capped}(f={fCap:F2})/下限护栏{inRange}/"
+            + $"让位门={noEvictBeforeCap && evictAtCap}/回池={poolBackOk && poolBackNeed && poolBackCd}/分型{kindTag}({rdEnv})) ");
         return ok;
     }
 }

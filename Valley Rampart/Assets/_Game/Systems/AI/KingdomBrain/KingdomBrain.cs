@@ -92,8 +92,9 @@ public class KingdomBrain
     // ===== HH.224/D670 治本批：通用「执行失败退避」上报口 =====
     /// <summary>行动**真失败**上报（退避表；键＝kingdomId×行动id，与 `s_dispatch` 同点清零）。
     /// 🔴**仅"真失败"可调**——"已达目标/正常态"的 `Bump(ok:false)`（如 ⑦ warrior≥target／⑧ 已上限）**不得**上报，
-    /// 否则会把达标误判为失败（HH.225 §一 落点清单分流）。</summary>
-    private void ReportActionFail(KingdomState kingdom)
+    /// 否则会把达标误判为失败（HH.225 §一 落点清单分流）。
+    /// `kind`＝失败分型（HH.226 追加项③）：`Env`＝环境让渡型（如 ⑥ 无候选，HH.28 裁决①）→ 仅标注不改行为。</summary>
+    private void ReportActionFail(KingdomState kingdom, ActionBackoff.FailKind kind = ActionBackoff.FailKind.Self)
     {
         if (kingdom == null) return;
         var a = (UtilityAction)kingdom.focus;
@@ -102,7 +103,7 @@ public class KingdomBrain
         float need = 0f;
         var d = UtilityActionConfig.LoadConfig().Find(a);
         if (d.HasValue) need = UtilityScorer.NeedScore(kingdom, d.Value);
-        ActionBackoff.ReportFail(kingdomId, a, day, need);
+        ActionBackoff.ReportFail(kingdomId, a, day, need, kind);
     }
 
     /// <summary>行动**成功落地**上报 ⇒ 退避计数清零（自愈之一）。</summary>
@@ -844,7 +845,7 @@ public class KingdomBrain
         if (vagrant == null)
         {
             Bump(kingdomId, train: true, ok: false);
-            ReportActionFail(kingdom);   // HH.224/D670：⑥真失败（无候选）⇒ 退避计数
+            ReportActionFail(kingdom, ActionBackoff.FailKind.Env);   // HH.226 追加项③：⑥无候选＝**环境让渡型**（HH.28 裁决①·仅标注）
             // HH.81/D542 件1 静默双坑修（P0 调优观测口）：无候选时打诊断——流浪池活体+守卫拒绝计数。
             // 口径注记：pool=Vagrant 职业活体总数；拒绝计数按 ⑥守卫序分桶（已入籍/已招募/异族），
             // 与 FindRecruitableVagrant 的 alive→kingdomId→Vagrant→Recruited→race 过滤序等价自洽（观测非判定）。

@@ -27,7 +27,7 @@ public static class Valley_HH80_Run
     //    ⚠️仍属"每批定案"项（非档位）：SEED/SLOT 保持 64513/p1_fix1b，下一批起跑前须按任务书设新 seed/槽
     //    （**换 seed 须同步改 `JUDGE_FOCUS_KINGDOM`**，见下方注释）。
     private const int SEED = 64513;          // HH.217 短局：复用 HH.214 定案 seed（同世界修前/修后对照；D664 裁准）
-    private const string SLOT = "p1_fix2";    // HH.224 对照跑独立槽（禁覆盖 p1_run6/6b/7/8、p1_fix1/1b）
+    private const string SLOT = "p1_fix3";    // HH.226 ①-b 追加项对照跑独立槽（禁覆盖 p1_run6/6b/7/8、p1_fix1/1b/2）
     private const int CIRCUIT_BREAK_DAY = 120;
     private const int MILITARY_STOP_COUNT = 2;   // ✅已复原（DZ-136）：长局判定档=≥2 AI 军事期（HH.217 短局自证档 1 已废止）
 
@@ -35,13 +35,27 @@ public static class Valley_HH80_Run
     //   本批（修前/修后同 seed 对照，对照段 D1~D60）= USE_DIAG_WINDOW=true；
     //   ⚠️**长局判定跑（七考重验）起跑前须置 false**（否则 120 日判定线被 60 截断＝D585/D589 截断混淆同族）。
     private const int DIAG_CIRCUIT_DAY = 60;
-    private const bool USE_DIAG_WINDOW = true;
+    private const bool USE_DIAG_WINDOW = false;   // ✅HH.226 ①-b 收尾已置 false（回主档 120/2；D678 勘正⑥ 兑现）
     private static int ActiveCircuitDay => USE_DIAG_WINDOW ? DIAG_CIRCUIT_DAY : CIRCUIT_BREAK_DAY;
 
-    // HH.224 同 seed 修前基线（源＝`p1_fix1` seed64513 D1~D60，**同日志源口径**；HH.225 §四 实测）：
-    //   census top=BuildWall 日数 k1 37／k2 47／k3 9／k4 47（census 段 59 日）；建造焦点落地总数 32。
-    private static readonly int[] BASE_WALL_TOP = { 0, 37, 47, 9, 47 };   // 索引=kingdomId
-    private const int BASE_BUILD_OK = 32;
+    // HH.226 追加项②（D678 裁）：J7 **同段基线**——修复假阳性根因（原＝全窗 37/59 vs 判据早窗＝**不同段比较**）。
+    //   常量＝修前 `p1_fix1`（seed64513·65 日）**逐日** `census top=BuildWall` 日号序列（同日志源口径）。
+    //   J7 判定＝`修后同段计数/样本 ≤ 0.5 × 修前同段计数/样本`（双方窗口均取 D2~当前日）。
+    //   ⚠️**仅当基线与本批 seed ＋窗口档同段时可启用**：HH.203（120 日档·另一 seed）**无同段参照** ⇒ 该批须重取基线
+    //     或保持 J7 关（否则重演"以既有常态误停"）。
+    private static readonly int[][] BASE_WALL_TOP_DAYS =
+    {
+        new int[0],                                              // 0 占位（无王国 id 0）
+        new int[] { 24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65 },   // k1 共 42 日
+        new int[] { 14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65 },   // k2 共 52 日
+        new int[] { 24,25,28,29,30,56,57,58,59 },            // k3 共 9 日
+        new int[] { 14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65 },   // k4 共 52 日
+    };
+    private const bool ENABLE_J7_WALLTOP = true;   // 基线与本批 seed/窗口同段 ⇒ 启用（HH.203 120 档须重取基线或置 false）
+
+    // J8 防退化同段基线（源＝修前 `p1_fix1` 同日志源）：累计"建造焦点落地"数（D2~D31＝22 ／ D1~D60＝32）
+    private const int BASE_BUILD_OK_D31 = 22;
+    private const int BASE_BUILD_OK_D60 = 32;
 
     // HH.222（D666 已裁 / test-harness-first §八 机制 1+3；教训 L-34）＝**在线判据·命中即停**：
     //   支撑/目标日志每日在流（探针 `verdict=`）⇒ 容器每轮检查，命中即 Finish("判据命中：X @D??")，不跑满窗口。
@@ -240,33 +254,51 @@ public static class Valley_HH80_Run
     private static bool CheckBackoffJudges(int day, out string why)
     {
         why = null;
-        for (int k = 1; k <= 4; k++)
+        // J7（端到端·霸占解除）：**同段**基线＝修前逐日序列截到当前日（D678 裁；原全窗基线 ⇒ 假阳性）
+        if (ENABLE_J7_WALLTOP)
         {
-            if (k == 3) continue;                       // J7 排除 k3（其 wall 占比本就低 9/59）
-            if (BASE_WALL_TOP[k] <= 0) continue;
-            int n = _censusSamples[k];
-            if (n < 30) continue;
-            float now = _wallTopDays[k] / (float)n;
-            float half = 0.5f * (BASE_WALL_TOP[k] / 60f);
-            if (now <= half)
+            for (int k = 1; k <= 4; k++)
             {
-                why = "判据命中：J7 霸占解除（k" + k + " wallTop " + _wallTopDays[k] + "/" + n + "=" + now.ToString("F2")
-                    + " ≤ 基线半值 " + half.ToString("F2") + "）@D" + day;
-                return true;
+                if (k == 3) continue;                       // J7 排除 k3（其 wall 占比本就低 9/59）
+                int n = _censusSamples[k];
+                if (n < 30) continue;                       // 样本不足不判（防早停误裁）
+                int curDay = n + 1;                          // census 自 D2 起每日一条 ⇒ 当前日＝样本数+1
+                var series = BASE_WALL_TOP_DAYS[k];
+                int baseCnt = 0;
+                for (int i = 0; i < series.Length && series[i] <= curDay; i++) baseCnt++;
+                if (baseCnt <= 0) continue;
+                float now = _wallTopDays[k] / (float)n;
+                float baseRate = baseCnt / (float)n;         // 修前**同段**占比
+                if (now <= 0.5f * baseRate)
+                {
+                    why = "判据命中：J7 霸占解除（k" + k + " 同段 wallTop " + _wallTopDays[k] + "/" + n + "=" + now.ToString("F2")
+                        + " ≤ 修前同段 " + baseCnt + "/" + n + "=" + baseRate.ToString("F2") + " 的半值）@D" + day;
+                    return true;
+                }
             }
         }
+        // J8（防退化·负向）：同段基线（修前累计落地数按日插值）⇒ 全批级
         int nn = _censusSamples[1];
         if (nn >= 30)
         {
-            float exp = BASE_BUILD_OK * (nn / 60f);
-            if (_buildOkDays <= 0.5f * exp)
+            float baseCnt2 = BaseBuildOkAt(nn + 1);
+            if (_buildOkDays <= 0.5f * baseCnt2)
             {
-                why = "判据命中：J8 防退化报警（建造落地 " + _buildOkDays + " ≤ 基线同段半值 " + (0.5f * exp).ToString("F1")
-                    + "，样本 " + nn + "）⇒ 停手报裁 @D" + day;
+                why = "判据命中：J8 防退化报警（建造落地 " + _buildOkDays + " ≤ 修前同段 " + baseCnt2.ToString("F0")
+                    + " 的半值，样本 " + nn + "）⇒ 停手报裁 @D" + day;
                 return true;
             }
         }
         return false;
+    }
+
+    /// <summary>修前同段累计"建造焦点落地"数（源 `p1_fix1`；线性插值：D2~D31＝22 ／ D1~D60＝32）。</summary>
+    private static float BaseBuildOkAt(int day)
+    {
+        if (day <= 2) return 0f;
+        if (day <= 31) return BASE_BUILD_OK_D31 * (day - 2) / 29f;
+        if (day >= 60) return BASE_BUILD_OK_D60;
+        return BASE_BUILD_OK_D31 + (BASE_BUILD_OK_D60 - BASE_BUILD_OK_D31) * (day - 31) / 29f;
     }
 
     private static void Finish(string why)

@@ -33,7 +33,13 @@ public static class ActionBackoff
         public int lastFailDay;   // 最近一次失败日（冷却自愈判据）
         public float snapNeed;    // 失败当时 need 快照（状态变化自愈判据）
         public bool hasSnap;
+        public bool lastEnv;      // 最近一次失败的**分型**＝环境让渡型（HH.226 追加项③·仅标注，不改行为）
     }
+
+    /// <summary>失败分型（HH.226 追加项③／D678 裁：退避**不问归因**照常计数，仅在 `avoid=` 读数标注分型）。
+    /// <para>`Env`＝**环境让渡型**（如 ⑥「流浪池无同族可招」——HH.28 裁决① 归让渡，AI 无法以自身行动消除）；
+    /// `Self`＝**行动自身型**（资源不足／前置建筑缺失／无合法落点／门面校验未过 等）。</para></summary>
+    public enum FailKind { Self = 0, Env = 1 }
 
     private static readonly Dictionary<long, State> _t = new Dictionary<long, State>();
 
@@ -67,8 +73,31 @@ public static class ActionBackoff
         return Mathf.Clamp(f, lo, 1f);
     }
 
-    /// <summary>上报"真失败"（**不得**用于"已达目标/正常态"的 `Bump(ok:false)`——见 HH.225 §一 落点清单分流）。</summary>
-    public static void ReportFail(int kingdomId, UtilityAction a, int day, float needNow)
+    /// <summary>**达退避硬上限 ⇒ 强制让位**判据（HH.226 追加项①-b／D678 破框裁：选择层实现，**非 `Feasible`**）。
+    /// **自愈回池**同源：成功／need 变化／冷却到期 ⇒ 条目已清 ⇒ 本方法返回 false（自动回池）。
+    /// <para>语义修正（D678 勘正①）：`hardCapFails` **不参与因子计算**——因子下限由 `Factor` 的 `Clamp(f,lo,1)`
+    /// 对**所有 `fails≥th`** 生效（出厂值下 `fails=5` 即达下限 0.25）；`hardCapFails` 的语义＝**升级报裁触发线 ＋ 让位门线**。</para></summary>
+    public static bool IsCapped(int kingdomId, UtilityAction a, float curNeed)
+    {
+        int aid = (int)a;
+        var cfg = ActionBackoffConfig.Load();
+        if (aid <= 0 || !cfg.EnabledOf(aid)) return false;
+
+        long key = Key(kingdomId, aid);
+        State s;
+        if (!_t.TryGetValue(key, out s)) return false;
+        // 自愈回池（与 Factor 同口径）：need 变化超容差 ⇒ 状态已变 ⇒ 复位并回池
+        if (s.hasSnap && Mathf.Abs(curNeed - s.snapNeed) > NeedSelfHealEps)
+        {
+            _t.Remove(key);
+            return false;
+        }
+        return s.fails >= Mathf.Max(1, cfg.hardCapFails);
+    }
+
+    /// <summary>上报"真失败"（**不得**用于"已达目标/正常态"的 `Bump(ok:false)`——见 HH.225 §一 落点清单分流）。
+    /// `kind` 仅作**分型标注**（HH.226 追加项③），不改变计数/退避行为（D678 裁：退避不问归因）。</summary>
+    public static void ReportFail(int kingdomId, UtilityAction a, int day, float needNow, FailKind kind = FailKind.Self)
     {
         int aid = (int)a;
         var cfg = ActionBackoffConfig.Load();
@@ -81,6 +110,7 @@ public static class ActionBackoff
         s.lastFailDay = day;
         s.snapNeed = needNow;
         s.hasSnap = true;
+        s.lastEnv = kind == FailKind.Env;
         _t[key] = s;
 
         // 硬上限（硬约束③）：达上限仍失败 ⇒ 锁下限 ＋ 一次性升级报裁标记
@@ -142,7 +172,11 @@ public static class ActionBackoff
         for (int i = 0; i < n; i++)
         {
             if (i > 0) sb.Append(',');
-            sb.Append((UtilityAction)list[i].Key).Append(':').Append(list[i].Value.ToString("F2"));
+            int aid = list[i].Key;
+            State st;
+            bool env = _t.TryGetValue(Key(kingdomId, aid), out st) && st.lastEnv;
+            sb.Append((UtilityAction)aid).Append(':').Append(list[i].Value.ToString("F2"))
+              .Append(env ? "(Env)" : "(Self)");   // HH.226 追加项③：失败分型标注（不改行为）
         }
         return sb.ToString();
     }

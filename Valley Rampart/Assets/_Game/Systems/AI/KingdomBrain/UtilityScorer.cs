@@ -103,6 +103,8 @@ public static class UtilityScorer
         public int noNeed;          // 无需求淘汰数
         public int infeasible;      // Feasible 二值门控淘汰数（D346）
         public int axisFiltered;    // 轴权/阶段权重为零淘汰数
+        public int evicted;         // HH.226 追加项①-b：达退避硬上限被**强制让位**（出池）数
+        public bool evictedFallback;// HH.226 追加项①-b：**兜底回池**触发（全部出池 ⇒ 忽略让位，不空转）
         public UtilityAction top;   // 最优行动（None=无可执行）
     }
 
@@ -116,8 +118,11 @@ public static class UtilityScorer
         census = default;
         if (k == null || cfg == null || cfg.actions == null) return UtilityAction.None;
 
-        float best = -1f;
+        float best = -1f;                       // 让位后首选（跳过被出池行动）
         UtilityAction top = UtilityAction.None;
+        float bestAny = -1f;                    // 含被出池者（**兜底回池**用）
+        UtilityAction topAny = UtilityAction.None;
+        bool evictedHit = false;
         var defs = cfg.actions;
         for (int i = 0; i < defs.Length; i++)
         {
@@ -140,10 +145,21 @@ public static class UtilityScorer
             if (stageW <= 0f) { census.axisFiltered++; continue; }
 
             float score = need * axis * stageW;
-            // HH.224/D670 治本批：通用「执行失败退避」乘子（硬约束①——只乘 score，不入 NeedScore/Feasible；
-            // 无记录/未达门槛 ⇒ 1.0 出厂等价；KingdomState 缺省（null）时亦为 1.0）
-            if (k != null) score *= ActionBackoff.Factor(k.id, def.id, need);
+            // HH.224/D670 治本批：通用「执行失败退避」乘子（硬约束①——只乘 score，不入 NeedScore/Feasible）
+            score *= ActionBackoff.Factor(k.id, def.id, need);
+            if (score > bestAny) { bestAny = score; topAny = def.id; }
+
+            // HH.226 追加项①-b（D678 破框裁）：**达退避硬上限 ⇒ 强制让位**（选择层；非 Feasible——守硬约束①）
+            //   依据：三选共同前提「压 ⑨ 自己 factor 即让位」已被实证证伪（压到下限 0.25 仍居 top）。
+            if (ActionBackoff.IsCapped(k.id, def.id, need)) { evictedHit = true; census.evicted++; continue; }
             if (score > best) { best = score; top = def.id; }
+        }
+        // **兜底回池**（D678 追加项范围 1）：出池后无任何入选候选 ⇒ 忽略让位（**不空转**）
+        if (top == UtilityAction.None && evictedHit)
+        {
+            top = topAny;
+            best = bestAny;
+            census.evictedFallback = true;
         }
         census.top = top;
         return top;

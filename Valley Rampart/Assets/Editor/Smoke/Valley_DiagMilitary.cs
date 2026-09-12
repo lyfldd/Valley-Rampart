@@ -221,8 +221,9 @@ public static class DiagMilitary
         UtilityScorer.ScoreCensus census;
         var top = UtilityScorer.ScoreTop(k, acfg, st, out census);
         Debug.LogWarning(string.Format(
-            "[DiagMilitary] {0} k{1} census defTotal={2} stageFiltered={3} noNeed={4} infeasible={5} axisFiltered={6} top={7}",
-            tag, k.id, census.defTotal, census.stageFiltered, census.noNeed, census.infeasible, census.axisFiltered, top));
+            "[DiagMilitary] {0} k{1} census defTotal={2} stageFiltered={3} noNeed={4} infeasible={5} axisFiltered={6} ev={7}{8} top={9}",
+            tag, k.id, census.defTotal, census.stageFiltered, census.noNeed, census.infeasible, census.axisFiltered,
+            census.evicted, census.evictedFallback ? "!" : "", top));   // HH.226 追加项①-b：ev=让位出池数（`!`=兜底回池触发）
 
         DumpEconomy(tag, k);
     }
