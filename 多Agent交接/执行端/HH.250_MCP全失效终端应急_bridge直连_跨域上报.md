@@ -9,7 +9,7 @@
 
 ## 〇、一句话
 
-**在「MCP 工具注入全失效」时，Unity 其实没死**：`mcp_unityMCP` 的 HTTP 服务活着（终端可探活）、`mcp_unity-bridge`（Tuanjie AI Bridge）可用**纯终端 TCP 协议直连接管全部 22 类命令**（已实测 `get_state`＋`execute_csharp_script` 通过）。据此建议在 `unity-mcp-first` 补「MCP 全失效·终端应急恢复」章节——**改 skill 由策划端执行**，本报告只提供实证与建议稿。
+**在「MCP 工具注入全失效」时，Unity 其实没死，且两条 MCP 都能终端直调**：`mcp_unityMCP` 的 HTTP 服务活着且**长连可完整直调**（streamable HTTP/SSE，keep-alive 保会话，已实测 `read_console`＋`tools/list`）；`mcp_unity-bridge`（Tuanjie AI Bridge）可用**纯终端 TCP 协议直连接管全部 22 类命令**（已实测 `get_state`＋`execute_csharp_script` 通过）。据此建议在 `unity-mcp-first` 补「MCP 全失效·终端应急恢复」章节——**改 skill 由策划端执行**，本报告只提供实证与建议稿。
 
 ---
 
@@ -23,18 +23,42 @@
 
 ## 二、实测证据（全部本会话终端实测，眼见为实）
 
-### ① `mcp_unityMCP`（mcp-for-unity）— HTTP 服务**活着**，但会话绑定 IDE 侧
+### ① `mcp_unityMCP`（mcp-for-unity）— **终端长连可完整直调**（streamable HTTP/SSE，会话随连接）
 
 | 探测 | 结果 |
 |---|---|
 | `Invoke-WebRequest http://127.0.0.1:8080/health` | **200** `{"status":"healthy","message":"MCP for Unity server is running","version":"10.2.0"}` |
 | `POST /mcp` initialize（`Accept: application/json, text/event-stream`） | **200**，完整返回 `mcp-for-unity-server 3.4.7`（tools/prompts/resources 全在线） |
-| 同 session 续发 `tools/list` | **404 / "Session not found"** |
+| ⚠️ 短连接续发 `tools/list`（`Invoke-WebRequest` 每次新 TCP） | **404 / "Session not found"**（session 绑定连接，连接关即销毁） |
+| ✅ **长连接**（Node `http.Agent({keepAlive:true})` 复用同一 TCP）同 session 续发 | **initialize→notify(202)→`read_console`(200 读回 5 条日志)→`tools/list`(200·`refresh_unity` 在册) 全通** |
 
 - 监听进程：`PID 32184`（父 27584）＝`uv python ...\mcp-for-unity.exe --transport http --http-url http://127.0.0.1:8080 --project-scoped-tools --pidfile <proj>\Library\MCPForUnity\RunState\mcp_http_8080.pid --unity-instance-token e8d91d16...`
-- **结论**：服务本体健康、HTTP transport 正常；但 **MCP session 由 IDE 客户端持有**，终端"半路插入"拿不到有效 session ⇒ **终端可探活、不可直调**（这解释了 Trae 侧注入失效时"工具不可用"但服务还活着）。
+- **结论**：服务本体健康、HTTP transport 正常；**session 绑定 TCP 连接**——`Invoke-WebRequest`/短连接每次新建 TCP ⇒ session 找不到（伪"不可直调"）；**保持 keep-alive 长连即可完整直调**（见下模板）。
+- 这也解释了 Trae 侧注入失效：IDE 客户端的长连断掉后，新工具调用路由到已失效的会话 ⇒ "工具不可用"但服务还活着。
 
 > ⚠️ **勘正 HH.248**：HH.248 记「mcp-for-unity 走 stdio（localhost:6500 未监听）」——本日实测为 **HTTP 8080 形态**（进程命令行硬证）。两者不矛盾：可能服务形态随环境变化（stdio↔HTTP）或并存，报告以**实盘为准**（L-02 家族）。
+
+**终端直调模板（Node，保持 keep-alive 长连）**：
+
+```javascript
+// node 直调 mcp_for_unity（streamable HTTP，长连会话）
+import http from 'node:http';
+const agent = new http.Agent({ keepAlive: true });   // ← 关键：复用同一 TCP 连接
+function mcpReq(body, sessionId) {
+  return new Promise((res, rej) => {
+    const data = JSON.stringify(body);
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'Content-Length': Buffer.byteLength(data) };
+    if (sessionId) headers['mcp-session-id'] = sessionId;
+    const req = http.request('http://127.0.0.1:8080/mcp', { method: 'POST', headers, agent },
+      (r) => { const c = []; r.on('data', x => c.push(x)); r.on('end', () => res({ status: r.statusCode, sid: r.headers['mcp-session-id'] || null, body: Buffer.concat(c).toString() })); });
+    req.on('error', rej); req.write(data); req.end();
+  });
+}
+const init = await mcpReq({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'tty', version: '1.0' } } });
+await mcpReq({ jsonrpc: '2.0', method: 'notifications/initialized' }, init.sid);
+const r = await mcpReq({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'read_console', arguments: { action: 'get', types: ['error'], format: 'plain', count: '20' } } }, init.sid);
+console.log(r.body);   // event: message\ndata: {...}
+```
 
 ### ② `mcp_unity-bridge`（Codely / Tuanjie AI Bridge）— **终端可直连，全命令接管**（核心发现）
 
@@ -97,11 +121,12 @@ WF $s '{"type":"execute_csharp_script","params":{"script":"return new System.Col
 
 1. **前置**：五步诊断（D697）仍为第一判据——先分清真/伪失效。
 2. **真失效时先终端探活两步（不急着换会话）**：
-   - ① `Invoke-WebRequest http://127.0.0.1:8080/health` → 200 说明 `mcp_unityMCP` 服务活着（探活用；直调受限因会话绑定 IDE）。
+   - ① `Invoke-WebRequest http://127.0.0.1:8080/health` → 200 说明 `mcp_unityMCP` 服务活着。
    - ② 读 `<proj>\Temp\.com-unity-codely.json`（**非项目根旧副本**）→ 有 `unity_port` 且 `reason=ready` ⇒ bridge 活着。
-3. **bridge 活 → 终端直连接管**：按上文协议 + 脚本模板，`read_console` / `manage_editor` / `execute_csharp_script` 等 22 类命令全量可用（含正门跑局所需的编译验证、Play 控制、`EnterTestRun` 所在菜单执行 `execute_menu_item`）。
-4. **bridge 停 → 编辑器侧手动 Connect**（AI → Check Connections → Tuanjie AI Bridge → Connect；或编辑器内置 AI/Cowork 旁路）。
-5. **仍不行 → 换新会话**（agent-handoff 兜底，HH.248 路径保留）。
+3. **`mcp_unityMCP` 活 → 终端长连直调**（首选）：按 §二① Node keep-alive 模板，`read_console`/`refresh_unity`/`manage_*` 全量可用（编译验证、场景/资产操作）。**注意 keep-alive 长连是硬前提**（session 绑定 TCP 连接；`Invoke-WebRequest` 短连接会伪"Session not found"）。
+4. **bridge 活 → 终端直连接管**：按 §二② 协议 + 脚本模板，`read_console` / `manage_editor` / `execute_csharp_script` 等 22 类命令全量可用（含万能 C#、`EnterTestRun` 菜单执行 `execute_menu_item`）。
+5. **bridge 停 → 编辑器侧手动 Connect**（AI → Check Connections → Tuanjie AI Bridge → Connect；或编辑器内置 AI/Cowork 旁路）。
+6. **双通道都不行 → 换新会话**（agent-handoff 兜底，HH.248 路径保留）。
 
 ---
 
