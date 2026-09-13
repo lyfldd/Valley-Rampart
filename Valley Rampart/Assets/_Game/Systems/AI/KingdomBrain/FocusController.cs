@@ -100,6 +100,12 @@ public class FocusController
             && kingdom.GetResourceValue(ResourceType.Food)
                < brainCfg.grainReserveDaysFloor * population * brainCfg.grainConsumptionPerPop;
         if (grainAlarm) { SetFocus(kingdom, FocusGranary, day); return; }
+        //  ---- ㉗ 触发式断路器（HH.254/D700·A+ 施工批）----
+        //  位序＝**粮警之后、人口之前**（新序＝粮 → ㉗断路器 → 人口 → 被攻）。
+        //  ⚠️ 本插入属 **D322 红线序变更**，授权出处＝`HH.254` 任务书（**D700** 裁 A·用户拍板）；
+        //     语义＝「断供∧通道A∧③不可行」时即时采集（㉗）是**可立即消解**的紧迫需求，应当日强制派发、
+        //     不受评分竞争与 3 日防抖约束（D531① 心跳四成员统一断路器语义）；粮底线保命优先，故仍在其后。
+        if (TryGatherBreaker(kingdom, day)) return;
         //  底线第二级「保增长下限」（自造件，D322 决策①判修结构性锁死 + HH.29 仲裁精确化）：工人 < 门槛 → 强制⑥
         //  低扩张国⑥评分被性格轴乘入长期压制（need=0.6 恒定 0.6×expansion 0.25=0.15 败给 BuildHouse），人口卡死→
         //  Develop→Expand 不可达→剧本卡存活期。触发式不评分跳防抖，与粮底线同构。
@@ -175,5 +181,44 @@ public class FocusController
     {
         kingdom.focus = id;
         _focusSinceDay = day;
+    }
+
+    /// <summary>
+    /// HH.254/D700（A+ ㉗ 触发式断路器·常设底线级）：断供资源走**通道A 且 ③建产能不可行**时，
+    /// 即时采集（㉗）不再永久让位 ⇒ **当日强制 `SetFocus(27)`（跳防抖）**，由 `ExecuteFocus` 路由
+    /// `ExecuteWorldGatherFocus`（HH.253 已落接管分支·同源判据自动成立）落地派发。
+    /// 条件**全 AND**（判据全部同源复用，L-31 禁另造第二套通道/可行性判定）：
+    ///   ① `ResolveTriageResource` 有断供 r；② `TryMapWorldResource(r)`＝石/木（世界通道）；
+    ///   ③ `DecideTriage == BuildCapacity`（通道A）；④ `UtilityScorer.Feasible(kingdom, ③def) == false`；
+    ///   ⑤ 该 rt **本国在册源 = 0**（**one-shot 自限**：注册一次后本条件不再成立 ⇒ 天然退避，不振荡）；
+    ///   ⑥ `HasCandidate(kingdom.id, rt)`（领土内确有点·防白焦点）；
+    ///   ⑦ `RoomOf(kingdom.id) &gt; 0`（**登记容量**——`maxSourcesPerKingdom` 全 rt 共享，满额时 `Advertise` 返 0 ⇒ 白焦点）；
+    ///   ⑧ `workerCount &gt; 0`（无工人可派 ⇒ 登记亦是空转）。
+    /// 不成立 ⇒ **零副作用**（原底线序与评分路径逐位照旧）。
+    /// </summary>
+    private bool TryGatherBreaker(KingdomState kingdom, int day)
+    {
+        if (kingdom == null) return false;
+        if (!SituationHub.TryGet(kingdom.id, out var sit) || sit == null || sit.Economy == null) return false;
+        var dcfg = KingdomDiagnosisConfig.Load();
+        int r = KingdomBrain.ResolveTriageResource(sit.Economy, dcfg);                                  // ① 断供触发（单源）
+        if (r < 0) return false;
+        if (!WorldGatherRegistry.TryMapWorldResource((EcoResource)r, out var rt)) return false;         // ② 石/木
+        if (KingdomBrain.DecideTriage(sit.Economy, dcfg, (EcoResource)r) != TriageDecision.BuildCapacity) return false;   // ③ 通道A
+        var ucfg = UtilityActionConfig.LoadConfig();
+        var capDef = ucfg != null ? ucfg.Find(UtilityAction.BuildCapacity) : null;
+        if (!capDef.HasValue || UtilityScorer.Feasible(kingdom, capDef.Value)) return false;            // ④ ③不可行（同源）
+        if (kingdom.workerCount <= 0) return false;                                                    // ⑧ 有工人可派
+        var reg = WorldGatherRegistry.Instance;
+        if (reg == null) return false;
+        if (reg.CountOf(kingdom.id, rt) > 0) return false;                                             // ⑤ one-shot 自限
+        if (!WorldGatherRegistry.HasCandidate(kingdom.id, rt)) return false;                            // ⑥ 领土内有点
+        int room = reg.RoomOf(kingdom.id);
+        if (room <= 0) return false;                                                                   // ⑦ 登记余量>0
+        SetFocus(kingdom, (int)UtilityAction.GatherWorldResource, day);                                 // 触发：当日强制（跳防抖）
+        // 只读观测打点（HH.254 M8·三分径之一）：区别于「㉗接管」（接管分支入径）与「㉗采集下发」（落地；
+        // 其行内已带 候选M/在册K 读数，故此处不重复扫描计数）
+        Debug.Log($"[KingdomBrain] k{kingdom.id} ㉗断路器触发：{rt}（通道A∧③不可行∧无在册源｜room={room}｜worker={kingdom.workerCount}）");
+        return true;
     }
 }

@@ -36,6 +36,37 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
         return list != null ? list.Count : 0;
     }
 
+    /// <summary>HH.254/D700（A+ ㉗ 触发式断路器）只读查询：该国在册源中**指定资源**的条数（不立案·不改状态）。
+    /// 与 <see cref="Advertise"/> 共用同一匹配函数 <see cref="TryMatchPoint"/>（L-31 同源，禁另造匹配逻辑）。
+    /// 用途＝触发条件⑤「该 rt 本国无在册源」的 one-shot 自限判据。</summary>
+    public int CountOf(int kingdomId, ResourceType resource)
+    {
+        if (kingdomId <= 0) return 0;
+        Prune(kingdomId, out var list);
+        if (list == null || list.Count == 0) return 0;
+        var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
+        if (map == null || map.features == null) return 0;
+        int n = 0;
+        for (int i = 0; i < list.Count; i++)
+            if (TryMatchPoint(map, list[i].Cell, resource, out _, out _)) n++;
+        return n;
+    }
+
+    /// <summary>HH.254/D700（A+ ㉗ 触发式断路器）只读查询：该国**登记余量**（`maxSourcesPerKingdom` 是全 rt 共享上限）。
+    /// 与 <see cref="Advertise"/> 的 room 判据**同一公式**（<see cref="RoomOf"/>·L-31）；
+    /// 用途＝触发预检排除「条件成立但容量已满」（此时 `Advertise` 会返 (0,0) ⇒ 白焦点日）。</summary>
+    public int RoomOf(int kingdomId)
+    {
+        var cfg = WorldGatherConfig.Load();
+        if (cfg == null || !cfg.enabled) return 0;
+        Prune(kingdomId, out var list);
+        return RoomOf(list, cfg);
+    }
+
+    /// <summary>登记余量**单源**（`Advertise` 与触发预检共用；L-31 禁另造公式）。</summary>
+    private static int RoomOf(List<Entry> list, WorldGatherConfig cfg)
+        => Mathf.Max(0, cfg != null ? cfg.maxSourcesPerKingdom - (list != null ? list.Count : 0) : 0);
+
     /// <summary>
     /// 立案：为本国领土内的目标资源点创建并注册 `WorldGatherSource`（**选点归本层**）。
     /// 返回 (新立案数 registered, 立案前所见候选点数 candidates)；`candidates==0` ⇒ 本国领土内无可采目标
@@ -52,7 +83,7 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
         if (sched == null) return (0, 0);
 
         Prune(kingdomId, out var list);
-        int room = Mathf.Max(0, cfg.maxSourcesPerKingdom - list.Count);
+        int room = RoomOf(list, cfg);                           // HH.254/D700：单源（触发预检 <see cref="RoomOf(int)"/> 共用本公式·L-31）
         if (room <= 0) return (0, 0);                           // 已在册满额（完成后腾位）
 
         var ts = TerritorySystem.Instance;
