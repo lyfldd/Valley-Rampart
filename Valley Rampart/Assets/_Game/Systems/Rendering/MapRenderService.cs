@@ -35,9 +35,12 @@ public class MapRenderService : Singleton<MapRenderService>
     public static readonly Vector2 DefaultCellSize = new Vector2(1.28f, 0.64f);
 
     // ===== 占位 tile 缓存（特征物 / 地皮）=====
-    private readonly Dictionary<FeatureType, Tile> _featureTiles = new Dictionary<FeatureType, Tile>();
+    // G1（HH.264）：特征物缓存键改 string（artId / "ph:{FeatureType}"）——真图按 artId 分档（树＝4 气候×3 变体）
+    private readonly Dictionary<string, Tile> _featureTiles = new Dictionary<string, Tile>();
     // HH.239 T10：地皮缓存键改 string（artId / "ph:{FeatureType}"）——地皮真图按温度带分档，同一 FeatureType 可多图
     private readonly Dictionary<string, Tile> _groundTiles = new Dictionary<string, Tile>();
+    // G2（HH.264）：特征物缺真图一次性告警去重表（同 key 只报一次·L-05 禁刷屏）
+    private readonly HashSet<string> _featureWarned = new HashSet<string>();
     private static readonly Color _fallback = new Color(0.6f, 0.6f, 0.6f);
 
     // ===== 视域动态加载（chunk 化，2_10 落地附加）=====
@@ -204,7 +207,7 @@ public class MapRenderService : Singleton<MapRenderService>
     {
         var pos = new Vector3Int(x, y, 0);
         if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft, x, y));
-        if (featureTilemap != null) featureTilemap.SetTile(pos, FeatureTileOrNull(ft));
+        if (featureTilemap != null) featureTilemap.SetTile(pos, FeatureTileOrNull(ft, x, y));
     }
 
     /// <summary>chunk 坐标 → 索引（long 防 256² 大数）。</summary>
@@ -346,16 +349,60 @@ public class MapRenderService : Singleton<MapRenderService>
         return tile;
     }
 
-    /// <summary>特征物 tile（非地皮实体才返回，水/平原返回 null 铺空）。</summary>
-    private Tile FeatureTileOrNull(FeatureType ft)
+    /// <summary>特征物 tile（非地皮实体才返回，水/平原返回 null 铺空）。
+    /// G1（HH.264/D711）：先查 <c>SpriteRefTable</c> 的 <c>feat_*</c> 真图（照 T9 建筑接线模式·真图优先）；
+    /// G2：未命中 ⇒ 保持占位色块 ＋ **一次性告警**（L-05 禁刷屏）。</summary>
+    private Tile FeatureTileOrNull(FeatureType ft, int x, int y)
     {
         if (ft != FeatureType.Tree && ft != FeatureType.Mountain && ft != FeatureType.SnowMountain
             && ft != FeatureType.Mine && ft != FeatureType.OreVein
             && ft != FeatureType.StonePile && ft != FeatureType.WoodPile) return null;
-        if (_featureTiles.TryGetValue(ft, out var t)) return t;
-        t = CreateIsoTile(FeatureToFeatureColor(ft));
-        _featureTiles[ft] = t;
+
+        string artId = FeatureArtId(ft, x, y);
+        string cacheKey = artId ?? ("ph:" + ft);
+        if (_featureTiles.TryGetValue(cacheKey, out var t)) return t;
+
+        Sprite realArt = null;
+        if (artId != null)
+        {
+            var table = ValleyRampart.Rendering.SpriteRefTable.Instance;
+            if (table != null) table.TryGet(artId, out realArt);
+        }
+        if (realArt != null)
+        {
+            t = CreateSpriteTile(realArt);
+        }
+        else
+        {
+            WarnMissingFeature(ft, artId);
+            t = CreateIsoTile(FeatureToFeatureColor(ft));
+        }
+        _featureTiles[cacheKey] = t;
         return t;
+    }
+
+    /// <summary>特征物 artId（G1·D37 唯一源）：树＝温度带×3 变体（复用 H2 格坐标确定性哈希·单一源在
+    /// <see cref="BuildingVisual.TreeArtId"/>）；矿洞/矿脉/石堆/木堆＝单键；山/雪山**映射表 §十.2 未定义
+    /// `feat_*` 素材** ⇒ 返回 null（走占位并列报·G3 禁静默）。</summary>
+    private static string FeatureArtId(FeatureType ft, int x, int y)
+    {
+        switch (ft)
+        {
+            case FeatureType.Tree:      return BuildingVisual.TreeArtId(new GridCoord(x, y));
+            case FeatureType.Mine:      return "feat_mine";
+            case FeatureType.OreVein:   return "feat_orevein";
+            case FeatureType.StonePile: return "feat_stone_pile";
+            case FeatureType.WoodPile:  return "feat_deadwood";
+            default:                    return null;   // Mountain / SnowMountain（无素材·列报）
+        }
+    }
+
+    /// <summary>G2：特征物缺真图一次性告警（同 key 只报一次·L-05）。</summary>
+    private void WarnMissingFeature(FeatureType ft, string artId)
+    {
+        string key = artId ?? ("ph:" + ft);
+        if (_featureWarned.Add(key))
+            Debug.LogWarning($"[MapRenderService] 特征物无真图：ft={ft} artId={artId ?? "(未定义)"} ⇒ 保持占位色块");
     }
 
     private static Tile CreateIsoTile(Color color)
