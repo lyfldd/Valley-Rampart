@@ -221,44 +221,178 @@ public static class Valley_HH268_MapProbe
                 rGround.mode == mG && rFeat.mode == mF && rGround.sortingOrder == oG && rFeat.sortingOrder == oF);
         }
 
-        _log.AppendLine("── G. ③运行中实例计数（特征层 feat_mine 实名 tile vs 已加载区 Mine 占位块）");
+        _log.AppendLine("── G. ③运行中实例计数（每个 2×2 占位块应恰 1 张 feat_mine）");
         if (gFeat != null && map != null)
         {
-            int featMineTiles = 0, otherFeatTiles = 0;
             var cb = gFeat.cellBounds;
+            int mineTiles = 0, otherTiles = 0;
             for (int y = cb.yMin; y < cb.yMax; y++)
                 for (int x = cb.xMin; x < cb.xMax; x++)
                 {
                     var sp = gFeat.GetSprite(new Vector3Int(x, y, 0));
                     if (sp == null) continue;
-                    if (sp.name.StartsWith("feat_mine")) featMineTiles++; else otherFeatTiles++;
+                    if (sp.name.StartsWith("feat_mine")) mineTiles++; else otherTiles++;
                 }
-            int loadedMineCells = 0, loadedMineBlocks = 0;
-            var used2 = new HashSet<long>();
+
+            var consumed = new HashSet<long>();
+            int ok1 = 0, multi = 0, zero = 0;
             for (int y = cb.yMin; y < cb.yMax; y++)
                 for (int x = cb.xMin; x < cb.xMax; x++)
                 {
-                    if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+                    if (x < 0 || y < 0 || x + 1 >= map.width || y + 1 >= map.height) continue;
                     if (map.features[y * map.width + x] != FeatureType.Mine) continue;
-                    loadedMineCells++;
                     long k = (long)x * 100000 + y;
-                    if (used2.Contains(k)) continue;
-                    bool full = x + 1 < map.width && y + 1 < map.height
-                        && map.features[y * map.width + x + 1] == FeatureType.Mine
-                        && map.features[(y + 1) * map.width + x] == FeatureType.Mine
-                        && map.features[(y + 1) * map.width + x + 1] == FeatureType.Mine;
+                    if (consumed.Contains(k)) continue;
+                    bool full = map.features[y * map.width + x + 1] == FeatureType.Mine
+                             && map.features[(y + 1) * map.width + x] == FeatureType.Mine
+                             && map.features[(y + 1) * map.width + x + 1] == FeatureType.Mine;
                     if (!full) continue;
-                    used2.Add((long)x * 100000 + y); used2.Add((long)(x + 1) * 100000 + y);
-                    used2.Add((long)x * 100000 + y + 1); used2.Add((long)(x + 1) * 100000 + y + 1);
-                    loadedMineBlocks++;
+                    consumed.Add(k); consumed.Add((long)(x + 1) * 100000 + y);
+                    consumed.Add((long)x * 100000 + y + 1); consumed.Add((long)(x + 1) * 100000 + y + 1);
+                    // 「已加载」判据＝该格地皮 tile 在场（地皮全覆盖 ⇒ 等价于该格已铺格）；四格全在场才算一个完整可比块
+                    if (gGround == null || gGround.GetTile(new Vector3Int(x, y, 0)) == null
+                        || gGround.GetTile(new Vector3Int(x + 1, y, 0)) == null
+                        || gGround.GetTile(new Vector3Int(x, y + 1, 0)) == null
+                        || gGround.GetTile(new Vector3Int(x + 1, y + 1, 0)) == null) continue;
+                    int cnt = 0;
+                    for (int dy = 0; dy < 2; dy++)
+                        for (int dx = 0; dx < 2; dx++)
+                        {
+                            var sp = gFeat.GetSprite(new Vector3Int(x + dx, y + dy, 0));
+                            if (sp != null && sp.name.StartsWith("feat_mine")) cnt++;
+                        }
+                    if (cnt == 1) ok1++; else if (cnt > 1) multi++; else zero++;
                 }
-            _log.AppendLine("   特征层已加载区：feat_mine tile=" + featMineTiles + " ／其他特征 tile=" + otherFeatTiles
-                + "；地图同区 Mine 格=" + loadedMineCells + " 占位块=" + loadedMineBlocks);
-            Log("③ 运行中计数：feat_mine tile=" + featMineTiles + " ⇒ 应 == 占位块数 " + loadedMineBlocks + "（逐格旧法=" + loadedMineCells + "）",
-                loadedMineBlocks > 0 && featMineTiles == loadedMineBlocks);
+            int blocks = ok1 + multi + zero;
+            _log.AppendLine("   特征层已加载区：feat_mine tile=" + mineTiles + " ／其他特征 tile=" + otherTiles
+                + "；四格全加载的完整 2×2 占位块=" + blocks + " ⇒ 恰 1 张=" + ok1 + " ／多张=" + multi + " ／零张=" + zero
+                + "（tile 与块数之差=" + (mineTiles - ok1) + "，为跨加载边界的块）");
+            Log("③ 运行中实例计数：**四格全加载的完整块 " + blocks + " 个 ⇒ 恰 1 张=" + ok1 + "／多张=" + multi + "／零张=" + zero
+                + "**（逐格旧法应为 " + (blocks * 4) + " 张）；feat_mine tile 总数=" + mineTiles,
+                blocks > 0 && multi == 0 && zero == 0);
         }
 
+        _log.AppendLine("── H. ⑤ NPC 头顶语句字号实测（世界尺寸）");
+        yield return MeasureSpeech();
+
+        _log.AppendLine("── I. ③⑤ 近景截图（运行中临时改相机，测毕还原）");
+        yield return Closeup("mine", true);
+        yield return Closeup("speech", false);
+
         Flush();
+    }
+
+    /// <summary>近景截图：临时关掉 CameraRig、把相机对准「最近的 Mine 占位块中心」或「最近的单位头顶气泡」，拍完还原。</summary>
+    static IEnumerator Closeup(string what, bool toMine)
+    {
+        var cam = Camera.main;
+        if (cam == null) { Log("近景截图：无 Main Camera", false); yield break; }
+        var rig = Object.FindObjectOfType<CameraRig>();
+        bool rigWas = rig != null && rig.enabled;
+
+        Vector3 target; float ortho;
+        if (toMine)
+        {
+            var map = WorldManager.Instance.ActiveMap;
+            var tms = Object.FindObjectsOfType<Tilemap>();
+            var gG = FindTm(tms, "Tilemap_Ground");
+            Vector3 camPos = cam.transform.position;
+            float bestD = float.MaxValue; bool found = false; Vector3 bestP = camPos;
+            if (map != null && gG != null)
+            {
+                var used = new HashSet<long>();
+                for (int y = 0; y < map.height; y++)
+                    for (int x = 0; x < map.width; x++)
+                    {
+                        if (map.features[y * map.width + x] != FeatureType.Mine) continue;
+                        long k = (long)x * 100000 + y;
+                        if (used.Contains(k) || x + 1 >= map.width || y + 1 >= map.height) continue;
+                        if (map.features[y * map.width + x + 1] != FeatureType.Mine
+                            || map.features[(y + 1) * map.width + x] != FeatureType.Mine
+                            || map.features[(y + 1) * map.width + x + 1] != FeatureType.Mine) continue;
+                        used.Add(k); used.Add((long)(x + 1) * 100000 + y);
+                        used.Add((long)x * 100000 + y + 1); used.Add((long)(x + 1) * 100000 + y + 1);
+                        if (gG.GetTile(new Vector3Int(x, y, 0)) == null) continue;
+                        Vector2 wp = MapRenderService.GridToIso(new GridCoord(x, y)) + new Vector2(0f, 0.32f);
+                        float d = (new Vector3(wp.x, wp.y, 0f) - camPos).sqrMagnitude;
+                        if (d < bestD) { bestD = d; bestP = new Vector3(wp.x, wp.y, camPos.z); found = true; }
+                    }
+            }
+            if (!found) { Log("近景截图(" + what + ")：未找到已加载 Mine 块", false); yield break; }
+            target = bestP; ortho = 2.0f;
+        }
+        else
+        {
+            Vector3 cc = cam.transform.position;
+            UnitController best = null; float bd = float.MaxValue;
+            foreach (var u in Object.FindObjectsOfType<UnitController>())
+            {
+                if (u == null || u.transform == null) continue;
+                float d = (u.transform.position - cc).sqrMagnitude;
+                if (d < bd) { bd = d; best = u; }
+            }
+            if (best == null) { Log("近景截图(" + what + ")：未找到单位", false); yield break; }
+            OverheadSpeech.Show(best.transform, "村民长名A0");
+            OverheadSpeech.Show(best.transform, "村民长名A1");
+            target = best.transform.position + new Vector3(0f, 0.9f, 0f);
+            ortho = 2.0f;
+        }
+
+        float orthoWas = cam.orthographicSize;
+        if (rig != null) rig.enabled = false;
+        cam.transform.position = new Vector3(target.x, target.y, cam.transform.position.z);
+        cam.orthographicSize = ortho;
+
+        // ③ 对照标记：在「占位块中心」画小白菱形（sortingOrder 200）⇒ 截图里看 merge sprite 锚点是否与之重合
+        GameObject mark = null;
+        if (toMine)
+        {
+            mark = new GameObject("hh268_centerMark");
+            mark.transform.position = new Vector3(target.x, target.y, 0f);
+            mark.transform.localScale = new Vector3(0.18f, 0.18f, 1f);
+            var sr = mark.AddComponent<SpriteRenderer>();
+            sr.sprite = MapRenderService.CreateIsoDiamondSprite(new Color(1f, 0.1f, 0.1f, 1f));
+            sr.sortingOrder = 200;
+        }
+        yield return null; yield return null;
+        yield return Shot("Logs/hh268_" + _tag + "_closeup_" + what + ".png");
+        if (mark != null) Object.Destroy(mark);
+        cam.orthographicSize = orthoWas;
+        if (rig != null) rig.enabled = rigWas;
+        yield return null;
+    }
+
+    /// <summary>⑤：把当前 production 字号的气泡挂到「离相机最近」的单位上，读 MeshRenderer 世界包围盒（供"可读且不遮地图"取值）。</summary>
+    static IEnumerator MeasureSpeech()
+    {
+        var cam = Camera.main;
+        Vector3 cc = cam != null ? cam.transform.position : Vector3.zero;
+        UnitController best = null; float bestD = float.MaxValue;
+        foreach (var u in Object.FindObjectsOfType<UnitController>())
+        {
+            if (u == null || u.transform == null) continue;
+            float d = (u.transform.position - cc).sqrMagnitude;
+            if (d < bestD) { bestD = d; best = u; }
+        }
+        if (best == null) { Log("⑤ 未找到单位，无法实测字号", false); yield break; }
+        var host = best.transform;
+        for (int i = 0; i < 3; i++) OverheadSpeech.Show(host, "村民长名A" + i);
+        yield return null; yield return null;
+
+        int found = 0; var detail = new StringBuilder();
+        foreach (var t in Object.FindObjectsOfType<TextMesh>())
+        {
+            if (t == null || t.gameObject.name != "OverheadSpeech") continue;
+            var mr = t.GetComponent<MeshRenderer>();
+            Vector3 sz = mr != null ? mr.bounds.size : Vector3.zero;
+            found++;
+            if (detail.Length < 260)
+                detail.Append(" [cs=").Append(t.characterSize).Append(" fs=").Append(t.fontSize)
+                      .Append(" worldH=").Append(sz.y.ToString("0.####")).Append(" worldW=").Append(sz.x.ToString("0.####")).Append("]");
+        }
+        Info("   挂点单位=" + best.name + "（距相机 " + Mathf.Sqrt(bestD).ToString("0.##") + "）；气泡 worldH/detail=" + detail);
+        Info("   参照：格高 0.64 世界；相机 ortho=8.64（屏高 17.28 世界）");
+        Log("⑤ 头顶气泡实测在场 " + found + " 个（缩小后应 ≈0.1~0.35 世界高：可读且不遮图）", found > 0);
     }
 
     static int C(Dictionary<FeatureType, int> d, FeatureType f) { int v; return d.TryGetValue(f, out v) ? v : 0; }

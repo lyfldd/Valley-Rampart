@@ -43,6 +43,29 @@ public class MapRenderService : Singleton<MapRenderService>
     private readonly HashSet<string> _featureWarned = new HashSet<string>();
     private static readonly Color _fallback = new Color(0.6f, 0.6f, 0.6f);
 
+    // ===== ③（HH.268）：多格占位特征「按占位只渲一次」=====
+    // 合并 tile 缓存（键 = artId + "@{side}x{side}"）——带格位偏移，故与逐格 tile 分表
+    private readonly Dictionary<string, TileBase> _mergedTiles = new Dictionary<string, TileBase>();
+    // 块锚记忆表（键 = x<<20|y；1=锚 0=非锚）。每次铺格入口清空（防运行时 features 变更后失效）
+    private readonly Dictionary<long, int> _blockAnchorMemo = new Dictionary<long, int>();
+
+    /// <summary>③ 多格占位特征：带格位偏移的 tile（把 sprite 锚点从「格中心」平移到「占位块中心」）。
+    /// 偏移以**格**为单位（side=2 ⇒ (0.5,0.5) 格 ⇒ 等轴下世界 +（0, cellH/2）= +0.32）。</summary>
+    private sealed class OffsetTile : TileBase
+    {
+        public Sprite sprite;
+        public Vector3 cellOffset;
+
+        public override void GetTileData(Vector3Int position, ITilemap tilemap, ref TileData tileData)
+        {
+            tileData.sprite = sprite;
+            tileData.color = Color.white;
+            tileData.transform = Matrix4x4.Translate(cellOffset);
+            tileData.flags = TileFlags.None;                       // 不锁 transform（LockTransform 会吞掉偏移）
+            tileData.colliderType = Tile.ColliderType.None;
+        }
+    }
+
     // ===== 视域动态加载（chunk 化，2_10 落地附加）=====
     [Header("视域动态加载（chunk 化）")]
     [Tooltip("chunk 边长（格数）。地图按此切块，摄像机滑入时才铺对应 chunk，初装只铺主城锚点周边强加载+视域")]
@@ -181,8 +204,31 @@ public class MapRenderService : Singleton<MapRenderService>
         var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
         if (map == null || map.features == null) return;
         if (cell.x < 0 || cell.y < 0 || cell.x >= map.width || cell.y >= map.height) return;
+        _blockAnchorMemo.Clear();    // ③：features 可能已变（采集/刷新）⇒ 块锚分解重算
         SetCell(cell.x, cell.y, map.features[cell.y * map.width + cell.x]);
+        // ③：多格占位特征的整块随之刷新（锚格变动会影响同块 4 格的渲染）
+        RefreshMultiCellNeighborhood(cell.x, cell.y, map);
     }
+
+    /// <summary>③ 多格占位特征：重铺 (x,y) 所在占位块的全部格（保证「只渲一次」在增量刷新下仍自洽）。</summary>
+    private void RefreshMultiCellNeighborhood(int x, int y, MapData map)
+    {
+        foreach (var ft in MultiCellFeatures)
+        {
+            int side = FootprintSide(ft);
+            for (int oy = -(side - 1); oy <= 0; oy++)
+                for (int ox = -(side - 1); ox <= 0; ox++)
+                {
+                    int nx = x + ox, ny = y + oy;
+                    if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) continue;
+                    if (nx == x && ny == y) continue;
+                    SetCell(nx, ny, map.features[ny * map.width + nx]);
+                }
+        }
+    }
+
+    /// <summary>③ 需按占位合并渲染的特征型清单（当前仅 `Mine`；`NaturalBuilding.w/h` 面留待有素材时扩）。</summary>
+    private static readonly FeatureType[] MultiCellFeatures = new FeatureType[] { FeatureType.Mine };
 
     /// <summary>重铺指定区域的全部格（外部批量刷新入口，如建筑 footprint 变化）。</summary>
     public void RefreshRegion(int x0, int y0, int w, int h)
@@ -202,12 +248,108 @@ public class MapRenderService : Singleton<MapRenderService>
         UpdateViewport();
     }
 
-    /// <summary>单格铺格（Ground+Feature）。占位 tile 缓存复用。</summary>
+    /// <summary>单格铺格（Ground+Feature）。占位 tile 缓存复用。
+    /// ③（HH.268）：多格占位特征（≥2×2）**整块取一张图、按占位中心只渲一次**（禁逐格重复贴）。</summary>
     private void SetCell(int x, int y, FeatureType ft)
     {
         var pos = new Vector3Int(x, y, 0);
         if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft, x, y));
-        if (featureTilemap != null) featureTilemap.SetTile(pos, FeatureTileOrNull(ft, x, y));
+        if (featureTilemap == null) return;
+
+        if (IsMultiCellFeature(ft))
+        {
+            int side = FootprintSide(ft);
+            if (IsBlockAnchor(x, y, ft, side))
+            {
+                var merged = MergedFeatureTile(ft, x, y, side);
+                if (merged != null) { featureTilemap.SetTile(pos, merged); return; }
+                // 缺真图 ⇒ 落回逐格占位（保缺图回退链语义）
+            }
+            else if (CoveredByBlockAnchor(x, y, ft, side))
+            {
+                featureTilemap.SetTile(pos, null);      // 同块非锚格：不重复贴
+                return;
+            }
+            // 非完整占位块（runtime features 变更等）⇒ 逐格回退，避免空洞
+        }
+        featureTilemap.SetTile(pos, FeatureTileOrNull(ft, x, y));
+    }
+
+    /// <summary>③ 该特征型是否为「多格占位特征」（需按占位合并渲染）。</summary>
+    private static bool IsMultiCellFeature(FeatureType ft) { return ft == FeatureType.Mine; }
+
+    /// <summary>③ 该型的占位边长（格）。来源＝单一源 <see cref="MapGenRules.MineClusterSide"/>。</summary>
+    private static int FootprintSide(FeatureType ft)
+    {
+        return ft == FeatureType.Mine ? MapGenRules.MineClusterSide : 1;
+    }
+
+    /// <summary>③ 块锚判据（**读序贪婪分解的闭式**）：(x,y) 是锚 ⇔ side×side 全为该特征
+    /// **且未被更早（读序：y升x升）的锚覆盖**；可能覆盖它的更早锚只可能是左上 (side-1)² 邻域内的块锚。
+    /// 与逐格旧法的差异＝同块只在**锚格**渲一张（`Mine` 2×2 ⇒ 4 张 → 1 张）。</summary>
+    private bool IsBlockAnchor(int x, int y, FeatureType ft, int side)
+    {
+        var map = _map;
+        if (map == null || map.features == null) return false;
+        if (x < 0 || y < 0 || x + side > map.width || y + side > map.height) return false;
+
+        long key = ((long)x << 20) | (uint)y;
+        int memo;
+        if (_blockAnchorMemo.TryGetValue(key, out memo)) return memo != 0;
+
+        bool anchor = true;
+        for (int dy = 0; dy < side && anchor; dy++)
+            for (int dx = 0; dx < side; dx++)
+                if (map.features[(y + dy) * map.width + (x + dx)] != ft) { anchor = false; break; }
+
+        if (anchor)
+        {
+            for (int oy = -(side - 1); oy <= 0 && anchor; oy++)
+                for (int ox = -(side - 1); ox <= 0; ox++)
+                {
+                    if (ox == 0 && oy == 0) continue;
+                    if (IsBlockAnchor(x + ox, y + oy, ft, side)) { anchor = false; break; }
+                }
+        }
+        _blockAnchorMemo[key] = anchor ? 1 : 0;
+        return anchor;
+    }
+
+    /// <summary>③ (x,y) 是否已被某个块锚覆盖（含自身；调用前已排除自身为锚的情形）。</summary>
+    private bool CoveredByBlockAnchor(int x, int y, FeatureType ft, int side)
+    {
+        for (int oy = -(side - 1); oy <= 0; oy++)
+            for (int ox = -(side - 1); ox <= 0; ox++)
+                if (IsBlockAnchor(x + ox, y + oy, ft, side)) return true;
+        return false;
+    }
+
+    /// <summary>③ 多格占位特征的合并 tile：真图 ＋ 格位偏移把 sprite 锚点落到**占位块中心**。
+    /// ⚠️ 偏移量须**扣掉 tileAnchor**：sprite 锚点本就落在 `CellToWorld(格 + tileAnchor)`
+    /// （实测 `GetCellCenterWorld(0,0,0)=(0,0.32)`），故目标偏移（格）＝ `(side-1)/2 − tileAnchor`。
+    /// 当前 tileAnchor=(0.5,0.5) ⇒ offset=(0,0)；若 ① 把 tileAnchor 归一为 (0,0) ⇒ offset=(0.5,0.5)。
+    /// 缺真图 ⇒ 返回 null（调用方落回逐格占位）。</summary>
+    private TileBase MergedFeatureTile(FeatureType ft, int x, int y, int side)
+    {
+        string artId = FeatureArtId(ft, x, y);
+        if (artId == null) { WarnMissingFeature(ft, artId); return null; }
+
+        Vector3 anchor = featureTilemap != null ? featureTilemap.tileAnchor : new Vector3(0.5f, 0.5f, 0f);
+        Vector3 offset = new Vector3((side - 1) * 0.5f - anchor.x, (side - 1) * 0.5f - anchor.y, 0f);
+        string cacheKey = artId + "@" + side + "x" + side + "|a" + anchor.x + "," + anchor.y;
+        TileBase cached;
+        if (_mergedTiles.TryGetValue(cacheKey, out cached)) return cached;
+
+        Sprite realArt = null;
+        var table = ValleyRampart.Rendering.SpriteRefTable.Instance;
+        if (table != null) table.TryGet(artId, out realArt);
+        if (realArt == null) { WarnMissingFeature(ft, artId); return null; }
+
+        var tile = ScriptableObject.CreateInstance<OffsetTile>();
+        tile.sprite = realArt;
+        tile.cellOffset = offset;
+        _mergedTiles[cacheKey] = tile;
+        return tile;
     }
 
     /// <summary>chunk 坐标 → 索引（long 防 256² 大数）。</summary>
@@ -283,6 +425,7 @@ public class MapRenderService : Singleton<MapRenderService>
 
     public void ClearAllTiles()
     {
+        _blockAnchorMemo.Clear();    // ③：全量重铺 ⇒ 块锚分解失效，须重算
         if (groundTilemap != null) groundTilemap.ClearAllTiles();
         if (featureTilemap != null) featureTilemap.ClearAllTiles();
     }

@@ -108,7 +108,13 @@ public static class OverheadSpeech
 
         var tm = go.AddComponent<TextMesh>();
         tm.text = text;
-        tm.characterSize = 0.12f;
+        // HH.268 ⑤：NPC 头顶语句字号过大 ⇒ 实测定档。
+        // 实测（`Logs/hh268_map_after35.log` §H·同机同相机 ortho=8.64＝屏高 17.28 世界）：
+        //   characterSize=0.12  ⇒ 世界高 ≈0.644（≈40px@1080p，用户实测"过大"）
+        //   characterSize=0.012 ⇒ 世界高 ≈0.064（≈4px，**不可读**）⇒ 用户提的"缩小十倍"实测超调
+        // ⇒ 取 **0.04**（÷3）：世界高 ≈0.215（≈13px@1080p、≈1/3 格高）＝可读且不遮地图。
+        // 只缩 characterSize（世界尺寸），**保留 fontSize=48**（不降字形分辨率 ⇒ 缩小后仍清晰）。
+        tm.characterSize = 0.04f;
         tm.fontSize = 48;
         tm.anchor = TextAnchor.MiddleCenter;
         tm.alignment = TextAlignment.Center;
