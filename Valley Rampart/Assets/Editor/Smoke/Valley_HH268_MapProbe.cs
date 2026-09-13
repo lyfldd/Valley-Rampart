@@ -22,7 +22,9 @@ using UnityEngine.Tilemaps;
 ///   F 候选 (e) 代价实测：运行中改 `TilemapRenderer.mode`（Chunk↔Individual）与 ④ 的 order 复位，
 ///     读 drawCalls/batches 差值；**只改运行时对象、不回写资产**，测毕还原。
 ///   G ③运行中实例计数：特征层中 `feat_mine` 实名 tile 数 vs 已加载区 Mine 占位块数（应 1:1）
-/// 证据：`Logs/hh268_map_{tag}.log` ＋ `Logs/hh268_{tag}_overview.png`。
+///   J ④ 层序双证：J1 结构（Territory 层序严格 < Feature/单位/建筑 ⇒ D443 探针 8）＋ J2 视觉 A/B
+///     （染色铺红菱：seqA 现层序 vs seqB 反证 order=50 压实体）＋ J3 正向（单位置于特征块正前方 ⇒ 可见）
+/// 证据：`Logs/hh268_map_{tag}.log` ＋ `Logs/hh268_{tag}_*.png`。
 /// </summary>
 public static class Valley_HH268_MapProbe
 {
@@ -96,7 +98,7 @@ public static class Valley_HH268_MapProbe
     static IEnumerator Snapshot()
     {
         var map = WorldManager.Instance.ActiveMap;
-        var tms = Object.FindObjectsOfType<Tilemap>();
+        var tms = Object.FindObjectsOfType<Tilemap>(true);   // includeInactive：近景档 Territory 层整体 SetActive(false)（D449/D451）
         var gGround = FindTm(tms, "Tilemap_Ground");
         var gFeat = FindTm(tms, "Tilemap_Feature");
         var rGround = gGround != null ? gGround.GetComponent<TilemapRenderer>() : null;
@@ -114,26 +116,47 @@ public static class Valley_HH268_MapProbe
                 + " sortOrder=" + (r != null ? r.sortOrder.ToString() : "-")
                 + " layer='" + (r != null ? r.sortingLayerName : "-") + "'");
         }
+
+        // A2（HH.268 落地判据）：三 Tilemap 锚点/层序 **运行中实名读数** + 断言（L-29：不靠文本 grep）
+        var tTerr = FindTm(tms, "Tilemap_Territory");
+        bool terrWasActive = tTerr != null && tTerr.gameObject.activeSelf;
+        if (tTerr != null && !terrWasActive) tTerr.gameObject.SetActive(true);   // 量测前临时激活（测毕还原；同帧内同步读数）
+        Vector3 ancG = gGround != null ? gGround.tileAnchor : new Vector3(-9f, -9f, -9f);
+        Vector3 ancF = gFeat != null ? gFeat.tileAnchor : new Vector3(-9f, -9f, -9f);
+        Vector3 ancT = tTerr != null ? tTerr.tileAnchor : new Vector3(-9f, -9f, -9f);
+        int ordG = OrderOf(gGround), ordF = OrderOf(gFeat), ordT = OrderOf(tTerr);
+        var rTerr = tTerr != null ? tTerr.GetComponent<TilemapRenderer>() : null;
+        _log.AppendLine("   [①] tileAnchor      Ground=" + ancG + "  Feature=" + ancF + "  Territory=" + ancT);
+        _log.AppendLine("   [④-1′] sortingOrder Ground=" + ordG + "  Territory=" + ordT + "  Feature=" + ordF);
+        Log("① 三处 tileAnchor 同批归一 (0,0,0)",
+            ancG == Vector3.zero && ancF == Vector3.zero && ancT == Vector3.zero);
+        Log("④-1′ 层序实读 = Ground −1 ｜ Territory 0 ｜ Feature 1",
+            ordG == -1 && ordT == 0 && ordF == 1);
+
         foreach (var c in Object.FindObjectsOfType<Camera>())
             Info("   Camera '" + c.name + "' ortho=" + c.orthographic + " size=" + c.orthographicSize
                  + " sortMode=" + c.transparencySortMode + " sortAxis=" + c.transparencySortAxis);
 
-        _log.AppendLine("── B. ①判据：GetCellCenterWorld − GridToIso（应 →0；基线 = (0,+0.32)）");
+        _log.AppendLine("── B. ①判据：三 Tilemap GetCellCenterWorld − GridToIso（应 →0；基线 = (0,+0.32)）");
+        var probeCells = new Vector3Int[] { new Vector3Int(0, 0, 0), new Vector3Int(1, 0, 0), new Vector3Int(0, 1, 0), new Vector3Int(3, 5, 0) };
         double maxAbs = 0;
-        if (gGround != null)
+        foreach (var tmx in new Tilemap[] { gGround, gFeat, tTerr })
         {
-            var probe = new Vector3Int[] { new Vector3Int(0, 0, 0), new Vector3Int(1, 0, 0), new Vector3Int(0, 1, 0), new Vector3Int(3, 5, 0) };
-            foreach (var c in probe)
+            if (tmx == null) { Log("① 缺 Tilemap（null）", false); continue; }
+            double mOne = 0;
+            foreach (var c in probeCells)
             {
-                Vector3 cc = gGround.GetCellCenterWorld(c);
+                Vector3 cc = tmx.GetCellCenterWorld(c);
                 Vector2 iso = MapRenderService.GridToIso(new GridCoord(c.x, c.y));
                 double dx = cc.x - iso.x, dy = cc.y - iso.y;
-                maxAbs = System.Math.Max(maxAbs, System.Math.Max(System.Math.Abs(dx), System.Math.Abs(dy)));
-                _log.AppendLine("   cell " + c + " tileCenter=" + cc.ToString("0.####") + " iso=" + iso.ToString("0.####")
-                    + " delta=(" + dx.ToString("0.####") + "," + dy.ToString("0.####") + ")");
+                mOne = System.Math.Max(mOne, System.Math.Max(System.Math.Abs(dx), System.Math.Abs(dy)));
+                _log.AppendLine("   " + tmx.name + " cell " + c + " tileCenter=" + cc.ToString("0.####")
+                    + " iso=" + iso.ToString("0.####") + " delta=(" + dx.ToString("0.####") + "," + dy.ToString("0.####") + ")");
             }
+            maxAbs = System.Math.Max(maxAbs, mOne);
+            Log("① " + tmx.name + " 锚点偏差 maxAbs=" + mOne.ToString("0.####") + " 世界单位（判据 →0 / ≤1px=0.01）", mOne <= 0.0100001);
         }
-        Log("① 锚点偏差 maxAbs=" + maxAbs.ToString("0.####") + " 世界单位（判据 →0 / ≤1px=0.01）", maxAbs <= 0.0100001);
+        if (tTerr != null && !terrWasActive) tTerr.gameObject.SetActive(false);   // 还原近景档「整层隐藏」
 
         _log.AppendLine("── C. M1 现值快照（几何/导入设置）");
         string[] geo = new string[] { "Assets/_Game/Art/Ground/ground_temperate.png",
@@ -206,19 +229,25 @@ public static class Valley_HH268_MapProbe
             int bothInd = DrawCalls();
             rGround.mode = mG; rFeat.mode = mF;
             yield return null; yield return null;
-            rFeat.sortingOrder = 1;                       // ④：特征 10 → 1（与单位/建筑同序）
+            // ④ 层序「前后」对照：临时回旧链（Ground 0 ｜ Territory 5 ｜ Feature 10），测毕还原为落地链（−1／0／1）
+            int oT = OrderOf(tTerr);
+            rGround.sortingOrder = 0;
+            if (rTerr != null) rTerr.sortingOrder = 5;
+            rFeat.sortingOrder = 10;
             yield return null; yield return null; yield return null;
-            int featOrder1 = DrawCalls();
-            rFeat.sortingOrder = oF;
+            int dcOldChain = DrawCalls();
+            rGround.sortingOrder = oG; rFeat.sortingOrder = oF;
+            if (rTerr != null) rTerr.sortingOrder = oT;
             yield return null; yield return null; yield return null;
             int restored = DrawCalls();
 
             Info("   drawCalls  Chunk(基线)=" + baseDc + "  Feature=Individual=" + featInd + "  两层=Individual=" + bothInd
-                 + "  Feature order 10→1=" + featOrder1 + "  还原=" + restored);
-            Log("F 候选 (e) 代价：Individual 代价实测在场（Δ_feat=" + (featInd - baseDc) + " / Δ_both=" + (bothInd - baseDc)
-                + "）；④ order 复位 Δ=" + (featOrder1 - baseDc), true);
-            Log("F 测毕已还原（mode=" + rGround.mode + "/" + rFeat.mode + " order=" + rGround.sortingOrder + "/" + rFeat.sortingOrder + "）",
-                rGround.mode == mG && rFeat.mode == mF && rGround.sortingOrder == oG && rFeat.sortingOrder == oF);
+                 + "  旧链(0/5/10)=" + dcOldChain + "  还原落地链(−1/0/1)=" + restored);
+            Log("F 候选 (e) 代价（② 销项留痕）：Individual 代价实测在场（Δ_feat=" + (featInd - baseDc) + " / Δ_both=" + (bothInd - baseDc)
+                + "）", featInd > baseDc);
+            Log("F ④-1′ 层序前后 Δ=" + (restored - dcOldChain) + "（旧链 " + dcOldChain + " ⇒ 落地链 " + restored + "）",
+                rGround.mode == mG && rFeat.mode == mF && rGround.sortingOrder == oG && rFeat.sortingOrder == oF
+                && OrderOf(tTerr) == oT);
         }
 
         _log.AppendLine("── G. ③运行中实例计数（每个 2×2 占位块应恰 1 张 feat_mine）");
@@ -278,6 +307,9 @@ public static class Valley_HH268_MapProbe
         _log.AppendLine("── I. ③⑤ 近景截图（运行中临时改相机，测毕还原）");
         yield return Closeup("mine", true);
         yield return Closeup("speech", false);
+
+        _log.AppendLine("── J. 层序双证（D443 探针8 负探针 ＋ 正向：单位在特征块正前方可见）");
+        yield return LayerProbe(gGround, gFeat, tTerr);
 
         Flush();
     }
@@ -393,6 +425,128 @@ public static class Valley_HH268_MapProbe
         Info("   挂点单位=" + best.name + "（距相机 " + Mathf.Sqrt(bestD).ToString("0.##") + "）；气泡 worldH/detail=" + detail);
         Info("   参照：格高 0.64 世界；相机 ortho=8.64（屏高 17.28 世界）");
         Log("⑤ 头顶气泡实测在场 " + found + " 个（缩小后应 ≈0.1~0.35 世界高：可读且不遮图）", found > 0);
+    }
+
+    /// <summary>HH.268 ④ 层序双证：
+    /// J1 结构（运行中实名读数）：Territory 层序严格低于 Feature/单位/建筑 ⇒ D443 探针 8（染色不盖实体）；
+    /// J2 视觉 A/B：在 Mine 块周围临时铺红菱染色片 ⇒ seqA（现层序·染色在实体之下）vs seqB（反证·染色 order=50 压实体），
+    ///    两张对照图证明层序真的决定该处像素；测毕清格还原（含被覆盖的原 tile）。
+    /// J3 正向：把最近单位移到该 Mine 块「正前方」（格 (bx,by−1) ⇒ iso Y 更小 ⇒ 更靠前）⇒ 截图应见单位在特征物之前。</summary>
+    static IEnumerator LayerProbe(Tilemap gG, Tilemap gF, Tilemap gT)
+    {
+        // ---- J1 结构 ----
+        int ordT = OrderOf(gT), ordF = OrderOf(gF), ordU = int.MaxValue, ordB = int.MaxValue;
+        foreach (var u in Object.FindObjectsOfType<UnitController>())
+        { if (u == null) continue; var sr = u.GetComponent<SpriteRenderer>(); if (sr != null) ordU = Mathf.Min(ordU, sr.sortingOrder); }
+        foreach (var b in Object.FindObjectsOfType<Building>())
+        { if (b == null) continue; var sr = b.GetComponent<SpriteRenderer>(); if (sr != null) ordB = Mathf.Min(ordB, sr.sortingOrder); }
+        int ordUs = ordU == int.MaxValue ? -1 : ordU, ordBs = ordB == int.MaxValue ? -1 : ordB;
+        _log.AppendLine("   层序实名读数：Territory=" + ordT + "  Feature=" + ordF + "  单位(min)=" + ordUs + "  建筑(min)=" + ordBs);
+        Log("D443 探针8（负探针·结构）：Territory(" + ordT + ") 严格低于 Feature(" + ordF + ")/单位(" + ordUs + ")/建筑(" + ordBs
+            + ") ⇒ 染色在任意深度下都不可能盖住特征物/单位/建筑",
+            ordT >= 0 && ordT < ordF && ordUs >= 0 && ordT < ordUs && ordBs >= 0 && ordT < ordBs);
+
+        int bx, by; Vector3 center;
+        if (!FindNearestMineBlock(gG, out bx, out by, out center))
+        { Log("J 层序视觉：未找到已加载 Mine 占位块（视觉段跳过）", false); yield break; }
+
+        var cam = Camera.main;
+        var rig = Object.FindObjectOfType<CameraRig>();
+        var overlay = Object.FindObjectOfType<TerritoryOverlay>();
+        if (cam == null) { Log("J 层序视觉：无 Main Camera", false); yield break; }
+        bool rigWas = rig != null && rig.enabled, overlayWas = overlay != null && overlay.enabled;
+        float orthoWas = cam.orthographicSize;
+        if (overlay != null) overlay.enabled = false;                  // 冻结染色层自身刷新 ⇒ A/B 只受层序影响
+        if (rig != null) rig.enabled = false;
+        if (gT != null && !gT.gameObject.activeSelf) gT.gameObject.SetActive(true);
+        cam.transform.position = new Vector3(center.x, center.y, cam.transform.position.z);
+        cam.orthographicSize = 2.0f;
+        yield return null; yield return null;
+
+        // ---- J2 视觉 A/B ----
+        var rT = gT != null ? gT.GetComponent<TilemapRenderer>() : null;
+        int ordTSaved = OrderOf(gT);
+        var red = ScriptableObject.CreateInstance<Tile>();
+        red.sprite = MapRenderService.CreateIsoDiamondSprite(new Color(1f, 0.12f, 0.12f, 0.6f));
+        var cells = new List<Vector3Int>();
+        var saved = new Dictionary<long, TileBase>();
+        for (int dy = -3; dy <= 3; dy++)
+            for (int dx = -3; dx <= 3; dx++)
+            {
+                var pos = new Vector3Int(bx + dx, by + dy, 0);
+                saved[(long)pos.x * 100000 + pos.y] = gT.GetTile(pos);
+                cells.Add(pos);
+                gT.SetTile(pos, red);
+            }
+        yield return null; yield return null;
+        yield return Shot("Logs/hh268_" + _tag + "_layer_seqA_territory_below.png");
+        if (rT != null) rT.sortingOrder = 50;                           // 反证：染色提到实体之上
+        yield return null; yield return null;
+        yield return Shot("Logs/hh268_" + _tag + "_layer_seqB_territory_above_control.png");
+        if (rT != null) rT.sortingOrder = ordTSaved;
+        Log("J2 视觉 A/B 落盘：seqA（现层序·染色 < 实体）／seqB（反证·染色 order=50 压实体）", true);
+        foreach (var pos in cells) gT.SetTile(pos, saved[(long)pos.x * 100000 + pos.y]);
+        Object.Destroy(red);
+        yield return null;
+
+        // ---- J3 正向 ----
+        UnitController uu = null; float bd = float.MaxValue;
+        foreach (var u in Object.FindObjectsOfType<UnitController>())
+        { if (u == null || u.transform == null) continue; float d = (u.transform.position - center).sqrMagnitude; if (d < bd) { bd = d; uu = u; } }
+        if (uu != null)
+        {
+            Vector3 was = uu.transform.position;
+            Vector2 front = MapRenderService.GridToIso(new GridCoord(bx, by - 1));
+            uu.transform.position = new Vector3(front.x, front.y, was.z);
+            cam.transform.position = new Vector3(front.x, front.y, cam.transform.position.z);
+            yield return null; yield return null;
+            var srU = uu.GetComponent<SpriteRenderer>();
+            _log.AppendLine("   J3 单位 '" + uu.name + "' order=" + (srU != null ? srU.sortingOrder : -9999)
+                + " ／ Feature order=" + ordF + "（同序 ⇒ 靠全局 CustomAxis(0,1,0) 的 Y 深度分胜负）；置于格 (" + bx + "," + (by - 1) + ") = 特征块正前方");
+            yield return Shot("Logs/hh268_" + _tag + "_unit_in_front_of_feature.png");
+            uu.transform.position = was;
+        }
+        else Log("J3 正向：未找到单位（跳过）", false);
+
+        cam.orthographicSize = orthoWas;
+        if (rig != null) rig.enabled = rigWas;
+        if (overlay != null) overlay.enabled = overlayWas;
+        yield return null;
+    }
+
+    static int OrderOf(Tilemap t)
+    {
+        if (t == null) return -9999;
+        var r = t.GetComponent<TilemapRenderer>();
+        return r != null ? r.sortingOrder : -9999;
+    }
+
+    /// <summary>找「离相机最近的、已加载（锚格地皮 tile 在场）的 Mine 2×2 占位块」；center ＝ 块中心（锚格 iso ＋ (0,+0.32)，与 merge sprite 落点同式）。</summary>
+    static bool FindNearestMineBlock(Tilemap gG, out int bx, out int by, out Vector3 center)
+    {
+        bx = by = -1; center = Vector3.zero;
+        var map = WorldManager.Instance.ActiveMap;
+        var cam = Camera.main;
+        if (map == null || gG == null || cam == null) return false;
+        float best = float.MaxValue; bool found = false;
+        var used = new HashSet<long>();
+        for (int y = 0; y < map.height; y++)
+            for (int x = 0; x < map.width; x++)
+            {
+                if (map.features[y * map.width + x] != FeatureType.Mine) continue;
+                long k = (long)x * 100000 + y;
+                if (used.Contains(k) || x + 1 >= map.width || y + 1 >= map.height) continue;
+                if (map.features[y * map.width + x + 1] != FeatureType.Mine
+                    || map.features[(y + 1) * map.width + x] != FeatureType.Mine
+                    || map.features[(y + 1) * map.width + x + 1] != FeatureType.Mine) continue;
+                used.Add(k); used.Add((long)(x + 1) * 100000 + y);
+                used.Add((long)x * 100000 + y + 1); used.Add((long)(x + 1) * 100000 + y + 1);
+                if (gG.GetTile(new Vector3Int(x, y, 0)) == null) continue;
+                Vector2 wp = MapRenderService.GridToIso(new GridCoord(x, y)) + new Vector2(0f, 0.32f);
+                float d = (new Vector3(wp.x, wp.y, 0f) - cam.transform.position).sqrMagnitude;
+                if (d < best) { best = d; bx = x; by = y; center = new Vector3(wp.x, wp.y, 0f); found = true; }
+            }
+        return found;
     }
 
     static int C(Dictionary<FeatureType, int> d, FeatureType f) { int v; return d.TryGetValue(f, out v) ? v : 0; }

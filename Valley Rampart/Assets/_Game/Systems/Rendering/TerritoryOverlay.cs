@@ -8,7 +8,9 @@ using UnityEngine.Tilemaps;
 /// 旗色=KingdomState.bannerColor（2_16 步骤5，D303 玩家 id=0 同染）；本类零写入上述数据源。
 ///
 /// 渲染结构（D443）：MapRender 第六层 Tilemap_Territory（Iso ZAsY 同参数）；单一白菱形 tile 常驻，
-/// 颜色经 per-cell SetColor（tint=派生色×alpha）；sortingOrder=5（Ground 0 之上、Feature/实体之下）；
+/// 颜色经 per-cell SetColor（tint=派生色×alpha）；sortingOrder=**0**
+/// （HH.268 ④-1′ 落地后链＝Ground −1 ｜ Territory 0 ｜ 单位/建筑/Feature 1 ⇒ 染色仍在实体之下；
+///  此前值 5 高于单位/建筑(1)＝与 D443 相悖的既有漂移，随批修正）；
 /// 无主地透明不铺。染色粒度=中区块（Ledger key=mid）：每 mid 展开 midChunkSize² 格同色同 alpha；
 /// 边界检测在 mid 级 8 邻域异主/无主（D450 边界恒浓：边界 mid 整块取档位表 boundaryAlpha）。
 ///
