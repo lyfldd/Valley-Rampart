@@ -317,8 +317,10 @@ public static class UtilityScorer
             case NeedKind.GatherShortageGap:
             {
                 // 触发源**单源**＝2_23 三通道分诊（`ResolveTriageResource` 首发断供资源 + `DecideTriage` 通道判定），
-                // 禁另造第二套"采集下单"判据（DZ-118/DZ-128 双源）；仅**通道B**（有产能但日产出低）属本行动域——
-                // 通道A（无产能→建）归 ③、通道C（仓储溢出→建仓）归 ⑤，本行动不抢（命中即止的单通道语义）。
+                // 禁另造第二套"采集下单"判据（DZ-118/DZ-128 双源）；**入口域**＝通道B（有产能但日产出低）
+                // **或**（HH.251/D699 A+ 新增）通道A 且 ③建产能 `Feasible==false`（无产能且建产能不可行 ⇒
+                // 降级通道接管，不再永久让位空转）；通道A 且 ③可行时维持让位（③ 更优·避抢焦点）；
+                // 通道C（仓储溢出→建仓）归 ⑤，本行动不抢（命中即止的单通道语义）。
                 if (!SituationHub.TryGet(k.id, out var sitG) || sitG == null || sitG.Economy == null) return 0f;
                 var ecoG = sitG.Economy;
                 var dcfgG = KingdomDiagnosisConfig.Load();
@@ -326,7 +328,14 @@ public static class UtilityScorer
                 if (rG < 0) return 0f;                                    // 无断供触发
                 if (!WorldGatherRegistry.TryMapWorldResource((EcoResource)rG, out var rtG)) return 0f;  // 只覆盖石/木
                 var erG = (EcoResource)rG;
-                if (KingdomBrain.DecideTriage(ecoG, dcfgG, erG) != TriageDecision.NoOp) return 0f;  // 只有通道B 归本行动
+                var decG = KingdomBrain.DecideTriage(ecoG, dcfgG, erG);
+                if (decG != TriageDecision.NoOp)
+                {
+                    if (decG != TriageDecision.BuildCapacity) return 0f;                 // 通道C ⇒ 让位 ⑤
+                    var ucfgG = UtilityActionConfig.LoadConfig();                        // 通道A：判 ③ 可行性（同源 Feasible）
+                    var capDefG = ucfgG != null ? ucfgG.Find(UtilityAction.BuildCapacity) : null;
+                    if (!capDefG.HasValue || Feasible(k, capDefG.Value)) return 0f;       // ③ 可行/不可判 ⇒ 让位 ③
+                }
                 int popG = ecoG.Population;
                 if (popG <= 0) return 0f;
                 float thrG = dcfgG != null ? dcfgG.channelBOutputPerPop : 1f;         // 阈值单源（与 DecideTriage 同参）
@@ -480,7 +489,10 @@ public static class UtilityScorer
     /// <summary>二值可行性门控（D346）。不看需求连续量，硬条件不过 → 0 出局。
     /// 完整局批次口径修正：按 UtilityActionDef 成本镜像判资源（与门面执行同口径双保险）；
     /// ⑥招工人=粮付得起 aiRecruitFoodCost 且未达工人目标（AI 人口增长唯一通道）。</summary>
-    private static bool Feasible(KingdomState k, UtilityActionDef d)
+    /// <summary>HH.251/D699（Gate=G1-1）A+ 施工批：可见性 private → **internal**——`KingdomBrain.ExecuteWorldGatherFocus`
+    /// 让位分支需以**同源**判据判「③建产能是否可行」（㉗↔③ 双轨解耦：通道A 且 ③不可行 ⇒ ㉗ 接管降级通道）。
+    /// 行为/语义逐字不变，仅放宽可见性＝禁另造第二套可行性判据（L-31 同源纪律；同 `ResolveTriageResource` 于 HH.221/D685 先例）。</summary>
+    internal static bool Feasible(KingdomState k, UtilityActionDef d)
     {
         switch (d.id)
         {

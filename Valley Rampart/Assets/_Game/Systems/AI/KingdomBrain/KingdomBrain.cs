@@ -1345,10 +1345,27 @@ public class KingdomBrain
             Bump(kingdomId, train: false, ok: true);   // 无断供触发／该资源无世界采集通道 ⇒ 正常态不空转
             return;
         }
-        if (DecideTriage(sit.Economy, dcfg, (EcoResource)r) != TriageDecision.NoOp)
+        var decW = DecideTriage(sit.Economy, dcfg, (EcoResource)r);
+        if (decW != TriageDecision.NoOp)
         {
-            Bump(kingdomId, train: false, ok: true);   // 通道A/C 归 ③/⑤ ⇒ 本行动正常让位（非失败）
-            return;
+            // HH.251/D699（Gate=G1-1）A+ 施工批·㉗↔③ 双轨解耦：通道C 归 ⑤、通道A 且 ③建产能可行 ⇒ 照旧让位
+            //（③ 更优·避抢焦点）；**新增**＝通道A 且 ③ `Feasible==false`（无产能且建产能不可行）⇒ ㉗ 接管
+            //（降级通道·即时采集），不再空转让位。判据与评分侧 `NeedScore.GatherShortageGap` 入口放宽**同源**
+            //（同一 `UtilityScorer.Feasible(③)`，L-31 禁另造第二套可行性判据）。
+            bool takeover = false;
+            if (decW == TriageDecision.BuildCapacity)
+            {
+                var ucfgW = UtilityActionConfig.LoadConfig();
+                var capDefW = ucfgW != null ? ucfgW.Find(UtilityAction.BuildCapacity) : null;
+                takeover = capDefW.HasValue && !UtilityScorer.Feasible(kingdom, capDefW.Value);
+            }
+            if (!takeover)
+            {
+                Bump(kingdomId, train: false, ok: true);   // 通道C／通道A 且 ③可行 ⇒ 本行动正常让位（非失败）
+                return;
+            }
+            // 只读观测打点（HH.251 §三 授权）：区分「接管（通道A·③不可行）」与「通道B 常态派发」两条入径
+            Debug.Log($"[KingdomBrain] k{kingdomId} ㉗接管：通道A且③不可行（{rt}）——降级通道派发");
         }
 
         var reg = WorldGatherRegistry.Instance;
