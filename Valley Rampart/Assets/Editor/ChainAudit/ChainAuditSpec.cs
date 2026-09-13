@@ -53,10 +53,12 @@ public static class ChainAuditSpec
         // 四列（test-harness-first §8.6）：〔可判定最早日＋命中即停〕〔服务哪条验收句〕〔作用域〕〔口径来源与排除项〕
         var l = new List<Capability>();
         // (id, label, kind, source, judge, scope, earliestDay, stopRule, caliber)
+        // HH.244（D694 勘正①/件1）：㉗ 判据由「评分 argmax」改「实际派发」（分资源）——L-35 教训。
         l.Add(new Capability("㉗", "采集世界资源点 GatherWorldResource", "Action",
-            "UtilityActionConfig.asset id27；HH.221/D685 A②", "㉗ 被选中 ≥1 次（入口可达·DZ-148 判据）", "全批 any-国",
-            5, "census top=GatherWorldResource 首达 ⇒ 入口可达；全程 0 ⇒ 🔴入口不可达",
-            "口径=DiagMilitary census `top=` 逐日；排除项=不数 chSrc（副产源灌水，HH.222 口径修订）"));
+            "UtilityActionConfig.asset id27；HH.221/D685 A②；HH.244 口径修正探针",
+            "㉗ 实际派发 ≥1 次 ⇒ `DZ-148` 证伪（石场景可派发）；全程 0 ⇒ `DZ-148` 证成（结构性不可达）", "全批 any-国·分资源（石/木）",
+            5, "`㉗采集下发` 日志分资源首达 ⇒ 可达；全程 0 ⇒ 🔴入口不可达",
+            "口径=`[KingdomBrain] kX ㉗采集下发：{rt} 新立案 N 个` 日志（ExecuteWorldGatherFocus 实际派发落地唯一出口）；支撑=census top= 评分面＋DiagTriage 分诊面（均不计判据）；排除项=肉/矿/粮/铁无世界通道（TryMapWorldResource 结构性排除）／HarvestCarry 无日志⇒入账口径知情未观测／Env 阻断（领土内无可采=世界给定物）"));
         l.Add(new Capability("③", "建产能 BuildCapacity", "Action",
             "UtilityActionConfig.asset id3", "③ 被选中 ≥1 次且建成 >0（DZ-148/DZ-135 判据）", "全批 any-国",
             5, "census top=BuildCapacity 首达或建成 >0 ⇒ 可达；选中>0 而建成=0 ⇒ 🔴feasible 恒伪",
