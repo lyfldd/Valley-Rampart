@@ -38,7 +38,7 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
 
     /// <summary>HH.254/D700（A+ ㉗ 触发式断路器）只读查询：该国在册源中**指定资源**的条数（不立案·不改状态）。
     /// 与 <see cref="Advertise"/> 共用同一匹配函数 <see cref="TryMatchPoint"/>（L-31 同源，禁另造匹配逻辑）。
-    /// 用途＝触发条件⑤「该 rt 本国无在册源」的 one-shot 自限判据。</summary>
+    /// 用途＝触发条件⑤「该 rt 本国无在册源」的**在册期自限**判据（该 rt 有在册源期间本条件成立即退避；源采尽腾位后可再触发＝按需重采）。</summary>
     public int CountOf(int kingdomId, ResourceType resource)
     {
         if (kingdomId <= 0) return 0;

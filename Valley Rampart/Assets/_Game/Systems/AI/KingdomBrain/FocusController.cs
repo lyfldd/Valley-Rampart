@@ -190,7 +190,7 @@ public class FocusController
     /// 条件**全 AND**（判据全部同源复用，L-31 禁另造第二套通道/可行性判定）：
     ///   ① `ResolveTriageResource` 有断供 r；② `TryMapWorldResource(r)`＝石/木（世界通道）；
     ///   ③ `DecideTriage == BuildCapacity`（通道A）；④ `UtilityScorer.Feasible(kingdom, ③def) == false`；
-    ///   ⑤ 该 rt **本国在册源 = 0**（**one-shot 自限**：注册一次后本条件不再成立 ⇒ 天然退避，不振荡）；
+    ///   ⑤ 该 rt **本国在册源 = 0**（**在册期自限**：该 rt 有在册源期间本条件成立即退避；源采尽腾位后可再触发（按需重采））；
     ///   ⑥ `HasCandidate(kingdom.id, rt)`（领土内确有点·防白焦点）；
     ///   ⑦ `RoomOf(kingdom.id) &gt; 0`（**登记容量**——`maxSourcesPerKingdom` 全 rt 共享，满额时 `Advertise` 返 0 ⇒ 白焦点）；
     ///   ⑧ `workerCount &gt; 0`（无工人可派 ⇒ 登记亦是空转）。
@@ -211,7 +211,7 @@ public class FocusController
         if (kingdom.workerCount <= 0) return false;                                                    // ⑧ 有工人可派
         var reg = WorldGatherRegistry.Instance;
         if (reg == null) return false;
-        if (reg.CountOf(kingdom.id, rt) > 0) return false;                                             // ⑤ one-shot 自限
+        if (reg.CountOf(kingdom.id, rt) > 0) return false;                                             // ⑤ 在册期自限（源采尽腾位后可再触发）
         if (!WorldGatherRegistry.HasCandidate(kingdom.id, rt)) return false;                            // ⑥ 领土内有点
         int room = reg.RoomOf(kingdom.id);
         if (room <= 0) return false;                                                                   // ⑦ 登记余量>0
