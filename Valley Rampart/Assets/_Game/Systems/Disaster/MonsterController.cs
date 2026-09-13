@@ -108,7 +108,10 @@ public class MonsterController : UnitController
     public IDamageable FindNearestHuman(float rangeWorld)
     {
         if (UnitRegistry.Instance == null) return null;
-        PerceptionSystem.QueryNearby(_rb.position, rangeWorld, Faction.PlayerCamp, true, _queryResults);
+        // D695 返工：此处须传 GetFaction()（＝Faction.Monster），不可传 Faction.PlayerCamp。
+        // QueryNearby 的 findEnemies=true 语义＝收「f != myFaction && f != None」（PerceptionSystem.cs:38-43），
+        // 传 PlayerCamp 会把玩家整个排除、返回非玩家阵营 ⇒ 本方法永远返回不了"人"（功能回归）。
+        PerceptionSystem.QueryNearby(_rb.position, rangeWorld, GetFaction(), true, _queryResults);
         IDamageable nearest = null;
         float nearestDist = float.MaxValue;
         for (int i = 0; i < _queryResults.Count; i++)
