@@ -66,6 +66,25 @@
 - 四族混编容器 **DrawCall 前后对照**（图集前 vs 后）。
 - 载体＝扩展 `Editor/ArtImportPipeline.cs` 或新建 `.spriteatlas`（择一·报告写明理由）。
 
+### E 段 **渲染路径全景诊断 ＋ 几何量测**（**只读 · D710 新增**）
+
+> **由来**＝用户 2026-09-13 实测截图：①**仍有色块**（树/山/矿/石堆/木堆）②**地皮错位/缝隙**。**诊断先行·禁先改。**
+
+| # | 诊断项 | 产出 / 已知嫌疑 |
+|---|---|---|
+| **E1** | **渲染路径全景**：逐层列「`FeatureType` → 渲染载体 → 是否查 `SpriteRefTable`」 | **已知嫌疑**：`MapRenderService.FeatureTileOrNull` 硬编码 `CreateIsoTile(色块)`，**完全不查表** ⇒ 特征物（`Tree/Mountain/SnowMountain/Mine/OreVein/StonePile/WoodPile`）**全走色块**；而 `feat_*` 真图**在库**（`Art/Buildings/neutral/features/`） |
+| **E2** | **几何量测**：地皮真图像素/世界尺寸 vs `cellSize` vs 占位菱形（`CreateIsoDiamondSprite`） | **已知嫌疑**：`ground_*` ＝ **170~172×200~202**（**等轴立体块·含侧壁**）；占位菱形 ＝ **128×64 平面** ⇒ **几何模型不同** |
+| **E3** | **tile 间距/锚点**：`groundTilemap` tile 锚点与 `cellSize` 的对齐性；白缝来源 | 对齐性结论 |
+| **E4** | **排序链**：`groundTilemap`／`featureTilemap`／建筑／单位的 `sortingOrder`／`sortingLayer`／`TransparencySortMode` 实读 | 排序链现状 |
+| **E5** | **素材形态定性**：`ground_*` 是「**立体块（带侧壁厚度）**」还是「平面菱形」？ | 定性 ＋ 依据（美术规范/计划/映射表**原文**） |
+
+**🔴 修法分岔（E5 结论决定 · 报裁后再动手）**：
+
+- **岔路 ①**＝若"立体块"**是设计如此** ⇒ **渲染方案须改**：地皮不能走平面 `Tilemap`，须改「逐格 `SpriteRenderer` ＋ 深度排序」或专用 iso 叠层 ⇒ **工程量级大·须单独立批**。
+- **岔路 ②**＝若"立体块"**是素材失误**／应裁出平面顶面 ⇒ **改图**：地皮真图裁为 2:1 菱形顶面（或美术重出）⇒ **工程量级小**。
+
+> **E 段＝只读**：❌ 不改任何 `Assets/**`；产出**诊断报告** ⇒ **报裁** ⇒ 定修法后再施工。
+
 ---
 
 ## 三、验收线
@@ -78,6 +97,8 @@
 | 4 | **D 段** | DrawCall **对照数** ＋ 入集后 sprite **不失效**实证 |
 | 5 | **回归** | 编译 **0 error** ＋ 收尾 `ExitTestRun`＋`QuitSmoke`＋**退 Play**；四族四轮冒烟**不退化**（对 HH.263 基线） |
 | 6 | **零改动面** | `AmmoDef`/`GroundEffectDef` **仍零改动**；`AI.Core` **零触**；**不另建 LOD 系统** |
+| 7 | **E 段（只读）** | 诊断报告含 **E1~E5 全项** ＋ **修法分岔结论**（岔路 ①/②）＋ 依据**原文**引用 |
+| 8 | **视觉验收客观化（新·D710）** | **禁**以"表里有键／`realArt` 计数"充作"真图生效"——须给「**渲染后抽样**」证据：逐层抽 ≥3 类，取**运行中** `SpriteRenderer.sprite`／`Tile.sprite` 的**实际 sprite 名**（须含 artId 前缀）＋**截图 1 张**；**且须覆盖特征物层**（E1 所指漏项面） |
 
 ---
 
