@@ -42,6 +42,49 @@ public static class ArtImportPipeline
         ApplyImportSettings();
         BuildSpriteRefTable();
         EnsureAnimatorConfig();
+        EnsureSpriteAtlas();
+    }
+
+    /// <summary>
+    /// D 段（HH.264 · H6 §7.3）：落盘 **Units 全帧图集（含 monster）**——载体＝**新建 `.spriteatlas` 资产**
+    /// （文件夹 packable ⇒ 新帧自动入集·零逐文件维护；与导入设置同源由本流水线生成入口保证）。
+    /// `SpriteRefTable` **直接引用**源 sprite（非图集子 sprite）⇒ 入集后引用不失效（D 段实证）。
+    /// </summary>
+    public static void EnsureSpriteAtlas()
+    {
+        const string path = "Assets/Resources/Config/Art/UnitsFrames.spriteatlas";
+        const string packRoot = "Assets/_Game/Art/Units";
+        EnsureFolder("Assets/Resources/Config/Art");
+
+        var atlas = AssetDatabase.LoadAssetAtPath<UnityEngine.U2D.SpriteAtlas>(path);
+        bool created = false;
+        if (atlas == null)
+        {
+            atlas = new UnityEngine.U2D.SpriteAtlas();
+            AssetDatabase.CreateAsset(atlas, path);
+            created = true;
+        }
+
+        bool packed = false;
+        foreach (var o in UnityEditor.U2D.SpriteAtlasExtensions.GetPackables(atlas))
+            if (o != null && AssetDatabase.GetAssetPath(o) == packRoot) { packed = true; break; }
+        var folder = AssetDatabase.LoadAssetAtPath<DefaultAsset>(packRoot);
+        if (!packed && folder != null)
+            UnityEditor.U2D.SpriteAtlasExtensions.Add(atlas, new UnityEngine.Object[] { folder });
+
+        UnityEditor.U2D.SpriteAtlasExtensions.SetIncludeInBuild(atlas, true);   // 正式构建内自动绑定
+        var ts = UnityEditor.U2D.SpriteAtlasExtensions.GetTextureSettings(atlas);
+        ts.filterMode = FilterMode.Bilinear;
+        ts.generateMipMaps = false;
+        ts.readable = false;
+        UnityEditor.U2D.SpriteAtlasExtensions.SetTextureSettings(atlas, ts);
+
+        EditorUtility.SetDirty(atlas);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        SpriteRefTable.ClearCache();
+        Debug.Log($"[ArtImportPipeline] SpriteAtlas {(created ? "已创建" : "已更新")}：{path} "
+                  + $"packables={UnityEditor.U2D.SpriteAtlasExtensions.GetPackables(atlas).Length} 根={packRoot}");
     }
 
     /// <summary>

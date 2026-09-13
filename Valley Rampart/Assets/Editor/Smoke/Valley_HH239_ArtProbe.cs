@@ -20,8 +20,9 @@ public static class Valley_HH239_ArtProbe
 {
     static readonly FieldInfo SetField =
         typeof(SpriteAnimator).GetField("_set", BindingFlags.NonPublic | BindingFlags.Instance);
+    // HH.264 A 段后 `EnsureSet` 由 internal 提升为 public（探针可访问）⇒ 反射须含 Public（否则取到 null）
     static readonly MethodInfo EnsureSet =
-        typeof(SpriteAnimator).GetMethod("EnsureSet", BindingFlags.NonPublic | BindingFlags.Instance);
+        typeof(SpriteAnimator).GetMethod("EnsureSet", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
     /// <summary>单轮：建局（正门链路）→ 探针 → 返回证据文本。race: 0=human 1=elf 2=dwarf 3=orc。</summary>
     public static string RunRound(int race, int worldSeed = 21107)
@@ -97,6 +98,29 @@ public static class Valley_HH239_ArtProbe
                 }
         }
         sb.AppendLine($"  ①GROUND distinct={used.Count} -> {string.Join(", ", used.OrderBy(s => s))}");
+
+        // ---- G 段回归（HH.264 G1）：特征物层真图（四族轮同源对照；行跨 3 抽样）----
+        var ftGo = GameObject.Find("Tilemap_Feature");
+        var ftm = ftGo != null ? ftGo.GetComponent<UnityEngine.Tilemaps.Tilemap>() : null;
+        int ftTot = 0, ftReal = 0;
+        var ftNames = new HashSet<string>();
+        if (ftm != null)
+        {
+            var fbb = ftm.cellBounds;
+            for (int x = fbb.xMin; x < fbb.xMax; x += 3)
+                for (int y = fbb.yMin; y < fbb.yMax; y += 3)
+                {
+                    var sp = ftm.GetSprite(new Vector3Int(x, y, 0));
+                    if (sp == null) continue;
+                    ftTot++;
+                    if (!string.IsNullOrEmpty(sp.name))
+                    {
+                        if (sp.name.StartsWith("feat_")) ftReal++;
+                        ftNames.Add(sp.name);
+                    }
+                }
+        }
+        sb.AppendLine($"  G段回归 特征物层: sampled={ftTot} real={ftReal} distinctFeat={ftNames.Count} -> {string.Join(", ", ftNames.OrderBy(s => s))}");
 
         // ---- ② 缺图回退负探针（不崩 + 回退非真图）----
         var fb1 = ValleyRampart.Rendering.PlaceholderSprites.Get("bld_academy");            // 学院无素材
