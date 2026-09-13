@@ -262,40 +262,53 @@ public class ProjectileManager : Singleton<ProjectileManager>
     /// 越墙判定（3.6 §5 抛物线体系）：低抛（Straight/Lob）查射手→落点线段上的工事，
     /// 弧高 ≤ 工事高度 → 被挡（穿透够则对墙结算伤害，不够则无效）。
     /// 高抛（HighArc）直接越墙。返回 true=被挡。
+    ///
+    /// HH.243（DZ-149/D693）改 D485 单遍过滤法：旧实现逐格扫 `for(y=0;y<=1;y++)`——`GridCoord.y`
+    /// 在 2.5D 已是**地图行号**（老"层"语义已迁 `layer` 字段）⇒ 只扫最南两行的工事，其余行工事
+    /// 对低抛"隐形"（越墙判定失效）。改法＝沿弹道取**矩形带**内工事（点到线段距离 ≤ 半格宽，
+    /// 排除起点/终点格）→ 取**最靠射手**的一枚 → 弧高/穿透判定**逐字保留**。
+    /// 与旧行为等价性：原循环"弧高够 ⇒ continue 找后续工事"＝只认第一枚弧高不足的工事。
     /// </summary>
     private bool CheckWallBlock(ProjectileData p)
     {
         if (p.ballisticType == BallisticType.HighArc) return false; // 高抛越墙
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
+        if (UnitRegistry.Instance == null) return false;
 
-        // doc1 改造：WorldToCoord 返回 GridCoord?（null=越界），越界视为不被墙挡
-        var startOpt = GridSystem.Instance.WorldToCoord(p.startPos);
-        var endOpt = GridSystem.Instance.WorldToCoord(p.targetPos);
-        if (!startOpt.HasValue || !endOpt.HasValue) return false;
-        int startCell = startOpt.Value.x;
-        int endCell = endOpt.Value.x;
-        if (startCell == endCell) return false;
+        Vector2 a = p.startPos;
+        Vector2 b = p.targetPos;
+        Vector2 ab = b - a;
+        float abLenSq = ab.sqrMagnitude;
+        if (abLenSq <= 0.0001f) return false;                    // 起终点重合：无弹道区间
 
-        int dir = startCell < endCell ? 1 : -1;
-        for (int cx = startCell + dir; cx != endCell; cx += dir)
+        float bandHalf = GridSystem.Instance.Config.cellSize.x * 0.5f;   // 带半宽 ≈ 半格
+        float abSq = bandHalf * bandHalf;
+
+        UnitController blocker = null;
+        float blockerT = float.MaxValue;
+        foreach (var unit in UnitRegistry.Instance.GetAllUnits())
         {
-            for (int y = 0; y <= 1; y++)
-            {
-                var list = GridSystem.Instance.GetUnitsInCell(new GridCoord(cx, y));
-                foreach (var unit in list)
-                {
-                    var uc = unit as UnitController;
-                    if (uc == null || uc.fortification == null) continue;
-                    var fort = uc.fortification;
-                    if (p.arcHeightCells > fort.heightCells) continue; // 弧高够 → 越过该工事
-                    // 被挡：穿透等级决定对墙伤害（3.6 §5.1）
-                    if (p.pierceLevel >= fort.defenseLevel)
-                        DamageSystem.Instance?.ApplyDamage(p.attacker, uc, p.attack, 0f, true);
-                    return true;
-                }
-            }
+            var uc = unit as UnitController;
+            if (uc == null || uc.fortification == null) continue;
+            if (p.arcHeightCells > uc.fortification.heightCells) continue; // 弧高够 → 越过该工事（继续找后续）
+
+            Vector2 pos = uc.transform.position;
+            if (Vector2.SqrMagnitude(pos - a) <= abSq) continue;    // 起点格不计（原循环 cx 从 startCell+dir 起）
+            if (Vector2.SqrMagnitude(pos - b) <= abSq) continue;    // 终点格不计（原循环 cx != endCell）
+            float t = Vector2.Dot(pos - a, ab) / abLenSq;
+            if (t <= 0f || t >= 1f) continue;                       // 只算弹道区间内
+            Vector2 closest = a + ab * t;
+            if (Vector2.SqrMagnitude(pos - closest) > abSq) continue; // 不在带内
+            if (t >= blockerT) continue;                            // 只认最靠射手的那一枚
+            blocker = uc;
+            blockerT = t;
         }
-        return false;
+
+        if (blocker == null) return false;
+        // 被挡：穿透等级决定对墙伤害（3.6 §5.1）
+        if (p.pierceLevel >= blocker.fortification.defenseLevel)
+            DamageSystem.Instance?.ApplyDamage(p.attacker, blocker, p.attack, 0f, true);
+        return true;
     }
 
     /// <summary>查目标位置附近微格内的单位（doc1 微格主表 D70，2_5 步骤3）。</summary>

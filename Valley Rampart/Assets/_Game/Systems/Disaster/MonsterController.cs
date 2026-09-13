@@ -99,36 +99,28 @@ public class MonsterController : UnitController
         };
     }
 
-    /// <summary>感知半径内最近玩家单位（GridSystem 邻近格扫描，y 地面+飞行两层；镜像 UnitController.FindNearestEnemy）。</summary>
+    /// <summary>
+    /// 感知半径内最近玩家单位（D485 单遍过滤法，镜像 UnitController.FindNearestEnemy）。
+    /// HH.243（DZ-149/D693）：旧实现 `for(y=0;y<=1;y++)` 把 `GridCoord.y`（2.5D 已是地图行号）
+    /// 当"地面+飞行两层"⇒ 只扫最南两行，其余行玩家单位对怪不可见。
+    /// 修法照抄 D485（复用 PerceptionSystem.QueryNearby），**kingdomId==0 守卫原样保留**。
+    /// </summary>
     public IDamageable FindNearestHuman(float rangeWorld)
     {
-        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return null;
-        float cellSize = GridSystem.Instance.Config.cellSize.x;
-        var centerOpt = GridSystem.Instance.WorldToCoord(_rb.position);
-        if (!centerOpt.HasValue) return null;
-        GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
-
+        if (UnitRegistry.Instance == null) return null;
+        PerceptionSystem.QueryNearby(_rb.position, rangeWorld, Faction.PlayerCamp, true, _queryResults);
         IDamageable nearest = null;
         float nearestDist = float.MaxValue;
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int i = 0; i < _queryResults.Count; i++)
         {
-            for (int y = 0; y <= 1; y++)
-            {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
-                foreach (var unit in units)
-                {
-                    var uc = unit as UnitController;
-                    if (uc == null || uc == this || !uc.IsAlive || uc.CurrentHp <= 0) continue;
-                    if (uc.GetFaction() != Faction.PlayerCamp) continue;
-                    // 2_17 步骤4 patch C（③）：单位级盲区守卫——步骤3 实体化的 AI 工人是 PlayerCamp+kingdomId>0 冒充态，
-                    // 会被怪感知为玩家目标；这里补 kingdomId==0（与建筑 L192 同模式同语义），P0 只袭玩家。
-                    // 步骤10 Faction 收编时随迁移退役（与既有守卫同生命周期）。
-                    if (uc.kingdomId != 0) continue;
-                    float d = Vector2.Distance(_rb.position, uc.transform.position);
-                    if (d < nearestDist) { nearestDist = d; nearest = uc; }
-                }
-            }
+            var uc = _queryResults[i] as UnitController;
+            if (uc == null || uc == this) continue;
+            // 2_17 步骤4 patch C（③）：单位级盲区守卫——步骤3 实体化的 AI 工人是 PlayerCamp+kingdomId>0 冒充态，
+            // 会被怪感知为玩家目标；这里补 kingdomId==0（与建筑 L192 同模式同语义），P0 只袭玩家。
+            // 步骤10 Faction 收编时随迁移退役（与既有守卫同生命周期）。
+            if (uc.kingdomId != 0) continue;
+            float d = Vector2.Distance(_rb.position, uc.transform.position);
+            if (d < nearestDist) { nearestDist = d; nearest = uc; }
         }
         return nearest;
     }

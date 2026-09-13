@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>8 向朝向（2_3 步骤5，D74）。与 doc 1 邻居顺序一致（E/NE/N/NW/W/SW/S/SE）。供 2_10 动画消费。</summary>
@@ -244,6 +245,13 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     // "有攻击值的按 CD 攻击射程内敌人"。Unity 侧此前无驱动 → 静态单位挂弹不发射。
     // 只在换目标时 RegisterAttack（DamageSystem tick 按 CD 驱动后续攻击，防每帧开火）。
     private IDamageable _staticTarget;
+
+    /// <summary>
+    /// 索敌查询复用缓冲（HH.243 D485 单遍过滤法；避免每次查询新建 List 产生 GC）。
+    /// 仅单线程主线程使用，调用点互不嵌套（FindNearestEnemy/CountCrewWorkers 顺序调用）。
+    /// protected：子类（MonsterController.FindNearestHuman）复用同一缓冲，禁各建一份。
+    /// </summary>
+    protected readonly List<IDamageable> _queryResults = new List<IDamageable>();
 
     Vector2X IUnitHandle.Position => new Vector2X(transform.position.x, transform.position.y);
     Faction IUnitHandle.Faction => Data != null ? Data.faction : Faction.None;
@@ -1013,30 +1021,25 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         return false;
     }
 
-    /// <summary>统计目标邻域 aoeWorld 半径内的敌对单位数（GridSystem 邻近格扫描，对齐 sim crowd 计数）。</summary>
+    /// <summary>
+    /// 统计目标邻域 aoeWorld 半径内的敌对单位数（D485 单遍过滤法，对齐 sim crowd 计数）。
+    /// HH.243（DZ-149/D693）：旧实现按 `for(dy=0;dy<=1)` 扫格——`GridCoord.y` 2.5D 已是**地图行号**
+    /// （`GridTypes.cs:15-20`「老 y=层已废」，层语义迁 `layer`），且原码把 `dy` 当**绝对行号**用，
+    /// ⇒ 只统计地图最南两行的敌数、其余行恒漏（AOE 密集判据系统性低估）。
+    /// 改单遍：UnitRegistry 全量一遍 → 阵营过滤 → 欧氏圆（与 PerceptionSystem.QueryNearby 同构）。
+    /// </summary>
     private int CountNearbyHostiles(IDamageable center, float aoeWorld)
     {
-        if (GridSystem.Instance == null || center == null) return 0;
-        float cellSize = GetCellSize();
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(aoeWorld / cellSize));
+        if (center == null) return 0;
+        if (UnitRegistry.Instance == null) return 0;
         Vector2 centerPos = center.GetPosition();
-        var centerCoordOpt = GridSystem.Instance.WorldToCoord(centerPos);
-        if (!centerCoordOpt.HasValue) return 0;
-        GridCoord centerCoord = centerCoordOpt.Value;
+        Faction myFaction = GetFaction();
         int count = 0;
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        foreach (var uc in UnitRegistry.Instance.GetAllUnits())
         {
-            for (int dy = 0; dy <= 1; dy++)
-            {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(centerCoord.x + dx, dy));
-                foreach (var unit in units)
-                {
-                    var uc = unit as UnitController;
-                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
-                    if (uc.GetFaction() == GetFaction() || uc.GetFaction() == Faction.None) continue;
-                    if (Vector2.Distance(centerPos, uc.transform.position) <= aoeWorld) count++;
-                }
-            }
+            if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+            if (uc.GetFaction() == myFaction || uc.GetFaction() == Faction.None) continue;
+            if (Vector2.Distance(centerPos, uc.transform.position) <= aoeWorld) count++;
         }
         return count;
     }
@@ -1048,41 +1051,33 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             ? GridSystem.Instance.Config.cellSize.x : 1f;
     }
 
-    /// <summary>静态单位射程内最近敌对单位（GridSystem 邻近格扫描，y 地面+飞行两层）。</summary>
+    /// <summary>静态单位射程内最近敌对单位（D485 单遍过滤法）。</summary>
     private IDamageable FindNearestEnemyInRange()
     {
         return FindNearestEnemy(_professionSnapshot.attackRange * GetCellSize());
     }
 
-    /// <summary>指定 rangeWorld 半径内最近敌对单位（GridSystem 邻近格扫描）。</summary>
+    /// <summary>
+    /// 指定 rangeWorld 半径内最近敌对单位（D485 单遍过滤法，复用 PerceptionSystem.QueryNearby）。
+    /// HH.243（DZ-149/D693）：旧实现 `for(y=0;y<=1;y++)` 把 `GridCoord.y`（2.5D 已是**地图行号**）
+    /// 当"地面+飞行两层"，只扫最南两行 ⇒ 其余行敌人不可被索敌（D485 同款残留，全库清点见 D693）。
+    /// 修法照抄 D485：UnitRegistry 全量单遍 → 阵营过滤 → 欧氏圆（禁方格遍历：GetUnitsInCell O(N)/格）。
+    /// </summary>
     private IDamageable FindNearestEnemy(float rangeWorld)
     {
-        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return null;
-        float cellSize = GridSystem.Instance.Config.cellSize.x;
-        var centerOpt = GridSystem.Instance.WorldToCoord(_rb.position);
-        if (!centerOpt.HasValue) return null;
-        GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
-
+        if (UnitRegistry.Instance == null) return null;
+        PerceptionSystem.QueryNearby(_rb.position, rangeWorld, GetFaction(), true, _queryResults);
         IDamageable nearest = null;
         float nearestDist = float.MaxValue;
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int i = 0; i < _queryResults.Count; i++)
         {
-            for (int y = 0; y <= 1; y++)
+            var uc = _queryResults[i] as UnitController;
+            if (uc == null) continue;
+            float d = Vector2.Distance(_rb.position, uc.transform.position);
+            if (d < nearestDist)
             {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
-                foreach (var unit in units)
-                {
-                    var uc = unit as UnitController;
-                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
-                    if (uc.GetFaction() == GetFaction() || uc.GetFaction() == Faction.None) continue;
-                    float d = Vector2.Distance(_rb.position, uc.transform.position);
-                    if (d < nearestDist)
-                    {
-                        nearestDist = d;
-                        nearest = uc;
-                    }
-                }
+                nearestDist = d;
+                nearest = uc;
             }
         }
         return nearest;
@@ -1135,33 +1130,23 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             MoveTowards(moveTarget.GetPosition(), speedOverride: _professionSnapshot.walkSpeed);
     }
 
-    /// <summary>统计操作半径内可用工人数（同阵营、存活、attack<=0 且 roleFamily==None）。</summary>
+    /// <summary>
+    /// 统计操作半径内可用工人数（同阵营、存活、attack&lt;=0 且 roleFamily==None）。
+    /// HH.243（DZ-149/D693）：旧实现 `for(y=0;y<=1;y++)` 同款 1D 残留（只扫最南两行）⇒ 改 D485 单遍过滤法。
+    /// 复用 PerceptionSystem.QueryNearby（其只做阵营布尔）＋后置 IsWorker 过滤（D694 预裁①）。
+    /// </summary>
     private int CountCrewWorkers()
     {
-        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return 0;
-        float cellSize = GetCellSize();
-        float crewRadius = _professionSnapshot.crewRadiusCells * cellSize;
-        var centerOpt = GridSystem.Instance.WorldToCoord(_rb.position);
-        if (!centerOpt.HasValue) return 0;
-        GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(crewRadius / cellSize));
+        if (UnitRegistry.Instance == null) return 0;
+        float crewRadius = _professionSnapshot.crewRadiusCells * GetCellSize();
+        PerceptionSystem.QueryNearby(_rb.position, crewRadius, GetFaction(), false, _queryResults);
         int count = 0;
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int i = 0; i < _queryResults.Count; i++)
         {
-            for (int y = 0; y <= 1; y++)
-            {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, y));
-                foreach (var unit in units)
-                {
-                    var uc = unit as UnitController;
-                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
-                    if (ReferenceEquals(uc, this)) continue;
-                    if (uc.GetFaction() != GetFaction()) continue;   // 同阵营
-                    if (!IsWorker(uc)) continue;                     // attack<=0 且 roleFamily==None
-                    if (Vector2.Distance(_rb.position, uc.transform.position) > crewRadius) continue;
-                    count++;
-                }
-            }
+            var uc = _queryResults[i] as UnitController;
+            if (uc == null || ReferenceEquals(uc, this)) continue;
+            if (!IsWorker(uc)) continue;                     // attack<=0 且 roleFamily==None
+            count++;
         }
         return count;
     }

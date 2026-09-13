@@ -1611,10 +1611,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             }
             SelfUnit.Teleport(newPos);
 
-            // 扫线段（上帧位置 → 本帧位置）内的敌对单位
-            float lastX = _chargeStart.x + _chargeDir.x * travelBefore;
-            float curX = _chargeStart.x + _chargeDir.x * travel;
-            ChargeSweep(Mathf.Min(lastX, curX), Mathf.Max(lastX, curX), cellSize);
+            // 扫线段（上帧位移 → 本帧位移）内的敌对单位（HH.243：改按沿弹道 travel 区间，方向无关）
+            ChargeSweep(travelBefore, travel, cellSize);
 
             if (reachEnd)
             {
@@ -1653,12 +1651,14 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     }
 
     /// <summary>
-    /// 路径击飞（3.6 §5.4）：x1→x2 线段上的敌对单位被击飞（动能+θ 模型，韧性决定距离）。
+    /// 路径击飞（3.6 §5.4）：沿冲锋弹道 [t1,t2] 位移区间带内的敌对单位被击飞（动能+θ 模型，韧性决定距离）。
     /// 3.6 §5.3 穿透冲锋：路径上所有敌对单位都吃冲锋伤害（chargeDamage=80）。工事/机器免疫，击飞打断攻击。
+    /// HH.243（DZ-149/D693）：入参由世界 x 区间改为**沿 `_chargeDir` 的 travel 区间**（方向无关；
+    /// 旧入参经 `_chargeStart.x + _chargeDir.x * travel` 换算，在 y 主轴冲锋时精度丢失）。
     /// </summary>
-    private void ChargeSweep(float x1, float x2, float cellSize)
+    private void ChargeSweep(float t1, float t2, float cellSize)
     {
-        var enemies = QueryUnitsInRangeX(x1, x2, cellSize);
+        var enemies = QueryUnitsInRangeX(t1, t2, cellSize);
         foreach (var uc in enemies)
         {
             if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
@@ -1682,21 +1682,32 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         }
     }
 
-    /// <summary>区间查询：x1→x2 范围内格子的单位（穿透冲锋路径扫描）。</summary>
+    /// <summary>
+    /// 区间查询：沿冲锋弹道 travel ∈ [t1,t2] 的路径带内单位（穿透冲锋路径扫描）。
+    /// HH.243（DZ-149/D693）改 D485 单遍过滤法：旧实现逐格扫 `for(y=0;y<=1;y++)`——`GridCoord.y`
+    /// 在 2.5D 已是**地图行号**（老"层"语义已迁 `layer`）⇒ 冲锋只扫最南两行，其余行敌人不被击飞
+    /// （穿透冲锋形同虚设）。改法＝UnitRegistry 单遍 → 沿 `_chargeDir` 位移区间 × 垂直半格带宽过滤。
+    /// </summary>
     private List<UnitController> QueryUnitsInRangeX(float x1, float x2, float cellSize)
     {
         var result = new List<UnitController>();
-        if (GridSystem.Instance == null) return result;
-        // doc1 改造：WorldToCoord 返回 GridCoord?（null=越界），越界返回空列表
-        var c1Opt = GridSystem.Instance.WorldToCoord(new Vector2(x1, 0));
-        var c2Opt = GridSystem.Instance.WorldToCoord(new Vector2(x2, 0));
-        if (!c1Opt.HasValue || !c2Opt.HasValue) return result;
-        int c1 = c1Opt.Value.x;
-        int c2 = c2Opt.Value.x;
-        for (int cx = c1; cx <= c2; cx++)
+        if (GridSystem.Instance == null || UnitRegistry.Instance == null) return result;
+        if (cellSize <= 0f) return result;
+
+        float tLo = Mathf.Min(x1, x2);
+        float tHi = Mathf.Max(x1, x2);
+        Vector2 dir = _chargeDir;
+        float bandHalf = cellSize * 0.5f;                    // 垂直带宽 ≈ 半格
+        Vector2 perp = new Vector2(-dir.y, dir.x);           // 冲锋方向的法向
+
+        foreach (var uc in UnitRegistry.Instance.GetAllUnits())
         {
-            for (int y = 0; y <= 1; y++)
-                result.AddRange(GridSystem.Instance.GetUnitsInCell(new GridCoord(cx, y)));
+            if (uc == null) continue;
+            Vector2 rel = (Vector2)uc.transform.position - _chargeStart;
+            float along = Vector2.Dot(rel, dir);             // 沿冲锋方向的位移
+            if (along < tLo - bandHalf || along > tHi + bandHalf) continue;
+            if (Mathf.Abs(Vector2.Dot(rel, perp)) > bandHalf) continue;   // 偏离路径带
+            result.Add(uc);
         }
         return result;
     }
