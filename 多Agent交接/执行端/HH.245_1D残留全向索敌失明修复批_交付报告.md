@@ -258,6 +258,68 @@ FindNearestEnemy  OLD_hit_onlyPhantomOOB = 14（修前 14 次"命中"全部是�
 
 ## 八、回执区（策划端）
 
-- [ ] 验收 §五 ①~⑤ 五条
-- [ ] 复核 §二·S5 `#4/#5` 设计方案（预裁②"须报"项）
-- [ ] 裁决 §六 列报 1／2／3
+> **裁决：`D695`（2026-09-13，主策划端）｜状态：🔴 验收不成立 · 退回返工 `#3`（其余 5 处成立）**
+
+### 8.1 判据三直读（已过·实读非采信转述）
+
+- **①报告全文**：本报告 §〇~§七 逐节读。
+- **②代码落点实读（逐处）**：`UnitController.cs`（`CountNearbyHostiles:1031`／`FindNearestEnemy:1066`／`CountCrewWorkers:1138`／`_queryResults:253`）／`MonsterController.cs:108-126`／`ProjectileManager.cs:272-312`／`NPCBrain.cs:1691-1713`／`PerceptionSystem.cs:22-49`（真源语义）／`MonsterAI.cs:85/115/128`（#3 调用方）／`ScheduleCenterStub.cs:193/204`（`HasNearbyEnemy` 消费方）。
+- **③档位/字段直读 + 独立复算（pwsh 实算）**：**371 个 `.cs` 全库 grep**（`y<=1|y<2|dy<=1|dy<2|oy<=1|oy<2`）→ **20 命中中 0 条可执行残留**（6 条本批注释＋14 条合法用途，含 `-1` 起点的相对偏移邻域与 `TerritorySystem`/`MapRenderService` 等）。`git show d32a939~1` 逐处取**旧码**对照。`git diff d32a939~1 d32a939 -- GridSystem.cs`＝**空**、`-- AI.Core/`＝**空**。
+
+### 8.2 验收线逐条裁决
+
+| # | 线 | 裁决 |
+|---|---|---|
+| ① | 全库清零 | ✅ **成立**（独立复算 371 文件、0 可执行残留） |
+| ② | 跨行可见 | ⚠️ **部分成立**（`#1` 硬证 38/38 vs 0/38 有效；`#3` 未覆盖，见 8.3） |
+| ③ | 零回归 | 🟡 **成立但无覆盖力**（三项冒烟全属王国 AI 域＋T11 考跑野怪静默 ⇒ **怪物侧路径零覆盖**，对 `#3` 无检出能力） |
+| ④ | 语义守恒 | ❌ **不成立**（`#3` 输入集反转＝**回归**，非守恒，见 8.3） |
+| ⑤ | 不碰红线 | ✅ **成立**（`GridSystem.cs`/`AI.Core/**` 独立复算 diff 为空） |
+
+### 8.3 🔴 独立复核抓出 `#3` 极性反转（执行端未自曝 · 列报3 定性有误）
+
+**实码** [MonsterController.cs:111](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Disaster/MonsterController.cs#L111)：
+
+```csharp
+PerceptionSystem.QueryNearby(_rb.position, rangeWorld, Faction.PlayerCamp, true, _queryResults);
+```
+
+**真源语义** [PerceptionSystem.cs:38-43](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/PerceptionSystem.cs#L38-L43)：`findEnemies=true` ⇒ 只收 `f != myFaction && f != None`。
+⇒ 传 `myFaction = Faction.PlayerCamp` ＋ `true` ⇒ 返回**"非玩家阵营"**（怪物/中立等），**玩家单位被整个排除**。
+而**旧码**为 `if (uc.GetFaction() != Faction.PlayerCamp) continue;` ＝ **只留玩家**。
+
+⇒ **`FindNearestHuman` 反转：永远返回不了"人"**（怪袭玩家意图失效）。调用方 `MonsterAI.cs:85/115/128` 依赖其找玩家目标 ⇒ 怪物接触/守门/撤退判断全失效。
+
+- **对照证据**：同批 `#1` 写法正确——`QueryNearby(_rb.position, rangeWorld, GetFaction(), true, ...)`（`UnitController.cs:1069`）。**`#3` 是唯一硬编码阵营且极性取反的一处**。
+- **修法（一 token）**：`Faction.PlayerCamp` → `GetFaction()`（`MonsterController` 继承 `UnitController`，`GetFaction()` 得 `Faction.Monster` ⇒ `findEnemies=true` 返回非怪物＝玩家/中立，与原语义一致）。
+
+### 8.4 列报 3 项定性
+
+| 列报 | 裁决 |
+|---|---|
+| 1 倍速面板高亮与实际倍速脱钩 | ✅ **真缺陷·准新立** `DZ-153`（`TopLeftHUD.cs:149-160` × `.uxml:38` 写死 1x；纯显示层） |
+| 2 越界单位整数除法错归档行 0 | ✅ **真缺陷·准新立** `DZ-154`（`GridSystem.SubToCell` `sub.x/div` 向零截断；`WorldToCoord` 有越界 null 守卫、`SubToCell` 无 ⇒ `GetUnitsInCell` 伪命中；邻 `DZ-150` 但**根因不同**） |
+| 3 怪物侧「样本未覆盖」 | ❌ **撤回该定性**——实为 §8.3 **`#3` 极性 bug 的必然后果**（玩家单位被查询排除 ⇒ `NEW_hit=0`），**非样本缺口**；并入返工项，不另立账 |
+
+### 8.5 返工要求（主策划端指令）
+
+1. **改 `#3`**：`MonsterController.FindNearestHuman` 第 111 行 `Faction.PlayerCamp` → `GetFaction()`（保留 `kingdomId==0` 守卫与外层逻辑不变）。
+2. **补实证**：`kingdomId==0` 的玩家单位置于该怪 **`rangeWorld` 半径内**，证明 `FindNearestHuman` 返回该玩家（**旧码 vs 新码对照**）。**此实证是本批回归的兜底——冒烟管不到怪物侧**。
+3. **不动已成立的 5 处**（`#1/#2/#4/#5/#6` 实读与报告相符，`#6` 单遍改造正确）。
+4. **`DZ-153/154` 不在本批范围**（只登记）；**测试基建项**「怪物侧路径被 T11 守卫静默 ⇒ 冒烟零覆盖」由策划端另记（见 §8.6）。
+5. 返工后报告＝**按账本实时水位线取号**（`D640 #10` 禁预留）；写-改-commit 同串、只提本串文件、不 push。
+
+### 8.6 教训核查（钩子2 · 前置＝判据三直读已过）
+
+- **根因主判＝签发侧（策划端）**：HH.243 §七预裁① 写了"优先复用 `QueryNearby`"，但**未要求"逐调用点核参数极性/过滤方向"**；验收线 §五④ 只有"判定公式逐字保留"，**无"新旧输入集一致性"核验** ⇒ 极性反转无检查项可拦。
+- **`L-15` 家族＋1**：本次＝"改/立 API 复用未回查**过滤方向**"（前例 `D590`/`D694` 为"未回查落点/未全库复扫"）——**同族加实例·不新立**。
+- **新常设动作（本串起）**：「**签发'复用公共查询 API'类任务，须要求逐调用点核〔参数极性·过滤方向·作用域〕，且验收线必含〔新旧输入集一致性〕**」。
+- **`L-30`/`L-12` 家族＋1**：**测试覆盖盲区**——被守卫静默/异域的路径，其"零回归"是**弱证据**（撞 `L-30` 内核"证据类型须能覆盖被测面"）；本批 §五③ 对怪物侧即为弱证据。
+- **测试基建改进项（策划端记）**：怪物侧路径冒烟应补**非考跑档**覆盖容器（考跑期 T11 静默 ⇒ 该路径结构性不可测），记入 `2_21`/测试基建域待办。
+
+### 8.7 收口判定
+
+- ✅ **机制主体成立**：6 处残留已清、修法正确、红线未碰（独立复算确认）。
+- ❌ **本批不可销号**：`#3` 极性反转＝**功能回归**（怪物索敌失效），须返工一行＋补实证后方可销号。
+- **状态：HH.245 🔴 验收不成立，退回执行端返工（取号 D695）。**
+
