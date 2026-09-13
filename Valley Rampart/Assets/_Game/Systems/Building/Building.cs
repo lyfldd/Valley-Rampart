@@ -602,7 +602,6 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public SavePayload SaveState()
     {
         var storage = GetComponent<StorageComponent>();
-        var producer = GetComponent<ProducerComponent>();
         // DZ-072a：矿洞副产组件双仓存量（无组件=零值元组）；T1.4（D609）：第三元=矿石
         var mineByprod = GetComponent<MineByproductComponent>();
         var mineByprodSaved = mineByprod != null ? mineByprod.SaveByproductState() : (crystal: 0, fireOil: 0, ore: 0);
@@ -620,8 +619,6 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             state = (int)state,
             sourceType = (int)sourceType,
             storedAmount = storage != null ? storage.storedAmount : 0,
-            byproductType = producer != null ? (int)producer.ByproductType : 0,
-            byproductAmount = producer != null ? producer.ByproductAmount : 0,
             // DZ-072a：矿洞副产组件双仓存量入档（旧档缺字段→默认 0 零 bump）
             byproductCrystalAmount = mineByprodSaved.crystal,
             byproductFireOilAmount = mineByprodSaved.fireOil,
@@ -675,9 +672,6 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
         var storage = GetComponent<StorageComponent>();
         if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
-
-        var producer = GetComponent<ProducerComponent>();
-        if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
 
         // DZ-072a：矿洞副产组件双仓存量恢复（旧档缺字段=0，零恢复=新产链起点）；T1.4（D609）：第三参=矿石
         var mineByprod = GetComponent<MineByproductComponent>();

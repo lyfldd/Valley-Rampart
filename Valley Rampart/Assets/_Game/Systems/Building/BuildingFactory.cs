@@ -399,14 +399,12 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         b.grade = (ResourceGrade)data.grade;
         b.ApplyDef();
 
-        // 恢复核心状态（level/hp/maxHp/storedAmount/副产）
+        // 恢复核心状态（level/hp/maxHp/storedAmount）
         b.level = Mathf.Max(1, data.level);
         b.maxHp = Mathf.Max(1, data.maxHp);
         b.hp = Mathf.Clamp(data.hp, 0, b.maxHp);
         var storage = b.GetComponent<StorageComponent>();
         if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
-        var producer = b.GetComponent<ProducerComponent>();
-        if (producer != null) producer.RestoreByproduct(data.byproductType, data.byproductAmount);
 
         // 2_12 步骤7 / D155：累计投入恢复（D155 修复成本基数 / D162 拆除返还基数）。旧档缺字段 → 兜底按 def.cost。
         b.totalInvested = data.totalInvested > 0

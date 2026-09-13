@@ -26,11 +26,8 @@ public struct BuildingSaveData
     public int state;           // (int)BuildingState
     public int sourceType;      // (int)BuildingType
     public int storedAmount;    // StorageComponent.storedAmount（无则 0）
-    // 3.5 步骤6：矿洞副产（水晶/火油）本地存储（无则 0）。旧档缺字段 → 默认 0，向前兼容。
-    public int byproductType;   // (int)ResourceType 副产类型（0=Gold 无副产）
-    public int byproductAmount; // 副产已存数量
     // DZ-072a（D562 / HH.107 件1）：矿洞副产组件（MineByproductComponent）双仓存量（无则 0）。
-    // 旧档缺字段 → 默认 0 向前兼容，零 bump（M10）。原 byproductType/Amount 为 ProducerComponent 副产口（mine 不适用）。
+    // 旧档缺字段 → 默认 0 向前兼容，零 bump（M10）。
     public int byproductCrystalAmount; // 水晶副产子仓存量
     public int byproductFireOilAmount; // 火油副产子仓存量
     public int byproductOreAmount;     // 矿石伴生子仓存量（T1.4/D609；尾插零 bump，旧档缺→0）
