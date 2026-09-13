@@ -234,4 +234,4 @@
 
 **禁令遵守**：只改注释文本；`TryGatherBreaker` 八条件／`SetFocus`／`WorldGatherRegistry` 只读查询**逐字未动**；未新建方法；未跑局。
 
-**产物**：`FocusController.cs`＋`WorldGatherRegistry.cs`（**仅注释**）＋本 §十二 回写。**commit**：`<见回报>`（**不 push**）。
+**产物**：`FocusController.cs`＋`WorldGatherRegistry.cs`（**仅注释**）＋本 §十二 回写。**commit**：`bcdcd97`（3 files·**不 push**）。
