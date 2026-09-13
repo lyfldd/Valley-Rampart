@@ -139,3 +139,30 @@ WF $s '{"type":"execute_csharp_script","params":{"script":"return new System.Col
 ---
 
 > 版本：2026-09-13（执行端）。关联：HH.248（D697）/ HH.247 / HH.244 任务书 / `unity-mcp-first`。
+
+---
+
+## 五、回执区（策划端）
+
+> **裁决：`D698`（2026-09-13，主策划端）｜状态：✅ 准予 + 勘正确认 · 全量落盘**
+
+### 5.1 判据三直读（已过·实读非采信转述）
+
+- **①报告全文**：本报告 §〇~§四逐节读（含红线自检＝零业务改动/未 push/skill 未动）。
+- **②实盘旁证（独立复算）**：策划端自行独立探活——
+  - `GET http://127.0.0.1:8080/health` → **200** `{"status":"healthy","version":"10.2.0"}`（与报告 §二① 同值）。
+  - 实读 `Temp\.com-unity-codely.json` → `unity_port=57118, reason=ready`（与报告 §二② 吻合）；**项目根旧副本** `.com-unity-codely.json` → `unity_port=-1, reason=package_updating, last_heartbeat=2026-09-12`（坐实 L-02 家族陷阱）。
+  - 进程命令行硬证（先前已存）＝`mcp-for-unity.exe --transport http --http-url http://127.0.0.1:8080 ...`。
+- **③逻辑闭合**：session 绑定 TCP 连接的机理（短连伪"Session not found"）与报告建议的 keep-alive 硬前提自洽。
+
+### 5.2 裁决
+
+1. **✅ 准予 §三 建议稿** → `unity-mcp-first` 四副本新增「MCP 全失效·终端应急恢复（D698 纪律·2026-09-13）」章节，含：终端探活两步（`/health`＋`Temp\.com-unity-codely.json`）→ `mcp_unityMCP` 长连直调（Node keep-alive 模板·硬前提）→ bridge 帧化 TCP 直连（pwsh 模板·22 类命令）→ 编辑器侧 Connect 兜底 → 换会话最后手段；**四端同步完成且哈希一致 `89C39252373F`（407 行，D697/D698 各 1 节）**。
+2. **✅ 勘正确认**：HH.248 记「mcp-for-unity 走 stdio/6500 未监听」＝**以实盘为准更正**——本日实测为 **HTTP 8080 形态**（进程命令行 + `/health` 硬证）；已写入 D698 章节 §6 勘正注，HH.248 §六 亦补勘正注。服务形态可随环境变化（stdio↔HTTP 并存可能），**一切以实盘为准**。
+3. **✅ 教训入库**：`_策划教训库.md` D698 条目（L-02 家族实例：`Temp\` 运行时真身 vs 项目根旧副本）。
+4. **恢复路径升级**：D697「恢复路径总表」的"真失效→换会话"升级为"真失效→**先终端探活**→双通道直连→仍不行才换会话"（D698 §0-5）。
+
+### 5.3 状态
+
+- ✅ **准予 + 勘正确认**；skill 四端同步（含修复 D697 章节重复·哈希 `89C39252373F`）。
+- **HH.250 销号**（取号 D698）。HH.244 收尾并行进行（交付 HH.249），不受阻。
