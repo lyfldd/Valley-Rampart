@@ -542,6 +542,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             // 停在原地（保持到达态，防被 Wander 拉走）；面向任务点由 UpdateFacing 内部处理
             uc.MoveTowards(brain.transform.position);
+            // HH.264 A2/F-02：Working 期＝工作循环动画（attack Loop，不回落；战斗 attack 才是 OnceReturn）
+            uc.NotifyWorkVisual();
         }
         OverheadSpeech.Show(brain.transform, "劳作中…", duration: 0.8f);
     }

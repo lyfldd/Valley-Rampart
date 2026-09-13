@@ -3,103 +3,129 @@ using UnityEngine;
 using ValleyRampart.Rendering;
 
 /// <summary>
-/// 轻量序列帧动画播放器（HH.239 T13 · 路线A · H5 全配档）。
+/// 轻量序列帧动画播放器（HH.239 T13 ＋ HH.264 A 段补完 · 规格《美术资源接入_SpriteAnimator播放器设计规格》）。
 ///
-/// 状态源 = 运动/攻击事件（idle / walk / attack / run）；帧源 = <see cref="SpriteRefTable"/>
-/// （<c>unit_{race}_{occ}_{state}</c> 切帧后的 Sprite[]；机器走 <c>machine_{race}_{type}_strip</c>）。
-/// **缺图回退静默化**：整套缺帧 ⇒ 保持 prefab 原 sprite 不动（负查询缓存 + 一次性告警，禁逐帧刷日志）。
+/// 状态源 = UnitController/NPCBrain/TaskScheduler（唯一）；帧源 = <see cref="SpriteRefTable"/>。
+/// **缺图回退链（F-09）**：状态缺 → `stateFallback` 回退态 → 静态立绘（`portrait_{race}_{occ}`）→ 占位（prefab 原图）。
+/// **O(1) 生死／不可见注销／脏写跳过／零 GC／零逐帧字符串比较**（见 Driver）。
 ///
-/// 架构（H5）：
-///   - **单管理器集中推进**（<see cref="SpriteAnimatorDriver"/>，ProjectileManager 同款）；
-///   - **结构体数组内联**（Driver 内平铺 <c>AnimSlot</c>：timer/frame/fps/state/frames，连续内存遍历）；
-///   - **脏写跳过**（帧索引未变不写 sprite 属性）；
-///   - **不可见注销**（OnBecameInvisible 移出活跃表／OnBecameVisible 回表）；
-///   - **状态注册表**（per (race,occ) 共享 Sprite[]，400 单位共享 ~46 套 sheet，帧数组只建一份）；
-///   - **O(1) 注册/注销**（swap-remove，禁 List.Remove）；OnDestroy 必注销（池复位纪律延伸）；
-///   - **零 GC／零逐帧字符串比较**（状态用 int id；帧集解析只在 race/occ 变化时做一次）；
-///   - **Time.deltaTime** 驱动（自动随倍速/timeScale 冻结）；per-state fps + 局部 speedScale。
+/// 本类＝**意图层**（状态/朝向/变速/回调订阅）；播放层＝<see cref="SpriteAnimatorDriver"/>（单管理器集中推进）。
+/// 硬编码值全部迁入 <see cref="SpriteAnimatorConfig"/>（so-data-driven）。
 /// </summary>
 [DisallowMultipleComponent]
 public class SpriteAnimator : MonoBehaviour
 {
-    public const int StIdle = 0, StWalk = 1, StAttack = 2, StRun = 3;
-    public const int StateCount = 4;
+    // ===== AnimState（规格 §三；int 枚举，禁逐帧字符串比较；扩展＝尾插）=====
+    public const int StIdle = 0, StWalk = 1, StAttack = 2, StRun = 3, StLoot = 4, StDeath = 5;
+    public const int StateCount = 6;
+    // ===== PlayMode（规格 §三）=====
+    public const int ModeLoop = 0, ModeOnceReturn = 1, ModeOnceHold = 2;
 
-    static readonly string[] StateNames = { "idle", "walk", "attack", "run" };
-    // 每状态：fps（SO 可配口径，暂常量）/ 播放模式（0=loop 1=once 回落 idle 2=once 定格）
-    static readonly float[] StateFps = { 8f, 12f, 12f, 12f };
-    static readonly int[] StateMode = { 0, 0, 1, 0 };   // 工人 attack=工作循环语义由 UnitController 侧选择不改模式
+    static readonly string[] StateNames = { "idle", "walk", "attack", "run", "loot", "death" };
 
-    /// <summary>共享帧注册表：key = race*1000 + (int)occ → 4 个状态的帧数组（帧数组只建一份）。</summary>
+    /// <summary>共享帧注册表：key = race*1000 + (int)occ → 6 状态帧数组（帧数组只建一份，F-01）。</summary>
     static readonly Dictionary<long, Sprite[][]> _setCache = new Dictionary<long, Sprite[][]>();
-    /// <summary>负查询缓存（缺图静默化：不重复查、不逐帧刷日志）。</summary>
+    /// <summary>负查询缓存（F-09 静默化：不重复查、不逐帧刷日志）。</summary>
     static readonly HashSet<long> _missingSets = new HashSet<long>();
-    /// <summary>缺图一次性告警登记（防刷屏）。</summary>
+    /// <summary>缺图一次性告警登记（防刷屏，M2）。</summary>
     static readonly HashSet<long> _warned = new HashSet<long>();
 
-    /// <summary>Driver 内联推进槽（结构体数组，连续内存；Driver 侧平铺持有）。</summary>
+    /// <summary>Driver 侧平铺推进槽（结构体数组内联·连续内存）。</summary>
     internal struct AnimSlot
     {
         public SpriteRenderer sr;
         public Sprite[] frames;
         public float timer;
-        public int frame;
+        public int frame;         // 当前帧索引
         public int lastFrame;     // 脏写跳过
         public int state;
+        public int mode;          // 本帧生效播放模式（含工人工作循环覆写）
+        public int token;         // 打断重播令牌（F-05）
         public bool facingLeft;
+        public bool completed;    // once 已触发回调（防重复）
+        public int lodTier;       // 0=Active 1=SemiActive 2=Dormant
+        public float lodTimer;
     }
 
     SpriteRenderer _sr;
     UnitController _uc;
-    Sprite[][] _set;              // null = 无真图（保持 prefab 原 sprite 不动）
+    Sprite[][] _set;
     int _raceId = int.MinValue;
     Occupation _occ;
     long _setKey = long.MinValue;
+
     int _desiredMoveState = StIdle;
-    float _speedScale = 1f;
+    int _forcedState = -1;        // Death/Loot 等显式态（优先级最高）
+    bool _attackIntend;           // 战斗攻击意图：**sticky 直到 once 播完**（F-02/F-05：CD 1s < 动画 1.33s，禁被 hold 截断）
+    float _speedScale = 1f;       // 局部变速（F-06 ②）
     float _moveHold;
-    float _attackHold;
+    float _workHold;              // 工人 Working 期（F-02 工作循环）
+    int _restartToken;
     bool _facingLeft;
     bool _registered;
 
+    System.Action _onOnceComplete;                       // F-04 完成回调（P0）
+    System.Action<UnitController, int> _onFrame;         // F-15 帧事件钩子（只预留·不接逻辑）
+
     internal AnimSlot Slot;
+    // ===== 验收/诊断读数面（HH.264 §7.2 探针 P1~P8 取证；只读）=====
+    /// <summary>当前状态 id（AnimState int）。</summary>
+    public int CurrentStateId => Slot.state;
+    /// <summary>当前帧索引。</summary>
+    public int CurrentFrameIndex => Slot.frame;
+    /// <summary>当前状态有效帧数（0＝无帧）。</summary>
+    public int CurrentFrameCount => (Slot.frames != null) ? Slot.frames.Length : 0;
+    /// <summary>是否已解析到真图帧集（false＝回退末端＝保持 prefab 原图）。</summary>
+    public bool HasRealFrames => _set != null;
+    /// <summary>当前 LOD 档位（0=Active 1=SemiActive 2=Dormant）。</summary>
+    public int LodTier => Slot.lodTier;
+    /// <summary>是否在 Driver 活跃表中（F-12 不可见注销可观测面）。</summary>
+    public bool IsRegistered => _registered;
+    /// <summary>当前生效播放模式（0=Loop 1=OnceReturn 2=OnceHold）。</summary>
+    public int CurrentMode => Slot.mode;
     internal Sprite[][] FrameSet => _set;
     internal bool FacingLeft => _facingLeft;
     internal float SpeedScale => _speedScale;
+    /// <summary>打断重播令牌（F-05 可观测面：每次重触发 +1）。</summary>
+    public int RestartToken => _restartToken;
+    internal System.Action OnceCallback => _onOnceComplete;
+    internal System.Action<UnitController, int> FrameCallback => _onFrame;
+    internal UnitController Controller => _uc;
 
-    /// <summary>本帧期望状态（意图层）：attack 优先 → 移动 → idle。播放层（Driver）只消费本值。</summary>
+    /// <summary>本帧期望状态（意图层）：显式态 &gt; 工作循环 &gt; 战斗攻击 &gt; 移动 &gt; idle。</summary>
     internal int DesiredState
     {
         get
         {
-            if (_attackHold > 0f) return StAttack;
+            if (_forcedState >= 0) return _forcedState;
+            if (_workHold > 0f) return StAttack;
+            if (_attackIntend) return StAttack;
             if (_moveHold > 0f) return _desiredMoveState;
             return StIdle;
         }
     }
 
-    /// <summary>意图计时衰减（由 Driver 集中调用；零 GC）。</summary>
+    /// <summary>本帧期望播放模式（F-02 三态分离：工人工作 attack＝Loop；战斗 attack＝OnceReturn）。</summary>
+    internal int DesiredMode
+    {
+        get
+        {
+            var cfg = SpriteAnimatorConfig.Instance;
+            int st = DesiredState;
+            if (st == StAttack && _workHold > 0f && cfg.workAttackLoop) return ModeLoop;
+            return cfg.ModeOf(st);
+        }
+    }
+
     internal void DecayIntent(float dt)
     {
         if (_moveHold > 0f) _moveHold -= dt;
-        if (_attackHold > 0f) _attackHold -= dt;
+        if (_workHold > 0f) _workHold -= dt;
     }
 
-    /// <summary>强制回落 idle（once 态播完）。</summary>
-    internal void ForceIdle()
-    {
-        _attackHold = 0f;
-        _moveHold = 0f;
-        _desiredMoveState = StIdle;
-    }
-
-    internal static float FpsOf(int state) => (state >= 0 && state < StateCount) ? StateFps[state] : 12f;
-
-    internal static int ModeOf(int state) => (state >= 0 && state < StateCount) ? StateMode[state] : 0;
-
-    /// <summary>随机起始相位（仅 loop 态进场随机帧，防全场齐步走）。</summary>
-    internal static int RandomPhase(int state, int len)
-        => (len > 1 && ModeOf(state) == 0) ? Random.Range(0, len) : 0;
+    /// <summary>随机起始相位（F-08：**仅 Loop 态**进场随机帧，防 400 单位齐步走；one-shot 不随机）。</summary>
+    internal static int RandomPhase(int mode, int len)
+        => (len > 1 && mode == ModeLoop) ? UnityEngine.Random.Range(0, len) : 0;
 
     void Awake()
     {
@@ -113,74 +139,139 @@ public class SpriteAnimator : MonoBehaviour
     void OnEnable()
     {
         EnsureSet();
-        if (isActiveAndEnabled) Register();   // 常驻登记：帧集未就绪时由 Driver 每 tick 复核（防「出池洗涤后不再解析」死锁）
+        if (isActiveAndEnabled) Register();   // 常驻登记：帧集未就绪由 Driver 每 tick 复核（防「出池洗涤后不再解析」死锁）
     }
 
     void OnDisable() => Unregister();
     void OnDestroy() => Unregister();
+    /// <summary>F-12 不可见注销（H5）。</summary>
     void OnBecameInvisible() => Unregister();
-    void OnBecameVisible() { if (isActiveAndEnabled) Register(); }
-
-    /// <summary>由 Driver 调用：重新解析帧集（race/occ 变化时才做，禁用逐帧解析）。</summary>
-    internal void EnsureSet()
+    void OnBecameVisible()
     {
-        int race = _uc != null ? _uc.raceId : RaceIds.Human;
-        var occ = _uc != null ? _uc.EffectiveOccupation : Occupation.Civilian;
-        if (_set != null && race == _raceId && occ == _occ) return;
-        _raceId = race;
-        _occ = occ;
-        _setKey = (long)race * 1000 + (int)occ;
-        _set = ResolveSet(_setKey, race, occ);
-        if (_set != null)
-        {
-            if (Slot.frames == null || Slot.frames.Length == 0) Slot.state = -1;  // 强制重置到 idle 相位
-        }
+        if (isActiveAndEnabled) Register();
+        Slot.lodTimer = 0f;   // 回表立即刷新 LOD 档（防"用旧档"；M1）
     }
 
-    /// <summary>移动通知（UnitController.UpdateFacing 调用）：驱动 walk/run + 两向 flipX。</summary>
+    // ===================== 对外 API（规格 §三）=====================
+
+    /// <summary>SetState（F-05：同状态重入＝打断重播，one-shot 从第 0 帧重开）。</summary>
+    public void SetState(int state, bool restart = false)
+    {
+        if (state < 0 || state >= StateCount) return;
+        if (state == StDeath || state == StLoot) _forcedState = state;
+        else _forcedState = -1;
+        if (state == StAttack) _attackIntend = true;
+        if (restart) _restartToken++;
+    }
+
+    /// <summary>SetFlip：只画朝右，左向＝flipX（F-07）。</summary>
+    public void SetFlip(bool facingLeft) => _facingLeft = facingLeft;
+
+    /// <summary>SetSpeed：局部变速（F-06 ②；LOD 缩放在 Driver 侧另乘）。</summary>
+    public void SetSpeedScale(float scale) => _speedScale = Mathf.Max(0f, scale);
+
+    /// <summary>SubscribeComplete（F-04 P0）：OnceReturn/OnceHold 播完触发；death 播完 ⇒ 衔接既有死亡流程。F-14 池复位清空。</summary>
+    public void SubscribeComplete(System.Action callback) => _onOnceComplete = callback;
+
+    /// <summary>OnFrame 帧事件钩子（F-15 **只预留**·本批不接游戏逻辑·表现禁驱动逻辑）。</summary>
+    public void SubscribeFrame(System.Action<UnitController, int> callback) => _onFrame = callback;
+
+    /// <summary>移动通知（UnitController.UpdateFacing 调用）：驱动 walk/run ＋ 两向 flipX。</summary>
     public void NotifyMove(Vector2 direction)
     {
         _moveHold = 0.15f;
         int st = Mathf.Abs(direction.x) > 0.01f || Mathf.Abs(direction.y) > 0.01f ? StWalk : StIdle;
-        if (_uc != null && _uc.IsCharging) st = StRun;   // 坐骑 run（冲锋语义）；无冲锋的族无 run 帧 → 回落 walk
+        if (_uc != null && _uc.IsCharging) st = StRun;   // 坐骑 run（D602）；非坐骑无 run 帧 ⇒ 回落 walk 并加速
         if (st != StIdle) _desiredMoveState = st;
         if (direction.x < -0.01f) _facingLeft = true;
         else if (direction.x > 0.01f) _facingLeft = false;
     }
 
-    /// <summary>攻击通知（UnitController 侧攻击注册成功时调用）：播放 attack（once 回落 idle）。</summary>
+    /// <summary>战斗攻击通知（DamageSystem.ExecuteAttack → NotifyAttackVisual）：attack＝OnceReturn（播完回落）。</summary>
     public void NotifyAttack()
     {
         if (_set == null) { EnsureSet(); if (_set == null) return; }
+        if (_forcedState >= 0) return;                  // 死亡/拾取演出中不打断
         if (_set[StAttack] == null || _set[StAttack].Length == 0) return;
-        _attackHold = 0.4f;
+        _attackIntend = true;                            // sticky：由 once 播完（OnOnceFinished）收口
+        _restartToken++;                                 // F-05 打断重播
     }
 
-    /// <summary>LOD / 倍速局部缩放（对接既有 LODSystem；1=全速，0.5=远档降半频，0=冻结静态帧）。</summary>
-    public void SetSpeedScale(float scale)
+    /// <summary>工人工作通知（TaskScheduler Working 期每 tick 调用）：attack＝Loop（不回落，F-02）。</summary>
+    public void NotifyWork()
     {
-        _speedScale = Mathf.Max(0f, scale);
+        _workHold = 0.3f;
+        _desiredMoveState = StIdle;
     }
 
-    /// <summary>就地重置（对象池复用 / 出池洗涤）。</summary>
+    /// <summary>死亡通知（UnitController.Die 调用）：death＝OnceHold（定格末帧），播完回调衔接既有死亡流程（F-04）。</summary>
+    public void NotifyDeath()
+    {
+        _forcedState = StDeath;
+        _moveHold = 0f;
+        _attackIntend = false;
+        _workHold = 0f;
+        _restartToken++;
+        EnsureSet();
+    }
+
+    /// <summary>拾取演出（HH.233 monster loot；触发方归 2_14 域，未接线则不会调用）。</summary>
+    public void NotifyLoot()
+    {
+        if (_set == null) EnsureSet();
+        _forcedState = StLoot;
+        _restartToken++;
+    }
+
+    /// <summary>该状态是否有真图帧（供 F-04：死亡演出在场性判定 —— 无 death 帧则不延后既有回收流程）。</summary>
+    public bool HasFramesFor(int state)
+    {
+        if (_set == null) EnsureSet();
+        return _set != null && state >= 0 && state < StateCount
+               && _set[state] != null && _set[state].Length > 0;
+    }
+
+    /// <summary>once 播完内部收口：按**播放模式**收口（OnceReturn 清态回落／OnceHold 定格保留），并触发订阅者回调（F-04）。</summary>
+    internal void OnOnceFinished(int mode)
+    {
+        var cb = _onOnceComplete;
+        _onOnceComplete = null;              // F-04：一次性（防重复触发）
+        if (mode != ModeOnceHold)
+        {
+            _forcedState = -1;
+            _attackIntend = false;
+        }
+        _workHold = 0f;
+        cb?.Invoke();
+    }
+
+    /// <summary>F-14 池复位：清回调 ＋ frame=随机 ＋ state=Idle（对齐规格 F-14 原文）。</summary>
     public void ResetForReuse()
     {
         _desiredMoveState = StIdle;
+        _forcedState = -1;
         _moveHold = 0f;
-        _attackHold = 0f;
+        _attackIntend = false;
+        _workHold = 0f;
         _facingLeft = false;
+        _restartToken++;
+        _onOnceComplete = null;              // F-14 回调查空
         _raceId = int.MinValue;
         _occ = default;
         _setKey = long.MinValue;
         _set = null;
         Slot.state = -1;
-        Slot.frame = 0;
+        Slot.frame = 0;                      // 下一帧进入 idle 时由 Driver 赋随机相位（F-08/F-14）
         Slot.lastFrame = -1;
         Slot.timer = 0f;
-        if (isActiveAndEnabled && !_registered) Register();   // 保持登记 ⇒ Driver 下一 tick 重新解析（防死锁）
+        Slot.token = -1;
+        Slot.completed = false;
+        Slot.lodTier = 0;
+        Slot.lodTimer = 0f;
+        if (isActiveAndEnabled && !_registered) Register();
     }
 
-    // ===== 注册表（O(1) swap-remove）=====
+    // ===================== 注册（O(1) swap-remove）=====================
 
     void Register()
     {
@@ -196,9 +287,22 @@ public class SpriteAnimator : MonoBehaviour
         SpriteAnimatorDriver.Instance.Remove(this);
     }
 
-    // ===== 帧集解析（状态注册表）=====
+    // ===================== 帧集解析（F-01 注册表 ＋ F-09 回退链）=====================
 
-    /// <summary>per (race,occ) 解析 4 状态帧数组；无真图返回 null（负查询缓存 + 一次性告警）。</summary>
+    /// <summary>解析帧集（race/occ 变化时才重建；池复位后/探针显式调用）。</summary>
+    public void EnsureSet()
+    {
+        int race = _uc != null ? _uc.raceId : RaceIds.Human;
+        var occ = _uc != null ? _uc.EffectiveOccupation : Occupation.Civilian;
+        if (_set != null && race == _raceId && occ == _occ) return;
+        _raceId = race;
+        _occ = occ;
+        _setKey = (long)race * 1000 + (int)occ;
+        _set = ResolveSet(_setKey, race, occ);
+        if (_set != null && Slot.frames == null) Slot.state = -1;   // 强制重置到首个状态相位
+    }
+
+    /// <summary>per (race,occ) 解析 6 状态帧数组；三级回退链末端仍无 ⇒ null（保持 prefab 原图＝占位）。</summary>
     Sprite[][] ResolveSet(long key, int race, Occupation occ)
     {
         if (_setCache.TryGetValue(key, out var cached)) return cached;
@@ -208,11 +312,11 @@ public class SpriteAnimator : MonoBehaviour
         if (table == null) { _missingSets.Add(key); return null; }
 
         string raceName = BuildingVisual.RaceName(race);
-        string token = ArtToken(occ);
+        var cfg = SpriteAnimatorConfig.Instance;
         var set = new Sprite[StateCount][];
         bool any = false;
 
-        // 机器线（T15）：machine_{race}_{type} 单图 / machine_{race}_{type}_strip 16 帧
+        // ---- 机器线（T15）：machine_{race}_{type} 单图 / machine_{race}_{type}_strip 16 帧 ----
         if (IsMachine(occ, out string machineType))
         {
             string mkey = $"machine_{raceName}_{machineType}";
@@ -225,14 +329,15 @@ public class SpriteAnimator : MonoBehaviour
                 set[StIdle] = new[] { single };
                 any = true;
             }
-            if (!any) { _missingSets.Add(key); return null; }
+            if (!any) { WarnMissing(key, race, occ); return null; }
             _setCache[key] = set;
             return set;
         }
 
-        if (token == null) { _missingSets.Add(key); return null; }
+        string token = ArtToken(occ);
+        if (token == null) { WarnMissing(key, race, occ); return null; }
 
-        // 敌怪（2_14）：素材路径 Units/monster/{type}/，键 = unit_monster_{type}_{state}（无族段）
+        // ---- ① 逐状态取帧（怪物键不含族段：unit_monster_{type}_{state}）----
         bool monster = occ == Occupation.Monster;
         string monsterType = null;
         if (monster)
@@ -240,42 +345,61 @@ public class SpriteAnimator : MonoBehaviour
             var mc = _uc as MonsterController;
             monsterType = mc != null ? mc.Type.ToString().ToLowerInvariant() : "raider";
         }
-
         for (int i = 0; i < StateCount; i++)
         {
             string frameKey = monster
                 ? $"unit_{token}_{monsterType}_{StateNames[i]}"
                 : $"unit_{raceName}_{token}_{StateNames[i]}";
-            if (table.TryGetFrames(frameKey, out var fr) && fr.Length > 0)
-            {
-                set[i] = fr;
-                any = true;
-            }
+            if (table.TryGetFrames(frameKey, out var fr) && fr.Length > 0) { set[i] = fr; any = true; }
         }
-        // 状态缺失回落：run→walk→idle；attack→idle（H5「once 回落」的静默兜底）
-        if (set[StRun] == null) set[StRun] = set[StWalk];
-        if (set[StAttack] == null) set[StAttack] = set[StIdle];
 
-        if (!any)
+        // ---- ② 状态缺 ⇒ stateFallback 回退态（F-09 第二级；最多两跳防环）----
+        if (any)
         {
-            _missingSets.Add(key);
-            if (_warned.Add(key))
-                Debug.Log($"[SpriteAnimator] 无真图帧集 (race={raceName}, occ={occ}) ⇒ 保持 prefab 原 sprite（缺图回退；同类只告警一次）");
-            return null;
+            for (int i = 0; i < StateCount; i++)
+            {
+                if (set[i] != null) continue;
+                int fb = cfg.FallbackOf(i);
+                for (int hop = 0; hop < 2 && fb >= 0 && set[fb] == null; hop++) fb = cfg.FallbackOf(fb);
+                if (fb >= 0 && fb < StateCount && set[fb] != null) set[i] = set[fb];
+            }
+            _setCache[key] = set;
+            return set;
         }
-        _setCache[key] = set;
-        return set;
+
+        // ---- ③ 整套缺 ⇒ 静态立绘（F-09 第三级：portrait_{race}_{occ}）----
+        string portraitKey = monster ? $"portrait_monster_{monsterType}" : $"portrait_{raceName}_{token}";
+        if (table.TryGet(portraitKey, out var portrait) && portrait != null)
+        {
+            var one = new[] { portrait };
+            for (int i = 0; i < StateCount; i++) set[i] = one;
+            _setCache[key] = set;
+            return set;
+        }
+
+        // ---- ④ 占位（F-09 末端：保持 prefab 原 sprite；负查询缓存＋一次性告警）----
+        WarnMissing(key, race, occ);
+        return null;
+    }
+
+    /// <summary>缺图一次性告警（负查询缓存 + 同类只告警一次·禁逐帧刷屏；M2）。</summary>
+    static void WarnMissing(long key, int race, Occupation occ)
+    {
+        _missingSets.Add(key);
+        if (_warned.Add(key))
+            Debug.Log($"[SpriteAnimator] 整套无真图 (race={BuildingVisual.RaceName(race)}, occ={occ})"
+                      + " ⇒ 保持 prefab 原 sprite（缺图回退链末端；同类只告警一次）");
     }
 
     static bool IsMachine(Occupation occ, out string type)
     {
         switch (occ)
         {
-            case Occupation.Ballista:    type = "ballista";     return true;
-            case Occupation.Mortar:      type = "mortar";       return true;
-            case Occupation.VineCatapult:type = "vinecatapult"; return true;
-            case Occupation.Ram:         type = "ram";          return true;
-            default:                     type = null;           return false;
+            case Occupation.Ballista:     type = "ballista";     return true;
+            case Occupation.Mortar:       type = "mortar";       return true;
+            case Occupation.VineCatapult: type = "vinecatapult"; return true;
+            case Occupation.Ram:          type = "ram";          return true;
+            default:                      type = null;           return false;
         }
     }
 
@@ -296,7 +420,7 @@ public class SpriteAnimator : MonoBehaviour
             case Occupation.Worker:       return "worker";
             case Occupation.Vagrant:      return "vagrant";
             case Occupation.Child:        return "child";
-            // 无独立素材者就近复用（缺图面·§七 维持回退口径）
+            // 无独立素材者就近复用（缺图面）
             case Occupation.Civilian:     return "worker";
             case Occupation.Porter:       return "worker";
             case Occupation.HeavyWarrior: return "warrior";

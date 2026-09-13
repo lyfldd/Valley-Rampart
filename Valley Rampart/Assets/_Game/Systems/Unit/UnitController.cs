@@ -276,6 +276,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (_animator != null) _animator.NotifyAttack();
     }
 
+    /// <summary>工人工作动画触发（HH.264 A2/F-02；由 TaskScheduler Working 期每 tick 调用）⇒ attack 工作循环不回落。</summary>
+    public void NotifyWorkVisual()
+    {
+        if (_animator != null) _animator.NotifyWork();
+    }
+
     /// <summary>阵营（敌我识别/Faction 二元判定用）。收编后优先运行时覆写（AI 王国单位=AiKingdom），否则 Data.faction。</summary>
     public Faction GetFaction() => EffectiveFaction;
 
@@ -669,6 +675,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         Debug.Log($"[UnitController] {Data?.faction}_{Data?.occupation} 死亡。");
 
+        // HH.264 A2（F-04 P0）：死亡演出（death = OnceHold 定格末帧）；播完回调 → 既有回收流程
+        if (_animator != null) _animator.NotifyDeath();
+
         // 先注销 ISaveable，再回池，防止 SaveManager 抓到已回收实例
         SaveManager.Instance.UnregisterSaveable(this);
 
@@ -698,6 +707,19 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         _lastGridSub = default;
 
         // 3.0.1 §7.4 对象池回收（无工厂兜底销毁——如场景未挂 UnitFactory）
+        // HH.264 A2（F-04）：death 演出在场 ⇒ 延后到演出播完（onOnceComplete 衔接既有死亡流程）；
+        // 无 death 帧（本批素材缺）⇒ 即时回收，**死亡语义与回收时机零变化**（表现侧挂钩，不反向驱动逻辑）。
+        if (_animator != null && _animator.HasFramesFor(SpriteAnimator.StDeath))
+        {
+            _animator.SubscribeComplete(ReturnToPoolAfterDeath);
+            return;
+        }
+        ReturnToPoolAfterDeath();
+    }
+
+    /// <summary>死亡流程收尾：回对象池（或兜底销毁）。</summary>
+    void ReturnToPoolAfterDeath()
+    {
         if (UnitFactory.Instance != null)
             UnitFactory.Instance.ReturnUnitToPool(this);
         else

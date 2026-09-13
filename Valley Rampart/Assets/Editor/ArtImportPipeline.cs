@@ -41,6 +41,35 @@ public static class ArtImportPipeline
     {
         ApplyImportSettings();
         BuildSpriteRefTable();
+        EnsureAnimatorConfig();
+    }
+
+    /// <summary>
+    /// A1（HH.264）：落盘 <c>Resources/Config/Art/SpriteAnimatorConfig.asset</c>（出厂值＝规格 §三 表）。
+    /// 仅**新建时**写出厂值（已存在则不动，避免覆盖人工调参·承 so-data-driven）。
+    /// </summary>
+    public static void EnsureAnimatorConfig()
+    {
+        const string path = "Assets/Resources/Config/Art/SpriteAnimatorConfig.asset";
+        EnsureFolder("Assets/Resources/Config/Art");
+        var cfg = AssetDatabase.LoadAssetAtPath<SpriteAnimatorConfig>(path);
+        if (cfg != null) { Debug.Log("[ArtImportPipeline] SpriteAnimatorConfig 已存在（不覆盖）：" + path); return; }
+
+        cfg = ScriptableObject.CreateInstance<SpriteAnimatorConfig>();
+        cfg.defaultFps = 12f;
+        cfg.fpsByState = new[] { 12f, 12f, 12f, 12f, 12f, 12f };
+        cfg.attackSpeedScale = 1f;
+        cfg.runAsWalkSpeedScale = 1.5f;
+        cfg.lodFpsScale = new[] { 1.0f, 0.5f, 0f };
+        cfg.lodRefreshInterval = 0.5f;
+        cfg.stateFallback = new[] { 0, 0, 0, 1, 0, -1 };   // Idle/Walk/Attack→Idle/Run→Walk/Loot→Idle/Death 无回退
+        cfg.stateMode = new[] { 0, 0, 1, 0, 2, 2 };         // Loop/Loop/OnceReturn/Loop/OnceHold/OnceHold
+        cfg.workAttackLoop = true;
+        AssetDatabase.CreateAsset(cfg, path);
+        EditorUtility.SetDirty(cfg);
+        AssetDatabase.SaveAssets();
+        SpriteAnimatorConfig.ClearCache();
+        Debug.Log("[ArtImportPipeline] SpriteAnimatorConfig 已创建：" + path);
     }
 
     // ===================== ① 导入设置 + 切帧 =====================
