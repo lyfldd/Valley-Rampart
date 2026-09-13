@@ -16,13 +16,14 @@ using UnityEngine;
 /// 退役（HH.19 裁决口径 2）：原本 SiegeProductionSystem._ammoStock 全局弹药账（ProjectileType 键）不再作为真源；
 ///   ProduceAmmo 改走本组件子仓；ResupplySiegeUnit 直填接口退役；旧档 ammoStock 读入时迁入本组件子仓（不丢档）。
 /// </summary>
-public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent
+public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSource
 {
     /// <summary>厂内仓储的子物体前缀（仿 TreasureVault 的 Vault_ 命名）。</summary>
     const string SubStorePrefix = "Ammo_";
 
     private Building _building;
     private SiegeProductionConfig _config;
+    private bool _registered;   // TaskScheduler 懒注册（D704 A 批：组件自持 Production 广告源）
     private readonly Dictionary<ResourceType, StorageComponent> _stores =
         new Dictionary<ResourceType, StorageComponent>();
 
@@ -106,11 +107,15 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent
     public void Tick()
     {
         if (_building == null || !_building.IsActive) return;
+        LazyRegister();   // 广告源注册须在岗门之前，否则无在岗时永不注册 ⇒ 永不自举
         if (_stores.Count < 3) return;
         if (_config == null) return;
 
         float rate = RatePerSecond();
         if (rate <= 0f) return;
+
+        // D704 §三-3-②：在岗门——本组件自持广告（任务源＝组件）⇒ 读 HasWorkerAssigned(本组件)。
+        if (!HasWorkerOnDuty) return;
 
         _accumulator += rate;
         int amount = Mathf.FloorToInt(_accumulator);
@@ -230,10 +235,44 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent
 
     void OnDestroy()
     {
+        if (_registered && TaskScheduler.HasInstance)
+            TaskScheduler.Instance.Unregister(this);
         foreach (var kv in _stores)
         {
             if (kv.Value != null) WarehouseRegistry.Unregister(kv.Value);
         }
         _stores.Clear();
+    }
+
+    // ===== ITaskSource（D704 A 批：组件自持 Production 广告；源＝组件；`TreeGatherSource` 非 Building 任务源先例）=====
+
+    /// <summary>在岗判定（D704 §三-3-②）：组件源 ⇒ `HasWorkerAssigned(本组件)`（任意任务类型 Working 均算在场）。</summary>
+    bool HasWorkerOnDuty => TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(this);
+
+    public bool IsValid => this != null && _building != null && _building.IsValid;
+
+    public Vector2 SourcePos => _building != null ? (Vector2)_building.transform.position : Vector2.zero;
+
+    public void OnRegister() { }
+    public void OnUnregister() { }
+
+    /// <summary>无在岗（组件源）⇒ 发 Production（常驻广告·destType=None 原地劳作）。子仓未就绪/已在岗则不派。</summary>
+    public bool TryAdvertiseTask(out KingdomTask task)
+    {
+        task = null;
+        if (_building == null || !_building.IsValid) return false;
+        if (_stores.Count < 3) return false;   // 子仓未就绪不派（对齐 Tick 守卫）
+        var sched = TaskScheduler.Instance;
+        if (sched != null && sched.HasWorkerAssigned(this)) return false;
+        task = new KingdomTask(KingdomTaskType.Production, this);
+        task.destType = KingdomDestType.None;
+        return true;
+    }
+
+    void LazyRegister()
+    {
+        if (_registered || !TaskScheduler.HasInstance) return;
+        TaskScheduler.Instance.Register(this);
+        _registered = true;
     }
 }

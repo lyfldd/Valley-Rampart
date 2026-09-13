@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// 矿洞副产组件（DZ-072a，D562 / HH.107 件1）。
 /// mine 双身份=A2 变体（已裁决策）：mine 保持 isResourceNode=1 石头采集点身份不动（WanderStimulusProvider/
-/// GuardDeploymentSystem/Building 拆除守卫/BuildingPanel 全消费此 flag——M1 红线），另挂本组件恒产水晶/火油。
+/// GuardDeploymentSystem/Building 拆除守卫/BuildingPanel 全消费此 flag——M1 红线），另挂本组件产水晶/火油/矿石（**在岗才产**，D704 A 批）。
 ///
 /// 结构（仿 SiegeWorkshopBuilding 厂级弹药仓）：
 ///   - 挂 **3** 个单资源子 StorageComponent（Crystal/FireOil/**Ore**；T1.4/D609 加矿石伴生），容量取
@@ -11,7 +11,8 @@ using UnityEngine;
 ///     不注册 WarehouseRegistry（子仓=待运出缓冲非可存仓，见 CreateSubStore 注）。
 ///   - 产率：KingdomConfig.byproductCrystalRate/byproductFireOilRate/byproductOreRate（0.05/s=慢产保稀缺；
 ///     副产无等级门槛，原 ProducerComponent Lv2/Lv3 门槛随 mine levels=[] 不适用——已裁决策）。
-///   - 恒产：不设工人门（任务书「恒产」口径；石头采集链的工人派工与本组件互不相干）。
+///   - 在岗才产（D704 A 批·OB1-2）：本组件自持 ITaskSource 广告 Production（source＝组件·原地劳作）；无在岗（Working）⇒ 三槽停产。
+///     在岗＝HasWorkerAssigned(本组件)（任意任务类型 Working 均算在场）；石头采集链的工人派工与本组件互不相干。
 ///   - 搬运：本组件实现 ITaskSource（TreeGatherSource 非 Building 任务源先例），子仓存量达
 ///     transportThreshold 时发 Transport（destType=NearestWarehouse；args 带子仓资源类型，
 ///     TaskScheduler.LoadInventoryFromSource 按 args 资源类型取子仓）。
@@ -85,6 +86,8 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
     {
         if (_building == null || !_building.IsActive) return;
         LazyRegister();
+        // D704 §三-3-⑤：在岗门与广告序同源——无在岗 ⇒ 不发 Production ⇒ 三槽停产（累积前 return）。
+        if (!HasWorkerOnDuty) return;
         var config = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
         TickStore(_crystalStore, config != null ? config.byproductCrystalRate : 0.05f, ref _crystalAccumulator, ref _crystalFullLogged);
         TickStore(_fireOilStore, config != null ? config.byproductFireOilRate : 0.05f, ref _fireOilAccumulator, ref _fireOilFullLogged);
@@ -168,6 +171,16 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
     {
         task = null;
         if (_building == null || !_building.IsValid) return false;
+
+        // D704 §三-3-③：广告序＝硬 if/else。无在岗 ⇒ 发 Production（常驻广告·destType=None 原地劳作）；
+        // 有在岗 ⇒ 走既有三仓 Transport 判定。禁同 tick 双发（ITaskSource 同 tick 只返一任务）。
+        if (!HasWorkerOnDuty)
+        {
+            task = new KingdomTask(KingdomTaskType.Production, this);
+            task.destType = KingdomDestType.None;
+            return true;
+        }
+
         float threshold = _building.transportThreshold;
         // 三仓分别判达标（存量≥capacity×threshold），一次只发先达标的一个（同 source 串行，互挤限制见类注释）
         if (TryAdvertiseStore(_crystalStore, threshold, out task)) return true;
@@ -175,6 +188,9 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         if (TryAdvertiseStore(_oreStore, threshold, out task)) return true;   // T1.4（D609）：矿石伴生搬运
         return false;
     }
+
+    /// <summary>在岗判定（D704 §三-3-②/⑤）：本组件为任务源 ⇒ 读 `HasWorkerAssigned(本组件)`（任意任务类型 Working 均算在场）。</summary>
+    bool HasWorkerOnDuty => TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(this);
 
     bool TryAdvertiseStore(StorageComponent store, float threshold, out KingdomTask task)
     {
