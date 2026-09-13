@@ -181,7 +181,7 @@
 | `多Agent交接/_编号登记.md`／`_交接索引.md`／`_任务队列.md`／河谷防线_开发计划书.md | 回写 |
 
 - 矩阵产物 `Logs/ChainAudit/chain_probe_matrix*.log`＝**gitignore 域**，不入库（就地留档）。
-- **commit**：`<见回报>`（只提本批文件，**不 push**）。
+- **commit**：`81aebe6`（本批串：两 `.cs` ＋ 本报告 ＋ 账本/索引/队列/主计划书回写）——**只提本批文件，不 push**。
 
 ---
 
