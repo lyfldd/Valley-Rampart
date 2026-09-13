@@ -145,3 +145,55 @@
 本回执落盘后**停手**，等策划端对 **§六 R1~R6** 逐条裁决（尤其 **R4 是否触 SO 红线**、**R1/R2/R3 存量收口范围**）后开工。
 
 > 执行端（TraeCode）｜2026-09-13｜本回执＝HH.239 开工前置（含 §六请裁自答＋§3.3 初检＋实盘对账 11 项勘正）。
+
+---
+
+## 九、策划裁决（D707 · 主策划端 · 2026-09-13）
+
+> **判据三直读＝已过（实读非采信转述）**：**①设计稿**＝HH.239 任务书＋§八 增补节＋`美术资源接入计划.md`＋`映射表 §十/§十一`＋`0.6 §二百一十八`（D689）＋本回执逐字；**②代码/资产实盘**＝见 §9.1 复核表（策划端独立跑 `git ls-files`／`find`／`git status --porcelain`／`grep`／`sed` 逐项复算）；**③独立复核**＝`ab41249` 取号恰 1 file 1 行／`3a7e1f8` 回执 147 行＋索引 1 行（**零业务代码改动**）／本阶段零施工动作确认。
+
+**结论：R1/R2/R3/R6 照准；R4 ❌ 否决执行端推荐（改裁 b）；R5 方向准但清单须改。** 另**修正回执 2 处口径**。
+
+### 9.1 11 项勘正 · 策划端独立复核
+
+| 项 | 回执断言 | 策划端实读复算 | 判 |
+|---|---|---|---|
+| K7 | 素材夹 tracked=325；`.gitignore` 无 Art 规则 | `git ls-files 美术资源文件夹`=**325**；`.gitignore` grep `Art\|美术` **零命中** | ✅坐实 |
+| K1 | `_Game/Art` 328 png，分类 8/105/3/6/8/46/152 | `find`=**328**；逐目录 **Ammo 8／Buildings 105／Effects 3／Ground 6／Machines 8／Portraits 46／Units 152** | ✅坐实 |
+| K2 | `git status Art`=91（60 `D`＋31 `??`） | **91**（`D`=**60**／`??`=**31**）；明细含 `Palette1111.prefab`＋中文地块（亚热带/寒带/温带）`.asset/.png` ＋meta | ✅坐实 |
+| K5 | `SpriteRefTable` 未建 | 全库 `find -name "*SpriteRefTable*"`=**0** | ✅坐实 |
+| K10 | `ProjectileType` 六值 | `ProjectileTypes.cs:12-19`＝**Arrow/Bolt/HeavyBolt/Stone/Fireball/Magic**（无 musket/monster/mage_barrage） | ✅坐实 |
+| K9 | `AmmoDef`/`GroundEffectDef` 无 sprite 字段 | `AmmoDef.cs`＝`ammoType/pierceLevel/aoeRadiusCells/aoeFalloff/ballisticType/arcHeightCells/effect`；`GroundEffectDef.cs`＝`type/radiusCells/duration/tickInterval/power/maxTargets` —— **均无 sprite** | ✅坐实（**裁见 R4**） |
+| K6 | `.meta` guid＝长 base64（非 32-hex） | `Art/Ammo/ammo_arrow.png.meta:2`＝`guid: DXkdvC//UHzndhEGIO5W1MYaOJaZJqCeHEho+Fe49chr4MNeLGMJJhM=`；抽样 3 张同型 ⇒ **文本 grep 互映不可用** | ✅坐实（**H1 成立**） |
+| D1 | 表内 `feat_water_ocean/river` vs 要求 `ground_*` | `Rendering/PlaceholderSprites.cs:47-50`＝`feat_water_river/lake/ocean/ice`；`:33-34`＝`ground_temperate`/`ground_cold`；键总数 **31** | ⚠️**口径须改**（见 9.2） |
+| K4 | 导入设置未配（`spriteMode=1`/`alignment=0`/pivot 0.5,0.5/`sprites=[]`；PPU=100 已符） | 未独立复算（需读 meta 全文）；**口径采信**并列入 `L-35`（来源＝meta 字段直读） | 采信 |
+| K3 | GameScene 编辑器侧：5 处 Missing＋3 Tilemap 全 0 tiles | 命令行以 `m_Script: {fileID: 0}` 复算＝**0 命中** ⇒ **文本侧不可复现**（Unity missing 可表现为悬空 script GUID 引用）⇒ **采信编辑器侧枚举**，但口径须写清（见 9.2-3） | 采信（口径待补） |
+| K8 | `MonsterController : UnitController` | `Disaster/MonsterController.cs:14`＋渲染源 `UnitController._renderer`（`:22`）⇒ **同链零新机制** | ✅坐实 |
+
+### 9.2 回执口径修正 2 处（不影响结论·须就地改）
+
+1. **「328 png 中仅 66 条被跟踪」措辞错**：实读 `git ls-files _Game/Art`＝**66 条全文件**（含 `.meta`），其中 **`.png` 仅 13 条**。⇒ 正确表述＝「`_Game/Art` 全量 **66/393 文件**被跟踪（png 13/328）」。**数字来源对、措辞须改**（否则 R1 的体积判断会失真）。
+2. **R5 不是「同物二名 2 键」，是两套粒度**（见 R5 裁）。
+
+### 9.3 R1~R6 逐条裁决
+
+| # | 裁 | 口径 / 理由 |
+|---|---|---|
+| **R1** | ✅ **准 (a) 全量纳入版本控制** | `_Game/Art/` 328 图＋meta 全部纳入。**附一条须知晓的体积事实**：素材夹 `美术资源文件夹/`（325 已 tracked）**本批保留不动** ⇒ 本批后仓库将**同时含源素材与接入资产（≈2×）**。**瘦身（移除/归档素材源）另立批**，本批不扩面。 |
+| **R2** | ✅ **准 (a) 本批打包提交该删除** | 60 条 `D`（`Palette1111.prefab`＋13 匿名残图＋中文地块 `.asset/.png`＋meta）属本批 T2 范围（D689 计划 §六）⇒ 本批提交＋**清悬空 meta**。 |
+| **R3** | ✅ **准 (a) 本批照清 5 处** | 附**定性**：`参考图`/`ruler`×2 属**存量欠账**（非本批引入），但**§九 验收线含「残留清零」** ⇒ 不清则**起点即不达标** ⇒ 必须照清。⇒ 执行端须在交付报告**分列**「本批引入 / 存量欠账」两栏（口径诚意）。 |
+| **R4** | ❌ **否决 (a)·裁 (b) 改走旁挂映射** | **执行端判断「非语义变更」有误**——实读铁证三条：①`NpcProfessionDef.cs:152` 明写「**核内（`AI.Core`）只吃 `ProfessionSnapshot`**，不引用本 SO。字段机械拷贝，**改字段需同步 `ProfessionSnapshot`**」；②`:179` 弹药字段**由 `AmmoDef` 拉平**进快照；③`ProfessionSnapshot.cs:65-66`（位于 **`Systems/AI.Core/Config/`**）＋`:73/77/78`（含 `effectType/effectPower/effectMaxTargets`＝**`GroundEffectDef` 同样拉平**）⇒ **给这两个 SO 加 sprite 字段＝必然改 `ProfessionSnapshot`＝撞 H3「AI.Core 禁触」红线**。④职责面：二者自述为「**行为模板/介质层**」（3.6 §三），字段全为机制/数值；sprite＝**表现层** ⇒ 混入＝介质层与呈现层耦合（违 2_24「去特判/单轨」）。⑤**旁挂是设计本意**：`SpriteRefTable`（T6 核心交付物）本就承担 artId→Sprite 映射，弹体 SpriteRenderer 在 `ProjectileManager.cs:110,377`（**表现侧**）⇒ 表现侧查表即可，**SO 无须认识自己长什么样**。⇒ **T14 改为：在 `SpriteRefTable` 增 `ammo_*`/`fx_*` 键，两个 SO 零改动**。 |
+| **R5** | ⚠️ **方向准 (a)，但清单须改＋补证** | 实读：表内 `feat_water_river/lake/ocean/ice`＝**4 键**（`:47-50`），素材 `Art/Ground/`＝**6 张**（`ground_cold/ocean/river/subtropical/temperate/tropical`）。⇒ **不是 2 键同物二名，而是「表内 4 键（水体）vs 素材 6 张（地皮/气候带）」两套粒度**，且表内 `ground_*` 仅 `cold/temperate` 2 键 ⇒ 收敛清单**须以素材实际 6 张为准**（非执行端所写 2 键）。**另：策划端 grep `feat_water_*` 除定义处零命中**（无编译期引用）——但**依 `L-29` 禁以文本 grep 判无引用** ⇒ 执行端须**补证**：`feat_water_lake/ice` 是否有 **artId 字符串查表调用方**（<br>运行时/编辑器）；**无 ⇒ 删**；**有 ⇒ 映射到对应 `ground_*`**。**禁双源**（`L-15`）。 |
+| **R6** | ✅ **准 (a)** | 施工序改为「**S1 收口存量**（提交既有删除＋清 5 处 Missing）→ **S2 核对 328＋配导入设置**」；清单逐项勾选按新序。 |
+
+### 9.4 嘉奖 / 记录
+
+- **嘉奖**＝①回执阶段即完成 **11 项实盘勘正**（`git`/`find`/编辑器枚举**命令输出为准**，非推断）②**K6 meta guid 坐实 H1**＝`L-29`「禁以文本 grep 判无引用」的**正面样本**（用 affordance 而非猜）③**R4 边界主动上报未擅动**——虽判断有误，但**停手待裁纪律正确**，恰是本门（HH.221 血泪的反面）的价值兑现。
+- **记录（不当追责）**＝R4 的「非语义变更」判断失误根因＝**未追 `AmmoDef` 的下游（快照链）**——`L-30` 家族同型（**判"改 X 是否安全"时只看了 X 本身，未查 X 的消费链**）。⇒ **`L-30` 家族＋1（实例注记·不新立）**：凡判「加/改字段是否安全」，**必追该字段所在 SO 的消费链**（是否拉平进快照/是否被 AI.Core 吃）。
+
+### 9.5 执行端下一步
+
+按本裁决施工（**R4 走旁挂**）：`SpriteRefTable` 建表（T6）→ 接线 5 线（弹药/特效走 `ammo_*`/`fx_*` 旁挂**不动 SO**）→ T1/T2 收口（提交 60 `D`＋清 5 处 Missing）→ T4/T5 导入设置＋切帧（**显式排除弓箭手 96×102**）→ 四族四轮冒烟（正门 `EnterTestRun`＋退 Play）→ 交付报告（**按实时水位线取号**·D640 #10 禁预留）。
+**红线不变**：`AI.Core` 零触（R4 改道后本批**不再有触 AI.Core 的风险面**）／不改 SO 语义字段／只提本批文件·未 push／`_任务队列.md` 不写（CRLF-blob）。
+
+> 策划端（主策划端）｜2026-09-13｜D707｜回写＝本 §九 · `0.6 §二百三十六` · 账本（D707） · `_交接索引.md`（HH.262 → ✅已裁决·放行施工） · `_策划教训库.md`（`L-30` 家族＋1 实例） · 主计划书工作日志。
