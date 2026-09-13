@@ -100,3 +100,36 @@
 ---
 
 **状态**：🟡 开工回执落盘（2026-09-13）→ 随即施工件1 → 件2 出结论 → 交付报告（HH.248）。
+
+---
+
+## 附 · 会话中断接续指引（本会话 MCP 失效·新会话续跑必读）
+
+> 触发：本会话 Unity MCP（`mcp_unityMCP`/`mcp_unity-bridge`）因会话 ID 失效无法注入（目录/配置均为最新，schema 齐全，纯注入失败；重启无效，须新会话）。**代码改动已全部落盘在磁盘**（未 commit）。
+
+### 已完成的（磁盘在场·勿重做）
+1. **账本取号 HH.247**（`_编号登记.md` 水位线→247＋在途行；commit `52a1094`）。
+2. **开工回执 HH.247**（sim-sync 核查结论＝不触 `AI.Core` 可直改；判据四列；跑档 seed73621/槽 `chain_probe2`/D60；立场=两向出结论）。
+3. **件1 代码改动（两个文件）**：
+   - `Assets/Editor/ChainAudit/Probes/ChainProbeFacade.cs`：
+     - 槽 `chain_probe1`→`chain_probe2`；
+     - 新增观测：`_dispatchByRes`（㉗ 实际派发）/`_envBlockByRes`/`_triageCounts`＋正则 `ReDispatchGather`/`ReGatherEnvBlock`/`ReTriageDec`/`ReTriagePair`；
+     - `Watch()` 捕获 `[KingdomBrain] kX ㉗采集下发：{rt} 新立案 N 个`（真实派发·判据面）＋`[DiagTriage]` 分诊（支撑面）＋Env 阻断（支撑面）；
+     - 矩阵表头「被选中次数」→「评分 top 次数」＋新增「实际派发次数」列；矩阵新增跑次标注（seed/槽/观测窗/采样）+ `DispatchSummary`/`EnvBlockSummary`/`TriageSummary`；
+     - 落盘改 `ChainAuditCore.WriteReports`（稳定名＋时间戳副本 `chain_probe_matrix_*.log`，L-02）；
+     - 判据：㉗ 走「实际派发」、其余维持「评分 top」（HH.242 口径）；⑦ 复合逻辑保留。
+   - `Assets/Editor/ChainAudit/ChainAuditSpec.cs`：㉗ 行四列更新（判据改实际派发、作用域分资源、口径来源/排除项重述）。
+4. **未 commit**：上述两个 .cs 改动仍为工作区未提交（严禁 `git add -A`；只提这两个文件＋交付报告）。
+
+### 新会话接续步骤（严格按序）
+1. **编译验证（MCP 正门）**：`refresh_unity(mode=force, scope=all, compile=request)` → `read_console(types=["error"])` 确认 **0 error**；有错按报错修。
+2. **跑修正后探针（件2）**：Unity 内先点「Valley/诊断/启动建军链诊断」（`DiagMilitary` fail-fast 前置）→ Play GameScene → 菜单「Valley/审计/ChainAudit/跑行为探针（正门进局）」→ 自动正门 `EnterTestRun` seed73621 槽 `chain_probe2` D60 → 收尾自动真暂停+Save+ExitTestRun+退 Play。
+3. **读矩阵产物**：`Logs/ChainAudit/chain_probe_matrix.txt`（稳定名）＋同目录 `chain_probe_matrix_*.log`（时间戳副本·报告引用标注跑次）。**㉗ 行判读**：`实际派发次数` 列 `Stone=x`（x>0⇒`DZ-148` 证伪；x=0 全程⇒证成）；结合 `分诊支撑`/`Env 阻断` 交叉核验。
+4. **出结论（件2·禁预设）**：石场景派发恒 0⇒`DZ-148` 成立→回报策划端签 A+ 施工任务书；石场景派发>0⇒`DZ-148` 证伪→A+ 不立→转 G1-1 余项。
+5. **交付报告 HH.248**（账本水位线先取号）：验收线 §四 5 条＋跑次标注（槽 `chain_probe2`/副本文件名）＋零业务改动 diff 核验＋`isPlaying=False` 实测＋commit（只提本批文件：两个 .cs＋HH.248 报告）＋**不 push**。
+6. **回写**：`_交接索引.md`（HH.247 状态→施工中/完成后补 HH.248 行）＋`_任务队列.md`（HH.244 行状态更新）＋主计划书工作日志。红线：写-改-commit 同串、只提本串文件。
+
+### 需新会话自证项
+- 编译 0 error（MCP 实测）；
+- `ChainProbeFacade` 重构后**幂等**（重复跑矩阵稳定名逐字节一致·可跑一次验证）；
+- 复现口径（HH.242 勘正②）：报告引用读数必须标注槽＋时间戳副本文件名，禁跨跑次混比。
