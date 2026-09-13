@@ -1,0 +1,487 @@
+fileFormatVersion: 2
+guid: CHMe5n/+V38OMCGvPkUoo6HobpnzNIdAfOaoXcFEW+slS/ei6E1LEPw=
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_0_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: defa5314ae7d2caa0800000000000000
+      internalID: -6142109540663578643
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_0_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41b867fe3ac167ea0800000000000000
+      internalID: -5875477173435462892
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_0_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 54208c23706981a60800000000000000
+      internalID: 7645025325122323013
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_0_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5f7de15aa010ec080800000000000000
+      internalID: -9165387046420817931
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_1_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e8ce699239cacd0f0800000000000000
+      internalID: -1090807261672575858
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_1_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b1c83df2a1a810330800000000000000
+      internalID: 3675370615987211291
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_1_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 96d5fde35c349d2a0800000000000000
+      internalID: -6712259255176569495
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_1_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d25ce32cf5b36e0f0800000000000000
+      internalID: -1088116977496570579
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_2_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7dc64feb72d8db470800000000000000
+      internalID: 8412034880844885207
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_2_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6c83eed128b75c7a0800000000000000
+      internalID: -6357539500185470778
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_2_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 577a54e27746aaa50800000000000000
+      internalID: 6533144672494528373
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_2_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb95a5871c893fdb0800000000000000
+      internalID: -4759292424485185093
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_3_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e17318c0f32c25740800000000000000
+      internalID: 5139383700831680286
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_3_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 601ab95873ba43510800000000000000
+      internalID: 1528034428538560774
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_3_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d188f3e2923bfbde0800000000000000
+      internalID: -1315135576717948899
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_elf_vinecatapult_strip_3_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.022988506}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6918faf68f24aaa70800000000000000
+      internalID: 8838950853461115286
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      machine_elf_vinecatapult_strip_0_0: -6142109540663578643
+      machine_elf_vinecatapult_strip_0_1: -5875477173435462892
+      machine_elf_vinecatapult_strip_0_2: 7645025325122323013
+      machine_elf_vinecatapult_strip_0_3: -9165387046420817931
+      machine_elf_vinecatapult_strip_1_0: -1090807261672575858
+      machine_elf_vinecatapult_strip_1_1: 3675370615987211291
+      machine_elf_vinecatapult_strip_1_2: -6712259255176569495
+      machine_elf_vinecatapult_strip_1_3: -1088116977496570579
+      machine_elf_vinecatapult_strip_2_0: 8412034880844885207
+      machine_elf_vinecatapult_strip_2_1: -6357539500185470778
+      machine_elf_vinecatapult_strip_2_2: 6533144672494528373
+      machine_elf_vinecatapult_strip_2_3: -4759292424485185093
+      machine_elf_vinecatapult_strip_3_0: 5139383700831680286
+      machine_elf_vinecatapult_strip_3_1: 1528034428538560774
+      machine_elf_vinecatapult_strip_3_2: -1315135576717948899
+      machine_elf_vinecatapult_strip_3_3: 8838950853461115286
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

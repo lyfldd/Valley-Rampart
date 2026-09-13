@@ -58,7 +58,9 @@ public class LoadManager : Singleton<LoadManager>
         CurrentPhase = LoadPhase.StaticConfigs;
         Debug.Log("[LoadManager] 阶段1：加载静态配置...");
 
-        PlaceholderSprites.PreloadAll();                               // 占位 sprite
+        // HH.239 T16：1D legacy 占位表已删除 → 预热 artId 等轴占位表 + 真图表（缺图回退链的两端）
+        ValleyRampart.Rendering.PlaceholderSprites.PreloadAll();
+        var _ = ValleyRampart.Rendering.SpriteRefTable.Instance;
         if (_configLoader != null) _configLoader.LoadAll();           // UnitData 等
         if (_prefabLoader != null) _prefabLoader.PreloadAll();        // UnitPrefabs
         // WorldConfig（WorldSystem.Awake 已 Resources.Load，这里只确认阶段）

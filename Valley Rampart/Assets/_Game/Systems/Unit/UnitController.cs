@@ -270,6 +270,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>世界坐标位置（空间分区查目标/投射物到达检测用）。</summary>
     public Vector2 GetPosition() => transform.position;
 
+    /// <summary>攻击动画触发（HH.239 T13；由 DamageSystem.ExecuteAttack 表现侧调用，无真图帧集时静默）。</summary>
+    public void NotifyAttackVisual()
+    {
+        if (_animator != null) _animator.NotifyAttack();
+    }
+
     /// <summary>阵营（敌我识别/Faction 二元判定用）。收编后优先运行时覆写（AI 王国单位=AiKingdom），否则 Data.faction。</summary>
     public Faction GetFaction() => EffectiveFaction;
 
@@ -289,11 +295,15 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
     protected SpriteRenderer _renderer;
     protected Rigidbody2D _rb;
+    /// <summary>序列帧动画播放器（HH.239 T13；无真图帧集时自动静默不介入，保持 prefab 原 sprite）。</summary>
+    protected SpriteAnimator _animator;
 
     protected virtual void Awake()
     {
         _renderer = GetComponent<SpriteRenderer>();
         _rb = GetComponent<Rigidbody2D>();
+        _animator = GetComponent<SpriteAnimator>();
+        if (_animator == null) _animator = gameObject.AddComponent<SpriteAnimator>();
         // D104 排序遮挡：单位与建筑同 sortingOrder 基底，靠全局 CustomAxis (0,1,0) Y-sort + spriteSortPoint=Pivot
         // 决定遮挡（单位在墙/建筑下方→单位在前；上方→建筑挡），而非 1D 时代的固定 order 盖层。
         _renderer.sortingOrder = 1;
@@ -313,6 +323,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     {
         npcId = 0;                      // QQQ.2 T17：NPC ID 复位，Initialize 重新分配
         _runtimeOccupation = -1;        // 职业回退 Data.occupation
+        if (_animator != null) _animator.ResetForReuse();   // HH.239 T13：动画状态出池洗涤（防串帧/串族）
         LastBirthDay = -999;            // 生育冷却复位（可生育）
         ChildGrowthDays = 0;            // 成长计数清零
         IsVagrantRecruited = false;     // 招募标记清零
@@ -1330,6 +1341,8 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         int octant = Mathf.RoundToInt(angle / 45f) & 7;   // 0=E 1=NE 2=N 3=NW 4=W 5=SW 6=S 7=SE
         Facing = (Facing8)octant;
 
+        // HH.239 T13：驱动序列帧动画（walk/run 状态 + 两向朝向）；无真图帧集时 animator 静默不介入
+        if (_animator != null) _animator.NotifyMove(direction);
         // 渲染 flipX 过渡（2_10 接管动画切换）：按水平分量翻转
         if (_renderer != null)
         {

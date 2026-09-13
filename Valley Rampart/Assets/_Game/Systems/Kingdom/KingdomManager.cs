@@ -128,7 +128,11 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         CastleLevel = clamped;
         RecomputeModuleLevels();
         var castle = FindCastleBuilding();
-        if (castle != null) castle.level = Mathf.Max(1, clamped);
+        if (castle != null)
+        {
+            castle.level = Mathf.Max(1, clamped);
+            castle.RefreshVisual();   // HH.239 T11：主城按 (race, level) 换图
+        }
         // 2_17 步骤11 批2：主城等级变更后镜像到用户王国 KingdomState[0]（per-kingdom 解锁态数据通道）
         MirrorPlayerUnlockToRegistry();
         Debug.Log($"[KingdomManager] 主城等级 → {clamped}，模块等级=[{string.Join(",", ModuleLevels)}]");

@@ -1,0 +1,487 @@
+fileFormatVersion: 2
+guid: WXxOsiOqVyjtDqZChZ+T3gWD5I7vRrtxEd3jn3+/wuDbXRGHtXB5ZLc=
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_0_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 213
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 12d744ae9cf58d2f0800000000000000
+      internalID: -947902400738067167
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_0_1
+      rect:
+        serializedVersion: 2
+        x: 71
+        y: 213
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c32a0adf72f009860800000000000000
+      internalID: 7534538841024143932
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_0_2
+      rect:
+        serializedVersion: 2
+        x: 142
+        y: 213
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a36140da46ee356e0800000000000000
+      internalID: -1849872905752275398
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_0_3
+      rect:
+        serializedVersion: 2
+        x: 213
+        y: 213
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 354272a5208fd9f10800000000000000
+      internalID: 2278249675505476691
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_1_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 142
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 09cec9792551b9480800000000000000
+      internalID: -8891489594837767024
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_1_1
+      rect:
+        serializedVersion: 2
+        x: 71
+        y: 142
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9c8a8c643a2993ff0800000000000000
+      internalID: -55852290400540471
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_1_2
+      rect:
+        serializedVersion: 2
+        x: 142
+        y: 142
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4392ac4321a759a30800000000000000
+      internalID: 4221414444343372084
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_1_3
+      rect:
+        serializedVersion: 2
+        x: 213
+        y: 142
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9bf93ab18e390ea60800000000000000
+      internalID: 7701317987908951993
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_2_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 71
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e829ca678686f5c10800000000000000
+      internalID: 2044467553726403214
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_2_1
+      rect:
+        serializedVersion: 2
+        x: 71
+        y: 71
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0c3cf4a7acbe104d0800000000000000
+      internalID: -3169993407824149568
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_2_2
+      rect:
+        serializedVersion: 2
+        x: 142
+        y: 71
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1c43dbb26845586d0800000000000000
+      internalID: -2988889842454285119
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_2_3
+      rect:
+        serializedVersion: 2
+        x: 213
+        y: 71
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f0959b906612e5bc0800000000000000
+      internalID: -3792557114065856241
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_3_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5bab012a946621d80800000000000000
+      internalID: -8281444298343269707
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_3_1
+      rect:
+        serializedVersion: 2
+        x: 71
+        y: 0
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1779417c2a17ddc80800000000000000
+      internalID: -8296349994607929487
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_3_2
+      rect:
+        serializedVersion: 2
+        x: 142
+        y: 0
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 08c2b12ab5d324d70800000000000000
+      internalID: 9025844066974903424
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: unit_monster_brute_attack_3_3
+      rect:
+        serializedVersion: 2
+        x: 213
+        y: 0
+        width: 71
+        height: 71
+      alignment: 9
+      pivot: {x: 0.5, y: 0.014084507}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 398353ef774619e00800000000000000
+      internalID: 1049730654682822803
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      unit_monster_brute_attack_0_0: -947902400738067167
+      unit_monster_brute_attack_0_1: 7534538841024143932
+      unit_monster_brute_attack_0_2: -1849872905752275398
+      unit_monster_brute_attack_0_3: 2278249675505476691
+      unit_monster_brute_attack_1_0: -8891489594837767024
+      unit_monster_brute_attack_1_1: -55852290400540471
+      unit_monster_brute_attack_1_2: 4221414444343372084
+      unit_monster_brute_attack_1_3: 7701317987908951993
+      unit_monster_brute_attack_2_0: 2044467553726403214
+      unit_monster_brute_attack_2_1: -3169993407824149568
+      unit_monster_brute_attack_2_2: -2988889842454285119
+      unit_monster_brute_attack_2_3: -3792557114065856241
+      unit_monster_brute_attack_3_0: -8281444298343269707
+      unit_monster_brute_attack_3_1: -8296349994607929487
+      unit_monster_brute_attack_3_2: 9025844066974903424
+      unit_monster_brute_attack_3_3: 1049730654682822803
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

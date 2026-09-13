@@ -1,0 +1,487 @@
+fileFormatVersion: 2
+guid: XnwWtiurVH45+kiikjJK+4WFKD3HjoOT5eoddrPYUSzUe1r2Wn/8vC8=
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_0_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 63481ab2753a71dd0800000000000000
+      internalID: -2515362272073645002
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_0_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a66f0266bb0084810800000000000000
+      internalID: 1749649260105758314
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_0_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3b90795b2d9223f80800000000000000
+      internalID: -8128388392483878477
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_0_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a9f56de5ee8b01360800000000000000
+      internalID: 7138408743315070874
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_1_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 029e652acab942980800000000000000
+      internalID: -8564549425591555808
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_1_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2107e5eeed911aa00800000000000000
+      internalID: 765921856902295570
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_1_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bd8c012fb2449a8e0800000000000000
+      internalID: -1681738030310700837
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_1_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b7c3ab8faa7670c20800000000000000
+      internalID: 3172618446520859771
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_2_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e6d47ca4389e3bde0800000000000000
+      internalID: -1318453515784860306
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_2_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 888d2314e4e5196f0800000000000000
+      internalID: -679658378561922936
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_2_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 815f9fba2b1632dc0800000000000000
+      internalID: -3664978251732093672
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_2_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 85bf777b9322c89d0800000000000000
+      internalID: -2770802039453123752
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_3_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6881aa5d8e5774c20800000000000000
+      internalID: 3190648503892842630
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_3_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 604eb9b8ccb25e240800000000000000
+      internalID: 4820307133685556230
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_3_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 67852b04868b98a70800000000000000
+      internalID: 8829791302338107510
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_human_ballista_strip_3_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.011494253}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1590b0f990181e660800000000000000
+      internalID: 7413348339951536465
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      machine_human_ballista_strip_0_0: -2515362272073645002
+      machine_human_ballista_strip_0_1: 1749649260105758314
+      machine_human_ballista_strip_0_2: -8128388392483878477
+      machine_human_ballista_strip_0_3: 7138408743315070874
+      machine_human_ballista_strip_1_0: -8564549425591555808
+      machine_human_ballista_strip_1_1: 765921856902295570
+      machine_human_ballista_strip_1_2: -1681738030310700837
+      machine_human_ballista_strip_1_3: 3172618446520859771
+      machine_human_ballista_strip_2_0: -1318453515784860306
+      machine_human_ballista_strip_2_1: -679658378561922936
+      machine_human_ballista_strip_2_2: -3664978251732093672
+      machine_human_ballista_strip_2_3: -2770802039453123752
+      machine_human_ballista_strip_3_0: 3190648503892842630
+      machine_human_ballista_strip_3_1: 4820307133685556230
+      machine_human_ballista_strip_3_2: 8829791302338107510
+      machine_human_ballista_strip_3_3: 7413348339951536465
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -59,7 +59,7 @@ public class BuildProgressBar : MonoBehaviour
         var bgGo = new GameObject("ProgressBar_BG");
         bgGo.transform.SetParent(transform, false);
         _bg = bgGo.AddComponent<SpriteRenderer>();
-        if (_bgSprite == null) _bgSprite = SpriteFactory.CreateSquare(8, new Color(0.15f, 0.15f, 0.15f, 0.9f));
+        if (_bgSprite == null) _bgSprite = ValleyRampart.Rendering.SpriteFactory.CreateSquare(8, new Color(0.15f, 0.15f, 0.15f, 0.9f));
         _bg.sprite = _bgSprite;
         _bg.sortingOrder = 10;
         _bgT = bgGo.transform;
@@ -69,7 +69,7 @@ public class BuildProgressBar : MonoBehaviour
         var fillGo = new GameObject("ProgressBar_Fill");
         fillGo.transform.SetParent(transform, false);
         _fill = fillGo.AddComponent<SpriteRenderer>();
-        if (_fillSprite == null) _fillSprite = SpriteFactory.CreateSquare(8, new Color(0.35f, 0.85f, 0.35f, 0.95f));
+        if (_fillSprite == null) _fillSprite = ValleyRampart.Rendering.SpriteFactory.CreateSquare(8, new Color(0.35f, 0.85f, 0.35f, 0.95f));
         _fill.sprite = _fillSprite;
         _fill.sortingOrder = 11;
         _fillT = fillGo.transform;

@@ -1,0 +1,487 @@
+fileFormatVersion: 2
+guid: Bn4Ytnz4UHMWsLFDkmxmsOAE47Ydt6Uu7vstZ45kL4LzrLqPyL7wfYQ=
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_0_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 38bd7bf1691dee650800000000000000
+      internalID: 6264174574426381187
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_0_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f6f1359d33bb0f9e0800000000000000
+      internalID: -1589564837097955473
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_0_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b7a0730eab31c1de0800000000000000
+      internalID: -1361191294026184069
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_0_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 287a7c2a7eae8edb0800000000000000
+      internalID: -4762298325354961022
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_1_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 49c42410ec3ccdf50800000000000000
+      internalID: 6907611218031299732
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_1_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c7d837c6f74661b80800000000000000
+      internalID: -8424435554506797700
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_1_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41ba62d246a63a710800000000000000
+      internalID: 1703322062562962196
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_1_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 762d16130be8d3780800000000000000
+      internalID: -8701642017616047513
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_2_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: de80a796ddb4cc6f0800000000000000
+      internalID: -663071630800844563
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_2_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 061f7ea0d4ad6f220800000000000000
+      internalID: 2519441065990680928
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_2_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8f07f8a1c5496da90800000000000000
+      internalID: -7289475823549058824
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_2_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 725bb5a539b01c040800000000000000
+      internalID: 4666023416436602151
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_3_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8404a2d6309546350800000000000000
+      internalID: 6009025674070343752
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_3_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a2bc9c9724b05b870800000000000000
+      internalID: 8697870635474996010
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_3_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f06f175154674d570800000000000000
+      internalID: 8490541236584838671
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_orc_ram_strip_3_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4836d4405a0ab7430800000000000000
+      internalID: 3781792942709891972
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      machine_orc_ram_strip_0_0: 6264174574426381187
+      machine_orc_ram_strip_0_1: -1589564837097955473
+      machine_orc_ram_strip_0_2: -1361191294026184069
+      machine_orc_ram_strip_0_3: -4762298325354961022
+      machine_orc_ram_strip_1_0: 6907611218031299732
+      machine_orc_ram_strip_1_1: -8424435554506797700
+      machine_orc_ram_strip_1_2: 1703322062562962196
+      machine_orc_ram_strip_1_3: -8701642017616047513
+      machine_orc_ram_strip_2_0: -663071630800844563
+      machine_orc_ram_strip_2_1: 2519441065990680928
+      machine_orc_ram_strip_2_2: -7289475823549058824
+      machine_orc_ram_strip_2_3: 4666023416436602151
+      machine_orc_ram_strip_3_0: 6009025674070343752
+      machine_orc_ram_strip_3_1: 8697870635474996010
+      machine_orc_ram_strip_3_2: 8490541236584838671
+      machine_orc_ram_strip_3_3: 3781792942709891972
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

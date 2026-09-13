@@ -499,7 +499,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             TerritorySystem.Instance.ClaimFootprintChunk(kingdomId, coord);
     }
 
-    /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式占位。占位 sprite 按 footprint w×h 缩放（2_2）。</summary>
+    /// <summary>按当前状态刷新视觉：Constructing 显示脚手架，其余显示正式图（真图优先）。占位 sprite 按 footprint w×h 缩放（2_2）。
+    /// HH.239 T9/T11/T16：真图（SpriteRefTable 命中）自带 PPU100 像素尺度 + 底面中心 pivot ⇒ 不叠加 footprint 缩放（防拉伸失真）。</summary>
     void UpdateVisual()
     {
         if (_renderer == null) _renderer = GetComponent<SpriteRenderer>();
@@ -507,33 +508,54 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         float cellH = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.y : 2.26f;
         // 占位 sprite 是 1x1 世界单位，按 footprint w×h × cellSize 缩放到实际占地尺寸
         int w = Mathf.Max(1, footprint.x), h = Mathf.Max(1, footprint.y);
-        transform.localScale = new Vector3(w * cellW, h * cellH, 1);
+        Vector3 placeholderScale = new Vector3(w * cellW, h * cellH, 1);
 
         if (state == BuildingState.Constructing)
         {
-            // 脚手架（半透明棕方块）
+            // 脚手架（按 footprint 三档选图；D642 1×1 兼覆城门）
             if (_renderer == null) _renderer = gameObject.AddComponent<SpriteRenderer>();
-            _renderer.sprite = PlaceholderSprites.Get("scaffold");
+            _renderer.sprite = global::ValleyRampart.Rendering.PlaceholderSprites.Get(ScaffoldArtId(w, h));
             _renderer.sortingOrder = 1;
+            _renderer.color = Color.white;
+            transform.localScale = placeholderScale;
         }
         else if (state == BuildingState.Ruined)
         {
             // 2_12 步骤7 / D154：废墟占位（2_10 提供 ruinsTile 美术，此处用灰暗废墟占位）
             if (_renderer == null) _renderer = gameObject.AddComponent<SpriteRenderer>();
-            _renderer.sprite = PlaceholderSprites.Get("ruins");
+            _renderer.sprite = global::ValleyRampart.Rendering.PlaceholderSprites.Get("bld_ruins");
             _renderer.sortingOrder = 1;
             _renderer.color = new Color(0.45f, 0.42f, 0.4f, 1f);   // 灰暗废墟色调
+            transform.localScale = placeholderScale;
         }
         else
         {
-            // 正式占位视觉
-            BuildingVisual.ApplyPlaceholder(gameObject, sourceType, def != null ? def.role : BuildingRole.Special, def != null ? def.id : "");
+            // 正式视觉：artId → SpriteRefTable 真图 → 占位回退（T9）
+            int raceId = kingdomId >= 0 ? KingdomRace.GetKingdomRace(kingdomId) : RaceIds.Human;
+            BuildingVisual.ApplyPlaceholder(gameObject, sourceType, def != null ? def.role : BuildingRole.Special,
+                def != null ? def.id : "", level, raceId, coord);
             _renderer = GetComponent<SpriteRenderer>();
+            _renderer.color = Color.white;
+            bool realArt = global::ValleyRampart.Rendering.SpriteRefTable.Instance != null
+                && global::ValleyRampart.Rendering.SpriteRefTable.Instance.Contains(_renderer.sprite);
+            transform.localScale = realArt ? Vector3.one : placeholderScale;
             // Abandoned 态变暗提示废弃
             if (_renderer != null && state == BuildingState.Abandoned)
                 _renderer.color = new Color(0.5f, 0.5f, 0.5f, 1f);
         }
     }
+
+    /// <summary>脚手架 artId（footprint 三档；3×3+ 归 3x3）。</summary>
+    static string ScaffoldArtId(int w, int h)
+    {
+        int n = Mathf.Max(w, h);
+        if (n >= 3) return "bld_scaffold_3x3";
+        if (n == 2) return "bld_scaffold_2x2";
+        return "bld_scaffold_1x1";
+    }
+
+    /// <summary>外部等级/族别变化后刷新视觉（HH.239 T11：主城按 (race, level) 取图）。</summary>
+    public void RefreshVisual() => UpdateVisual();
 
     // ===== IInteractable =====
 

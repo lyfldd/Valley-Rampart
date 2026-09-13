@@ -20,6 +20,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         public int maxTargets;
         public float elapsed;
         public float nextTick;
+        public GameObject visual;   // HH.239 T14：命中特效真图（SpriteRefTable fx_* 旁挂键；缺图 = null 不回退不崩）
     }
 
     private readonly List<Effect> _effects = new();
@@ -42,8 +43,56 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
             maxTargets = maxTargets,
             elapsed = 0f,
             nextTick = 0f,
+            visual = SpawnVisual(pos, type, radiusCells),
         });
     }
+
+    /// <summary>命中特效可视（HH.239 T14）：真图表 <c>fx_*</c> 旁挂键（**不动** GroundEffectDef —— 撞 H3 AI.Core 红线）。
+    /// 缺图（无键/表缺失）⇒ 返回 null = 静默无特效（不崩）。</summary>
+    private static GameObject SpawnVisual(Vector2 pos, GroundEffectType type, float radiusCells)
+    {
+        string artId = type switch
+        {
+            GroundEffectType.Burn => "fx_fireball",   // 火弹命中 → Burn 场
+            GroundEffectType.Slow => "fx_magic",      // 魔弹命中 → Slow 场
+            _ => null,                                 // Heal 无素材（映射表 §十一 仅 3 张命中特效）
+        };
+        if (artId == null) return null;
+
+        var table = ValleyRampart.Rendering.SpriteRefTable.Instance;
+        if (table == null || !table.TryGet(artId, out var spr) || spr == null) return null;
+
+        var go = new GameObject($"GroundEffect_{type}");
+        go.transform.position = pos;
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = spr;
+        sr.sortingOrder = 0;   // 地皮层（Region:0），压在单位/建筑之下
+        // 直径对齐效果直径（2×radiusCells 格宽）
+        float cellW = GridSystem.Instance != null && GridSystem.Instance.Config != null
+            ? GridSystem.Instance.Config.cellSize.x : 1.28f;
+        float targetDia = Mathf.Max(0.1f, radiusCells * 2f * cellW);
+        float sprW = Mathf.Max(0.0001f, spr.bounds.size.x);
+        float k = targetDia / sprW;
+        go.transform.localScale = new Vector3(k, k, 1f);
+        return go;
+    }
+
+    /// <summary>销毁特效可视（含异常终结/清场路径）。</summary>
+    private static void DestroyVisual(Effect e)
+    {
+        if (e == null || e.visual == null) return;
+        if (Application.isPlaying) Destroy(e.visual); else DestroyImmediate(e.visual);
+        e.visual = null;
+    }
+
+    /// <summary>清空全部效果（生命周期清算/异常终结；防可视残留泄漏）。</summary>
+    public void ClearAllEffects()
+    {
+        for (int i = _effects.Count - 1; i >= 0; i--) DestroyVisual(_effects[i]);
+        _effects.Clear();
+    }
+
+    private void OnDestroy() => ClearAllEffects();
 
     private void Update()
     {
@@ -56,6 +105,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
 
             if (e.elapsed >= e.duration)
             {
+                DestroyVisual(e);
                 _effects.RemoveAt(i);
                 continue;
             }

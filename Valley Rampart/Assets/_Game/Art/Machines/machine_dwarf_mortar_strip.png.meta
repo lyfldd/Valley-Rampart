@@ -1,0 +1,487 @@
+fileFormatVersion: 2
+guid: Dn8ftnyuB38hwLpll+xcYE+m8jpgugl8MrvKtYvF9VqsM/1ddaAII3w=
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 14
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  webStreaming: 0
+  priorityLevel: 0
+  uploadedMode: 2
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 3
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 3
+    buildTarget: Server
+    maxTextureSize: 2048
+    maxPlaceholderSize: 32
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_0_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e8773e1a4e51bc890800000000000000
+      internalID: -7436826287959476338
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_0_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bced6db627df1fb40800000000000000
+      internalID: 5472433690109206219
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_0_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6635d1c4df55f2650800000000000000
+      internalID: 6210276957559280486
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_0_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 261
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 71fc6d9443ae39de0800000000000000
+      internalID: -1327459954846150889
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_1_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5fbcbc13c69763ef0800000000000000
+      internalID: -128782033734611979
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_1_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 032bc780cb6f39950800000000000000
+      internalID: 6454773978408727088
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_1_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 01f9199236087bc50800000000000000
+      internalID: 6680949735614947088
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_1_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 174
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 198374afc1c0913b0800000000000000
+      internalID: -5541384547905095535
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_2_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d935ffd5e0b89cac0800000000000000
+      internalID: -3834380713906449507
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_2_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b5fa970ec009043b0800000000000000
+      internalID: -5530261957430890661
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_2_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1e6c0077b31dbc310800000000000000
+      internalID: 1426463760322709217
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_2_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 87
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6dc9d3d163eb36f00800000000000000
+      internalID: 1108939072891362518
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_3_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f8047568618558a10800000000000000
+      internalID: 1911030470655033487
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_3_1
+      rect:
+        serializedVersion: 2
+        x: 87
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9d708c0ba6608ac90800000000000000
+      internalID: -7158464552403204135
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_3_2
+      rect:
+        serializedVersion: 2
+        x: 174
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c755a5b84032dbdd0800000000000000
+      internalID: -2468778518304369284
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: machine_dwarf_mortar_strip_3_3
+      rect:
+        serializedVersion: 2
+        x: 261
+        y: 0
+        width: 87
+        height: 87
+      alignment: 9
+      pivot: {x: 0.5, y: 0.03448276}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2aaa24b8c07dce3e0800000000000000
+      internalID: -2023005683720213854
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      machine_dwarf_mortar_strip_0_0: -7436826287959476338
+      machine_dwarf_mortar_strip_0_1: 5472433690109206219
+      machine_dwarf_mortar_strip_0_2: 6210276957559280486
+      machine_dwarf_mortar_strip_0_3: -1327459954846150889
+      machine_dwarf_mortar_strip_1_0: -128782033734611979
+      machine_dwarf_mortar_strip_1_1: 6454773978408727088
+      machine_dwarf_mortar_strip_1_2: 6680949735614947088
+      machine_dwarf_mortar_strip_1_3: -5541384547905095535
+      machine_dwarf_mortar_strip_2_0: -3834380713906449507
+      machine_dwarf_mortar_strip_2_1: -5530261957430890661
+      machine_dwarf_mortar_strip_2_2: 1426463760322709217
+      machine_dwarf_mortar_strip_2_3: 1108939072891362518
+      machine_dwarf_mortar_strip_3_0: 1911030470655033487
+      machine_dwarf_mortar_strip_3_1: -7158464552403204135
+      machine_dwarf_mortar_strip_3_2: -2468778518304369284
+      machine_dwarf_mortar_strip_3_3: -2023005683720213854
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  doOverrideTextureManagerOperations: 0
+  platformOperationGroupSettings: 
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

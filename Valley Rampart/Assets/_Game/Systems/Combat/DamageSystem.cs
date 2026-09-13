@@ -208,6 +208,7 @@ public class DamageSystem : Singleton<DamageSystem>
     public void UpdateRegistration(IDamageable attacker, IDamageable newTarget)
     {
         if (!_registrations.TryGetValue(attacker, out var reg)) return;
+
         if (newTarget == null) return;
 
         // 旧 target 过度杀伤-1（近战）
@@ -281,6 +282,9 @@ public class DamageSystem : Singleton<DamageSystem>
         }
 
         if (!_registrations.TryGetValue(attacker, out var reg)) return;
+
+        // HH.239 T13：攻击动画触发（纯表现侧挂钩，不触碰战斗语义/数值）
+        if (attacker is UnitController animUc) animUc.NotifyAttackVisual();
 
         var target = reg.target;
         var profile = reg.profile;

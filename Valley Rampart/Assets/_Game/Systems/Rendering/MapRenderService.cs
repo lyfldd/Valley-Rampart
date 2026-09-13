@@ -36,7 +36,8 @@ public class MapRenderService : Singleton<MapRenderService>
 
     // ===== 占位 tile 缓存（特征物 / 地皮）=====
     private readonly Dictionary<FeatureType, Tile> _featureTiles = new Dictionary<FeatureType, Tile>();
-    private readonly Dictionary<FeatureType, Tile> _groundTiles = new Dictionary<FeatureType, Tile>();
+    // HH.239 T10：地皮缓存键改 string（artId / "ph:{FeatureType}"）——地皮真图按温度带分档，同一 FeatureType 可多图
+    private readonly Dictionary<string, Tile> _groundTiles = new Dictionary<string, Tile>();
     private static readonly Color _fallback = new Color(0.6f, 0.6f, 0.6f);
 
     // ===== 视域动态加载（chunk 化，2_10 落地附加）=====
@@ -202,7 +203,7 @@ public class MapRenderService : Singleton<MapRenderService>
     private void SetCell(int x, int y, FeatureType ft)
     {
         var pos = new Vector3Int(x, y, 0);
-        if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft));
+        if (groundTilemap != null) groundTilemap.SetTile(pos, GroundTile(ft, x, y));
         if (featureTilemap != null) featureTilemap.SetTile(pos, FeatureTileOrNull(ft));
     }
 
@@ -299,13 +300,50 @@ public class MapRenderService : Singleton<MapRenderService>
     //  占位 tile
     // ========================================================================
 
-    /// <summary>地皮 tile（全覆盖无缝隙；特征→地皮基色）。</summary>
-    private Tile GroundTile(FeatureType ft)
+    /// <summary>地皮 tile（全覆盖无缝隙；特征→地皮基色）。HH.239 T10：先查 <c>ground_*</c> 真图（按温度带/水系），
+    /// 未命中回退生成菱形（缺图不崩不空白）。</summary>
+    private Tile GroundTile(FeatureType ft, int x, int y)
     {
-        if (_groundTiles.TryGetValue(ft, out var t)) return t;
-        t = CreateIsoTile(FeatureToGroundColor(ft));
-        _groundTiles[ft] = t;
+        string artId = GroundArtId(ft, x, y);
+        string cacheKey = artId ?? ("ph:" + ft);
+        if (_groundTiles.TryGetValue(cacheKey, out var t)) return t;
+
+        Sprite realArt = null;
+        if (artId != null)
+        {
+            var table = ValleyRampart.Rendering.SpriteRefTable.Instance;
+            if (table != null) table.TryGet(artId, out realArt);
+        }
+        t = realArt != null ? CreateSpriteTile(realArt) : CreateIsoTile(FeatureToGroundColor(ft));
+        _groundTiles[cacheKey] = t;
         return t;
+    }
+
+    /// <summary>地皮 artId：水/海按水系，其余按格所在温度带（D689 口径变更＝升级真图）。素材缺项（湖/冰河）返回 null ⇒ 回退占位。</summary>
+    private string GroundArtId(FeatureType ft, int x, int y)
+    {
+        switch (ft)
+        {
+            case FeatureType.Ocean: return "ground_ocean";
+            case FeatureType.River: return "ground_river";
+            case FeatureType.Lake:  return "ground_river";   // 湖/冰河无独立素材（映射表 §七 缺图面）→ 复用河道真图
+        }
+        var map = _map;
+        if (map == null || map.climateZones == null || map.climateZones.Length == 0) return "ground_temperate";
+        switch (MapGenRules.ZoneOf(map, x, y))
+        {
+            case ClimateZone.Tropical:    return "ground_tropical";
+            case ClimateZone.Subtropical: return "ground_subtropical";
+            case ClimateZone.Cold:        return "ground_cold";
+            default:                      return "ground_temperate";
+        }
+    }
+
+    private static Tile CreateSpriteTile(Sprite sprite)
+    {
+        var tile = ScriptableObject.CreateInstance<Tile>();
+        tile.sprite = sprite;
+        return tile;
     }
 
     /// <summary>特征物 tile（非地皮实体才返回，水/平原返回 null 铺空）。</summary>

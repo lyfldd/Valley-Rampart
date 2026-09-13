@@ -15,6 +15,17 @@ namespace ValleyRampart.Rendering
 /// </summary>
 public static class SpriteFactory
 {
+    /// <summary>纯色方块 sprite（1×1 世界单位；HH.239 T16 自 Core/SpriteFactory 迁入，供建造进度条等 UI 侧消费）。</summary>
+    public static Sprite CreateSquare(int size, Color color)
+    {
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+        var px = new Color[size * size];
+        for (int i = 0; i < px.Length; i++) px[i] = color;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), pixelsPerUnit: size);
+    }
+
     /// <summary>生成等轴菱形瓦片（无高度，如地皮/水）。宽=footprintW×128，高=footprintH×64 @PPU100。pivot=底面中心。</summary>
     public static Sprite CreateIsoTile(int footprintW, int footprintH, Color color)
     {

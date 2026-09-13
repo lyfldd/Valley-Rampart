@@ -107,8 +107,27 @@ public class ProjectileManager : Singleton<ProjectileManager>
         visual.transform.position = startPos;
         visual.SetActive(true);
         // 3.7 P1.2：按弹药类型着色（复用单一 sprite，色变区分箭/弩/石/火/魔）
+        // HH.239 T14 / D707 R4：弹药真图走 SpriteRefTable **ammo_*** 旁挂键（两个 SO 零改动）——
+        // AmmoDef 字段会拉平进 ProfessionSnapshot（Systems/AI.Core/Config）⇒ 加 sprite 字段必撞 H3「AI.Core 禁触」。
         var sr = visual.GetComponent<SpriteRenderer>();
-        if (sr != null) sr.color = GetProjectileColor(profile.projectileType);
+        if (sr != null)
+        {
+            Sprite ammoArt = null;
+            var table = ValleyRampart.Rendering.SpriteRefTable.Instance;
+            if (table != null) table.TryGet(AmmoArtId(profile.projectileType), out ammoArt);
+            if (ammoArt != null)
+            {
+                sr.sprite = ammoArt;
+                sr.color = Color.white;                       // 真图不叠色变
+                visual.transform.localScale = Vector3.one;     // 素材自带 PPU100 尺度
+            }
+            else
+            {
+                sr.sprite = _runtimeSprite;                    // 缺图回退：占位方块 + 色变区分（不崩）
+                sr.color = GetProjectileColor(profile.projectileType);
+                visual.transform.localScale = Vector3.one * ProjectileScale;
+            }
+        }
 
         _active.Add(new ProjectileData
         {
@@ -381,6 +400,24 @@ public class ProjectileManager : Singleton<ProjectileManager>
         go.transform.localScale = Vector3.one * ProjectileScale;
         go.transform.SetParent(transform);
         return go;
+    }
+
+    /// <summary>
+    /// 弹种 → 弹药 artId（H3 接线边界：只挂现役 <c>ProjectileType</c> 六值可消费素材；
+    /// <c>ammo_musket</c>/<c>ammo_monster</c>/<c>ammo_mage_barrage</c> 入库不接线，挂 3.6.1 转正批）。
+    /// </summary>
+    private static string AmmoArtId(ProjectileType t)
+    {
+        switch (t)
+        {
+            case ProjectileType.Arrow:     return "ammo_arrow";
+            case ProjectileType.Bolt:      return "ammo_arrow";       // 弩箭无独立素材（缺图面）→ 复用箭
+            case ProjectileType.HeavyBolt: return "ammo_heavybolt";
+            case ProjectileType.Stone:     return "ammo_stone";
+            case ProjectileType.Fireball:  return "ammo_fireball";
+            case ProjectileType.Magic:     return "ammo_magic";
+            default:                       return null;
+        }
     }
 
     /// <summary>

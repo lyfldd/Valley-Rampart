@@ -47,7 +47,7 @@ public class ChestEntity : MonoBehaviour, IInteractable
     private void Render()
     {
         if (_renderer == null) _renderer = gameObject.AddComponent<SpriteRenderer>();
-        _renderer.sprite = PlaceholderSprites.Get("treasure_box");
+        _renderer.sprite = ValleyRampart.Rendering.PlaceholderSprites.Get("feat_treasure_box");
         _renderer.sortingOrder = 5;
     }
 
