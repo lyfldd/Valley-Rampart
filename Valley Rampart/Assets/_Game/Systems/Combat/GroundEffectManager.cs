@@ -66,7 +66,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         go.transform.position = pos;
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = spr;
-        sr.sortingOrder = 0;   // 地皮层（Region:0），压在单位/建筑之下
+        sr.sortingOrder = 0;   // 与 Territory 同序（Ground 已迁 −1），压在单位/建筑之下
         // 直径对齐效果直径（2×radiusCells 格宽）
         float cellW = GridSystem.Instance != null && GridSystem.Instance.Config != null
             ? GridSystem.Instance.Config.cellSize.x : 1.28f;
