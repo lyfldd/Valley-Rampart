@@ -27,7 +27,7 @@
 
 ---
 
-## 二、范围（五件）
+## 二、范围（六件）
 
 ### ① 气候层重构：群系形状（**本批最大改动面**）
 
@@ -102,6 +102,22 @@
 | 2 | `WorldManager.cs:249 IsResourceNodeAvailable` 的 `case BuildingType.Farmland`（`:259`） | **摘除**（农田是玩家建筑，非资源锚点） |
 | 3 | `resourcesPerChunkBase` / `climateFeatures` 死字段 | **落地为 SO**（见 ②-3） |
 
+### ⑥ 湖/冰河 正式删除（**2026-09-14 18:58 用户裁决·新增**）
+
+**背景**：用户质疑「湖以及冰河本来就删了的呀」⇒ 策划端核实＝**设计/规范/排期三处都在、代码在跑，仅美术未出图**（`美术资源接入映射表.md:22/163/271`「湖/冰河暂缺」·`美术资源规范_等轴立方体瓦片.md:103` 定义 `feat_water_ice`·`MapGenRules.PlaceLakes` 在生成）⇒ 用户裁＝**正式删除**（不再补图）。
+
+**四处同删（缺一不可）**：
+1. **生成算法**：`MapGenRules.PlaceLakes`（`:455-469`）整段删除；`PlaceWater`（`:420-427`）内调用同步移除；`PlaceRiver` 的湖避让判断（`cur != FeatureType.Lake`）同步清理
+2. **特征物枚举**：`FeatureType.Lake` 移除（`GridTypes.cs`）；**连带全量**—— `IsWalkableFeature`／`FeatureToGroundColor`／`FeatureTileOrNull`／`MapRenderService.GroundArtId`（`case FeatureType.Lake:` 分支）／`MatchesPreferredFeature` 内 Water 判定／`PlaceLakes` 的 `RectHasFeature(…Lake)` 避让
+3. **渲染映射**：`MapRenderService.GroundArtId` 的 Lake 分支移除（原为 `return "ground_river"` 复用）
+4. **设计稿**：`2_1_2D地图生成.md` §3.3 特征物表「河流/湖泊」→「河流」；§3.6 水域段落删湖泊；`美术资源接入映射表.md` 同步标取消
+5. **冰河**：`D257`「寒带河流同湖泊冰河（视觉）」⇒ **本件先删「湖泊/独立冰河地形」**；**寒带河流要不要保留"冰河视觉变体"另定**（默认一并删，若要留须报策划端）
+
+**⚠️ 连带风险（必测）**：
+- **`FeatureType` 枚举值若被存档序列化** ⇒ 删枚举会改数值 ⇒ **须核存档**（`D718` 已定"存档不用管"⇒ 可直改，但**回执里须声明**）
+- **地图少一种地形** ⇒ **可走率上升、水域占比下降** ⇒ **须给改前后实测对照**
+- **DZ-084 避让语义**（河不穿湖）⇒ 湖没了则该避让自然失效，**保留无害、须在报告里声明**
+
 ---
 
 ## 三、验收线
@@ -119,6 +135,7 @@
 | **9** | **死链路** | `IsResourceNodeAvailable` **无 Farmland 分支**；`2_1 §5.5` 验收项已删；`resourcesPerChunkBase` 可 SO 读取 |
 | **10** | **实机** | 正门 `EnterTestRun`（seed 21107／Medium／diff2／1x）截图：**群系边界不规则**（对比旧图）＋主城周边干净 |
 | **11** | **山脉化（件④）** | ①**形状**：山脉呈**带状/连绵**（非散点）——给「山脉簇的**长宽比**」统计（建议 ≥2:1）＋**簇数量**显著少于改前散点；②**连通**：山脉簇 4-连通、**无 < 4 格**碎片；③**可走率**：给**改前/改后**对照（山脉化后阻挡增多 ⇒ 可走率必降，**须在可接受区间**）；④**连通性校验仍通过**（flood-fill 无孤立可走区） |
+| **12** | **湖/冰河删除（件⑥）** | ①**四处同删**均有 diff 证据（生成／枚举／渲染／设计稿）；②**全库 grep `FeatureType.Lake` 零命中**（除注释/存档兼容位）；③**可走率/水域占比**改前后实测；④**地图能正常生成**（出图无 exception） |
 
 ---
 
