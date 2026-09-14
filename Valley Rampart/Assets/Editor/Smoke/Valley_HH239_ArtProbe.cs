@@ -123,12 +123,13 @@ public static class Valley_HH239_ArtProbe
         sb.AppendLine($"  G段回归 特征物层: sampled={ftTot} real={ftReal} distinctFeat={ftNames.Count} -> {string.Join(", ", ftNames.OrderBy(s => s))}");
 
         // ---- ② 缺图回退负探针（不崩 + 回退非真图）----
+        // D724 件3（HH.239 探针勘正）：删 `ground_lake` 查项——git log -S "ground_lake" 全库历史零命中
+        // （全库从未有该键，R5 收敛后水系走 ground_ocean/ground_river），且随本日「湖/冰河删除」彻底作废
+        // （撞 L-26 家族：判据本身不可满足）。D724 裁定「须修探针（删该查项）」。
         var fb1 = ValleyRampart.Rendering.PlaceholderSprites.Get("bld_academy");            // 学院无素材
-        var fb2 = ValleyRampart.Rendering.PlaceholderSprites.Get("ground_lake");            // 湖无素材
         var fb3 = ValleyRampart.Rendering.PlaceholderSprites.Get("unit_orc_windwalker_idle"); // 兽人无风行者
         var fb4 = ValleyRampart.Rendering.PlaceholderSprites.Get("bld_house", 2);           // 命中 lv2 真图
         sb.AppendLine($"  ②FALLBACK bld_academy→nonNull={fb1 != null}/inTable={fb1 != null && table.Contains(fb1)}" +
-                      $" ; ground_lake→nonNull={fb2 != null}" +
                       $" ; orc_windwalker→nonNull={fb3 != null}" +
                       $" ; bld_house_lv2→inTable={fb4 != null && table.Contains(fb4)}");
 
