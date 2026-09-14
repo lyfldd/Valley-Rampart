@@ -1,0 +1,115 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!687078895 &4343727234628468602
+SpriteAtlas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GroundFeature
+  serializedVersion: 2
+  m_EditorData:
+    serializedVersion: 2
+    textureSettings:
+      serializedVersion: 3
+      anisoLevel: 1
+      compressionQuality: 50
+      maxTextureSize: 2048
+      textureCompression: 0
+      filterMode: 1
+      generateMipMaps: 0
+      readable: 0
+      crunchedCompression: 0
+      webStreaming: 0
+      sRGB: 1
+    platformSettings: []
+    packingSettings:
+      serializedVersion: 2
+      padding: 4
+      blockOffset: 1
+      allowAlphaSplitting: 0
+      enableRotation: 1
+      enableTightPacking: 1
+      enableAlphaDilation: 0
+    secondaryTextureSettings: {}
+    variantMultiplier: 1
+    packables:
+    - {fileID: 102900000, guid: e5f7ef856188beb48a0fdded18af3598, type: 3}
+    - {fileID: 102900000, guid: 83db9c87ca5925f46b015c99e9a68bbc, type: 3}
+    bindAsDefault: 1
+    isAtlasV2: 0
+    cachedData: {fileID: 0}
+    packedSpriteRenderDataKeys:
+    - f453984150c3a014d81e77c3a7c8fcac: 21300000
+    - 27fb0bb1760482a438551db084d406e6: 21300000
+    - a273fb22df6497e4c8afcb438816aa10: 21300000
+    - 8b2ee803bc2f3944e98b8f4dea075b7c: 21300000
+    - cc8ee98388c20d24cb549433e2078d26: 21300000
+    - 3b6fa4c3d05964945811af29118881f3: 21300000
+    - 454cc5160b6a37f45b24b77287d81a94: 21300000
+    - d238c0b75ac5c334d94d38576f791ee6: 21300000
+    - a191d6f76dce3484c93738d354f517c2: 21300000
+    - 51848909d370132488a7f61c58d3b557: 21300000
+    - 1e87fc09a11adba45a116f284b76091a: 21300000
+    - a2ed4ed9a8edd404dbb9509e4545aca9: 21300000
+    - 15b3ebfab92781248b0a6ba1bbbaa2ff: 21300000
+    - d406265b787c3434eb2a6db1ae1b888a: 21300000
+    - f290889b6bb869d46a52eeb3ea0ae121: 21300000
+    - 3adeef0c7bf475d4ba8ba3c1e5ee45d4: 21300000
+    - fc3e6a1d71185944fa93d6aa328ad9bd: 21300000
+    - 8ca3894e8bbdc424cb61ad867937264c: 21300000
+    - 77ec607e044fe01468af4a66a7c04b2f: 21300000
+    - ac43c2aefb2279949a34c071ba350c09: 21300000
+    - 8b476bde7e416054bb4eb9fb69112fc4: 21300000
+    - a9dd31fe13a931749a442fecb6e37470: 21300000
+  m_MasterAtlas: {fileID: 0}
+  m_PackedSprites:
+  - {fileID: 21300000, guid: f453984150c3a014d81e77c3a7c8fcac, type: 3}
+  - {fileID: 21300000, guid: 27fb0bb1760482a438551db084d406e6, type: 3}
+  - {fileID: 21300000, guid: a273fb22df6497e4c8afcb438816aa10, type: 3}
+  - {fileID: 21300000, guid: 8b2ee803bc2f3944e98b8f4dea075b7c, type: 3}
+  - {fileID: 21300000, guid: cc8ee98388c20d24cb549433e2078d26, type: 3}
+  - {fileID: 21300000, guid: 3b6fa4c3d05964945811af29118881f3, type: 3}
+  - {fileID: 21300000, guid: 454cc5160b6a37f45b24b77287d81a94, type: 3}
+  - {fileID: 21300000, guid: d238c0b75ac5c334d94d38576f791ee6, type: 3}
+  - {fileID: 21300000, guid: a191d6f76dce3484c93738d354f517c2, type: 3}
+  - {fileID: 21300000, guid: 51848909d370132488a7f61c58d3b557, type: 3}
+  - {fileID: 21300000, guid: 1e87fc09a11adba45a116f284b76091a, type: 3}
+  - {fileID: 21300000, guid: a2ed4ed9a8edd404dbb9509e4545aca9, type: 3}
+  - {fileID: 21300000, guid: 15b3ebfab92781248b0a6ba1bbbaa2ff, type: 3}
+  - {fileID: 21300000, guid: d406265b787c3434eb2a6db1ae1b888a, type: 3}
+  - {fileID: 21300000, guid: f290889b6bb869d46a52eeb3ea0ae121, type: 3}
+  - {fileID: 21300000, guid: 3adeef0c7bf475d4ba8ba3c1e5ee45d4, type: 3}
+  - {fileID: 21300000, guid: fc3e6a1d71185944fa93d6aa328ad9bd, type: 3}
+  - {fileID: 21300000, guid: 8ca3894e8bbdc424cb61ad867937264c, type: 3}
+  - {fileID: 21300000, guid: 77ec607e044fe01468af4a66a7c04b2f, type: 3}
+  - {fileID: 21300000, guid: ac43c2aefb2279949a34c071ba350c09, type: 3}
+  - {fileID: 21300000, guid: 8b476bde7e416054bb4eb9fb69112fc4, type: 3}
+  - {fileID: 21300000, guid: a9dd31fe13a931749a442fecb6e37470, type: 3}
+  m_PackedSpriteNamesToIndex:
+  - ground_river
+  - feat_tree_temperate_2
+  - feat_tree_tropical_2
+  - feat_stone_pile
+  - feat_tree_cold_1
+  - feat_tree_cold_2
+  - feat_tree_subtropical_1
+  - ground_cold
+  - feat_tree_temperate_1
+  - feat_tree_tropical_1
+  - feat_tree_subtropical_3
+  - ground_ocean
+  - feat_mine
+  - ground_temperate
+  - feat_deadwood
+  - feat_tree_temperate_3
+  - feat_tree_subtropical_2
+  - ground_subtropical
+  - feat_orevein
+  - feat_tree_tropical_3
+  - feat_tree_cold_3
+  - ground_tropical
+  m_RenderDataMap: {}
+  m_Tag: GroundFeature
+  m_IsVariant: 0
+  m_IsPlaceholder: 0
