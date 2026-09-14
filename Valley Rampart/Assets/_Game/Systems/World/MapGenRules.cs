@@ -6,32 +6,26 @@ using UnityEngine;
 /// 2D 地图生成规则（2_1 §5.2 生成管线）。全部静态方法，注入 System.Random 保证确定性（R4）。
 /// features 为唯一功能源（2_1 §1.3）；本类只写 map.features / climateZones / spawns / naturalBuildings，
 /// 不实例化 Building（归 2_2）、不渲染（归 2_10）。
+///
+/// **HH.272 重构（2_1_R1 方案）**：
+///   ① 气候层＝种子生长 + 噪声扰动 + 碎片清理（逐格存，替代 16×16 硬方块逐块 roll）
+///   ② 资源层＝坑位模型 + 权重表归一化配额（T=120/大区块 × 难度系数）+ 保底 B_i
+///   ③ 主城净空区（footprint 3×3 外扩 R=4 ⇒ 11×11）
+///   ④ 山脉化（脊线生成 + 沿线扩宽 ⇒ 带状），替代逐格概率散点
+///   ⑤ 死链路清理
+///   ⑥ 湖/冰河删除（PlaceLakes 整段 + FeatureType.Lake 全量连带）
 /// </summary>
 public static class MapGenRules
 {
     public const int ChunkSize = 16;   // 大区块边长（doc 1 §3.1 固定 16×16）
 
-    // ===== §3.3 特征物密度表（固定设计表，内置保证确定性）=====
-    // 每温度带一组权重；空格=Plain。水域（River/Lake/Ocean）不在填充步，归 PlaceWater。
-    private struct FW { public FeatureType f; public float w; }
-    private static readonly FW[][] ClimateFeatureTable = new FW[][]
+    // ===== 资源类型位序（与 MapGenRulesConfig.resourceWeights 的 5 位一一对应）=====
+    public const int ResTree = 0, ResStone = 1, ResWood = 2, ResOre = 3, ResMine = 4;
+    public const int ResourceKindCount = 5;
+    /// <summary>位序 0..4 对应的 FeatureType。</summary>
+    public static readonly FeatureType[] ResourceKindFeature =
     {
-        // Tropical（热带）：平原多、树多、无雪山
-        new FW[]{ new FW{f=FeatureType.Plain,w=60}, new FW{f=FeatureType.Tree,w=20},
-                  new FW{f=FeatureType.Mountain,w=5}, new FW{f=FeatureType.Mine,w=5},
-                  new FW{f=FeatureType.OreVein,w=3}, new FW{f=FeatureType.StonePile,w=2}, new FW{f=FeatureType.WoodPile,w=2} },
-        // Subtropical（亚热带）
-        new FW[]{ new FW{f=FeatureType.Plain,w=55}, new FW{f=FeatureType.Tree,w=20},
-                  new FW{f=FeatureType.Mountain,w=10}, new FW{f=FeatureType.SnowMountain,w=2}, new FW{f=FeatureType.Mine,w=8},
-                  new FW{f=FeatureType.OreVein,w=2}, new FW{f=FeatureType.StonePile,w=1}, new FW{f=FeatureType.WoodPile,w=1} },
-        // Temperate（温带）：矿洞最多
-        new FW[]{ new FW{f=FeatureType.Plain,w=45}, new FW{f=FeatureType.Tree,w=20},
-                  new FW{f=FeatureType.Mountain,w=15}, new FW{f=FeatureType.SnowMountain,w=5}, new FW{f=FeatureType.Mine,w=10},
-                  new FW{f=FeatureType.OreVein,w=2}, new FW{f=FeatureType.StonePile,w=1}, new FW{f=FeatureType.WoodPile,w=1} },
-        // Cold（寒带）：雪山为主
-        new FW[]{ new FW{f=FeatureType.Plain,w=35}, new FW{f=FeatureType.Tree,w=5},
-                  new FW{f=FeatureType.Mountain,w=10}, new FW{f=FeatureType.SnowMountain,w=35}, new FW{f=FeatureType.Mine,w=5},
-                  new FW{f=FeatureType.OreVein,w=1}, new FW{f=FeatureType.StonePile,w=1} },
+        FeatureType.Tree, FeatureType.StonePile, FeatureType.WoodPile, FeatureType.OreVein, FeatureType.Mine
     };
 
     /// <summary>特征物是否可走（生成期判定，未灌 GridSystem 前用）。</summary>
@@ -42,17 +36,21 @@ public static class MapGenRules
             case FeatureType.Plain: case FeatureType.Tree: case FeatureType.Mine:
             case FeatureType.OreVein: case FeatureType.StonePile: case FeatureType.WoodPile:
                 return true;
-            default: return false;   // Mountain/SnowMountain/River/Lake/Ocean 阻挡
+            default: return false;   // Mountain/SnowMountain/River/Ocean 阻挡
         }
     }
 
     public static int Idx(MapData m, int x, int y) => y * m.width + x;
     public static int ChunkW(MapData m) => Mathf.Max(1, m.width / ChunkSize);
+    public static int ChunkH(MapData m) => Mathf.Max(1, m.height / ChunkSize);
+
+    /// <summary>温度带查询。**HH.272 件①**：`climateZones` 由「按大区块存」改为**逐格存**
+    /// （随机形状无法用 `(x/16,y/16)` 反查）；对外签名不变 ⇒ 调用方零改动。</summary>
     public static ClimateZone ZoneOf(MapData m, int x, int y)
-        => m.climateZones[(x / ChunkSize) + (y / ChunkSize) * ChunkW(m)];
+        => m.climateZones[y * m.width + x];
 
     // ===== 件12（D618/DZ-084/D621）：矿山锚点 2×2 成簇工具 =====
-    public const int OceanThickness = 2;      // 海洋边缘厚度（PlaceOcean 与矿山簇撒布边界共用；原为 PlaceOcean 内字面量 2）
+    public const int OceanThickness = 2;      // 海洋边缘厚度（PlaceOcean 与资源落位内缩边界共用）
     public const int MineClusterSide = 2;     // 矿山簇边长（对齐 mine.footprint 2×2，D613）
 
     /// <summary>块是否**完整**由指定特征填满（轴对齐 side×side，D621①：L 形连通不算）。</summary>
@@ -100,90 +98,919 @@ public static class MapGenRules
         return false;
     }
 
-    /// <summary>矩形内是否含指定特征（DZ-084 水域避让；越界格不计）。</summary>
-    static bool RectHasFeature(MapData map, int ox, int oy, int bw, int bh, FeatureType need)
+    // ========================================================================
+    //  步骤 3：气候层——群系形状（种子生长 + 噪声扰动 + 碎片清理）
+    // ========================================================================
+
+    public static void FillClimateZones(System.Random rng, MapData map, MapGenRulesConfig cfg)
     {
-        for (int y = oy; y < oy + bh; y++)
-            for (int x = ox; x < ox + bw; x++)
-                if (InB(map, x, y) && map.features[Idx(map, x, y)] == need) return true;
+        int w = map.width, h = map.height, n = w * h;
+        var zones = map.climateZones;
+        if (zones == null || zones.Length != n)
+            throw new InvalidOperationException(
+                $"[MapGenRules] climateZones 须为**逐格**数组（期望 {n}，实得 {zones?.Length ?? 0}）——见 HH.272 件①。" +
+                "大区块口径已废止（2_1_R1 §二第一层）。");
+
+        int typMin = cfg != null ? Mathf.Max(1, cfg.clusterSizeTypicalMin) : 96;
+        int typMax = cfg != null ? Mathf.Max(typMin, cfg.clusterSizeTypicalMax) : 384;
+        int maxSize = cfg != null ? Mathf.Max(typMax, cfg.clusterSizeMax) : 384;
+        int minSize = cfg != null ? Mathf.Max(1, cfg.clusterSizeMin) : 4;
+
+        // 低频噪声场（确定性·不消耗 rng 主链之外的语义）
+        var noise = BuildNoiseField(rng, w, h);
+
+        // ---- 1) 种子数 = 面积 / 平均簇大小；配额 = 面积 / 种子数（归一化 ⇒ Σ配额 = n）----
+        int avg = Mathf.Max(1, (typMin + typMax) / 2);
+        int seedCount = Mathf.Max(1, n / avg);
+        int baseQuota = n / seedCount;
+        int remQuota = n - baseQuota * seedCount;      // 余数摊给前几个种子（Σ配额 ≡ n）
+
+        var lab = new int[n];
+        for (int i = 0; i < n; i++) lab[i] = -1;
+
+        var cBand = new List<int>(seedCount);          // 每簇温度带
+        var cSize = new List<int>(seedCount);          // 每簇体积
+        var cQuota = new List<int>(seedCount);         // 每簇目标体积（want 停靠）
+        var cFront = new List<List<int>>(seedCount);
+        var active = new Queue<int>();
+        var stamp = new int[n];                        // 前沿去重：某格已入 owner 前沿 ⇒ 不再重复入
+
+        // 去重版前沿入队：只入「自由且未在本簇前沿」的邻格 ⇒ frontier 保持唯一（PickByNoise 更快）
+        // 标记 = owner+1（stamp 初值 0 与簇 0 冲突）
+        void PushF(List<int> f, int cell, int owner)
+        {
+            int o = owner + 1;
+            int cx = cell % w, cy = cell / w;
+            if (cx + 1 < w) { int ni = cy * w + cx + 1; if (lab[ni] == -1 && stamp[ni] != o) { stamp[ni] = o; f.Add(ni); } }
+            if (cx - 1 >= 0) { int ni = cy * w + cx - 1; if (lab[ni] == -1 && stamp[ni] != o) { stamp[ni] = o; f.Add(ni); } }
+            if (cy + 1 < h) { int ni = (cy + 1) * w + cx; if (lab[ni] == -1 && stamp[ni] != o) { stamp[ni] = o; f.Add(ni); } }
+            if (cy - 1 >= 0) { int ni = (cy - 1) * w + cx; if (lab[ni] == -1 && stamp[ni] != o) { stamp[ni] = o; f.Add(ni); } }
+        }
+
+        int Spawn(int cell, int band, int quota)
+        {
+            int cid = cBand.Count;
+            cBand.Add(band);
+            cSize.Add(1);
+            cQuota.Add(quota);
+            var f = new List<int>(64);
+            cFront.Add(f);
+            lab[cell] = cid;
+            PushF(f, cell, cid);
+            active.Enqueue(cid);
+            return cid;
+        }
+
+        // ---- 1b) 种子均匀撒布（抖动网格 ⇒ 无种子死区 ⇒ 全图可达；替代纯随机散点）----
+        //   **强 4-着色**：同带种子在 3×3 邻域内（直邻+对角）必不同带 ⇒ 同带簇相隔 ≥ 一格异带 ⇒
+        //   生长期同带簇不接触 ⇒ 无「同带缝隙」，各簇独立按配额长满。
+        int gx = (int)Mathf.Sqrt(seedCount), gy = gx;
+        if (gx * gy < seedCount) gx++;          // 网格容量 ≥ seedCount（≥1 槽/种子）
+        if (gx * gy < seedCount) gy++;
+        float stepX = w / (float)gx, stepY = h / (float)gy;
+        int jitterX = Mathf.Max(1, (int)(stepX * 0.4f));
+        int jitterY = Mathf.Max(1, (int)(stepY * 0.4f));
+        var seedBands = new int[seedCount];
+        for (int s = 0; s < seedCount; s++)
+        {
+            var used = new bool[4];
+            if (s % gx > 0) used[seedBands[s - 1]] = true;        // 左邻
+            if (s >= gx) used[seedBands[s - gx]] = true;          // 上邻
+            if (s >= gx && s % gx > 0) used[seedBands[s - gx - 1]] = true;   // 左上对角
+            if (s >= gx && s % gx < gx - 1) used[seedBands[s - gx + 1]] = true; // 右上对角
+            seedBands[s] = RollClimateExcluding(rng, cfg, used);
+        }
+        for (int s = 0; s < seedCount; s++)
+        {
+            int ix = s % gx, iy = s / gx;
+            int sx = Mathf.Clamp((int)((ix + 0.5f) * stepX) + rng.Next(-jitterX, jitterX + 1), 0, w - 1);
+            int sy = Mathf.Clamp((int)((iy + 0.5f) * stepY) + rng.Next(-jitterY, jitterY + 1), 0, h - 1);
+            int start = sy * w + sx;
+            if (lab[start] != -1) start = FindNearestFree(lab, w, h, sx, sy);
+            if (start < 0) break;
+            Spawn(start, seedBands[s], baseQuota + (s < remQuota ? 1 : 0));
+        }
+
+        // ---- 2) 轮转生长：两段式（同带并入封顶校验贯穿）。
+        //   Pass A（want 停靠）：各簇长到配额即停 ⇒ 体积均衡 ≈ n/seedCount ≈ 240，落在典型区间 [96,384] 内。
+        //   Pass B（maxSize 封顶）：**配额已满但前沿未空的簇重新激活**，以竞争方式接管残留格
+        //     （余量 ≈ 384−240，充足 ⇒ 无需兜底合并 ⇒ 不产超限巨簇）。
+        //   噪声决定扩张优先级 ⇒ 边界自然蜿蜒。----
+        void GrowthPass(int cap)
+        {
+            active.Clear();
+            for (int c = 0; c < cBand.Count; c++) if (cSize[c] < cap) active.Enqueue(c);
+            while (active.Count > 0)
+            {
+                int cid = active.Dequeue();
+                if (cSize[cid] >= cap) continue;           // 到停靠线 ⇒ 退役
+                var f = cFront[cid];
+                int placed = -1;
+                while (f.Count > 0)
+                {
+                    int pick = PickByNoise(rng, f, noise);
+                    int cell = f[pick];
+                    f[pick] = f[f.Count - 1];
+                    f.RemoveAt(f.Count - 1);
+                    if (lab[cell] != -1) continue;         // 已被别簇占走
+                    if (MergedSizeIfClaim(lab, w, h, cell, cid, cBand, cSize) > maxSize) continue;
+                    placed = cell; break;
+                }
+                if (placed < 0) continue;                  // 前沿耗尽 ⇒ 该簇退役（残留交下一段/兜底）
+                lab[placed] = cid; cSize[cid]++;
+                PushF(f, placed, cid);
+                if (cSize[cid] < cap) active.Enqueue(cid);
+            }
+        }
+        GrowthPass(baseQuota);                               // Pass A 配额均衡（封顶 240）
+        GrowthPass(maxSize);                                 // Pass B 接管残留（封顶 384）
+
+        // ---- 3) 残隙收尾（BFS）：每个空格并入「邻接格数最多」且并入后 ≤ 上限的邻接簇；
+        //      全超限 ⇒ 取**并后体积最小**者（短暂超限且分散，交步骤 4 裁剪）。全图无未分配、无新碎片簇。----
+        {
+            var q = new Queue<int>();
+            var seen = new bool[n];
+            var nbIds = new List<int>(4);
+            for (int i = 0; i < n; i++) if (lab[i] != -1) PushUnassignedNeighbors(q, seen, lab, w, h, i);
+            while (q.Count > 0)
+            {
+                int cell = q.Dequeue();
+                if (lab[cell] != -1) continue;
+                int cx = cell % w, cy = cell / w;
+                nbIds.Clear();
+                for (int d = 0; d < 4; d++)
+                {
+                    int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                    int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    int id = lab[ny * w + nx];
+                    if (id < 0) continue;
+                    if (!nbIds.Contains(id)) nbIds.Add(id);
+                }
+                int best = -1, bestCnt = -1; long bestMerged = long.MaxValue;
+                for (int k = 0; k < nbIds.Count; k++)
+                {
+                    int id = nbIds[k];
+                    int cnt = 0;
+                    for (int d = 0; d < 4; d++)
+                    {
+                        int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                        int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                        int nid = lab[ny * w + nx];
+                        if (nid == id) cnt++;
+                    }
+                    long m = MergedSizeIfClaim(lab, w, h, cell, id, cBand, cSize);
+                    if (m <= maxSize && (cnt > bestCnt || (cnt == bestCnt && m < bestMerged)))
+                    { best = id; bestCnt = cnt; bestMerged = m; }
+                }
+                if (best < 0)
+                {
+                    // 全超限 ⇒ 并后体积最小者（分散超限交裁剪）
+                    best = -1; bestMerged = long.MaxValue;
+                    for (int k = 0; k < nbIds.Count; k++)
+                    {
+                        long m = MergedSizeIfClaim(lab, w, h, cell, nbIds[k], cBand, cSize);
+                        if (m < bestMerged) { bestMerged = m; best = nbIds[k]; }
+                    }
+                }
+                if (best < 0) { zones[cell] = ClimateZone.Temperate; continue; }   // 理论不可达
+                lab[cell] = best;
+                cSize[best]++;
+                PushUnassignedNeighbors(q, seen, lab, w, h, cell);
+            }
+        }
+
+        // 写回逐格温度带
+        int leftover = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (lab[i] < 0) { leftover++; zones[i] = ClimateZone.Temperate; continue; }
+            zones[i] = (ClimateZone)cBand[lab[i]];
+        }
+        if (leftover > 0)
+            Debug.LogWarning($"[MapGenRules] 气候层生长残留未分配={leftover}（期望 0·HH.272 件①）。");
+
+        // ---- 4) 收尾至不动点：碎片并入（&lt; minSize 整簇并入邻接最多带）↔ 上限裁剪
+        //      （裁剪可能切出碎片、并入可能撑超 ⇒ 交替；当前碎片/超限极少 ⇒ 1~3 轮即收敛）。
+        //      判停用返回值（merged==0 且 rounds==0 ⇒ 干净），省去每轮多余的连通性复检。----
+        int capRounds = 0;
+        for (int outer = 0; outer < 8; outer++)
+        {
+            int merged = MergeFragments(zones, w, h, minSize, maxSize);
+            capRounds = CapOversizedClusters(zones, w, h, maxSize);
+            if (merged == 0 && capRounds == 0) break;
+        }
+
+        ReportClimateShape(zones, w, h, minSize, maxSize, capRounds, 0);
+    }
+
+    /// <summary>「把 cell 并入 cid」后的分量体积：自身 + 四邻**同带**簇体积（按簇 id 去重）。
+    /// &gt; 上限 ⇒ 该格须拒绝（否则同带两簇被一格桥接成一簇 ⇒ 超限）。</summary>
+    static long MergedSizeIfClaim(int[] lab, int w, int h, int cell, int cid, List<int> cBand, List<int> cSize)
+    {
+        int cx = cell % w, cy = cell / w;
+        int band = cBand[cid];
+        long m = cSize[cid] + 1;
+        var ids = new int[4]; int nn = 0;
+        for (int d = 0; d < 4; d++)
+        {
+            int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+            int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            int id = lab[ny * w + nx];
+            if (id < 0 || id == cid) continue;
+            if (cBand[id] != band) continue;
+            bool dup = false;
+            for (int k = 0; k < nn; k++) if (ids[k] == id) { dup = true; break; }
+            if (dup) continue;
+            ids[nn++] = id;
+            m += cSize[id];
+        }
+        return m;
+    }
+
+    /// <summary>低频噪声场（值域 0..1）：多分量正弦叠加，波长 ~80~300 格 ⇒ 决定生长优先级。</summary>
+    static float[] BuildNoiseField(System.Random rng, int w, int h)
+    {
+        const int comps = 3;
+        var fx = new float[comps]; var fy = new float[comps];
+        var ph = new float[comps]; var am = new float[comps];
+        for (int c = 0; c < comps; c++)
+        {
+            fx[c] = (float)(rng.NextDouble() * 0.055 + 0.018);
+            fy[c] = (float)(rng.NextDouble() * 0.055 + 0.018);
+            ph[c] = (float)(rng.NextDouble() * Math.PI * 2.0);
+            am[c] = 1f / (c + 1);
+        }
+        var f = new float[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float v = 0f, tw = 0f;
+                for (int c = 0; c < comps; c++)
+                {
+                    v += am[c] * (float)Math.Sin(x * fx[c] + y * fy[c] + ph[c]);
+                    tw += am[c];
+                }
+                f[y * w + x] = Mathf.Clamp01((v / tw) * 0.5f + 0.5f);
+            }
+        return f;
+    }
+
+    /// <summary>噪声加权挑 frontier 项（权重 = (noise+0.05)^3）。frontier 大时抽样 64 个取最优（保 O(1)）。</summary>
+    static int PickByNoise(System.Random rng, List<int> frontier, float[] noise)
+    {
+        int cnt = frontier.Count;
+        if (cnt <= 512)
+        {
+            float sum = 0f;
+            for (int i = 0; i < cnt; i++) { float t = noise[frontier[i]] + 0.05f; sum += t * t * t; }
+            float roll = (float)rng.NextDouble() * sum;
+            for (int i = 0; i < cnt; i++)
+            {
+                float t = noise[frontier[i]] + 0.05f;
+                roll -= t * t * t;
+                if (roll <= 0f) return i;
+            }
+            return cnt - 1;
+        }
+        int best = rng.Next(cnt); float bestV = noise[frontier[best]];
+        for (int k = 0; k < 64; k++)
+        {
+            int idx = rng.Next(cnt);
+            float v = noise[frontier[idx]];
+            if (v > bestV) { bestV = v; best = idx; }
+        }
+        return best;
+    }
+
+    static int FindNearestFree(int[] label, int w, int h, int cx, int cy)
+    {
+        if (label[cy * w + cx] == -1) return cy * w + cx;
+        int maxR = Mathf.Max(w, h);
+        for (int r = 1; r <= maxR; r++)
+            for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Mathf.Abs(dx) != r && Mathf.Abs(dy) != r) continue;
+                    int x = cx + dx, y = cy + dy;
+                    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+                    int i = y * w + x;
+                    if (label[i] == -1) return i;
+                }
+        return -1;
+    }
+
+    /// <summary>把自由邻格入队（残隙 BFS 扩散用；seen 防重复入队）。</summary>
+    static void PushUnassignedNeighbors(Queue<int> q, bool[] seen, int[] label, int w, int h, int cell)
+    {
+        int cx = cell % w, cy = cell / w;
+        for (int d = 0; d < 4; d++)
+        {
+            int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+            int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            int ni = ny * w + nx;
+            if (label[ni] != -1 || seen[ni]) continue;
+            seen[ni] = true; q.Enqueue(ni);
+        }
+    }
+
+    // ---- 4-连通簇标注（气候层公用）----
+
+    static int[] _labelQueue;   // LabelComponents 复用 BFS 缓冲（MapGen 单线程串行 ⇒ 安全复用）
+
+    static int LabelComponents(ClimateZone[] zones, int w, int h, int[] label, List<int> compSize, List<ClimateZone> compBand)
+    {
+        int n = w * h;
+        for (int i = 0; i < n; i++) label[i] = -1;
+        compSize.Clear(); compBand.Clear();
+        if (_labelQueue == null || _labelQueue.Length < n) _labelQueue = new int[n];
+        var q = _labelQueue;
+        int cc = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (label[i] != -1) continue;
+            var band0 = zones[i];
+            int c = cc++;
+            label[i] = c;
+            int head = 0, tail = 0;
+            q[tail++] = i;
+            int sz = 0;
+            while (head < tail)
+            {
+                int cur = q[head++]; sz++;
+                int cx = cur % w, cy = cur / w;
+                if (cx + 1 < w) { int ni = cur + 1; if (label[ni] == -1 && zones[ni] == band0) { label[ni] = c; q[tail++] = ni; } }
+                if (cx > 0)     { int ni = cur - 1; if (label[ni] == -1 && zones[ni] == band0) { label[ni] = c; q[tail++] = ni; } }
+                if (cy + 1 < h) { int ni = cur + w; if (label[ni] == -1 && zones[ni] == band0) { label[ni] = c; q[tail++] = ni; } }
+                if (cy > 0)     { int ni = cur - w; if (label[ni] == -1 && zones[ni] == band0) { label[ni] = c; q[tail++] = ni; } }
+            }
+            compSize.Add(sz); compBand.Add(band0);
+        }
+        return cc;
+    }
+
+    /// <summary>碎片并入：size &lt; minSize 的 4-连通簇整簇并入邻接带。
+    /// **封顶感知**：目标带「并入后 Σ(同带邻接分量体积) + 碎片体积 ≤ 上限」优先（体积最小者）；
+    /// 全超限 ⇒ 取同带邻接体积最小者（接受短暂超限，交裁剪）⇒ 减少并入→裁剪振荡。
+    /// 单遍 O(n)（先收集碎片格，再逐碎片统计邻接分量）。</summary>
+    static int MergeFragments(ClimateZone[] zones, int w, int h, int minSize, int maxSize)
+    {
+        int n = w * h;
+        var label = new int[n];
+        var sz = new List<int>();
+        var bd = new List<ClimateZone>();
+        int cc = LabelComponents(zones, w, h, label, sz, bd);
+        if (cc == 0) return 0;
+
+        var fragCells = new List<int>[cc];
+        for (int i = 0; i < n; i++)
+        {
+            int c = label[i];
+            if (sz[c] >= minSize) continue;
+            if (fragCells[c] == null) fragCells[c] = new List<int>(8);
+            fragCells[c].Add(i);
+        }
+
+        var target = new int[cc];
+        for (int c = 0; c < cc; c++) target[c] = -1;
+        int merged = 0;
+        var nbComp = new List<int>(4);
+        for (int c = 0; c < cc; c++)
+        {
+            var cells = fragCells[c];
+            if (cells == null) continue;
+            merged++;
+            nbComp.Clear();
+            for (int k = 0; k < cells.Count; k++)
+            {
+                int i = cells[k];
+                int cx = i % w, cy = i / w;
+                for (int d = 0; d < 4; d++)
+                {
+                    int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                    int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    int nc = label[ny * w + nx];
+                    if (nc == c) continue;
+                    if (!nbComp.Contains(nc)) nbComp.Add(nc);
+                }
+            }
+            var bandVol = new long[4];
+            for (int k = 0; k < nbComp.Count; k++) bandVol[(int)bd[nbComp[k]]] += sz[nbComp[k]];
+            int best = -1; long bestVol = long.MaxValue;
+            for (int b = 0; b < 4; b++)
+            {
+                if (bandVol[b] <= 0) continue;
+                if (bandVol[b] + cells.Count <= maxSize && bandVol[b] < bestVol) { best = b; bestVol = bandVol[b]; }
+            }
+            if (best < 0)
+            {
+                bestVol = long.MaxValue;
+                for (int b = 0; b < 4; b++)
+                    if (bandVol[b] > 0 && bandVol[b] < bestVol) { bestVol = bandVol[b]; best = b; }
+            }
+            if (best < 0) best = 0;
+            target[c] = best;
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            int t = target[label[i]];
+            if (t >= 0) zones[i] = (ClimateZone)t;
+        }
+        return merged;
+    }
+
+    /// <summary>上限裁剪（设计「任一簇 &gt; 384 ⇒ 切分」）：每轮对**全部超限簇**的边界格，逐格转移给
+    /// 「异带且接收后 ≤ 上限」的邻接分量（体积最小者优先 ⇒ 分散、不撑爆单邻带）；
+    /// 全不可 ⇒ 取体积最小邻带（短暂超限交下一轮）。转移格必邻接目标带 ⇒ 不产生新碎片。
+    /// 单轮内 sz 为快照（目标可能被多格撑超 ⇒ 下轮再处理）⇒ 典型 1~3 轮收敛。
+    /// **（本版为唯一干净收敛版：曾试桥格切割/叶格优先/活体积追踪，均致碎片残留或 512 轮卡死，HH.272 复盘）**</summary>
+    static int CapOversizedClusters(ClimateZone[] zones, int w, int h, int maxSize)
+    {
+        int n = w * h;
+        var label = new int[n];
+        var sz = new List<int>();
+        var bd = new List<ClimateZone>();
+
+        for (int iter = 0; iter < 512; iter++)
+        {
+            int cc = LabelComponents(zones, w, h, label, sz, bd);
+            bool hasOver = false;
+            for (int c = 0; c < cc; c++) if (sz[c] > maxSize) { hasOver = true; break; }
+            if (!hasOver) return iter;
+
+            int moved = 0;
+            for (int i = 0; i < n; i++)
+            {
+                int ci = label[i];
+                if (sz[ci] <= maxSize) continue;          // 非超限簇的格不动
+                int cx = i % w, cy = i / w;
+                // 第一优先：异带且接收后仍 ≤ 上限 的分量（体积最小者 ⇒ 分散）
+                int bestB = -1; long bestSz = long.MaxValue;
+                for (int d = 0; d < 4; d++)
+                {
+                    int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                    int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    int ni = ny * w + nx;
+                    int cn = label[ni];
+                    if (cn == ci) continue;
+                    long s = sz[cn];
+                    if (s + 1 <= maxSize && s < bestSz) { bestSz = s; bestB = (int)bd[cn]; }
+                }
+                if (bestB < 0)
+                {
+                    // 全不可 ⇒ 取体积最小异带分量（短暂超限交下一轮）
+                    bestSz = long.MaxValue;
+                    for (int d = 0; d < 4; d++)
+                    {
+                        int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                        int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                        int ni = ny * w + nx;
+                        int cn = label[ni];
+                        if (cn == ci) continue;
+                        long s = sz[cn];
+                        if (s < bestSz) { bestSz = s; bestB = (int)bd[cn]; }
+                    }
+                }
+                if (bestB < 0) continue;                  // 无邻带（理论不可达）
+                zones[i] = (ClimateZone)bestB;
+                moved++;
+            }
+            if (moved == 0) return iter;                  // 无法切（防御）
+        }
+        return 512;
+    }
+
+    /// <summary>形状自检（可证伪点）：碎片/超限簇计数，非 0 即告警。</summary>
+    static void ReportClimateShape(ClimateZone[] zones, int w, int h, int minSize, int maxSize, int capRounds, int outerRounds)
+    {
+        int[] label = new int[w * h];
+        var sz = new List<int>(); var bd = new List<ClimateZone>();
+        int cc = LabelComponents(zones, w, h, label, sz, bd);
+        int frag = 0, over = 0, maxSeen = 0;
+        for (int c = 0; c < cc; c++)
+        {
+            if (sz[c] < minSize) frag++;
+            if (sz[c] > maxSize) over++;
+            if (sz[c] > maxSeen) maxSeen = sz[c];
+        }
+        if (frag > 0 || over > 0)
+            Debug.LogWarning($"[MapGenRules] 气候层形状自检：簇={cc} 碎片(<{minSize})={frag} 超限(>{maxSize})={over} 最大={maxSeen} 切割轮={capRounds} 外层轮={outerRounds}（期望 碎片/超限 均为 0，HH.272 件①）。");
+        else
+            Debug.Log($"[MapGenRules] 气候层形状自检通过：簇={cc} 最大={maxSeen} 切割轮={capRounds} 外层轮={outerRounds}（碎片 0／超限 0，HH.272 件①）。");
+    }
+
+    /// <summary>排除指定带后按 climateWeights 加权摇温度带（HH.272 件① 种子 4-着色用）。
+    /// 全部被禁（防御）⇒ 取第一个未禁带。</summary>
+    static int RollClimateExcluding(System.Random rng, MapGenRulesConfig cfg, bool[] exclude)
+    {
+        float total = 0f; var wts = new float[4];
+        for (int b = 0; b < 4; b++)
+        {
+            float w = cfg != null ? cfg.GetClimateWeight((ClimateZone)b) : 1f;
+            wts[b] = (exclude[b] || w <= 0f) ? 0f : w;
+            total += wts[b];
+        }
+        if (total <= 0f)
+        {
+            for (int b = 0; b < 4; b++) if (!exclude[b]) return b;
+            return 0;
+        }
+        float roll = (float)rng.NextDouble() * total;
+        for (int b = 0; b < 4; b++) { roll -= wts[b]; if (roll <= 0f) return b; }
+        return 3;
+    }
+
+    /// <summary>大区块的主导温度带（该区块内出现格数最多者；并列取固定序）。配额表按此查。</summary>
+    public static ClimateZone DominantZoneOfChunk(MapData map, int cx, int cy)
+    {
+        var cnt = new int[4];
+        int x0 = cx * ChunkSize, y0 = cy * ChunkSize;
+        for (int y = y0; y < y0 + ChunkSize && y < map.height; y++)
+            for (int x = x0; x < x0 + ChunkSize && x < map.width; x++)
+                cnt[(int)ZoneOf(map, x, y)]++;
+        int best = 0;
+        for (int b = 1; b < 4; b++) if (cnt[b] > cnt[best]) best = b;
+        return (ClimateZone)best;
+    }
+
+    // ========================================================================
+    //  步骤 4：特征物填充（山脉化 ＋ 坑位模型 ＋ 归一化配额 ＋ 保底）
+    // ========================================================================
+
+    /// <summary>特征物填充。**HH.272 件②④**：① 山脉化（脊线 + 扩宽 ⇒ 带状，替代逐格概率散点）；
+    /// ② 资源按「坑位模型 + 权重表归一化配额」落位（T=`resourcesPerChunkBase` × 难度系数，保底 B_i）。</summary>
+    public static void FillFeatures(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty)
+    {
+        int n = map.width * map.height;
+        for (int i = 0; i < n; i++) map.features[i] = FeatureType.Plain;
+
+        PlaceMountainRidges(rng, map, cfg);          // 件④：山脉化
+        PruneMountainSpecks(map, cfg);               // 件④：山脉簇最小尺寸约束（≥4 格）
+        PlaceResourceQuota(rng, map, cfg, difficulty, skipClearZone: false);   // 件②：配额落格
+    }
+
+    /// <summary>山脉化（件④）：按温度带「总格数占比」反推脊线条数（脊线数 = 目标格数 / (平均宽度 × 平均长度)），
+    /// 每条脊线为 4-邻域折线（走向随机 + 长度受控），沿线按随机宽度向两侧扩宽 ⇒ 带状山体；
+    /// 相邻脊线自然相接 ⇒ 合并为连绵大山脉。密度：寒带最多、热带最少（`mountainCellRatio`）。</summary>
+    static void PlaceMountainRidges(System.Random rng, MapData map, MapGenRulesConfig cfg)
+    {
+        int cw = ChunkW(map), ch = ChunkH(map);
+        int wMin = cfg != null ? Mathf.Max(1, cfg.mountainRidgeWidthMin) : 1;
+        int wMax = cfg != null ? Mathf.Max(wMin, cfg.mountainRidgeWidthMax) : 2;
+        int lMin = cfg != null ? Mathf.Max(2, cfg.mountainRidgeLengthMin) : 6;
+        int lMax = cfg != null ? Mathf.Max(lMin, cfg.mountainRidgeLengthMax) : 20;
+        float avgW = (wMin + wMax) * 0.5f;
+        float avgL = (lMin + lMax) * 0.5f;
+
+        for (int cy = 0; cy < ch; cy++)
+            for (int cx = 0; cx < cw; cx++)
+            {
+                var band = DominantZoneOfChunk(map, cx, cy);
+                float ratio = cfg != null ? cfg.GetMountainCellRatio(band) : 0.1f;
+                if (ratio <= 0f) continue;
+                int targetCells = Mathf.RoundToInt(ChunkSize * ChunkSize * ratio);
+                int ridges = Mathf.Max(1, Mathf.RoundToInt(targetCells / (avgW * avgL)));
+
+                for (int r = 0; r < ridges; r++)
+                {
+                    // 起点/行进范围对海洋带内缩（`OceanThickness+1`）⇒ PlaceOcean 不会切碎山脊（件④·防碎片）
+                    int inset = OceanThickness + 1;
+                    int x = cx * ChunkSize + rng.Next(inset, ChunkSize - inset);
+                    int y = cy * ChunkSize + rng.Next(inset, ChunkSize - inset);
+                    int dir = rng.Next(4);                       // 0=+x 1=-x 2=+y 3=-y
+                    int len = rng.Next(lMin, lMax + 1);
+                    for (int step = 0; step < len; step++)
+                    {
+                        if (rng.NextDouble() < 0.22) dir = rng.Next(4);   // 折线转弯 ⇒ 走向自然
+                        int width = rng.Next(wMin, wMax + 1);
+                        for (int t = 0; t < width; t++)
+                        {
+                            int px = x + (dir <= 1 ? 0 : t);
+                            int py = y + (dir >= 2 ? 0 : t);
+                            StampMountain(rng, map, px, py, cfg);
+                        }
+                        if (dir == 0) x++; else if (dir == 1) x--;
+                        else if (dir == 2) y++; else y--;
+                        if (x < inset || y < inset || x >= map.width - inset || y >= map.height - inset) break;
+                    }
+                }
+            }
+    }
+
+    /// <summary>盖章山体：按**该格自身温度带**决定 Mountain / SnowMountain（寒带全雪、热带无雪）。
+    /// 判定随机取注入的 <paramref name="rng"/>（同 seed 逐格一致 · 验收线 7）。</summary>
+    static void StampMountain(System.Random rng, MapData map, int x, int y, MapGenRulesConfig cfg)
+    {
+        if (x < 0 || y < 0 || x >= map.width || y >= map.height) return;
+        var band = ZoneOf(map, x, y);
+        float snow = cfg != null ? cfg.GetMountainSnowRatio(band) : (band == ClimateZone.Cold ? 1f : 0.3f);
+        map.features[Idx(map, x, y)] = rng.NextDouble() < snow ? FeatureType.SnowMountain : FeatureType.Mountain;
+    }
+
+    /// <summary>山脉簇最小尺寸约束（件④）：4-连通簇 &lt; `mountainClusterMinSize` 的山体碎片回落 Plain。</summary>
+    static void PruneMountainSpecks(MapData map, MapGenRulesConfig cfg)
+    {
+        int minSize = cfg != null ? Mathf.Max(1, cfg.mountainClusterMinSize) : 4;
+        int w = map.width, h = map.height, n = w * h;
+        var isMt = new bool[n];
+        for (int i = 0; i < n; i++)
+            isMt[i] = map.features[i] == FeatureType.Mountain || map.features[i] == FeatureType.SnowMountain;
+        var label = new int[n];
+        for (int i = 0; i < n; i++) label[i] = -1;
+        var q = new Queue<int>();
+        int pruned = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (!isMt[i] || label[i] != -1) continue;
+            label[i] = 0; q.Clear(); q.Enqueue(i);
+            var cells = new List<int>();
+            while (q.Count > 0)
+            {
+                int cur = q.Dequeue(); cells.Add(cur);
+                int cx = cur % w, cy = cur / w;
+                for (int d = 0; d < 4; d++)
+                {
+                    int nx = cx + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                    int ny = cy + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                    int ni = ny * w + nx;
+                    if (!isMt[ni] || label[ni] != -1) continue;
+                    label[ni] = 0; q.Enqueue(ni);
+                }
+            }
+            if (cells.Count < minSize)
+            {
+                for (int k = 0; k < cells.Count; k++) { map.features[cells[k]] = FeatureType.Plain; pruned++; }
+            }
+        }
+        if (pruned > 0)
+            Debug.Log($"[MapGenRules] 山脉化：清除 <{minSize} 格山体碎片 {pruned} 格（件④·4-连通最小尺寸约束）。");
+    }
+
+    /// <summary>资源配额落格（件②）。每大区块：T = `resourcesPerChunkBase` × 难度系数；
+    /// 权重表归一化 p_i=(1−w_i)/Σ(1−w_j)；E_i=T×p_i；保底 B_i=floor(E_i×guaranteeRatio)。
+    /// 坑位模型：每 Cell 拆 2×2 子坑位（格内固定偏移·天然不重叠），每坑位至多 1 资源；
+    /// 矿洞例外＝**2×2 Cell 粒度**（先占整块，再在剩余 Cell 填坑位）。</summary>
+    static void PlaceResourceQuota(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty, bool skipClearZone)
+    {
+        int cw = ChunkW(map), ch = ChunkH(map);
+        var kindCount = new int[ResourceKindCount];
+        var candidates = new List<int>(ChunkSize * ChunkSize);
+        var kinds = new List<int>(512);
+        var e = new float[ResourceKindCount];
+        var b = new int[ResourceKindCount];
+
+        for (int cy = 0; cy < ch; cy++)
+            for (int cx = 0; cx < cw; cx++)
+            {
+                for (int t = 0; t < ResourceKindCount; t++) kindCount[t] = 0;
+                var band = DominantZoneOfChunk(map, cx, cy);
+                ComputeQuota(cfg, band, difficulty, e, b);
+
+                // 候选 Cell：Plain ＋ 避开海洋带（PlaceOcean 后不会被覆写）＋ （保底时）避开主城净空区
+                candidates.Clear();
+                int x0 = cx * ChunkSize, y0 = cy * ChunkSize;
+                for (int y = y0; y < y0 + ChunkSize && y < map.height; y++)
+                    for (int x = x0; x < x0 + ChunkSize && x < map.width; x++)
+                    {
+                        if (x < OceanThickness || y < OceanThickness
+                            || x >= map.width - OceanThickness || y >= map.height - OceanThickness) continue;
+                        if (map.features[Idx(map, x, y)] != FeatureType.Plain) continue;
+                        if (skipClearZone && IsInKingdomClearZone(map, x, y, cfg)) continue;
+                        candidates.Add(Idx(map, x, y));
+                    }
+                Shuffle(rng, candidates);
+                int cursor = 0;
+
+                // 矿洞：2×2 整块优先（先占整块，再在剩余 Cell 填坑位）
+                int mineClusters = Mathf.RoundToInt(e[ResMine] / (MineClusterSide * MineClusterSide));
+                if (mineClusters <= 0 && b[ResMine] > 0) mineClusters = 1;
+                for (int k = 0; k < mineClusters; k++)
+                    if (TryStampMineCluster(map, candidates, rng, cfg)) kindCount[ResMine]++;
+
+                // 其余资源：按配额构造类型序列 → 打散 → 落坑位（每坑位至多 1 资源；矿洞已占格跳过）
+                kinds.Clear();
+                for (int t = 0; t < ResMine; t++)
+                {
+                    int cnt = Mathf.RoundToInt(e[t]);
+                    for (int k = 0; k < cnt; k++) kinds.Add(t);
+                }
+                Shuffle(rng, kinds);
+                for (int k = 0; k < kinds.Count; k++)
+                {
+                    // 跳过被矿洞占掉/已落资源的候选格
+                    while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
+                    if (cursor >= candidates.Count) break;
+                    int cell = candidates[cursor++];
+                    PickSubSlot(rng);                       // 格内 2×2 固定偏移取 1 个坑位（不重叠）
+                    map.features[cell] = ResourceKindFeature[kinds[k]];
+                    kindCount[kinds[k]]++;
+                }
+
+                // 保底 B_i：逐区块统计实际数量，不足则补足（矿洞按簇补）
+                for (int t = 0; t < ResourceKindCount; t++)
+                {
+                    if (b[t] <= 0) continue;
+                    int have = t == ResMine ? kindCount[ResMine] * MineClusterSide * MineClusterSide : kindCount[t];
+                    int need = b[t] - have;
+                    while (need > 0)
+                    {
+                        if (t == ResMine)
+                        {
+                            if (!TryStampMineCluster(map, candidates, rng, cfg)) break;
+                            kindCount[ResMine]++; need -= MineClusterSide * MineClusterSide;
+                        }
+                        else
+                        {
+                            while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
+                            if (cursor >= candidates.Count) break;
+                            int cell = candidates[cursor++];
+                            PickSubSlot(rng);
+                            map.features[cell] = ResourceKindFeature[t];
+                            kindCount[t]++; need--;
+                        }
+                    }
+                }
+            }
+    }
+
+    /// <summary>坑位选位：每 Cell 拆 2×2 子坑位（格内固定偏移）。返回子坑位序号 0..3。</summary>
+    static int PickSubSlot(System.Random rng) => rng.Next(4);
+
+    static bool TryStampMineCluster(MapData map, List<int> candidates, System.Random rng, MapGenRulesConfig cfg)
+    {
+        int side = MineClusterSide;
+        // 从候选里找一块完整 side×side 全 Plain（随机起点 ⇒ 不总贴同一角）
+        int start = candidates.Count > 0 ? rng.Next(candidates.Count) : 0;
+        for (int k = 0; k < candidates.Count; k++)
+        {
+            int cell = candidates[(start + k) % candidates.Count];
+            int ox = cell % map.width, oy = cell / map.width;
+            if (ox + side > map.width || oy + side > map.height) continue;
+            if (ox < OceanThickness || oy < OceanThickness
+                || ox + side > map.width - OceanThickness || oy + side > map.height - OceanThickness) continue; // 整块避开海洋带（否则 PlaceOcean 切碎簇 ⇒ 孤立矿格）
+            if (InClearZone(map, ox, oy, side, cfg)) continue;      // 整块避开主城净空区（步 6.6 补足路径）
+            if (!IsClearBlock(map, ox, oy, side)) continue;
+            StampBlock(map, ox, oy, FeatureType.Mine, side);
+            return true;
+        }
         return false;
     }
 
-    // ===== 步骤 3：温度带权重铺（按大区块）=====
-    public static void FillClimateZones(System.Random rng, MapData map, MapGenRulesConfig cfg)
+    /// <summary>Fisher–Yates（确定性·注入 rng）。</summary>
+    static void Shuffle<T>(System.Random rng, List<T> list)
     {
-        int cw = ChunkW(map), ch = Mathf.Max(1, map.height / ChunkSize);
-        for (int cy = 0; cy < ch; cy++)
-            for (int cx = 0; cx < cw; cx++)
-                map.climateZones[cx + cy * cw] = RollClimate(rng, cfg);
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            T t = list[i]; list[i] = list[j]; list[j] = t;
+        }
     }
 
-    static ClimateZone RollClimate(System.Random rng, MapGenRulesConfig cfg)
+    /// <summary>配额解算（2_1_R1 §二第二层）：r_i=1−w_i ⇒ p_i=r_i/Σr × T ⇒ E_i=T×p_i ⇒ B_i=floor(E_i×ratio)。</summary>
+    static void ComputeQuota(MapGenRulesConfig cfg, ClimateZone band, int difficulty, float[] e, int[] b)
     {
-        float total = 0f;
-        var weights = new float[4];
-        for (int i = 0; i < 4; i++) { weights[i] = cfg != null ? cfg.GetClimateWeight((ClimateZone)i) : 1f; total += weights[i]; }
-        if (total <= 0f) return (ClimateZone)rng.Next(4);
-        float roll = (float)rng.NextDouble() * total;
-        for (int i = 0; i < 4; i++) { roll -= weights[i]; if (roll <= 0f) return (ClimateZone)i; }
-        return ClimateZone.Temperate;
+        float T = cfg != null ? Mathf.Max(1f, cfg.resourcesPerChunkBase) : 120f;
+        int di = Mathf.Clamp(difficulty - 1, 0, 2);
+        float scale = cfg != null && cfg.difficultyResourceScale != null && cfg.difficultyResourceScale.Length > di
+            ? cfg.difficultyResourceScale[di] : 1f;
+        T *= Mathf.Max(0.01f, scale);
+        float ratio = cfg != null ? Mathf.Clamp01(cfg.guaranteeRatio) : 0.5f;
+
+        var w5 = cfg != null ? cfg.GetResourceWeights(band) : null;
+        float sumR = 0f;
+        var r = new float[ResourceKindCount];
+        for (int i = 0; i < ResourceKindCount; i++)
+        {
+            float wi = w5 != null ? Mathf.Clamp01(w5[i]) : 0.5f;
+            r[i] = 1f - wi;
+            sumR += r[i];
+        }
+        for (int i = 0; i < ResourceKindCount; i++)
+        {
+            if (sumR <= 0f) { e[i] = 0f; b[i] = 0; continue; }
+            e[i] = T * (r[i] / sumR);
+            b[i] = Mathf.FloorToInt(e[i] * ratio);
+        }
     }
 
-    // ===== 步骤 4：特征物填充（散点分布，空格=该带平原）=====
-    /// <summary>特征物填充。**件12（D618/DZ-084）**：矿山锚点由「逐格散点」改为「2×2 轴对齐成簇撒布」——
-    /// 逐格 pass 仍照旧表 roll（保其他特征概率与 rng 消耗不变），仅把 Mine 结果落为 Plain；
-    /// 再由 <see cref="ScatterMineClusters"/> 以「每格概率 ÷ 簇面积」的簇概率盖章，使**总矿格数≈原值**（D621②）。</summary>
-    public static void FillFeatures(System.Random rng, MapData map)
+    // ========================================================================
+    //  步骤 6.5：主城净空区（footprint 3×3 外扩 R=4 ⇒ 11×11）
+    // ========================================================================
+
+    /// <summary>某格是否落在任一主城净空区（footprint 半宽 1 ＋ 外扩 R）。</summary>
+    public static bool IsInKingdomClearZone(MapData map, int x, int y, MapGenRulesConfig cfg)
     {
+        if (map.kingdomSpawns == null || map.kingdomSpawns.Count == 0) return false;
+        int r = cfg != null ? Mathf.Max(0, cfg.kingdomClearRadius) : 4;
+        int half = 1 + r;
+        for (int i = 0; i < map.kingdomSpawns.Count; i++)
+        {
+            var sp = map.kingdomSpawns[i];
+            if (x >= sp.x - half && x <= sp.x + half && y >= sp.y - half && y <= sp.y + half) return true;
+        }
+        return false;
+    }
+
+    /// <summary>步骤 6.5：主城净空区——`kingdomSpawns` 全体 11×11 内 `Tree/Mine/OreVein/StonePile/WoodPile`
+    /// 一律置 `Plain`（水域保留；山体不在清单内 ⇒ 保留）。返回清除格数。
+    /// **矿洞按「整簇清除」**：`Mine` 为 2×2 Cell 粒度，若只清簇内一部分会留下孤立矿格
+    /// （其后被 `PruneOrphanMineCells` 降级并告警 ⇒ 上游缺陷）⇒ 与净空区相交的整块一并清除。</summary>
+    public static int ClearKingdomZones(MapData map, MapGenRulesConfig cfg)
+    {
+        int cleared = 0;
+        // ① 矿洞：与净空区相交的完整 2×2 块整体清除
         for (int y = 0; y < map.height; y++)
             for (int x = 0; x < map.width; x++)
             {
-                var f = RollFeature(rng, ZoneOf(map, x, y));
-                map.features[Idx(map, x, y)] = f == FeatureType.Mine ? FeatureType.Plain : f;   // Mine 改由成簇撒布（件12）
+                if (map.features[Idx(map, x, y)] != FeatureType.Mine) continue;
+                if (!HasFullBlock(map, x, y, FeatureType.Mine, MineClusterSide)) continue;
+                bool touch = false;
+                for (int dy = 0; dy < MineClusterSide && !touch; dy++)
+                    for (int dx = 0; dx < MineClusterSide && !touch; dx++)
+                        if (IsInKingdomClearZone(map, x + dx, y + dy, cfg)) touch = true;
+                if (!touch) continue;
+                StampBlock(map, x, y, FeatureType.Plain, MineClusterSide);
+                cleared += MineClusterSide * MineClusterSide;
             }
-        ScatterMineClusters(rng, map);
-    }
-
-    /// <summary>矿山锚点成簇撒布（件12/D618/D621②）：逐候选原点 roll「每格概率 ÷ 簇面积」，命中即整簇盖章。
-    /// 盖章顶掉格内原特征（= 原逐格语义的簇化平移：原 Mine 格也是顶掉该格其它结果）；仅跳过已有 Mine 的格/块以防重复计入。
-    /// 原点限在海洋带内缩区（故与 PlaceOcean 天然不冲突）⇒ 全图 Mine 格必属完整 2×2（每簇 4 格、簇间不重叠）。</summary>
-    static void ScatterMineClusters(System.Random rng, MapData map)
-    {
-        int side = MineClusterSide;
-        int hiX = map.width - OceanThickness - side;
-        int hiY = map.height - OceanThickness - side;
-        for (int y = OceanThickness; y <= hiY; y++)
-            for (int x = OceanThickness; x <= hiX; x++)
+        // ② 其余资源：区内一律置 Plain（水域保留）
+        for (int y = 0; y < map.height; y++)
+            for (int x = 0; x < map.width; x++)
             {
-                if (map.features[Idx(map, x, y)] == FeatureType.Mine) continue;     // 已属前簇 → 跳（保每格只计一次）
-                float p = MineCellProbability(ZoneOf(map, x, y));
-                if (p <= 0f || rng.NextDouble() >= p / (side * side)) continue;    // 簇概率 = 每格概率 ÷ 簇面积
-                if (BlockHasFeature(map, x, y, FeatureType.Mine, side)) continue;  // 与已有簇重叠 → 跳（簇间不重叠）
-                StampBlock(map, x, y, FeatureType.Mine, side);
+                if (!IsInKingdomClearZone(map, x, y, cfg)) continue;
+                int i = Idx(map, x, y);
+                var f = map.features[i];
+                if (f == FeatureType.Tree || f == FeatureType.OreVein || f == FeatureType.StonePile || f == FeatureType.WoodPile)
+                { map.features[i] = FeatureType.Plain; cleared++; }
             }
+        return cleared;
     }
 
-    /// <summary>该温度带的「每格矿山概率」= 表内 Mine 权重 ÷ 总权重（原始逐格口径；簇撒布再除以簇面积）。</summary>
-    static float MineCellProbability(ClimateZone zone)
+    /// <summary>步骤 6.6：逐区块配额**补足**（在净空区之后跑，避免"保底把资源塞回净空区"）。
+    /// 统计本区块各资源实际数量，不足 `target_i = max(round(E_i), B_i)` 时在区块内补足（跳过净空区/海洋带）。</summary>
+    public static void EnsureChunkResourceQuota(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty)
     {
-        var table = ClimateFeatureTable[(int)zone];
-        float total = 0f, mineW = 0f;
-        for (int i = 0; i < table.Length; i++)
-        {
-            total += table[i].w;
-            if (table[i].f == FeatureType.Mine) mineW += table[i].w;
-        }
-        return total > 0f ? mineW / total : 0f;
-    }
+        int cw = ChunkW(map), ch = ChunkH(map);
+        var e = new float[ResourceKindCount];
+        var b = new int[ResourceKindCount];
+        var have = new int[ResourceKindCount];
+        var candidates = new List<int>(ChunkSize * ChunkSize);
 
-    static FeatureType RollFeature(System.Random rng, ClimateZone zone)
-    {
-        var table = ClimateFeatureTable[(int)zone];
-        float total = 0f;
-        for (int i = 0; i < table.Length; i++) total += table[i].w;
-        float roll = (float)rng.NextDouble() * total;
-        for (int i = 0; i < table.Length; i++) { roll -= table[i].w; if (roll <= 0f) return table[i].f; }
-        return FeatureType.Plain;
+        for (int cy = 0; cy < ch; cy++)
+            for (int cx = 0; cx < cw; cx++)
+            {
+                ComputeQuota(cfg, DominantZoneOfChunk(map, cx, cy), difficulty, e, b);
+                for (int t = 0; t < ResourceKindCount; t++) have[t] = 0;
+
+                int x0 = cx * ChunkSize, y0 = cy * ChunkSize;
+                candidates.Clear();
+                for (int y = y0; y < y0 + ChunkSize && y < map.height; y++)
+                    for (int x = x0; x < x0 + ChunkSize && x < map.width; x++)
+                    {
+                        int i = Idx(map, x, y);
+                        var f = map.features[i];
+                        for (int t = 0; t < ResourceKindCount; t++)
+                            if (f == ResourceKindFeature[t]) { have[t]++; break; }
+                        if (x < OceanThickness || y < OceanThickness
+                            || x >= map.width - OceanThickness || y >= map.height - OceanThickness) continue;
+                        if (f != FeatureType.Plain) continue;
+                        if (IsInKingdomClearZone(map, x, y, cfg)) continue;
+                        candidates.Add(i);
+                    }
+                Shuffle(rng, candidates);
+                int cursor = 0;
+
+                // 矿洞：按簇补足
+                int mineWant = Mathf.RoundToInt(e[ResMine] / (MineClusterSide * MineClusterSide));
+                if (mineWant <= 0 && b[ResMine] > 0) mineWant = 1;
+                int mineHave = have[ResMine] / (MineClusterSide * MineClusterSide);
+                while (mineHave + 1 <= mineWant)
+                {
+                    if (!TryStampMineCluster(map, candidates, rng, cfg)) break;
+                    mineHave++;
+                }
+                for (int t = 0; t < ResMine; t++)
+                {
+                    int target = Mathf.Max(Mathf.RoundToInt(e[t]), b[t]);
+                    int need = target - have[t];
+                    while (need > 0)
+                    {
+                        while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
+                        if (cursor >= candidates.Count) break;
+                        int cell = candidates[cursor++];
+                        PickSubSlot(rng);
+                        map.features[cell] = ResourceKindFeature[t];
+                        need--;
+                    }
+                }
+            }
     }
 
     // ===== 步骤 6：王国出生点（2_16 步骤3：温度带匹配 D288/D292/D298/D302）=====
@@ -278,7 +1105,7 @@ public static class MapGenRules
 
     /// <summary>
     /// 立国选址特征匹配判定（2_22 P0 批D / D5，D316 原设计语义+M4 尾插枚举四特征全实现）：
-    /// RiverAdjacent=候选点半径内存在水格（River/Lake/Ocean）；ForestDense/MineralRich/BarrenRich=
+    /// RiverAdjacent=候选点半径内存在水格（River/Ocean）；ForestDense/MineralRich/BarrenRich=
     /// 候选点所在大区块（ChunkSize=16）内 Tree/Mine/Plain 格占比达阈值（MapGenRulesConfig）。
     /// None=恒命中（不过滤）。
     /// </summary>
@@ -295,7 +1122,7 @@ public static class MapGenRules
                     int x = p.x + dx, y = p.y + dy;
                     if (!InB(map, x, y)) continue;
                     var f = map.features[Idx(map, x, y)];
-                    if (f == FeatureType.River || f == FeatureType.Lake || f == FeatureType.Ocean) return true;
+                    if (f == FeatureType.River || f == FeatureType.Ocean) return true;
                 }
                 return false;
             }
@@ -379,9 +1206,9 @@ public static class MapGenRules
         int radiusCells = radiusChunks * ChunkSize;
         foreach (var sp in map.kingdomSpawns)
         {
-            EnsureBlock(map, sp, radiusCells, FeatureType.Tree, 1);                    // 木（1×1）
-            EnsureBlock(map, sp, radiusCells, FeatureType.Mine, MineClusterSide);      // 矿（件12/D618：簇保底，非单格）
-            EnsureBlock(map, sp, radiusCells, FeatureType.StonePile, 1);               // 石（1×1）
+            EnsureBlock(map, sp, radiusCells, FeatureType.Tree, 1, cfg);                    // 木（1×1）
+            EnsureBlock(map, sp, radiusCells, FeatureType.Mine, MineClusterSide, cfg);      // 矿（件12/D618：簇保底，非单格）
+            EnsureBlock(map, sp, radiusCells, FeatureType.StonePile, 1, cfg);               // 石（1×1）
             // 农田 = Plain 可建位，天然充足，不强制
         }
     }
@@ -389,8 +1216,9 @@ public static class MapGenRules
     /// <summary>半径内若无指定特征的**完整 side×side 轴对齐块**，则在可走区就地补一整块。
     /// **D621①**：判定必须是「完整 side×side 块」（L 形连通不算）——若按「存在任一 need 格」判定，
     /// 一个孤立格就会让保底静默失效（其后又被清孤立清掉 ⇒ 保底彻底落空，L-01「就位≠生效」）。
-    /// side=1 时与旧 EnsureOne 逐格语义完全等价（tree/stone_pile 行为零变化）。</summary>
-    static void EnsureBlock(MapData map, Vector2Int sp, int radius, FeatureType need, int side)
+    /// side=1 时与旧 EnsureOne 逐格语义完全等价（tree/stone_pile 行为零变化）。
+    /// **HH.272 件③**：候选位一律跳过主城净空区（否则保底会把矿塞回区内）。</summary>
+    static void EnsureBlock(MapData map, Vector2Int sp, int radius, FeatureType need, int side, MapGenRulesConfig cfg)
     {
         for (int dy = -radius; dy <= radius; dy++)
             for (int dx = -radius; dx <= radius; dx++)
@@ -398,29 +1226,46 @@ public static class MapGenRules
         // 缺 → 一级：半径内找一块 side×side 全 Plain 空位补上（最干净，side=1 时即旧语义）
         for (int dy = -radius; dy <= radius; dy++)
             for (int dx = -radius; dx <= radius; dx++)
+            {
+                if (InClearZone(map, sp.x + dx, sp.y + dy, side, cfg)) continue;
                 if (IsClearBlock(map, sp.x + dx, sp.y + dy, side))
                 {
                     StampBlock(map, sp.x + dx, sp.y + dy, need, side);
                     return;
                 }
+            }
         // 二级（仅巨型簇 side>1，不改变 tree/stone 的 1×1 旧语义）：退而求「不含已有同特征」的完整位，保底不静默落空
+        // 件④：跳过含山/雪山的块（盖章会挖掉山体 ⇒ 产山脉碎片）
         if (side > 1)
             for (int dy = -radius; dy <= radius; dy++)
                 for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (InClearZone(map, sp.x + dx, sp.y + dy, side, cfg)) continue;
+                    if (BlockHasFeature(map, sp.x + dx, sp.y + dy, FeatureType.Mountain, side)) continue;
+                    if (BlockHasFeature(map, sp.x + dx, sp.y + dy, FeatureType.SnowMountain, side)) continue;
                     if (!BlockHasFeature(map, sp.x + dx, sp.y + dy, need, side))
                     {
                         StampBlock(map, sp.x + dx, sp.y + dy, need, side);
                         Debug.LogWarning($"[MapGenRules] 簇保底降级：出生点 {sp} 半径内无全 Plain 位，改用非空位盖章 {need} {side}×{side}（D618）。");
                         return;
                     }
+                }
         Debug.LogWarning($"[MapGenRules] 簇保底失败：出生点 {sp} 半径 {radius} 内无 {side}×{side} 完整空位可放 {need}（D618）；不硬塞。");
     }
 
-    // ===== 步骤 9：海洋边缘 + 湖泊 + 河流 =====
+    /// <summary>side×side 块是否与主城净空区相交（HH.272 件③ 保底避让）。</summary>
+    static bool InClearZone(MapData map, int ox, int oy, int side, MapGenRulesConfig cfg)
+    {
+        for (int dy = 0; dy < side; dy++)
+            for (int dx = 0; dx < side; dx++)
+                if (IsInKingdomClearZone(map, ox + dx, oy + dy, cfg)) return true;
+        return false;
+    }
+
+    // ===== 步骤 9：海洋边缘 + 河流（HH.272 件⑥：湖泊/冰河已正式删除）=====
     public static void PlaceWater(System.Random rng, MapData map, WorldSize size)
     {
         PlaceOcean(map);
-        PlaceLakes(rng, map);
         int riverCount = size == WorldSize.Small ? 1 : size == WorldSize.Medium ? 2 : 3;
         for (int i = 0; i < riverCount; i++) PlaceRiver(rng, map);
         PruneOrphanMineCells(map);   // 件12/D618 兜底：水域后清孤立矿山格（正常应为 0 命中）
@@ -445,27 +1290,11 @@ public static class MapGenRules
 
     static void PlaceOcean(MapData map)
     {
-        int thickness = OceanThickness;   // 海洋边缘厚度（件12：与矿山簇撒布内缩边界共用常量）
+        int thickness = OceanThickness;
         for (int y = 0; y < map.height; y++)
             for (int x = 0; x < map.width; x++)
                 if (x < thickness || y < thickness || x >= map.width - thickness || y >= map.height - thickness)
                     map.features[Idx(map, x, y)] = FeatureType.Ocean;
-    }
-
-    static void PlaceLakes(System.Random rng, MapData map)
-    {
-        int lakeCount = Mathf.Max(1, (map.width / 128));   // 256² → 2 个湖
-        for (int n = 0; n < lakeCount; n++)
-        {
-            int bw = rng.Next(3, 6), bh = rng.Next(3, 6);
-            int ox = rng.Next(ChunkSize, Mathf.Max(ChunkSize + 1, map.width - ChunkSize - bw));
-            int oy = rng.Next(ChunkSize, Mathf.Max(ChunkSize + 1, map.height - ChunkSize - bh));
-            if (NearAnySpawn(map, ox, oy, bw, bh, ChunkSize)) continue;   // 避开出生点 1 大区块
-            if (RectHasFeature(map, ox, oy, bw, bh, FeatureType.Mine)) continue;   // DZ-084：避让矿山簇（禁切碎，整湖跳过保矩形完整）
-            for (int y = oy; y < oy + bh; y++)
-                for (int x = ox; x < ox + bw; x++)
-                    if (InB(map, x, y)) map.features[Idx(map, x, y)] = FeatureType.Lake;
-        }
     }
 
     /// <summary>主干河：从一边界随机走到对边界，标记 River（不做分支 D34）。</summary>
@@ -480,8 +1309,9 @@ public static class MapGenRules
         while (InB(map, x, y) && guard++ < map.width + map.height + 200)
         {
             var cur = map.features[Idx(map, x, y)];
-            // DZ-084：不覆盖湖，也不覆盖矿山簇（河穿矿=该格岩石出露，河在此断开——D618 认可语义）
-            if (cur != FeatureType.Lake && cur != FeatureType.Mine)
+            // DZ-084：不覆盖矿山簇（河穿矿=该格岩石出露，河在此断开——D618 认可语义）
+            // HH.272 件④：亦**不覆盖山/雪山**（2_1 §3.6「绕行特殊地形·不穿雪地」；否则山脊被河切断 ⇒ 产 <4 格碎片）
+            if (cur != FeatureType.Mine && cur != FeatureType.Mountain && cur != FeatureType.SnowMountain)
                 map.features[Idx(map, x, y)] = FeatureType.River;
             // 朝对岸推进 + 随机侧移
             if (horizontal) { x++; if (rng.NextDouble() < 0.4) y += rng.Next(-1, 2); }
@@ -491,14 +1321,6 @@ public static class MapGenRules
             if (horizontal && x >= map.width - 1) break;
             if (!horizontal && y >= map.height - 1) break;
         }
-    }
-
-    static bool NearAnySpawn(MapData map, int ox, int oy, int bw, int bh, int pad)
-    {
-        foreach (var sp in map.kingdomSpawns)
-            if (sp.x >= ox - pad && sp.x < ox + bw + pad && sp.y >= oy - pad && sp.y < oy + bh + pad)
-                return true;
-        return false;
     }
 
     // ===== 步骤 10：威胁刷点（SpawnDef）=====

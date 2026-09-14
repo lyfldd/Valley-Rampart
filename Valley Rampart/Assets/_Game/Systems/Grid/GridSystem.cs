@@ -84,7 +84,6 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             // 一次性资源坑位落在可走地皮上（对应地皮，视觉变体归 2_10）
             case FeatureType.OreVein: case FeatureType.StonePile: case FeatureType.WoodPile: return TerrainType.Plain;
             case FeatureType.River: return TerrainType.River;
-            case FeatureType.Lake: return TerrainType.Lake;
             case FeatureType.Ocean: return TerrainType.Ocean;
             default: return TerrainType.Plain;
         }
@@ -110,7 +109,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             case FeatureType.OreVein: case FeatureType.StonePile: case FeatureType.WoodPile:
                 return WalkFlags.TerrainWalkable;
             // 水域阻挡（桥由 2_2 置 Bridge 位覆盖）
-            case FeatureType.River: case FeatureType.Lake: case FeatureType.Ocean:
+            case FeatureType.River: case FeatureType.Ocean:
                 return WalkFlags.Water;
             // 山地/雪山阻挡（无 TerrainWalkable 位）
             default: return WalkFlags.None;

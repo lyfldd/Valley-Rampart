@@ -156,7 +156,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             width = width,
             height = height,
             features = new FeatureType[width * height],
-            climateZones = new ClimateZone[Mathf.Max(1, width / MapGenRules.ChunkSize) * Mathf.Max(1, height / MapGenRules.ChunkSize)],
+            climateZones = new ClimateZone[width * height],   // HH.272 件①：逐格存（原大区块口径废止）
             kingdomSpawns = new List<Vector2Int>(),
             threatSpawns = new List<SpawnDef>(),
             naturalBuildings = new List<NaturalBuilding>()
@@ -164,9 +164,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
 
         var rng = new System.Random(seed);   // 确定性单源（R4，禁 UnityEngine.Random）
 
-        // §5.2 管线：温度带 → 特征物 → 出生点 → 资源就近补 → 连通性 → 水域 → 复跑连通 → 威胁刷点 → 自然建筑派生
-        MapGenRules.FillClimateZones(rng, map, _mapGenRulesConfig);             // 步骤3
-        MapGenRules.FillFeatures(rng, map);                                     // 步骤4
+        // §5.2 管线：温度带 → 特征物 → 出生点 → 净空区(6.5) → 配额补足(6.6) → 资源就近补 → 连通性 → 水域 → 复跑连通 → 威胁刷点 → 自然建筑派生
+        MapGenRules.FillClimateZones(rng, map, _mapGenRulesConfig);             // 步骤3（HH.272 件①：种子生长 + 噪声 + 碎片清理）
+        MapGenRules.FillFeatures(rng, map, _mapGenRulesConfig, difficulty);     // 步骤4（HH.272 件②④：山脉化 + 坑位配额）
         int aiCount = _mapSizeConfig != null ? _mapSizeConfig.GetEnemyMapBase(size, difficulty, rng) : 2;   // 步骤6（2_16 重锚 D288 档位）
         // 2_16 步骤3↔4联动：同 rng 链绘制 AI 王国模板，写入 map.kingdomTemplates 供步骤5 Foundry 消费（保证放置/立国同模板+确定性）
         // 2_20 M3/D430：抽取升级为种族配额分配——玩家族占保底席（AI 池排除玩家族）+AI 保底其余三族各一（D506② min(AI,3) 降级）+余者随机。
@@ -175,9 +175,13 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         int playerRaceId = KingdomRace.GetKingdomRace(0);
         var templates = tplLib != null ? tplLib.DrawAiTemplates(rng, aiCount, playerRaceId) : new List<KingdomDef>();
         MapGenRules.PlaceKingdomSpawns(rng, map, _mapGenRulesConfig, size, aiCount, templates);   // 步骤6
+        // HH.272 件③：步骤 6.5 主城净空区（放主城之后、就近补矿之前）
+        int cleared = MapGenRules.ClearKingdomZones(map, _mapGenRulesConfig);
+        // HH.272 件②：步骤 6.6 逐区块配额补足（在净空区之后 ⇒ 保底不会把资源塞回区内）
+        MapGenRules.EnsureChunkResourceQuota(rng, map, _mapGenRulesConfig, difficulty);
         MapGenRules.EnsureNearbyResources(rng, map, _mapGenRulesConfig);        // 步骤7
         MapValidator.ValidateConnectivity(map);                                  // 步骤8
-        MapGenRules.PlaceWater(rng, map, size);                                  // 步骤9（海洋/湖/河）
+        MapGenRules.PlaceWater(rng, map, size);                                  // 步骤9（海洋/河；湖已删 HH.272 件⑥）
         MapValidator.ValidateConnectivity(map);                                  // 水域后复跑连通（审计）
         MapGenRules.PlaceThreatSpawns(rng, map, _mapGenRulesConfig, difficulty); // 步骤10
         MapGenRules.DeriveNaturalBuildings(map);                                 // 步骤11
@@ -192,7 +196,8 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         if (ResourceRespawnSystem.HasInstance) ResourceRespawnSystem.Instance.ResetRespawns();
 
         Debug.Log($"[WorldManager] 地图生成（2_1）: mapId={mapId}, seed={seed}, {width}x{height}, " +
-                  $"出生点={map.kingdomSpawns.Count}, 威胁点={map.threatSpawns.Count}, 自然建筑={map.naturalBuildings.Count}");
+                  $"出生点={map.kingdomSpawns.Count}, 威胁点={map.threatSpawns.Count}, 自然建筑={map.naturalBuildings.Count}, " +
+                  $"净空区清除={cleared} 格（HH.272 件③）");
         return map;
     }
 
@@ -245,7 +250,8 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         return true;
     }
 
-    /// <summary>该格是否满足资源点放置（Tree/Mine/Farmland；A+ 下由 features 数据判定，非 Building 实体）。</summary>
+    /// <summary>该格是否满足资源点放置（Tree/Mine；A+ 下由 features 数据判定，非 Building 实体）。
+    /// **HH.272 件⑤**：`BuildingType.Farmland` 分支已摘除（农田＝玩家建筑·非资源锚点 ⇒ 恒真死分支，撞 `L-26`）。</summary>
     public bool IsResourceNodeAvailable(GridCoord coord, BuildingType requiredNode)
     {
         var map = ActiveMap;
@@ -256,7 +262,6 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         {
             case BuildingType.Tree:      return f == FeatureType.Tree;
             case BuildingType.Mine:      return f == FeatureType.Mine;
-            case BuildingType.Farmland:  return f == FeatureType.Plain;   // 农田建在可耕 Plain 上
             default: return false;
         }
     }

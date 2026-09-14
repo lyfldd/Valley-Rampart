@@ -90,16 +90,18 @@ public enum PlainSubState
 /// <summary>温度带（大区块 16×16 属性，散乱分布不按纬度，2_1 §3.2）。</summary>
 public enum ClimateZone { Tropical, Subtropical, Temperate, Cold }
 
-/// <summary>小区块特征物（功能层，2_1 §5.1 唯一功能源）。可走/阻挡由 GridSystem 派生 walkFlags。</summary>
+/// <summary>小区块特征物（功能层，2_1 §5.1 唯一功能源）。可走/阻挡由 GridSystem 派生 walkFlags。
+/// **HH.272 件⑥**：`Lake`（湖/冰河）已正式删除（用户 2026-09-14 裁决）⇒ 枚举移除，
+/// `River/Ocean` 数值顺移（River 8 不变、Ocean 10→9；D718「存档不用管」已授权）。</summary>
 public enum FeatureType
 {
     Plain,             // 可走/可建
     Tree,              // 一次性木（可刷新，木无产能建筑 2_12）
-    Mountain,          // 阻挡
-    SnowMountain,      // 阻挡
+    Mountain,          // 阻挡（HH.272 件④：山脉化生成）
+    SnowMountain,      // 阻挡（同上）
     Mine,              // 矿洞（石，需争夺；可走，Locked 由 2_2/2_7 置）
     OreVein, StonePile, WoodPile,  // 一次性资源（可走）
-    River, Lake, Ocean             // 水（阻挡）
+    River, Ocean                   // 水（阻挡）
 }
 
 /// <summary>自然建筑占位（features 派生的视觉层，供 2_2 实例化，不反向改可走，2_1 §5.1）。</summary>

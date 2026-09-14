@@ -351,7 +351,7 @@ public static class Valley_HH140_Probe
         var m = new MapData();
         m.width = w; m.height = h;
         m.features = new FeatureType[w * h];
-        m.climateZones = new ClimateZone[(w / 16 + 1) * (h / 16 + 1)];
+        m.climateZones = new ClimateZone[w * h];   // HH.272 件①：逐格存
         for (int i = 0; i < m.climateZones.Length; i++) m.climateZones[i] = ClimateZone.Temperate;
         m.kingdomSpawns = new List<Vector2Int>();
         m.naturalBuildings = new List<NaturalBuilding>();

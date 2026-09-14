@@ -41,11 +41,12 @@ public class MapGenDebugDrawer : MonoBehaviour
         for (int cy = 0; cy < ch; cy++)
             for (int cx = 0; cx < cw; cx++)
             {
-                var zone = map.climateZones[cx + cy * cw];
                 int cellX = cx * MapGenRules.ChunkSize + MapGenRules.ChunkSize / 2;
                 int cellY = cy * MapGenRules.ChunkSize + MapGenRules.ChunkSize / 2;
                 if (cellX >= map.width) cellX = map.width - 1;
                 if (cellY >= map.height) cellY = map.height - 1;
+                // HH.272 件①：climateZones 已改逐格存 ⇒ 取区块中心格温度带（调用口径不变）
+                var zone = MapGenRules.ZoneOf(map, cellX, cellY);
                 Gizmos.color = ClimateColor(zone);
                 Gizmos.DrawCube(grid.CoordToWorld(new GridCoord(cellX, cellY)), new Vector3(chunkW, chunkH, 0.02f));
             }

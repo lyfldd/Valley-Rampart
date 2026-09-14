@@ -136,7 +136,7 @@ public static class Valley_HH264_FeatureProbe
         var mustReal = new[] { FeatureType.Tree, FeatureType.Mine, FeatureType.OreVein, FeatureType.StonePile, FeatureType.WoodPile };
         foreach (var ft in new[] { FeatureType.Plain, FeatureType.Tree, FeatureType.Mountain, FeatureType.SnowMountain,
                                    FeatureType.Mine, FeatureType.OreVein, FeatureType.StonePile, FeatureType.WoodPile,
-                                   FeatureType.River, FeatureType.Lake, FeatureType.Ocean })
+                                   FeatureType.River, FeatureType.Ocean })
         {
             string nm = perFt.ContainsKey(ft) ? perFt[ft] : "(本视野内无该型)";
             int n = perFtCount.ContainsKey(ft) ? perFtCount[ft] : 0;

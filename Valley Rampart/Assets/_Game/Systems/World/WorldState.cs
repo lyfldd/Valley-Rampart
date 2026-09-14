@@ -23,7 +23,7 @@ public class MapData
     public int seed;
     public int width;                 // 格数
     public int height;
-    public ClimateZone[] climateZones;        // 温度带，按大区块 16×16 存（长度 = width/16 × height/16）
+    public ClimateZone[] climateZones;        // 温度带，**逐格存**（长度 = width*height；HH.272 件①：原「按大区块 16×16 存」废止）
     public FeatureType[] features;            // W×H，唯一功能源（可走/阻挡由此派生）
     public List<Vector2Int> kingdomSpawns;    // 王国出生点（0=玩家，1..N=AI 王国，2_1 生成）
     public List<KingdomDef> kingdomTemplates; // 与 kingdomSpawns 并行：0=null(玩家)，1..N=AI 模板绑定（2_16 步骤3 落，供步骤5 Foundry 立国用，保证放置/立国同模板）

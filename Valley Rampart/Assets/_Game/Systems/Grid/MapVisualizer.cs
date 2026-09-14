@@ -102,7 +102,6 @@ public class MapVisualizer : MonoBehaviour
             case FeatureType.StonePile: return new Color(0.55f, 0.55f, 0.55f);
             case FeatureType.WoodPile: return new Color(0.5f, 0.4f, 0.25f);
             case FeatureType.River: return new Color(0.25f, 0.5f, 0.8f);
-            case FeatureType.Lake: return new Color(0.2f, 0.45f, 0.75f);
             case FeatureType.Ocean: return new Color(0.1f, 0.3f, 0.65f);
             default: return Color.gray;
         }

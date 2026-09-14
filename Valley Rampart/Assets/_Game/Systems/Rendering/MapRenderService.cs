@@ -465,14 +465,14 @@ public class MapRenderService : Singleton<MapRenderService>
         return t;
     }
 
-    /// <summary>地皮 artId：水/海按水系，其余按格所在温度带（D689 口径变更＝升级真图）。素材缺项（湖/冰河）返回 null ⇒ 回退占位。</summary>
+    /// <summary>地皮 artId：水/海按水系，其余按格所在温度带（D689 口径变更＝升级真图）。
+    /// HH.272 件⑥：`Lake`（湖/冰河）已删 ⇒ 原「复用河道真图」分支移除。</summary>
     private string GroundArtId(FeatureType ft, int x, int y)
     {
         switch (ft)
         {
             case FeatureType.Ocean: return "ground_ocean";
             case FeatureType.River: return "ground_river";
-            case FeatureType.Lake:  return "ground_river";   // 湖/冰河无独立素材（映射表 §七 缺图面）→ 复用河道真图
         }
         var map = _map;
         if (map == null || map.climateZones == null || map.climateZones.Length == 0) return "ground_temperate";
@@ -585,7 +585,6 @@ public class MapRenderService : Singleton<MapRenderService>
             case FeatureType.Tree: return new Color(0.45f, 0.55f, 0.35f);        // 林下地皮（Feature 叠树）
             case FeatureType.Mountain: case FeatureType.SnowMountain: return new Color(0.5f, 0.5f, 0.5f);
             case FeatureType.River: return new Color(0.3f, 0.5f, 0.7f);          // 河
-            case FeatureType.Lake: return new Color(0.25f, 0.45f, 0.65f);        // 湖
             case FeatureType.Ocean: return new Color(0.15f, 0.35f, 0.6f);        // 海
             default: return new Color(0.4f, 0.45f, 0.4f);                        // 矿/一次性资源落可走地皮
         }

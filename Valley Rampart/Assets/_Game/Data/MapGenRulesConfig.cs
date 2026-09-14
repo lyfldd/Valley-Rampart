@@ -6,15 +6,76 @@ using UnityEngine;
 /// 温度带分布 / 出生点间距 / 资源保障半径 / 连通性阈值。
 /// 资产实例放在 Resources/Grid/MapGenRulesConfig.asset
 ///
-/// 注：§3.3 特征物密度表是固定设计表，内置于 MapGenRules（保证确定性），
-/// 本 SO 承载可调标量（温度带权重/出生点间距/资源半径/连通阈值）。
+/// **HH.272（2_1_R1 §四）**：气候簇形状 / 资源配额（T ＋ 权重表 ＋ 保底 ＋ 难度系数）/ 主城净空区 /
+/// 山脉化 全部 SO 化——原「硬编码表 + 死字段」消除（`climateFeatures` 死字段口径随本批作废）。
 /// </summary>
 [CreateAssetMenu(menuName = "ValleyRampart/MapGenRulesConfig", fileName = "MapGenRulesConfig")]
 public class MapGenRulesConfig : ScriptableObject
 {
+    /// <summary>每温度带 × 每资源的权重（w 越大越稀有；`1−w` 参与归一化配额）。位序＝Tree/StonePile/WoodPile/OreVein/Mine。</summary>
+    [System.Serializable]
+    public struct BandResourceWeights
+    {
+        [Range(0f, 1f)] public float tree;
+        [Range(0f, 1f)] public float stonePile;
+        [Range(0f, 1f)] public float woodPile;
+        [Range(0f, 1f)] public float oreVein;
+        [Range(0f, 1f)] public float mine;
+    }
+
     [Header("温度带分布权重（热带/亚热带/温带/寒带，等概率占位 D1）")]
     [Tooltip("索引 0/1/2/3 = Tropical/Subtropical/Temperate/Cold")]
     public float[] climateWeights = new float[4] { 1f, 1f, 1f, 1f };
+
+    [Header("气候层 · 群系形状（HH.272 件①：种子生长 + 噪声扰动 + 碎片清理）")]
+    [Tooltip("气候簇硬底线：4-连通簇小于该值 ⇒ 整簇并入邻接最多的带（碎片清理阈值）")]
+    public int clusterSizeMin = 4;
+    [Tooltip("典型簇大小区间下限（格）")]
+    public int clusterSizeTypicalMin = 96;
+    [Tooltip("典型簇大小区间上限（格）")]
+    public int clusterSizeTypicalMax = 384;
+    [Tooltip("簇上限（格）：任一 4-连通簇超过该值即视为超限（生长期/归并期均受此约束）")]
+    public int clusterSizeMax = 384;
+
+    [Header("资源层 · 归一化配额（HH.272 件②）")]
+    [Tooltip("每大区块目标资源数 T（坑位口径；难度系数乘在此值上）")]
+    public int resourcesPerChunkBase = 120;
+    [Tooltip("每温度带 × 每资源的权重表（索引 0/1/2/3 = 热带/亚热带/温带/寒带）。温带矿洞权重最低 ⇒ 1−w 最大 ⇒ 温带矿最多。")]
+    public BandResourceWeights[] resourceWeights = new BandResourceWeights[4]
+    {
+        // Tropical：平原多、树多、无雪山
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.45f, woodPile = 0.45f, oreVein = 0.50f, mine = 0.60f },
+        // Subtropical
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.45f, mine = 0.50f },
+        // Temperate：矿洞最多（mine w=0.35 最低）
+        new BandResourceWeights { tree = 0.25f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.40f, mine = 0.35f },
+        // Cold：木堆不生成（w=1 ⇒ 1−w=0 ⇒ 配比 0）
+        new BandResourceWeights { tree = 0.60f, stonePile = 0.45f, woodPile = 1.00f, oreVein = 0.55f, mine = 0.60f },
+    };
+    [Tooltip("保底系数：B_i = floor(E_i × ratio)")]
+    [Range(0f, 1f)] public float guaranteeRatio = 0.5f;
+    [Tooltip("难度资源系数（索引 0/1/2 = Easy/Normal/Hard），乘在 T 上")]
+    public float[] difficultyResourceScale = new float[3] { 0.7f, 1.0f, 1.3f };
+
+    [Header("山脉化（HH.272 件④：脊线生成 + 沿线扩宽 ⇒ 带状）")]
+    [Tooltip("每温度带的山体格数占比（索引 0/1/2/3 = 热带/亚热带/温带/寒带；寒带最多、热带最少）")]
+    public float[] mountainCellRatio = new float[4] { 0.05f, 0.08f, 0.12f, 0.16f };
+    [Tooltip("山体中「雪山」占比（按该格自身温度带；寒带=1 全雪、热带=0 无雪）")]
+    [Range(0f, 1f)] public float[] mountainSnowRatio = new float[4] { 0f, 0.05f, 0.30f, 1f };
+    [Tooltip("脊线宽度下限（格，垂直走向方向）")]
+    public int mountainRidgeWidthMin = 1;
+    [Tooltip("脊线宽度上限（格）")]
+    public int mountainRidgeWidthMax = 2;
+    [Tooltip("脊线长度下限（格）")]
+    public int mountainRidgeLengthMin = 6;
+    [Tooltip("脊线长度上限（格）")]
+    public int mountainRidgeLengthMax = 20;
+    [Tooltip("山脉 4-连通簇最小尺寸（小于该值 ⇒ 碎片回落 Plain）")]
+    public int mountainClusterMinSize = 4;
+
+    [Header("主城净空区（HH.272 件③）")]
+    [Tooltip("主城 footprint(3×3) 外扩格数 R ⇒ 净空区边长 = 3+2R = 11")]
+    public int kingdomClearRadius = 4;
 
     [Header("出生点间距下限（按地图档位，D41：Small=24/Medium=32/Large=40）")]
     [Tooltip("索引 0/1/2 = Small/Medium/Large")]
@@ -65,5 +126,34 @@ public class MapGenRulesConfig : ScriptableObject
         if (climateWeights != null && idx >= 0 && idx < climateWeights.Length)
             return Mathf.Max(0f, climateWeights[idx]);
         return 1f;
+    }
+
+    /// <summary>按温度带查资源权重行（位序＝Tree/StonePile/WoodPile/OreVein/Mine；缺省 0.5）。</summary>
+    public float[] GetResourceWeights(ClimateZone zone)
+    {
+        int idx = (int)zone;
+        var dst = new float[5] { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+        if (resourceWeights == null || idx < 0 || idx >= resourceWeights.Length) return dst;
+        var r = resourceWeights[idx];
+        dst[0] = r.tree; dst[1] = r.stonePile; dst[2] = r.woodPile; dst[3] = r.oreVein; dst[4] = r.mine;
+        return dst;
+    }
+
+    /// <summary>按温度带查山体格数占比（缺省 0.1）。</summary>
+    public float GetMountainCellRatio(ClimateZone zone)
+    {
+        int idx = (int)zone;
+        if (mountainCellRatio != null && idx >= 0 && idx < mountainCellRatio.Length)
+            return Mathf.Max(0f, mountainCellRatio[idx]);
+        return 0.1f;
+    }
+
+    /// <summary>按温度带查山体中雪山占比（缺省 0.3）。</summary>
+    public float GetMountainSnowRatio(ClimateZone zone)
+    {
+        int idx = (int)zone;
+        if (mountainSnowRatio != null && idx >= 0 && idx < mountainSnowRatio.Length)
+            return Mathf.Clamp01(mountainSnowRatio[idx]);
+        return 0.3f;
     }
 }
