@@ -131,7 +131,7 @@
 
 ## §五、commit
 
-- 本批单笔 commit（容器清理＋asset 治本＋探针＋回执/报告/账本·写-改-commit 同串）：hash 见 git log（提交后由账本回执贴附）
+- 本批单笔 commit（容器清理＋asset 治本＋探针＋回执/报告/账本·写-改-commit 同串）：**`bc8a50df`**（11 files·+580/−51·`Valley_HH285_Observe.cs.meta → Valley_HH284_Probe.cs.meta` 改名识别 100%）
 - **未 push**
 
 ## §六、移交
