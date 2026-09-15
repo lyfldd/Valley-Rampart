@@ -94,3 +94,55 @@
 ---
 
 > 执行端｜2026-09-15｜第一步（只读静态）完成：五环 gap 表逐环勾选·无结构性不可达·识别 3 项可达性条件＋2 项口径发现·停手待放行第二步
+
+---
+
+## §八、策划端裁决区（`D728`，2026-09-15，主策划端）
+
+> 裁决文号 **D728**（`0.6 §二百五十六`）· Gate=`G2-2` · **第一步回执＝✅ 验收成立 · 放行第二步**
+
+### 8.1 回执验收（✅ 成立）
+
+**判据三直读已过**：①**commit 实核** `2eb02b1d`（4 files：交接索引 +1／编号登记 2±／回执 96 行／工作日志 3± ＝ **+100/−2** ✅ 与声称一致）；②**代码实读**（见 8.2）；③**档位直读**（`Assets/_Game/Resources/Config/Kingdoms/UtilityActionConfig.asset` **27 条行动全表** ＋ `NeedKind` 枚举逐值对位）。
+
+### 8.2 逐环复核（策划端独立取证·非采信转述）
+
+| 环 | 回执定性 | 策划端实读 | 复核结论 |
+|---|---|---|---|
+| 环2 | ✅已闭（四守卫） | `UtilityScorer.cs:609-620`：①厂前置 `:616` `CountActiveDef(SiegeWorkshop)<1 ⇒ false`／②按王国上限 `:617`／③prefab 预检／④金成本 | ✅ **成立** |
+| 环4 | ✅已闭 | `UnitFactory.cs:135-145` AI overload → `SpawnUnit(...,kingdomId)`；`kingdomId>0` ⇒ 覆写 `Faction.AiKingdom` | ✅ **成立** |
+| 环5 | ✅已闭＋"新口径·零行为差异" | `SiegeProductionSystem.cs:47-58` `WorkshopLevel()` **无 kingdomId 过滤**（仅按 `def.id=="SiegeWorkshop" && IsActive` 取**首个命中**的 level）；`:61-68` `GetMachineLimit()` 建其上；而 `:204` `GetPlacedMachineCountByKingdom(kid)` **按王国** | ⚠️ **改定性＝口径不对称缺陷**（见 8.3-2）。"零行为差异"的前提（`level` 恒 1）**未证**，须由 R5 实证 |
+| 环1 | 🔴未闭（可达但不保证） | 资产 27 条含 **id25 `BuildSiegeWorkshop`**（`minStage:3`／`need:17`／`buildingId:SiegeWorkshop`）；评分 `UtilityScorer.cs:563`／执行 `KingdomBrain.cs:621`／断链校验 `R4_ActionReach.cs:169` **全链在位**；六族 `KingdomDef.baseBuildingDefIds` **逐字相同**＝`[castle,House,farm,Well,mine,Warehouse,quarry]` **均无 SiegeWorkshop** | ✅ **成立**，**根因坐实＝`DZ-105`**（见 8.3-3） |
+| 环3 | ⚠️有条件下可达 | `UtilityScorer.cs:304-315`：门＝**军事期 ∧ (threatM ‖ postureM)**；`threatM`＝`sitM.Threats.Count>0`（**无战士阈值**）；`postureM`＝`PostureHub.Get ≥ Alert`，而姿态判定 `MilitaryPostureController.cs:118-123` `HasThreat` **有**阈值（`alertMinThreatWarriors`） | ✅ **"孤立国结构性不入池"成立**——策划端补全推理链：**两条路径都依赖"邻接国存在"**（`Threats` 空 ⇒ `threatM=false`；姿态无威胁 ⇒ 恒 `None` ⇒ `postureM=false`） |
+
+### 8.3 策划端新查出（回执未报·3 条）
+
+1. **`DZ-156`（新·族专属建筑修复漏项）**：`UtilityActionConfig.asset` **id20 `BuildLeyForge` 仍用 `need:17`**(`ExclusiveGap`)，而 id18/19/21（WarAcademy/WarCamp/ArcheryRange）已改 `need:22`(`MilitaryBuildingGap`) ⇒ **`D656` 修复未全量同步**（同为"族专属建筑"的四条里**矮人族 LeyForge 漏改**）。
+2. **`DZ-157`（新·上限口径跨主体）**：`WorkshopLevel()` 无 kingdomId 过滤 ⇒ `GetMachineLimit()` ＝**全局口径**，而 `GetPlacedMachineCountByKingdom(kid)` ＝**按王国** ⇒ **上限/计数不对称**：任一国的厂升级会抬高**所有国**的机器上限（含 AI 受玩家厂影响）。
+3. **`DZ-105` 升级（观察项 → 坐实·根因）**：台账（2026-09-11 立）**已给定正确口径**＝「**态势驱动**（同 id26 `MachineDemand`）」，并明示**不可**用 `MilitaryBuildingGap`（＝troop-gap，会把"缺将军"错接到"建机器厂"，机器语义与配兵双环正交）。本批实读**坐实**：id25 `need:17` 恒定 **0.5**，而同轴同权重对手 id18/19/21/23/24 用**真实缺口**（可达 **1.0**）⇒ **㉔ 结构性竞争劣势**。
+
+### 8.4 两裁（执行端请裁项·裁定）
+
+**裁 1｜观测载体取向 ＝ 准 B（新建独立容器 `Valley_HH284_Probe`）**
+
+- **理由**：①本批读数是**门判定级证据**，须**可独立复跑、可验收锚定**（先例＝`Valley_P1_Observer`／`Valley_HH282_Verify` 均为独立容器）；②`Valley_DiagMilitary.cs` 系**跨批共享诊断载体**（`HH.140`／`HH.272`／`HH.280` 均引用），尾插会引入"同载体多批语义叠加"风险；③A 案省 1 文件的收益 ＜ 证据独立性收益。
+- **约束**：容器**自建自收**（正门进局 ＋ 退 Play）；**不改** `Valley_DiagMilitary.cs`。
+
+**裁 2｜跑局档位 ＝ 准 seed `73621` ／ 新槽 `hh284` ／ 日数 **150**（非 120）**
+
+- **理由**：`D684` 实证军事期首达 **k4@D78 ／ k1@D94**，而 ㉔/㉕ `minStage=3`(Military) ⇒ **D78 前必零分**；120 日仅余 **26~42** 日观察窗，**150 日余 56~72 日**。
+- **附加约束**：**命中即停**（`L-34`）—— 见 ㉔ 或 ㉕ **实际派发**即停；若 D150 仍零触发，**该结果本身即证据**（须与预判**分列**，禁读作"未观测＝没问题"）。
+- **禁用槽** `p1_run7`／`p1_run9`／`p1_main` ✅（回执已声明）
+
+### 8.5 主动裁 3｜**序 —— 建议先修 `DZ-105` 再跑局**（二选一·请用户点选）
+
+- **A（策划端推荐）**：**先立 `DZ-105` 治本批**（id25 `need` 由 `ExclusiveGap(17)` 改**态势驱动**口径·同 id26 `MachineDemand`），**再**跑本批读数 ⇒ 一局拿真读数。
+  **依据**：`DZ-105` 台账已给定正确口径；㉔ 现存结构性竞争劣势 ⇒ 跑局**预期"零触发"**＝明知不可达仍消耗观察窗（`L-30` 家族）。修改面＝`UtilityActionConfig.asset`（Unity 侧 KingdomBrain 域·**非 `AI.Core`**）⇒ **sim-sync 零义务**（`HH.194/D656` 同判）。
+- **B**：先跑**现状基线局**（取"修前零触发"对照），再治本、再复跑 ⇒ 两局成本换一条修前证据。
+  **须声明**：零触发为**预期结果**，不构成新发现。
+
+### 8.6 其余裁定
+
+- 执行端**全程无越权**（未改业务代码／未写 `_任务队列.md`／未 push／具名 `add`）⇒ **嘉奖**；环3 推理链补齐为**正向勘正**。
+- ⚠️ **流程教训（策划侧自曝）**：本批**任务书缺位**——由**对话派工**直接进入施工，账本有号（HH.284）而**无任务书文件**。本串已**补落** `多Agent交接/策划端/HH.284_㉕机器实产门判定读数_任务书.md`。**防范**：对话派工与任务书**同批落盘**，禁"先跑后补"。
+- **本批仍不置 `G2-2` 门 ✅**：待 R1/R2 读数（㉔/㉕ 实产）＋ `DZ-103`/`DZ-105` 定性。
