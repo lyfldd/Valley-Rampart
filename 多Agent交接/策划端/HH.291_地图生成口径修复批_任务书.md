@@ -46,7 +46,7 @@
 - **做法**：移除/停用 `EnsureNearbyResources:1203` ＋ 其专用参数 `resourceGuaranteeRadius`；同步清理 `WorldManager.cs:187` 附近的调用
 - ⚠️ **必须保留**：`EnsureChunkResourceQuota:958`（**逐区块**配额补足）仍生效 ⇒ **不得出现"整片区域无资源"**
 
-### A6 · **F-09**：`Mine` 进 `naturalBuildings` 派生
+### ~~A6 · **F-09**：`Mine` 进 `naturalBuildings` 派生~~ ❌ **已撤销（D737·见下方勘正块）·勿施工**
 
 - **问题**：`DeriveNaturalBuildings:1377` 白名单只有 `OreVein`/`WoodPile`/`StonePile` ⇒ **Mine 永不进 `naturalBuildings`** ⇒ `BuildingFactory.InstantiateFromMap:79` 不创建 ⇒ **`mine.asset` 从未被实例化** ⇒ `BuildingFactory:310/318` 的 `AddComponent<ProducerComponent>`／`AddComponent<MineByproductComponent>` **永不执行** ⇒ **矿山不产石 ＋ 副产品链（水晶/火油/矿石）全断**
 - **做法**：白名单加 `FeatureType.Mine`；`NaturalBuilding` 的 `w/h` 填 **2×2**（对齐 `mine.footprint`）
@@ -54,6 +54,20 @@
 - ⚠️ **必须给性能读数**（加载时长／帧率），因 `HH.2 A+` 的初衷正是防"加载 20s"
 
 ---
+
+---
+
+> ## ⛔ 勘正块（D737，2026-09-15 20:20，主策划端）—— **`A6` 撤出本批，勿施工**
+>
+> **背景**：用户指正「**我们的矿洞只能在矿山上面建造**」⇒ 复核发现 **`F-09` 原判错误**（把「矿山锚点 `FeatureType.Mine`＝**地形**」误读为「矿洞 `mine.asset`＝**建筑**」）。
+>
+> - **字段直读（决定性）**：`TerrainType.Quarry (=4)` 的枚举注释逐字＝**「矿山（石来源）」**；**`mine.asset` `allowedTerrain = [Quarry]`（资产内 `04000000`）⇒ 矿洞只许建在矿山地形上** ✓
+> - **`FeatureType.Mine` ＝ 矿山锚点（地图数据格），本就不该被 `DeriveNaturalBuildings` 派生为建筑实体**
+> - **「矿山 → 产石」链当前由 `quarry` 兑现**（`isPlayerBuilt: 1`・`rate=5`・玩家可建 ＋ AI 立国预置 ×7）⇒ **产能链并未断**
+> - **`mine` 的真正缺口＝过渡态语义**（`isResourceNode:1`／`isPlayerBuilt:0`／`levels:[]` ⇒ 目标 `isResourceNode:0`＋`isPlayerBuilt:1`＋`levels 3 档`＋矿山限位）⇒ 归 **`建筑体系重构批` T4/T6**（D574 立项・六考后统筹）
+>
+> **⇒ 本批范围修正**：**`A6` 撤销**（**已施工部分请回退**）；**`A1`~`A5` 照施工**；**`§三` 验收判据由六条改五条**（`A6` 行作废）。**`§五` 产出 3 的「Mine 实例数 ＋ 石入库读数」一并取消**。
+> **⇒ 其余不变**（红线、`sim-sync` 零义务、`A5` 调用点 2 处、M1~M8）。
 
 ## §二 红线
 
