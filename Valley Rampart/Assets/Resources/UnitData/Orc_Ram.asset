@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Orc_Ram
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 705049825803942007, guid: c2037bb5f6820d041bde3f39cee9d492, type: 3}
   faction: 1
   occupation: 37
   walkSpeed: 0.9

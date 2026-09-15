@@ -170,7 +170,13 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         RulerController.Instance.Spend(cost);
         if (UnitFactory.Instance != null)
         {
-            UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos);
+            // HH.282 DZ-097 兜底：SpawnUnit 返 null（prefab 缺失/数据回滚）⇒ 退款回玩家账户 + 不报"成功"
+            if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos) == null)
+            {
+                RulerController.Instance.Refund(cost);
+                Debug.LogError($"[SiegeProduction] 生产失败：{type} 生成返回 null（UnitData.prefab 缺失或未挂接），已退款 金{cost.gold} 石{cost.stone} 木{cost.wood}");
+                return false;
+            }
             Debug.Log($"[SiegeProduction] 生产 {type}（造价 金{cost.gold} 石{cost.stone} 木{cost.wood}）");
             return true;
         }
@@ -213,7 +219,13 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         kingdom.Spend(cost);   // AI 国库台账扣费（镜像玩家 Spend 语义）
         if (UnitFactory.Instance != null)
         {
-            UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos, kingdomId);
+            // HH.282 DZ-097 兜底：SpawnUnit 返 null ⇒ 退款回 per-kingdom 国库（AI 账户≠玩家账户）+ 不报"成功"
+            if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos, kingdomId) == null)
+            {
+                kingdom.Refund(cost);
+                Debug.LogError($"[SiegeProduction] k{kingdomId} 生产失败：{type} 生成返回 null（UnitData.prefab 缺失或未挂接），已退款 金{cost.gold} 石{cost.stone} 木{cost.wood}");
+                return false;
+            }
             Debug.Log($"[SiegeProduction] k{kingdomId} 生产 {type}（造价 金{cost.gold} 石{cost.stone} 木{cost.wood}）");
             return true;
         }

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Orc_Berserker
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 415569860172724834, guid: 37964130c40e7684a8bad74a8fcaa9b8, type: 3}
   faction: 1
   occupation: 28
   walkSpeed: 1.1

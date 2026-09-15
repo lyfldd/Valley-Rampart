@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Elf_VineCatapult
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 3834627971895094037, guid: 80c4a030269c9c54e8e6abb23743279e, type: 3}
   faction: 1
   occupation: 36
   walkSpeed: 0.7

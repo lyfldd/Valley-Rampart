@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Dwarf_Bedrock
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 8451807468755188989, guid: 9943a7adc41bafd4ca7153f90facc024, type: 3}
   faction: 1
   occupation: 31
   walkSpeed: 0.6

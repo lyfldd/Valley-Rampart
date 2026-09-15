@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Elf_Windwalker
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 7359384065792994209, guid: 865d36b9cb35a7d46b253b1afc46dc4f, type: 3}
   faction: 1
   occupation: 33
   walkSpeed: 1.5

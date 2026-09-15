@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Elf_Ranger
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 7099887874199927664, guid: c7d4501d6db6358429c79fb0e128b592, type: 3}
   faction: 1
   occupation: 32
   walkSpeed: 1

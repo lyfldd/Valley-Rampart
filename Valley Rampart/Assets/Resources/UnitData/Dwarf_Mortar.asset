@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 906656d1f508ef540ad445ff1ee085f8, type: 3}
   m_Name: Dwarf_Mortar
   m_EditorClassIdentifier: 
-  prefab: {fileID: 0}
+  prefab: {fileID: 60010018589695758, guid: ec3702721e938584c8089fc9a06f9088, type: 3}
   faction: 1
   occupation: 35
   walkSpeed: 0.4
