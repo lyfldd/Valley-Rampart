@@ -43,7 +43,7 @@ public static class Valley_HH272_MapGenProbe
         if (spawns) MapGenRules.PlaceKingdomSpawns(rng, map, cfg, WorldSize.Medium, aiCount, null);
         MapGenRules.ClearKingdomZones(map, cfg);
         MapGenRules.EnsureChunkResourceQuota(rng, map, cfg, difficulty);
-        MapGenRules.EnsureNearbyResources(rng, map, cfg);
+        // HH.291 A5：步骤 7「资源就近补」已退役（`EnsureNearbyResources` 删除 ⇒ 本行同步移除）
         MapValidator.ValidateConnectivity(map);
         if (water)
         {

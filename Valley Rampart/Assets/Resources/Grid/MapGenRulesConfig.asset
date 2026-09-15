@@ -17,8 +17,63 @@ MonoBehaviour:
   - 1
   - 1
   - 1
+  clusterSizeMin: 4
+  clusterSizeTypicalMin: 96
+  clusterSizeTypicalMax: 384
+  clusterSizeMax: 384
+  resourcesPerChunkBase: 120
+  resourceWeights:
+  - tree: 0.2
+    stonePile: 0.45
+    woodPile: 0.45
+    oreVein: 0.5
+    mine: 0.9
+  - tree: 0.2
+    stonePile: 0.4
+    woodPile: 0.4
+    oreVein: 0.45
+    mine: 0.84
+  - tree: 0.25
+    stonePile: 0.4
+    woodPile: 0.4
+    oreVein: 0.4
+    mine: 0.8
+  - tree: 0.6
+    stonePile: 0.45
+    woodPile: 1
+    oreVein: 0.55
+    mine: 0.92
+  guaranteeRatio: 0.5
+  difficultyResourceScale:
+  - 0.7
+  - 1
+  - 1.3
+  bandResourceAbundance:
+  - 0.9
+  - 1.3
+  - 1.1
+  - 0.7
+  mountainCellRatio:
+  - 0.05
+  - 0.08
+  - 0.12
+  - 0.16
+  mountainSnowRatio:
+  - 0
+  - 0.05
+  - 0.3
+  - 1
+  mountainRidgeWidthMin: 1
+  mountainRidgeWidthMax: 2
+  mountainRidgeLengthMin: 6
+  mountainRidgeLengthMax: 20
+  mountainClusterMinSize: 4
+  kingdomClearRadius: 4
   spawnMinDistanceCells: 180000002000000028000000
-  resourceGuaranteeRadius: 3
   connectivityThreshold: 0.95
   threatsPerKingdom: 2
   threatMinChunkDistance: 2
+  featureScanRadiusCells: 8
+  forestDensityThreshold: 0.1
+  mineralDensityThreshold: 0.039
+  barrenDensityThreshold: 0.6

@@ -179,7 +179,7 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         int cleared = MapGenRules.ClearKingdomZones(map, _mapGenRulesConfig);
         // HH.272 件②：步骤 6.6 逐区块配额补足（在净空区之后 ⇒ 保底不会把资源塞回区内）
         MapGenRules.EnsureChunkResourceQuota(rng, map, _mapGenRulesConfig, difficulty);
-        MapGenRules.EnsureNearbyResources(rng, map, _mapGenRulesConfig);        // 步骤7
+        // HH.291 A5（R-02 前半）：步骤 7「资源就近补」`EnsureNearbyResources` 已退役（改由开局资源兜底，另批）
         MapValidator.ValidateConnectivity(map);                                  // 步骤8
         MapGenRules.PlaceWater(rng, map, size);                                  // 步骤9（海洋/河；湖已删 HH.272 件⑥）
         MapValidator.ValidateConnectivity(map);                                  // 水域后复跑连通（审计）

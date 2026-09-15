@@ -28,6 +28,62 @@ public static class MapGenRules
         FeatureType.Tree, FeatureType.StonePile, FeatureType.WoodPile, FeatureType.OreVein, FeatureType.Mine
     };
 
+    // ===== 坑位模型（2_1 §3.4 ／ 2_1_R1 §二第二层 ／ HH.291 A4）=====
+    /// <summary>每 Cell 拆 2×2 子坑位（格内**固定偏移** ⇒ 天然不重叠）⇒ **一格最多 4 个资源**。</summary>
+    public const int PitsPerCell = 4;
+
+    /// <summary>生成期坑位账：每 Cell 的 2×2 子坑位**占用位掩码**（bit0..3＝子坑位 0..3；0＝无资源）。
+    /// 跨 `PlaceResourceQuota`（步骤 4）与 `EnsureChunkResourceQuota`（步骤 6.6）**两趟存活**；
+    /// 长度＝`width*height`，由 `FillFeatures` 按图重建。
+    /// **口径**：这是**生成期计数器**（`2_1_R1 §二` 验收线 4「坑位不重叠（**计数器实证**）」）——
+    /// `MapData.features` 仍是逐格唯一功能源 ⇒ 同格 4 坑位**必须同型**（混合型无法表达，会被静默丢弃）。
+    /// **矿洞例外**：`Mine` 为 2×2 Cell 粒度，其 4 格掩码置满（不可再被其他资源占用），
+    /// 而**配额结算按 Cell 计**（1 簇＝2×2 Cell＝4 单位，与改前 `TryStampMineCluster` 同口径）。</summary>
+    static byte[] _pitMask;
+
+    /// <summary>位掩码中已占坑位数（0..4）。</summary>
+    static int PitCountOfMask(int mask)
+    {
+        int c = 0;
+        while (mask != 0) { c += mask & 1; mask >>= 1; }
+        return c;
+    }
+
+    /// <summary>某 Cell 的生成期坑位数（0..4）；无账（未生成）返 0。</summary>
+    static int PitCountOfCell(int cell)
+        => _pitMask != null && cell >= 0 && cell < _pitMask.Length ? PitCountOfMask(_pitMask[cell]) : 0;
+
+    /// <summary>**验收读数（生成期口径）**：扫描坑位账 × 当前 `features`，只统计**最终仍为资源格**的 Cell
+    /// （净空区/水域清除过的格不计）。`excludeMine=true` 时排除矿洞格（矿洞按 2×2 Cell 例外，其掩码恒满）。
+    /// 返回：每 Cell 最大坑位数 / 满格（＝4）计数 / 分布直方图（下标 0..4 的计数）/ 坑位总数。</summary>
+    public static void ReadPitStats(MapData map, bool excludeMine,
+                                    out int maxPerCell, out int fullCellCount, out int[] histogram, out int totalPits)
+    {
+        maxPerCell = 0; fullCellCount = 0; totalPits = 0;
+        histogram = new int[PitsPerCell + 1];
+        if (map == null || map.features == null || _pitMask == null || _pitMask.Length != map.features.Length)
+            return;
+        for (int i = 0; i < map.features.Length; i++)
+        {
+            var f = map.features[i];
+            bool isRes = false;
+            for (int t = 0; t < ResourceKindCount; t++)
+                if (f == ResourceKindFeature[t]) { isRes = true; break; }
+            int n = isRes ? PitCountOfMask(_pitMask[i]) : 0;
+            if (excludeMine && f == FeatureType.Mine) n = 0;
+            histogram[Mathf.Clamp(n, 0, PitsPerCell)]++;
+            if (n <= 0) continue;
+            totalPits += n;
+            if (n > maxPerCell) maxPerCell = n;
+            if (n >= PitsPerCell) fullCellCount++;
+        }
+    }
+
+    /// <summary>**验收读数（生成期口径）**：某格当前坑位数（0..4）。</summary>
+    public static int PitCountAt(MapData map, int x, int y)
+        => map == null || x < 0 || y < 0 || x >= map.width || y >= map.height
+           ? 0 : PitCountOfCell(Idx(map, x, y));
+
     /// <summary>特征物是否可走（生成期判定，未灌 GridSystem 前用）。</summary>
     public static bool IsWalkableFeature(FeatureType f)
     {
@@ -61,15 +117,6 @@ public static class MapGenRules
             for (int dx = 0; dx < side; dx++)
                 if (map.features[Idx(map, ox + dx, oy + dy)] != need) return false;
         return true;
-    }
-
-    /// <summary>块内是否含指定特征（成簇防重叠用）。</summary>
-    static bool BlockHasFeature(MapData map, int ox, int oy, FeatureType need, int side)
-    {
-        for (int dy = 0; dy < side; dy++)
-            for (int dx = 0; dx < side; dx++)
-                if (map.features[Idx(map, ox + dx, oy + dy)] == need) return true;
-        return false;
     }
 
     /// <summary>块是否全为 Plain（可盖章空位）。</summary>
@@ -650,6 +697,7 @@ public static class MapGenRules
     {
         int n = map.width * map.height;
         for (int i = 0; i < n; i++) map.features[i] = FeatureType.Plain;
+        _pitMask = new byte[n];                      // HH.291 A4：坑位账按图重建（生成期口径）
 
         PlaceMountainRidges(rng, map, cfg);          // 件④：山脉化
         PruneMountainSpecks(map, cfg);               // 件④：山脉簇最小尺寸约束（≥4 格）
@@ -754,16 +802,15 @@ public static class MapGenRules
             Debug.Log($"[MapGenRules] 山脉化：清除 <{minSize} 格山体碎片 {pruned} 格（件④·4-连通最小尺寸约束）。");
     }
 
-    /// <summary>资源配额落格（件②）。每大区块：T = `resourcesPerChunkBase` × 难度系数；
+    /// <summary>资源配额落格（件②）。每大区块：T = `resourcesPerChunkBase` × **地带丰度** × 难度系数；
     /// 权重表归一化 p_i=(1−w_i)/Σ(1−w_j)；E_i=T×p_i；保底 B_i=floor(E_i×guaranteeRatio)。
-    /// 坑位模型：每 Cell 拆 2×2 子坑位（格内固定偏移·天然不重叠），每坑位至多 1 资源；
-    /// 矿洞例外＝**2×2 Cell 粒度**（先占整块，再在剩余 Cell 填坑位）。</summary>
+    /// **坑位模型（HH.291 A4）**：每 Cell 拆 2×2 子坑位（格内固定偏移·天然不重叠），**一格最多 4 个资源**
+    /// （同格**同型**——features 逐格唯一功能源）；矿洞例外＝**2×2 Cell 粒度**（先占整块，再在剩余 Cell 填坑位）。</summary>
     static void PlaceResourceQuota(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty, bool skipClearZone)
     {
         int cw = ChunkW(map), ch = ChunkH(map);
         var kindCount = new int[ResourceKindCount];
         var candidates = new List<int>(ChunkSize * ChunkSize);
-        var kinds = new List<int>(512);
         var e = new float[ResourceKindCount];
         var b = new int[ResourceKindCount];
 
@@ -795,26 +842,26 @@ public static class MapGenRules
                 for (int k = 0; k < mineClusters; k++)
                     if (TryStampMineCluster(map, candidates, rng, cfg)) kindCount[ResMine]++;
 
-                // 其余资源：按配额构造类型序列 → 打散 → 落坑位（每坑位至多 1 资源；矿洞已占格跳过）
-                kinds.Clear();
+                // 其余资源：按**型**打包落位（HH.291 A4 坑位模型：每 Cell 至多 4 个**同型**坑位；
+                //   features 为逐格唯一功能源 ⇒ 同格必须同型，混合型无法表达）。
+                //   空格仍由 candidates（已 shuffle）供位 ⇒ 空间散布不变。
                 for (int t = 0; t < ResMine; t++)
                 {
-                    int cnt = Mathf.RoundToInt(e[t]);
-                    for (int k = 0; k < cnt; k++) kinds.Add(t);
-                }
-                Shuffle(rng, kinds);
-                for (int k = 0; k < kinds.Count; k++)
-                {
-                    // 跳过被矿洞占掉/已落资源的候选格
-                    while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
-                    if (cursor >= candidates.Count) break;
-                    int cell = candidates[cursor++];
-                    PickSubSlot(rng);                       // 格内 2×2 固定偏移取 1 个坑位（不重叠）
-                    map.features[cell] = ResourceKindFeature[kinds[k]];
-                    kindCount[kinds[k]]++;
+                    int remaining = Mathf.RoundToInt(e[t]);
+                    while (remaining > 0)
+                    {
+                        // 跳过被矿洞占掉/已落资源的候选格
+                        while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
+                        if (cursor >= candidates.Count) break;
+                        int cell = candidates[cursor++];
+                        int slots = Mathf.Min(PitsPerCell, remaining);
+                        PlaceResourceCell(map, cell, t, slots, rng);
+                        kindCount[t] += slots;
+                        remaining -= slots;
+                    }
                 }
 
-                // 保底 B_i：逐区块统计实际数量，不足则补足（矿洞按簇补）
+                // 保底 B_i：逐区块统计实际数量（**坑位口径**），不足则补足（矿洞按簇补）
                 for (int t = 0; t < ResourceKindCount; t++)
                 {
                     if (b[t] <= 0) continue;
@@ -832,9 +879,9 @@ public static class MapGenRules
                             while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
                             if (cursor >= candidates.Count) break;
                             int cell = candidates[cursor++];
-                            PickSubSlot(rng);
-                            map.features[cell] = ResourceKindFeature[t];
-                            kindCount[t]++; need--;
+                            int slots = Mathf.Min(PitsPerCell, need);
+                            PlaceResourceCell(map, cell, t, slots, rng);
+                            kindCount[t] += slots; need -= slots;
                         }
                     }
                 }
@@ -843,6 +890,23 @@ public static class MapGenRules
 
     /// <summary>坑位选位：每 Cell 拆 2×2 子坑位（格内固定偏移）。返回子坑位序号 0..3。</summary>
     static int PickSubSlot(System.Random rng) => rng.Next(4);
+
+    /// <summary>**落一格 N 个坑位**（N∈1..4·同型·HH.291 A4）：`PickSubSlot` 的返回值**真正参与落位**——
+    /// 以返回序号为起点占一个**未占用**子坑位（已占则顺移到下一个），回合内 `slots` 次 ⇒ 坑位天然不重叠。
+    /// 写入 `features`（同格同型）＋生成期坑位账。返回实际落位坑位数。</summary>
+    static int PlaceResourceCell(MapData map, int cell, int kind, int slots, System.Random rng)
+    {
+        int mask = 0;
+        for (int s = 0; s < slots; s++)
+        {
+            int slot = PickSubSlot(rng);
+            while ((mask & (1 << slot)) != 0) slot = (slot + 1) & 3;   // 该坑位已占 ⇒ 顺移下一个空坑位
+            mask |= 1 << slot;
+        }
+        map.features[cell] = ResourceKindFeature[kind];
+        if (_pitMask != null && cell >= 0 && cell < _pitMask.Length) _pitMask[cell] = (byte)mask;
+        return slots;
+    }
 
     static bool TryStampMineCluster(MapData map, List<int> candidates, System.Random rng, MapGenRulesConfig cfg)
     {
@@ -859,9 +923,22 @@ public static class MapGenRules
             if (InClearZone(map, ox, oy, side, cfg)) continue;      // 整块避开主城净空区（步 6.6 补足路径）
             if (!IsClearBlock(map, ox, oy, side)) continue;
             StampBlock(map, ox, oy, FeatureType.Mine, side);
+            MarkBlockPitsFull(map, ox, oy, side);   // HH.291 A4：矿洞例外＝4 格各自整格占用（不可再被其他资源占用）
             return true;
         }
         return false;
+    }
+
+    /// <summary>把 side×side 区块记入坑位账为「整格占满」（矿洞例外·HH.291 A4）。</summary>
+    static void MarkBlockPitsFull(MapData map, int ox, int oy, int side)
+    {
+        if (_pitMask == null) return;
+        for (int dy = 0; dy < side; dy++)
+            for (int dx = 0; dx < side; dx++)
+            {
+                int i = Idx(map, ox + dx, oy + dy);
+                if (i >= 0 && i < _pitMask.Length) _pitMask[i] = (1 << PitsPerCell) - 1;
+            }
     }
 
     /// <summary>Fisher–Yates（确定性·注入 rng）。</summary>
@@ -878,6 +955,7 @@ public static class MapGenRules
     static void ComputeQuota(MapGenRulesConfig cfg, ClimateZone band, int difficulty, float[] e, int[] b)
     {
         float T = cfg != null ? Mathf.Max(1f, cfg.resourcesPerChunkBase) : 120f;
+        T *= cfg != null ? cfg.GetBandAbundance(band) : 1f;   // HH.291 A3（R-01）：地带丰度
         int di = Mathf.Clamp(difficulty - 1, 0, 2);
         float scale = cfg != null && cfg.difficultyResourceScale != null && cfg.difficultyResourceScale.Length > di
             ? cfg.difficultyResourceScale[di] : 1f;
@@ -954,7 +1032,8 @@ public static class MapGenRules
     }
 
     /// <summary>步骤 6.6：逐区块配额**补足**（在净空区之后跑，避免"保底把资源塞回净空区"）。
-    /// 统计本区块各资源实际数量，不足 `target_i = max(round(E_i), B_i)` 时在区块内补足（跳过净空区/海洋带）。</summary>
+    /// 统计本区块各资源实际数量（**HH.291 A4：坑位口径**；矿洞按 Cell），不足 `target_i = max(round(E_i), B_i)`
+    /// 时在区块内补足（跳过净空区/海洋带）；补足同样按**一格至多 4 个同型坑位**打包。</summary>
     public static void EnsureChunkResourceQuota(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty)
     {
         int cw = ChunkW(map), ch = ChunkH(map);
@@ -976,8 +1055,9 @@ public static class MapGenRules
                     {
                         int i = Idx(map, x, y);
                         var f = map.features[i];
+                        // HH.291 A4：非矿洞按**坑位**计（生成期坑位账）；矿洞例外按 Cell 计（1 簇＝4 Cell＝4 单位）
                         for (int t = 0; t < ResourceKindCount; t++)
-                            if (f == ResourceKindFeature[t]) { have[t]++; break; }
+                            if (f == ResourceKindFeature[t]) { have[t] += t == ResMine ? 1 : PitCountOfCell(i); break; }
                         if (x < OceanThickness || y < OceanThickness
                             || x >= map.width - OceanThickness || y >= map.height - OceanThickness) continue;
                         if (f != FeatureType.Plain) continue;
@@ -1005,9 +1085,9 @@ public static class MapGenRules
                         while (cursor < candidates.Count && map.features[candidates[cursor]] != FeatureType.Plain) cursor++;
                         if (cursor >= candidates.Count) break;
                         int cell = candidates[cursor++];
-                        PickSubSlot(rng);
-                        map.features[cell] = ResourceKindFeature[t];
-                        need--;
+                        int slots = Mathf.Min(PitsPerCell, need);   // HH.291 A4：一格填至多 4 个同型坑位
+                        PlaceResourceCell(map, cell, t, slots, rng);
+                        need -= slots;
                     }
                 }
             }
@@ -1199,59 +1279,11 @@ public static class MapGenRules
 
     static bool InB(MapData m, int x, int y) => x >= 0 && y >= 0 && x < m.width && y < m.height;
 
-    // ===== 步骤 7：后置校验① 资源就近补 =====
-    public static void EnsureNearbyResources(System.Random rng, MapData map, MapGenRulesConfig cfg)
-    {
-        int radiusChunks = cfg != null ? Mathf.Max(1, cfg.resourceGuaranteeRadius) : 3;
-        int radiusCells = radiusChunks * ChunkSize;
-        foreach (var sp in map.kingdomSpawns)
-        {
-            EnsureBlock(map, sp, radiusCells, FeatureType.Tree, 1, cfg);                    // 木（1×1）
-            EnsureBlock(map, sp, radiusCells, FeatureType.Mine, MineClusterSide, cfg);      // 矿（件12/D618：簇保底，非单格）
-            EnsureBlock(map, sp, radiusCells, FeatureType.StonePile, 1, cfg);               // 石（1×1）
-            // 农田 = Plain 可建位，天然充足，不强制
-        }
-    }
-
-    /// <summary>半径内若无指定特征的**完整 side×side 轴对齐块**，则在可走区就地补一整块。
-    /// **D621①**：判定必须是「完整 side×side 块」（L 形连通不算）——若按「存在任一 need 格」判定，
-    /// 一个孤立格就会让保底静默失效（其后又被清孤立清掉 ⇒ 保底彻底落空，L-01「就位≠生效」）。
-    /// side=1 时与旧 EnsureOne 逐格语义完全等价（tree/stone_pile 行为零变化）。
-    /// **HH.272 件③**：候选位一律跳过主城净空区（否则保底会把矿塞回区内）。</summary>
-    static void EnsureBlock(MapData map, Vector2Int sp, int radius, FeatureType need, int side, MapGenRulesConfig cfg)
-    {
-        for (int dy = -radius; dy <= radius; dy++)
-            for (int dx = -radius; dx <= radius; dx++)
-                if (HasFullBlock(map, sp.x + dx, sp.y + dy, need, side)) return;   // 已有完整块
-        // 缺 → 一级：半径内找一块 side×side 全 Plain 空位补上（最干净，side=1 时即旧语义）
-        for (int dy = -radius; dy <= radius; dy++)
-            for (int dx = -radius; dx <= radius; dx++)
-            {
-                if (InClearZone(map, sp.x + dx, sp.y + dy, side, cfg)) continue;
-                if (IsClearBlock(map, sp.x + dx, sp.y + dy, side))
-                {
-                    StampBlock(map, sp.x + dx, sp.y + dy, need, side);
-                    return;
-                }
-            }
-        // 二级（仅巨型簇 side>1，不改变 tree/stone 的 1×1 旧语义）：退而求「不含已有同特征」的完整位，保底不静默落空
-        // 件④：跳过含山/雪山的块（盖章会挖掉山体 ⇒ 产山脉碎片）
-        if (side > 1)
-            for (int dy = -radius; dy <= radius; dy++)
-                for (int dx = -radius; dx <= radius; dx++)
-                {
-                    if (InClearZone(map, sp.x + dx, sp.y + dy, side, cfg)) continue;
-                    if (BlockHasFeature(map, sp.x + dx, sp.y + dy, FeatureType.Mountain, side)) continue;
-                    if (BlockHasFeature(map, sp.x + dx, sp.y + dy, FeatureType.SnowMountain, side)) continue;
-                    if (!BlockHasFeature(map, sp.x + dx, sp.y + dy, need, side))
-                    {
-                        StampBlock(map, sp.x + dx, sp.y + dy, need, side);
-                        Debug.LogWarning($"[MapGenRules] 簇保底降级：出生点 {sp} 半径内无全 Plain 位，改用非空位盖章 {need} {side}×{side}（D618）。");
-                        return;
-                    }
-                }
-        Debug.LogWarning($"[MapGenRules] 簇保底失败：出生点 {sp} 半径 {radius} 内无 {side}×{side} 完整空位可放 {need}（D618）；不硬塞。");
-    }
+    // ===== 步骤 7「资源就近补」已删除（HH.291 A5 / R-02 前半）=====
+    // 原 `EnsureNearbyResources`（每主城就近补 Tree 1×1／Mine 2×2 簇／StonePile 1×1）＋专用参数
+    // `resourceGuaranteeRadius` 一并退役 —— 改由「开局资源」兜底（另批）。
+    // **保留**：`EnsureChunkResourceQuota`（步骤 6.6·逐区块配额补足）仍生效 ⇒ 不得出现"整片区域无资源"。
+    // （`EnsureBlock`／`BlockHasFeature` 为该链路专用，随之一并删除；`InClearZone` 仍被 `TryStampMineCluster` 使用 ⇒ 保留。）
 
     /// <summary>side×side 块是否与主城净空区相交（HH.272 件③ 保底避让）。</summary>
     static bool InClearZone(MapData map, int ox, int oy, int side, MapGenRulesConfig cfg)
@@ -1361,16 +1393,45 @@ public static class MapGenRules
     }
 
     // ===== 步骤 11：naturalBuildings 派生（视觉层/一次性可采集实体，不反向改可走）=====
-    // A+（HH.2）落地：树/矿/雪山不再派生 Building 实体——它们归 2_10 Tilemap 特征层渲染 +
+    // A+（HH.2）落地：树/雪山不再派生 Building 实体——它们归 2_10 Tilemap 特征层渲染 +
     // features 数据承载（装饰持续节点），不再建 1.6 万个 GameObject（消灭加载 20s 根因）。
-    // 仅真正一次性可采集的 OreVein 保留 Building 实体（走 BuildingPanel 采集销毁链路，2_12 不受影响）。
+    // **HH.291 A6（F-09）修正**：`Mine` **必须**派生实体（双身份：Tilemap 特征层渲染 ＋ 产能建筑）——
+    //   否则 `mine.asset` 从未实例化 ⇒ 矿山不产石 ＋ 副产品链（水晶/火油/矿石）全断。
+    //   规模核：全图 ≈1536 簇（对照 Tree ≈7168 数据格）⇒ 量级可接受。
+    // 一次性可采集 `OreVein`/`WoodPile`/`StonePile` 保留 Building 实体（走 BuildingPanel 采集销毁链路，2_12 不受影响）。
     public static void DeriveNaturalBuildings(MapData map)
     {
         map.naturalBuildings.Clear();
+        bool[] mineCovered = null;   // HH.291 A6：矿洞 2×2 簇去重（每簇只派生 1 个 nb）
         for (int y = 0; y < map.height; y++)
             for (int x = 0; x < map.width; x++)
             {
                 var f = map.features[Idx(map, x, y)];
+
+                // **HH.291 A6（F-09）**：`Mine` 进派生 —— 每 2×2 簇**只派生 1 个** `NaturalBuilding`
+                //   （`w/h = 2×2`·对齐 `mine.footprint`；`BuildingFactory.InstantiateFromMap` 是「一 nb 一实体」
+                //   ⇒ 不产 4 份 GameObject）。缺此分支 ⇒ `mine.asset` 从未被实例化
+                //   ⇒ `BuildingFactory:310/318` 的 `ProducerComponent`(产石)／`MineByproductComponent`(副产品链) 永不执行。
+                if (f == FeatureType.Mine)
+                {
+                    if (mineCovered == null) mineCovered = new bool[map.features.Length];
+                    int mi = Idx(map, x, y);
+                    if (mineCovered[mi]) continue;
+                    if (!HasFullBlock(map, x, y, FeatureType.Mine, MineClusterSide))
+                    { mineCovered[mi] = true; continue; }   // 非整块（`PruneOrphanMineCells` 已保证 0 ⇒ 正常不命中）
+                    for (int dy = 0; dy < MineClusterSide; dy++)
+                        for (int dx = 0; dx < MineClusterSide; dx++)
+                            mineCovered[Idx(map, x + dx, y + dy)] = true;
+                    map.naturalBuildings.Add(new NaturalBuilding
+                    {
+                        cellX = x, cellY = y, w = MineClusterSide, h = MineClusterSide,
+                        feature = f,
+                        climate = ZoneOf(map, x, y),
+                        artId = f.ToString()
+                    });
+                    continue;
+                }
+
                 // HH.10 裁决三：一次性可采集实体扩到 OreVein/WoodPile/StonePile 三类。
                 //   （此前仅 OreVein → WoodPile/StonePile 格存在但无实体，工人采不到，木/石断供。）
                 //   Tree 走数据格采集（数据化，不建实体，防止 A+ 复辟），故不在此派生。

@@ -40,22 +40,26 @@ public class MapGenRulesConfig : ScriptableObject
     [Header("资源层 · 归一化配额（HH.272 件②）")]
     [Tooltip("每大区块目标资源数 T（坑位口径；难度系数乘在此值上）")]
     public int resourcesPerChunkBase = 120;
-    [Tooltip("每温度带 × 每资源的权重表（索引 0/1/2/3 = 热带/亚热带/温带/寒带）。温带矿洞权重最低 ⇒ 1−w 最大 ⇒ 温带矿最多。")]
+    [Tooltip("每温度带 × 每资源的权重表（索引 0/1/2/3 = 热带/亚热带/温带/寒带）。w 越大越稀有 ⇒ `1−w` 越小 ⇒ 占比越低。**HH.291 A2**：`mine` 四带提值（矿山应稀有）。")]
     public BandResourceWeights[] resourceWeights = new BandResourceWeights[4]
     {
         // Tropical：平原多、树多、无雪山
-        new BandResourceWeights { tree = 0.20f, stonePile = 0.45f, woodPile = 0.45f, oreVein = 0.50f, mine = 0.60f },
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.45f, woodPile = 0.45f, oreVein = 0.50f, mine = 0.90f },
         // Subtropical
-        new BandResourceWeights { tree = 0.20f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.45f, mine = 0.50f },
-        // Temperate：矿洞最多（mine w=0.35 最低）
-        new BandResourceWeights { tree = 0.25f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.40f, mine = 0.35f },
-        // Cold：木堆不生成（w=1 ⇒ 1−w=0 ⇒ 配比 0）
-        new BandResourceWeights { tree = 0.60f, stonePile = 0.45f, woodPile = 1.00f, oreVein = 0.55f, mine = 0.60f },
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.45f, mine = 0.84f },
+        // Temperate：HH.291 A2 由 0.35 提至 0.80 ⇒ 配额占比 20.3% → ≈7.3%
+        new BandResourceWeights { tree = 0.25f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.40f, mine = 0.80f },
+        // Cold：木堆不生成（w=1 ⇒ 1−w=0 ⇒ 配比 0）；HH.291 A2 mine 0.60→**0.92**（实测校准：
+        //   0.88 时实测占比 10.4% > 温带 6.6% ⇒ 梯度反了；Σ 小 + 2×2 簇整数量化 ⇒ 按实测回调）
+        new BandResourceWeights { tree = 0.60f, stonePile = 0.45f, woodPile = 1.00f, oreVein = 0.55f, mine = 0.92f },
     };
     [Tooltip("保底系数：B_i = floor(E_i × ratio)")]
     [Range(0f, 1f)] public float guaranteeRatio = 0.5f;
     [Tooltip("难度资源系数（索引 0/1/2 = Easy/Normal/Hard），乘在 T 上")]
     public float[] difficultyResourceScale = new float[3] { 0.7f, 1.0f, 1.3f };
+    [Tooltip("**HH.291 A3（R-01）** 地带资源丰度（索引 0/1/2/3 = 热带/亚热带/温带/寒带），乘在 T 上。" +
+             "四带等概率 ⇒ 均值 1.0 ⇒ 全图总量基准不变、仅改变分布。")]
+    public float[] bandResourceAbundance = new float[4] { 0.9f, 1.3f, 1.1f, 0.7f };
 
     [Header("山脉化（HH.272 件④：脊线生成 + 沿线扩宽 ⇒ 带状）")]
     [Tooltip("每温度带的山体格数占比（索引 0/1/2/3 = 热带/亚热带/温带/寒带；寒带最多、热带最少）")]
@@ -80,10 +84,6 @@ public class MapGenRulesConfig : ScriptableObject
     [Header("出生点间距下限（按地图档位，D41：Small=24/Medium=32/Large=40）")]
     [Tooltip("索引 0/1/2 = Small/Medium/Large")]
     public int[] spawnMinDistanceCells = new int[3] { 24, 32, 40 };
-
-    [Header("资源保障")]
-    [Tooltip("就近补资源半径（大区块数，§5.2 步骤4）")]
-    public int resourceGuaranteeRadius = 3;
 
     [Header("连通性")]
     [Tooltip("出生点彼此可达比例阈值，低于则打通走廊（占位 D257）")]
@@ -137,6 +137,15 @@ public class MapGenRulesConfig : ScriptableObject
         var r = resourceWeights[idx];
         dst[0] = r.tree; dst[1] = r.stonePile; dst[2] = r.woodPile; dst[3] = r.oreVein; dst[4] = r.mine;
         return dst;
+    }
+
+    /// <summary>按温度带查资源丰度（**HH.291 A3**；缺省 1）。</summary>
+    public float GetBandAbundance(ClimateZone zone)
+    {
+        int idx = (int)zone;
+        if (bandResourceAbundance != null && idx >= 0 && idx < bandResourceAbundance.Length)
+            return Mathf.Max(0f, bandResourceAbundance[idx]);
+        return 1f;
     }
 
     /// <summary>按温度带查山体格数占比（缺省 0.1）。</summary>
