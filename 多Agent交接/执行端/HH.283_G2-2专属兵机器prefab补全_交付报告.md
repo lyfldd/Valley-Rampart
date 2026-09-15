@@ -194,7 +194,9 @@
 
 ### 13.3 `G2-2` 不置 ✅ 的理由（重要·防误读）
 
-1. `3.1 §二` 门判据＝**「warrior 达门且落地数 > 0」**。本批**只解「prefab 缺失致扣费落空」**，**不解「⑦/⑰ 能否召到」**——`HH.203` 七考实测 4 AI 全程 `warriorCount` 峰值 = **0**，属**另一条账**（`DZ-068`／`DZ-663` 域）。
+1. **门判据「warrior 达门且落地数 > 0」＝已实质达成**（**勘正**：`KingdomState.cs:100` `warriorCount => PopulationSystem.AliveWarriorCount(id)`＝**实体派生**；`G2-1` 门 D684 ②`HH.203` PASS＝「≥2 AI 自主至军事期」，军事期硬条件含 `warriorCount >= 4`〔`ScriptStageMachine.cs:98`〕⇒ 该子项**已被 D684 蕴含**。原第 1 条「属另一条账」＝**策划端误述·勘正**）。
+2. **门未置 ✅ 的真实理由＝「㉕战争机器 AI 实产」未证**：驱动已接通（`KingdomBrain.cs:624-625` / `:1034-1067` → `SiegeProductionSystem.ProduceMachine(pick, spawnPos, kingdomId)`；`UtilityScorer.cs:48` `ProduceMachine=26`），但**跑局中 AI 是否真造出专属机器无读数**。
+3. **机制勘清（影响后续任务定向）**：**7 专属兵不经 prefab**——⑦`ExecuteRecruitArmy`（`KingdomBrain.cs:935`）→ `CollectRecruitCandidates :900`（`TrainingConfig.asset` 实读含 `toOccupation 28/29/30/31/32/33/34`＝7 兵全在册）→ `TrainingSystem.TryTrainFromKingdomPool :586` → `UnitController.cs:85` `SetOccupation()`＝**只改一个 int·不重建实体·不用 prefab**；其**真实消费面＝读档重建**（`UnitFactory.SpawnFromSave :182`）⇒ **本批对 7 兵的真实收益＝「旧档含专属兵不再静默丢」**。
 2. 门上仍有挂账：`DZ-094`／`DZ-048`／`DZ-102`／`DZ-103`／`DZ-105`。
 ⇒ **本批通过不得被读作 `G2-2` 全绿。**
 
