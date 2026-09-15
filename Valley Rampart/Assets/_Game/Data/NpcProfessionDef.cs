@@ -154,11 +154,21 @@ public class NpcProfessionDef : UnitData
     /// </summary>
     public ProfessionSnapshot ToSnapshot()
     {
+        // HH.280 D724 件2 移速重标：快照 walkSpeed/runSpeed 随 npcSpeed 基准重标，使决策核（追击/撤退速度判定）
+        // 与单位实际移动速度同源一致（全链一致口径 C）。怪物（Faction.Monster）快照已是「格/秒×cell」世界速，
+        // 跳过重标防双重缩放。sim 侧 profession 数据保持原样 ⇒ 本变更属 Unity 侧决策输入语义变更，sim 镜像义务由策划端裁定。
+        var mc = MovementConfig.Instance;
+        float ws = walkSpeed, rs = runSpeed;
+        if (faction != Faction.Monster && mc != null)
+        {
+            ws = mc.ScaleUnitSpeed(walkSpeed);
+            rs = mc.ScaleUnitSpeed(runSpeed);
+        }
         return new ProfessionSnapshot
         {
             faction = faction,
-            walkSpeed = walkSpeed,
-            runSpeed = runSpeed,
+            walkSpeed = ws,
+            runSpeed = rs,
             maxHp = maxHp,
             attack = attack,
             defense = defense,

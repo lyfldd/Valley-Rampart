@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0122a32c3e940e249b7a4f1f92d33aa0, type: 3}
   m_Name: LodConfig
   m_EditorClassIdentifier: 
-  activeRadiusMidChunks: 1
-  semiActiveRadiusMidChunks: 2
+  activeRadiusMidChunks: 2
+  semiActiveRadiusMidChunks: 3
   activeHz: 10
   semiHz: 2
   dormantHz: 0.5

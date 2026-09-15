@@ -195,6 +195,10 @@ public class CameraRig : Singleton<CameraRig>
     {
         if (_cam == null || !_mapReady) return;
         if (config == null) return;
+        // HH.280 件1（D724）：玩家视角焦点喂 LOD 活跃中心集。此前 `SetFocalCenter` 在 `_Game` 零调用点
+        // ⇒ 运行时 `_focalMidChunk` 恒 null ⇒ 绝大多数中区块 Dormant ⇒ lodFpsScale[2]=0 动画冻结（HH.278 R1~R4）。
+        // 相机中心即 Iso 世界中心（GridSystem.WorldToCoord 同源映射），置于 inputEnabled 检查前保证 FocusOn/Pan/输入锁定下仍跟随。
+        if (LODSystem.Instance != null) LODSystem.Instance.SetFocalCenter(transform.position);
         // 输入锁定（小剧场自动验收/截图）：禁用 WASD/边缘滚屏/中键/滚轮，避免鼠标滞留窗口边缘把相机推离主城
         if (!inputEnabled) return;
 

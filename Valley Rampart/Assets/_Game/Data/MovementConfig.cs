@@ -21,8 +21,18 @@ public class MovementConfig : ScriptableObject
     }
 
     [Header("移动手感（HH.3 裁决 2026-08-22 统一 iso：格四邻步长全等 0.716/格）")]
-    [Tooltip("NPC 基础速度（世界单位/秒，按 iso 步长 0.716/格重标=1格/秒基准；单位个体速度取 UnitData.walkSpeed/runSpeed，本值为全局基础）")]
+    [Tooltip("NPC 基础速度（世界单位/秒，按 iso 步长 0.716/格 重标=1格/秒基准；单位个体速度取 UnitData.walkSpeed/runSpeed，本值为全局基础）")]
     public float npcSpeed = 0.716f;
+
+    [Header("移速重标（HH.280 D724 件2）")]
+    [Tooltip("UnitData.walkSpeed 重标参考值（资产标准=3.0 ⇒ 1 格/秒基准）。单位实际世界速 = npcSpeed × (dataSpeed / unitSpeedRefData)；禁硬编码魔法数值。")]
+    public float unitSpeedRefData = 3f;
+
+    /// <summary>移速重标（HH.280 D724 件2）：把 UnitData 存量「世界单位/秒」值按 npcSpeed 基准重标。
+    /// dataSpeed == unitSpeedRefData 的单位 ⇒ npcSpeed（=1 格/秒基准）。怪物（Faction.Monster）不走此口——
+    /// 其 walkSpeed 已是「格/秒×cell」显式换算，调用方自行判断。</summary>
+    public float ScaleUnitSpeed(float dataSpeed)
+        => npcSpeed * (dataSpeed / (unitSpeedRefData > 0f ? unitSpeedRefData : 3f));
 
     [Tooltip("到达半径（格单位，§1.6：√((Δx/cellW)²+(Δy/cellH)²) ≤ 此值视为到达）")]
     public float arriveRadiusCells = 0.3f;

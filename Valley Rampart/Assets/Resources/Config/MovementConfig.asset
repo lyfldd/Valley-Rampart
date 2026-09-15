@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: MovementConfig
   m_EditorClassIdentifier: 
   npcSpeed: 0.716
+  unitSpeedRefData: 3
   arriveRadiusCells: 0.3
   repathCooldownSeconds: 1
   pendingTimeoutSeconds: 3

@@ -243,6 +243,15 @@ public class LODSystem : Singleton<LODSystem>
                     anchorMid = am;
             }
         }
+        // HH.280 件1 报裁②A（D724）：上帝视角无君主锚回退 = 主城锚点——设计「缺省用主城锚点」落地。
+        // 上帝视角 MonarchUnit 恒 null（HH.17）且开局 _armyCenters 空 ⇒ 原回退链致活跃中心集近空 ⇒
+        // 未登记区块 GetLevelAt→Dormant 冻结（HH.278 R3/R4）。GetKingdomAnchorWorld 与 WorldToMidChunk 同 iso 映射。
+        if (anchorMid == null)
+        {
+            var wm = WorldManager.Instance;
+            if (wm != null && WorldToMidChunk(wm.GetKingdomAnchorWorld(), out var km))
+                anchorMid = km;
+        }
         if (anchorMid.HasValue) _activeCenters.Add(anchorMid.Value);
 
         // 2) 战斗热点：热度 > hotspotThreshold 的中区块，按热度降序取前 N

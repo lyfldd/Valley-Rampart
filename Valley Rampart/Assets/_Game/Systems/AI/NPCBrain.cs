@@ -765,10 +765,13 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         UpdateCombatRegistration(in ctx);
 
         // ④b 移速决策（3.6 §六，可训练）：追击中按 speedChaseBoost 提速（平常 walkSpeed / 追击最大 runSpeed）
+        // HH.280 D724 件2：改吃控制器重标后运行时速度（_controller.WalkSpeed/RunSpeed）——原 _profession.walkSpeed
+        // 为 SO 原始值（未重标），追击提速会绕过移速重标回到旧速；怪物控制器 WalkSpeed 已是「格/秒×cell」，同样正确。
         if (_chaseTarget != null && cmd.Module == BehaviorModule.MoveTowards)
         {
-            cmd.Speed = _profession.walkSpeed
-                + (_profession.runSpeed - _profession.walkSpeed) * _config.speedChaseBoost;
+            cmd.Speed = (_controller != null ? _controller.WalkSpeed : _profession.walkSpeed)
+                + ((_controller != null ? _controller.RunSpeed : _profession.runSpeed)
+                   - (_controller != null ? _controller.WalkSpeed : _profession.walkSpeed)) * _config.speedChaseBoost;
         }
 
         // ④c B4 角色族因子（对齐 sim ApplyProfessionFactors）：死拼/保命/顶住/压上

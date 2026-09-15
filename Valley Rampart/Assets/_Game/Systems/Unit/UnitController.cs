@@ -373,8 +373,12 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         MaxHp = data.maxHp;
         Attack = data.attack;
         Defense = data.defense;
-        WalkSpeed = data.walkSpeed;
-        RunSpeed = data.runSpeed;
+        // HH.280 D724 件2 移速重标：默认移动（无 speedOverride）走 WalkSpeed/RunSpeed；
+        // 怪物（Faction.Monster）的 walkSpeed 已是「格/秒×cell」显式换算，跳过重标防双重缩放。
+        var speedCfg = MovementConfig.Instance;
+        bool monsterSpeed = data.faction == Faction.Monster;
+        WalkSpeed = monsterSpeed || speedCfg == null ? data.walkSpeed : speedCfg.ScaleUnitSpeed(data.walkSpeed);
+        RunSpeed = monsterSpeed || speedCfg == null ? data.runSpeed : speedCfg.ScaleUnitSpeed(data.runSpeed);
 
         CurrentHp = MaxHp;
 
@@ -507,6 +511,8 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         MaxHp = data.maxHp;
         Attack = data.attack;
         Defense = data.defense;
+        // HH.280 D724 件2：移速重标后存档 walkSpeed 字段语义变化（存的是运行时重标值 0.716 量级）。
+        // 旧存档（重标前 3.0 量级）读档不迁移——未发布项目按 D718「存档不用管」口径声明，直接恢复。
         WalkSpeed = data.walkSpeed;
         RunSpeed = data.runSpeed;
         // 位置已在 SpawnFromSave 时由 UnitFactory.SpawnUnit 设置
