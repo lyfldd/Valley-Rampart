@@ -93,6 +93,28 @@
 
 ---
 
+### 3.1 线3 行为探针·**验法指引**（`D732` 补注·**防假通过**）
+
+> **①⛔ 禁自造 `UtilityActionDef`（本批最大陷阱）**
+> 现成先例 `Smoke_2_22P0.cs:493-507`（P9a）与 `Valley_HH140_Probe.cs:251-265`（P6d）**都是自造 def**：
+> ```csharp
+> var defMD = new UtilityActionDef { id = ..., need = NeedKind.MachineDemand, needA = 2 };  // ← need 硬编码
+> ```
+> 那验的是 **`MachineDemand` 分支逻辑本身**，**与本批改的 `asset.need` 字段无关** ⇒ 照抄它会**通过但什么都没验到**。
+> **本批必须**：从资产取**真 def** —— `UtilityActionConfig.LoadConfig().Find(UtilityAction.BuildSiegeWorkshop)` / `...Find(UtilityAction.BuildLeyForge)`，再跑 `UtilityScorer.NeedScore(k, def)`。
+>
+> **② 静态直读（资产级·必给）**：`Find(BuildSiegeWorkshop).need == 21` ／ `Find(BuildLeyForge).need == 22`（输出实测值）。
+>
+> **③ 行为前后对照**：**改前基线已现成**＝`HH.285` 报告实测「㉔ `score` **恒 0.500**」（＝`ExclusiveGap` 占位·已由 `D732` 收编为治本前基线）；**改后**＝`MachineDemand` 态势驱动（照先例注入法：`scriptPhase=Military` ＋ `SituationHub`/`PostureHub` 造 None/Alert 两档 ⇒ **期望 None 档 0 ／ Alert 档 > 0**）。
+>
+> **④ 本批不跑长局**：asset 改动的 `NeedScore` **可在容器内直接调**（两处先例即如此）⇒ **禁**为此再跑 120 日——**长局读数是 `HH.284` 第二步的事**。
+>
+> **⑤ ⓒ 互斥链**：用 `UtilityScorer.Feasible` 直调（`HH.282` 验收探针同法）——无厂 ⇒ `Feasible(㉕)=false`（`:616` 厂前置）＋`Feasible(㉔)=true`；建厂后 ⇒ `Feasible(㉔)=false`（`buildTargetCap:1`·`:577`）＋`Feasible(㉕)=true`。
+>
+> **⑥ 容器归属**：本批探针**自建独立容器**（**禁**改 `Valley_DiagMilitary.cs`——该文件已因 `HH.284` 违裁尾插待回退，见 `D732` 四）。
+
+---
+
 ## 五、红线
 
 1. ❌ **不改任何 `.cs`**（含 `UtilityScorer.cs`／`KingdomBrain.cs`／`UtilityActionConfig.cs` 的**默认数组**——注意 `.cs` 与 `.asset` 是**两份**，本批**只改 `.asset`**）。
