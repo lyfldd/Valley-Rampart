@@ -244,17 +244,6 @@ public static class DiagMilitary
         DumpAction(tag, k, acfg, UtilityAction.BoostHarvest, "⑩强化采集", st);
         // HH.221/D685：㉗ 采集世界资源点（A② 决策出口·A① 通道）——需求/可行/评分三面实读件
         DumpAction(tag, k, acfg, UtilityAction.GatherWorldResource, "㉗采集世界资源点", st);
-        // HH.285（D728 后「㉕机器实产·门判定读数」批）：㉔/㉕ 三面实读件（need/feasible/score 同型 DumpAction；只读尾插）
-        DumpAction(tag, k, acfg, UtilityAction.BuildSiegeWorkshop, "㉔建投掷机厂", st);
-        DumpAction(tag, k, acfg, UtilityAction.ProduceMachine, "㉕造机器", st);
-        // HH.285 R4/R1 存量面（只读；口径与 Feasible ①②同源）：本国厂在场数 / 已放置机器数/上限 / 厂级
-        var spsD = SiegeProductionSystem.Instance;
-        Debug.LogWarning(string.Format(
-            "[DiagMilitary] {0} k{1} siegeFacility={2} machines={3}/{4} workshopLv={5}",
-            tag, k.id, CountSiegeWorkshop(k.id),
-            spsD != null ? spsD.GetPlacedMachineCountByKingdom(k.id) : -1,
-            spsD != null ? spsD.GetMachineLimit() : -1,
-            spsD != null ? spsD.WorkshopLevel() : -1));
 
         // 评分淘汰构成普查（HH.115 件E#6 既有公开口）
         UtilityScorer.ScoreCensus census;
@@ -444,21 +433,5 @@ public static class DiagMilitary
             try { if (load != null) cfgB = load.Invoke(null, null); } catch { }
             Debug.LogWarning("[DiagBias] " + tag + " k" + k.id + " ResourceBiasConfig=" + (cfgB != null ? cfgB.ToString() : "不可达"));
         }
-    }
-
-    /// <summary>HH.285：本国 Active 投掷机厂数（口径镜像 UtilityScorer.CountActiveDef＝kingdomId+IsActive+def.id，
-    /// L-31 同源纪律：只读统计，禁另算语义；-1=注册表不可达）。</summary>
-    private static int CountSiegeWorkshop(int kingdomId)
-    {
-        var reg = BuildingRegistry.Instance;
-        if (reg == null || reg.All == null) return -1;
-        int n = 0;
-        for (int i = 0; i < reg.All.Count; i++)
-        {
-            var b = reg.All[i];
-            if (b != null && b.def != null && b.kingdomId == kingdomId && b.IsActive && b.def.id == "SiegeWorkshop")
-                n++;
-        }
-        return n;
     }
 }

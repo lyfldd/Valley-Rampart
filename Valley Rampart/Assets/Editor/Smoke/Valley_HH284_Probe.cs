@@ -1,33 +1,35 @@
 #if UNITY_EDITOR
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
 
 // ============================================================================
-//  HH.285「㉕机器实产 · 门判定读数」跑局观测容器（Editor-only · 只读观察 · 业务代码零改动）
+//  HH.284「㉕机器实产 · 门判定读数」跑局观测容器（Editor-only · 只读观察 · 业务代码零改动）
 //  ---------------------------------------------------------------------------
+//  ⚠️ 命名沿革（D732 容器清理）：本文件原为 Valley_HH285_Observe.cs——**它实际是 HH.284 第二步的
+//      读数容器**（HH.285 治本批只改 asset·不跑长局），故随 D732 改名 Valley_HH284_Probe（类名/meta/注释/日志路径同步）。
 //  依据：HH.284 开工回执 §三（读数方案 R1~R4·L-34 五列）＋ D728 后派工「第二步」。
-//  载体取向（HH.284 停手待裁①，按最小面+隔离原则定案）：读数面=既有 Valley_DiagMilitary 尾插
-//        （㉔/㉕ DumpAction＋R4/R1 存量行）；跑局面=本独立容器。理由：HH.80 正跑档 SLOT=p1_run9
-//        禁覆盖（HH.230 证据）；其判据集 J1/J3 服务 D666 该批验收句，与本批验收句不同级
-//        ⇒ 复用有外来判据误停风险（L-30 家族预防，D666「判据须与其服务验收句同级＋同作用域」）。
+//  载体取向：**独立容器（D728 裁 1 准 B）**——读数面（㉔/㉕ 三面实读＋R4/R1 存量行）与跑局面**均在本容器内**，
+//        ★ 迁入说明：㉔/㉕ 实读原曾以 +27 行尾插形式落在共享诊断文件 Valley_DiagMilitary.cs（违 D728 裁 1，D732 打回）
+//        ⇒ 已回退（该文件逐字还原）并**迁入本独立容器**（`DumpMachineReadout`）。
 //  档位（HH.284 停手待裁②·建议值放行）：SEED=73621（HH.230 七考正跑档同 seed·与 D684/HH.203 对照）
-//        / 新槽 hh285_obs1（禁覆盖 p1_run9/p1_run8/HH.214 槽）/ 120 日熔断（HH.203 同档）。
-//  只读纪律：本容器不写任何业务状态（相机平移=纯表现层，仅供截图佐证）；证据=Logs/hh285_obs.log
-//        （逐行镜像·console 大缓冲教训）+ Logs/hh285_status.log（终局状态）+ Editor.log。
+//        / 新槽 hh284_probe（禁覆盖 p1_run9/p1_run8/HH.214 槽）/ 120 日熔断（HH.203 同档）。
+//  只读纪律：本容器不写任何业务状态（相机平移=纯表现层，仅供截图佐证）；证据=Logs/hh284_probe.log
+//        （逐行镜像·console 大缓冲教训）+ Logs/hh284_status.log（终局状态）+ Editor.log。
 //  命中即停（L-34·HH.284 §3.2 R1 判据）：
 //        ① R1 门达标＝top=ProduceMachine 首达 且 该国机器实体 >0（门达标即停）
-//        ② R1 空转＝top 首达后实体恒 0 ≥30 日（空转即停·窗口值本批定案并在报告披露）
+//        ② R1 空转＝top 首达后实体恒 0 ≥30 日（空转即停·窗口值定案并在报告披露）
 //        ③ ANOMALY＝[SiegeProduction]「生成返回 null」退款（HH.282 兜底被触发=prefab 回归·当场判定）
 //        ④ D120 熔断。
 //  红线：零玩家干预（只观测不建造不训练不输资源）；AI.Core 零触。
 // ============================================================================
-public static class Valley_HH285_Observe
+public static class Valley_HH284_Probe
 {
     const int Seed = 73621;
-    const string Slot = "hh285_obs1";
+    const string Slot = "hh284_probe";
     const int CircuitBreakDay = 120;
     const int StallStopDays = 30;          // R1 空转窗口：top=ProduceMachine 首达后实体恒 0 ≥N 日
     const int R2SnapshotEvery = 10;        // R2 定期快照间隔（日）
@@ -49,19 +51,21 @@ public static class Valley_HH285_Observe
     static int _lastDay = -1;
     static string _stopReason;             // 非 null ⇒ 请求停止（TickDay 判据命中 或 OnLog ANOMALY）
     static ProbeHost _host;
+    static MethodInfo _miFeasible;         // UtilityScorer.Feasible（private static·反射只读）
+    static bool _warnedFeasible;
 
     public static void Run()
     {
-        if (!EditorApplication.isPlaying) { Debug.LogError("[HH285] 须先 GameScene 进 Play。"); return; }
+        if (!EditorApplication.isPlaying) { Debug.LogError("[HH284] 须先 GameScene 进 Play。"); return; }
         if (!Init()) return;
-        _host = new GameObject("HH285_ObserveHost").AddComponent<ProbeHost>();
+        _host = new GameObject("HH284_ProbeHost").AddComponent<ProbeHost>();
         _host.Host(Coroutine());
     }
 
     /// <summary>MCP exec_runtime_script 桥接：返回协程让工具等待执行完毕（fire-and-forget 会被退 Play 中断）。</summary>
     public static IEnumerator RunCoroutine()
     {
-        if (!Application.isPlaying) { Debug.LogError("[HH285] 须在 Play 模式内调用。"); yield break; }
+        if (!Application.isPlaying) { Debug.LogError("[HH284] 须在 Play 模式内调用。"); yield break; }
         if (!Init()) yield break;
         yield return Coroutine();
     }
@@ -70,10 +74,10 @@ public static class Valley_HH285_Observe
 
     static bool Init()
     {
-        if (_installed) { Debug.LogWarning("[HH285] 已在观测中（幂等守卫）。"); return false; }
+        if (_installed) { Debug.LogWarning("[HH284] 已在观测中（幂等守卫）。"); return false; }
         _log.Clear(); _obs.Clear(); _finished = false; _stopReason = null; _lastDay = -1; _host = null;
-        _obsPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh285_obs.log"));
-        _statusPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh285_status.log"));
+        _obsPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh284_probe.log"));
+        _statusPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh284_status.log"));
         Log($"观测启动：seed={Seed} slot={Slot} 熔断=D{CircuitBreakDay} 空转窗口={StallStopDays}日（只读·业务代码零改动·AI.Core 零触）");
         Application.logMessageReceived += OnLog;
         _installed = true;
@@ -83,7 +87,7 @@ public static class Valley_HH285_Observe
     static void Log(string msg)
     {
         _log.AppendLine(msg);
-        Debug.Log("[HH285] " + msg);
+        Debug.Log("[HH284] " + msg);
         try
         {
             if (_obsPath != null)
@@ -112,7 +116,7 @@ public static class Valley_HH285_Observe
             if (Time.realtimeSinceStartup - t0 > 120f) { Finish("等世界就绪超时"); yield break; }
         }
 
-        // 读数单源启动：DiagMilitary 每日 census/DumpAction/存量行（P1Observer 本批不启——证据=本容器镜像+Editor.log）
+        // 读数单源启动：DiagMilitary 每日 census（既有公开诊断口；本批未改该文件）
         DiagMilitary.ResetJudges();
         DiagMilitary.Start();
 
@@ -132,11 +136,12 @@ public static class Valley_HH285_Observe
         }
     }
 
-    /// <summary>逐日只读 tick：R3 状态 + R4/R1 存量面 + R1 两判据命中即停。</summary>
+    /// <summary>逐日只读 tick：R3 状态 + ㉔/㉕ 实读（迁入） + R4/R1 存量面 + R1 两判据命中即停。</summary>
     static void TickDay(int day)
     {
         var reg = KingdomRegistry.Instance; if (reg == null) return;
         var all = reg.GetAll(); if (all == null) return;
+        var acfg = UtilityActionConfig.LoadConfig();
         var sps = SiegeProductionSystem.Instance;
         for (int i = 0; i < all.Count; i++)
         {
@@ -150,6 +155,13 @@ public static class Valley_HH285_Observe
             Log($"D{day} k{k.id} stage={o.stage} warrior={o.warrior} fac={o.fac} machines={o.machines}/{o.limit} " +
                 $"top㉕={o.topPmCount}(首达D{o.topPmFirstDay}) top㉔={o.topBswCount}(首达D{o.topBswFirstDay}) " +
                 $"派发 成/败/限={o.prodOk}/{o.prodFail}/{o.limitBlock} 落地={o.landed} 拦截={o.intercept} stall={o.stallDays}");
+            // ㉔/㉕ 三面实读（HH.284 读数面·D732 自 DiagMilitary 尾插迁入本独立容器）
+            if (acfg != null)
+            {
+                ScriptStage st = k.scriptPhase ?? ScriptStage.Survive;
+                DumpMachineReadout(day, k, acfg, UtilityAction.BuildSiegeWorkshop, "㉔建投掷机厂", st);
+                DumpMachineReadout(day, k, acfg, UtilityAction.ProduceMachine, "㉕造机器", st);
+            }
             // R1 门达标（HH.284 §3.2）：top 首达 且 实体 >0
             if (o.topPmFirstDay >= 0 && o.machines > 0)
             {
@@ -168,6 +180,47 @@ public static class Valley_HH285_Observe
                 }
             }
         }
+    }
+
+    /// <summary>㉔/㉕ 需求/可行/评分三面实读（自 Valley_DiagMilitary 尾插迁入；格式与 DiagMilitary.DumpAction
+    /// 同型以便与既有读数逐项对照·L-31 同源纪律）。口径：need=`UtilityScorer.NeedScore`（公开）；
+    /// feasible=`UtilityScorer.Feasible`（private static·反射只读）；score=need×axisWeight×personality[axis]×stageWeight。
+    /// 排除项：玩家国（调用方已跳过 id=0）。</summary>
+    static void DumpMachineReadout(int day, KingdomState k, UtilityActionConfig acfg, UtilityAction id, string label, ScriptStage st)
+    {
+        var defOpt = acfg.Find(id);
+        if (defOpt == null) { Log($"D{day} k{k.id} {label} def=缺失（配置无条目）"); return; }
+        var d = defOpt.Value;
+
+        float need = UtilityScorer.NeedScore(k, d);
+        bool feasible = InvokeFeasible(k, d, out bool feasibleOk);
+
+        float axisRaw = d.axisWeight;
+        float personality = 1f;
+        if (k.personality != null && d.axis >= 0 && d.axis < k.personality.Length)
+        { personality = Mathf.Clamp01(k.personality[d.axis]); axisRaw *= personality; }
+        float stageW = (d.stageWeight != null && (int)st < d.stageWeight.Length)
+            ? Mathf.Max(0f, d.stageWeight[(int)st]) : 1f;
+        float score = need * axisRaw * stageW;
+        bool stageGate = st < d.minStage;
+
+        Log($"D{day} k{k.id} {label} needKind={d.need}(={(int)d.need}) need={need:F3} feasible={feasible} feasibleReachable={feasibleOk} " +
+            $"score={score:F3} minStage={d.minStage} stageGateBlocked={stageGate} buildTargetCap={d.buildTargetCap}");
+    }
+
+    static bool InvokeFeasible(KingdomState k, UtilityActionDef d, out bool reachable)
+    {
+        reachable = true;
+        if (_miFeasible == null)
+            _miFeasible = typeof(UtilityScorer).GetMethod("Feasible", BindingFlags.NonPublic | BindingFlags.Static);
+        if (_miFeasible == null)
+        {
+            reachable = false;
+            if (!_warnedFeasible) { _warnedFeasible = true; Debug.LogWarning("[HH284] 反射不可达：UtilityScorer.Feasible（⇒按不可判读列报，不破零改动）"); }
+            return false;
+        }
+        try { return (bool)_miFeasible.Invoke(null, new object[] { k, d }); }
+        catch (System.Exception ex) { reachable = false; Debug.LogWarning("[HH284] Feasible 反射调用异常: " + ex.Message); return false; }
     }
 
     /// <summary>R2：UnitRegistry 在册单位按 kingdomId 分列的职业计数（专属兵 28~34 vs 通用 Warrior；含机器 35~37+弩炮）。</summary>
@@ -313,7 +366,7 @@ public static class Valley_HH285_Observe
             Log($"截图前相机平移至首台机器 @ {mpos.Value}（表现层·只读纪律不受影响）");
             yield return null; yield return null;
         }
-        string shot = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh285_live.png"));
+        string shot = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh284_live.png"));
         ScreenCapture.CaptureScreenshot(shot);
         yield return null;
         Log($"视觉佐证：Game 窗口截图 → {shot}（exists={System.IO.File.Exists(shot)}）");

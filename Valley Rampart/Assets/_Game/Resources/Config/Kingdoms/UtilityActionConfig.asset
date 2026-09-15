@@ -379,7 +379,7 @@ MonoBehaviour:
     minStage: 2
     axis: 1
     axisWeight: 1
-    need: 17
+    need: 22
     needA: 1
     needB: 0
     stageWeight:
@@ -474,7 +474,7 @@ MonoBehaviour:
     minStage: 3
     axis: 0
     axisWeight: 1
-    need: 17
+    need: 21
     needA: 1
     needB: 0
     stageWeight:
