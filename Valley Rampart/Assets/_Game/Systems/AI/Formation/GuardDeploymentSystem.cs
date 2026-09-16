@@ -224,14 +224,78 @@ public static class GuardDeploymentSystem
         RemoveGuardRegion(coordOpt.Value);
     }
 
-    /// <summary>清理全部守卫区域（场景切换/重载时调）。</summary>
+    /// <summary>清理全部守卫区域（场景切换/重载时调）。同时作废资源点索引（下次查询按需重建）。</summary>
     public static void Clear()
     {
         _regions.Clear();
         _nodes.Clear();
+        _idxMap = null;
+        _idxBuilt = false;
+        _idxCells.Clear();
+        _idxSeen.Clear();
     }
 
     // ===== A+ 口径：高价值资源点 = features 数据集的 Tree/Mine/OreVein 格（HH.2 数据化）=====
+
+    // 【HH.294 补正 P1】资源点**索引**（右键派兵不再全图扫 features）
+    //   改造前：`FindNearestResourceNode` 嵌套 for y<height / x<width 全扫 `map.features`
+    //     （大图 384² = 147,456 格；`底层执行计划` 片3 若把 features 下移小格子则 ×16 = 2,359,296），
+    //     且**每命中资源格**还调 `CoordToWorld`。触发频率＝**每次玩家右键派兵**
+    //     （`SelectionController.cs:270` 判 `nearResource` ＋ `:279` `DeployGuard` 内再查一次 ⇒ 一次右键走两遍）。
+    //   改造后：索引＝「**曾出现过可守卫资源点的格号**」（地块级，与地图面积解耦）；查询只遍历索引条目，
+    //     **逐条回读实时 `features` 校验**（被消耗 ⇒ 跳过）；候选世界坐标**建索引时预换算**，
+    //     查询内距离式与改造前**逐位同式**（`dx*dx + dy*dy`）。
+    //   ⭐ 超集不变量（为什么索引只增不减仍正确）：运行期对 `features` 的资源点写入只有两处 ——
+    //     `WorldManager.TryConsumeResourceNode:241`（资源→Plain，消耗）与
+    //     `ResourceRespawnSystem.SetFeature:178`（重生写回**原格**）；前者由回读校验兜住，
+    //     后者经 `NotifyFeatureWritten` 增量登记 ⇒ 索引恒为「当前可守卫资源点格」的**超集**，
+    //     取最近结果与全扫**完全一致**（并列时按格号小者胜＝改造前 y*W+x 扫描序先者胜）。
+    private static MapData _idxMap;
+    private static bool _idxBuilt;
+    private static readonly List<int> _idxCells = new List<int>();      // 候选格号（y*w+x），升序＝扫描序
+    private static readonly List<Vector2> _idxWorld = new List<Vector2>();  // 与 _idxCells 并行：候选格世界坐标（建索引时一次换算，免每次查询重算）
+    private static readonly HashSet<int> _idxSeen = new HashSet<int>();
+
+    /// <summary>索引条目数（观测读口；＝一次 `FindNearestResourceNode` 的遍历上界）。</summary>
+    public static int IndexedResourceCells => _idxCells.Count;
+
+    /// <summary>按图重建资源点索引（幂等：同图已建则直接返回）。**内存装载期调一次**（`WorldManager` 建图后），
+    /// 亦作懒兜底（探针/其他入口首查时自建）。代价＝单次全图 `features` 扫（1 次/图）。</summary>
+    public static void RebuildResourceIndex(MapData map)
+    {
+        if (map == null || map.features == null) return;
+        _idxMap = map;
+        _idxBuilt = true;
+        _idxCells.Clear();
+        _idxWorld.Clear();
+        _idxSeen.Clear();
+        var f = map.features;
+        int w = map.width;
+        var grid = GridSystem.Instance;
+        for (int i = 0; i < f.Length; i++)
+            if (IsGuardResourceFeature(f[i]) && _idxSeen.Add(i)) AddEntry(i, w, grid);
+    }
+
+    /// <summary>【HH.294 补正 P1】`features` 写入登记（保证索引超集性）。
+    /// 仅「非资源点 → 可守卫资源点」的写入需登记（重生写回原格）；消耗无需登记（回读会跳过）。</summary>
+    public static void NotifyFeatureWritten(GridCoord cell, FeatureType f)
+    {
+        if (!_idxBuilt) return;                                   // 未建：后续首查整表重建，自然含该格
+        var world = WorldManager.Instance;
+        var map = world != null ? world.ActiveMap : null;
+        if (map == null || map != _idxMap || map.features == null) return;   // 他图/换图：下次首查重建
+        if (!IsGuardResourceFeature(f)) return;
+        int i = cell.y * map.width + cell.x;
+        if (i < 0 || i >= map.features.Length) return;
+        if (_idxSeen.Add(i)) AddEntry(i, map.width, GridSystem.Instance);
+    }
+
+    /// <summary>追加一条候选（格号 ＋ 预换算世界坐标，与 `CoordToWorld` 同式）。</summary>
+    private static void AddEntry(int idx, int width, GridSystem grid)
+    {
+        _idxCells.Add(idx);
+        _idxWorld.Add(grid != null ? grid.CoordToWorld(new GridCoord(idx % width, idx / width)) : Vector2.zero);
+    }
 
     /// <summary>该 feature 是否为可守卫资源点（A+ 口径：Tree/Mine/OreVein，Mine/Tree 亦可部署）。</summary>
     public static bool IsGuardResourceFeature(FeatureType f)
@@ -250,8 +314,10 @@ public static class GuardDeploymentSystem
     }
 
     /// <summary>
-    /// 查找 pos 最近的高价值资源点（A+ 口径：直查 WorldManager.ActiveMap.features 数据索引，
-    /// Tree/Mine/OreVein），返回数据句柄而非 Building 实体（HH.3 §六 / HH.6 裁决二）。
+    /// 查找 pos 最近的高价值资源点（A+ 口径：`features` 的 Tree/Mine/OreVein），返回数据句柄而非 Building 实体
+    /// （HH.3 §六 / HH.6 裁决二）。
+    /// **【HH.294 补正 P1】按索引查询**：遍历上界＝`IndexedResourceCells`（索引条目数，地块级、与地图面积解耦），
+    /// 不再全图扫 `W×H`；每条**回读实时 features** 校验（消耗即跳过），结果与全扫一致（并列取格号小者＝原扫描序先者）。
     /// </summary>
     public static GuardResourceNode? FindNearestResourceNode(Vector2 pos)
     {
@@ -260,22 +326,28 @@ public static class GuardDeploymentSystem
         var grid = GridSystem.Instance;
         if (map == null || map.features == null || grid == null) return null;
 
+        if (!_idxBuilt || _idxMap != map) RebuildResourceIndex(map);   // 懒兜底（正常由建图后预建）
+
         GuardResourceNode? best = null;
         float bestSq = float.MaxValue;
-        int width = map.width, height = map.height;
-        for (int y = 0; y < height; y++)
+        int bestIdx = int.MaxValue;
+        int width = map.width;
+        var cells = _idxCells;
+        var worlds = _idxWorld;
+        for (int k = 0; k < cells.Count; k++)
         {
-            for (int x = 0; x < width; x++)
+            int i = cells[k];
+            if (i < 0 || i >= map.features.Length) continue;
+            FeatureType f = map.features[i];              // 实时回读：功能源仍是 features，索引只作候选集
+            if (!IsGuardResourceFeature(f)) continue;
+            Vector2 wp = worlds[k];
+            float dx = wp.x - pos.x, dy = wp.y - pos.y;   // 与改造前 ((Vector2)CoordToWorld(c) - pos).sqrMagnitude **逐位同式**
+            float sq = dx * dx + dy * dy;
+            if (sq < bestSq || (sq == bestSq && i < bestIdx))
             {
-                FeatureType f = map.features[y * width + x];
-                if (!IsGuardResourceFeature(f)) continue;
-                var c = new GridCoord(x, y);
-                float sq = ((Vector2)grid.CoordToWorld(c) - pos).sqrMagnitude;
-                if (sq < bestSq)
-                {
-                    bestSq = sq;
-                    best = new GuardResourceNode(c, f, Faction.PlayerCamp, FeatureDisplayName(f));
-                }
+                bestSq = sq;
+                bestIdx = i;
+                best = new GuardResourceNode(new GridCoord(i % width, i / width), f, Faction.PlayerCamp, FeatureDisplayName(f));
             }
         }
         return best;

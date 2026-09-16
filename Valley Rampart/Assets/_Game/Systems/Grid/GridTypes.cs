@@ -80,7 +80,7 @@ public enum FeatureType
     Tree,              // 一次性木（可刷新，木无产能建筑 2_12）
     Mountain,          // 阻挡（HH.272 件④：山脉化生成）
     SnowMountain,      // 阻挡（同上）
-    Mine,              // 矿山锚点（地形；其上可建 mine（矿洞·建筑）／quarry）——≠ mine.asset（建筑，2×2，allowedTerrain=[Quarry]）
+    Mine,              // 矿山锚点（地形；其上可建 mine（矿洞·建筑）／quarry）——≠ mine.asset（建筑，2×2，allowedTerrain=[Mine]）
     OreVein, StonePile, WoodPile,  // 一次性资源（可走）
     River, Ocean                   // 水（阻挡）
 }
@@ -160,8 +160,8 @@ public enum ResourceGrade
 
 /// <summary>
 /// 小区块：单位堆叠 + 建筑占用最小单元。
-/// doc 1 §2.2 / §5.3：occupant/isObstacle/terrain 已下沉到 GridSystem 稠密数组
-/// （_occupants/_walkFlags/_terrain），本 class 只承载稀疏懒分配的单位列表。
+/// doc 1 §2.2 / §5.3：occupant/isObstacle 已下沉到 GridSystem 稠密数组
+/// （_occupants/_walkFlags；`terrain` 已于 HH.294 片2 随 TerrainType 整层删除），本 class 只承载稀疏懒分配的单位列表。
 /// 旧字段保留为 Obsolete 过渡属性，从 GridSystem 数组读取；改造完毕删除。
 /// </summary>
 public class GridCell
@@ -187,8 +187,8 @@ public class GridCell
 
     // ===== 过渡 Obsolete 属性（已下沉 GridSystem 数组，2_2/2_4 适配完成后删除）=====
 
-    /// <summary>[过渡已废弃] 占据此格的建筑。改用 GridSystem.IsOccupied / GetOccupant。</summary>
-    [System.Obsolete("GridCell.occupant 已下沉 GridSystem._occupants，改用 GridSystem.IsOccupied/GetOccupant")]
+    /// <summary>[过渡已废弃] 占据此格的建筑。改用 GridSystem.GetOccupant。</summary>
+    [System.Obsolete("GridCell.occupant 已下沉 GridSystem._occupants，改用 GridSystem.GetOccupant")]
     public Building occupant
     {
         get { var g = GridSystem.Instance; return g != null ? g.GetOccupant(Coord) as Building : null; }

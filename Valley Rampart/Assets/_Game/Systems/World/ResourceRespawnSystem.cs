@@ -176,6 +176,8 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
         int i = cell.y * map.width + cell.x;
         if (i < 0 || i >= map.features.Length || map.features[i] == target) return false;
         map.features[i] = target;
+        // 【HH.294 补正 P1】守卫资源索引增量登记（重生写回**原格** ⇒ 索引超集性；消耗写 Plain 被内部自过滤）
+        GuardDeploymentSystem.NotifyFeatureWritten(cell, target);
         if (GridSystem.Instance != null) GridSystem.Instance.RefreshCellFromFeature(cell, target);
         if (MapRenderService.Instance != null) MapRenderService.Instance.UpdateCell(cell);
         return true;

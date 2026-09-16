@@ -3,7 +3,7 @@ using UnityEngine;
 // 2_14 传送门实体（实施计划步骤5 / 设计稿 §2.3/§2.4）
 // 职责：HP / 2×2 占格+阻挡 / 白天无敌 / 被打反向强化 / 召唤出怪锚点 / 摧毁清占格。
 // A⁻ 决策：实现 IGridOccupant 以 2×2 入占格表 + IsGridObstacle=true（D154 同建筑占格语义），
-//   Portal 非 Building 却可被 GridSystem.IsOccupied/IsObstacle/GetOccupant 查询。
+//   Portal 非 Building 却可被 GridSystem.IsObstacle/GetOccupant 查询。
 // 视觉（崩塌动画/召唤动画）归 2_10；存档归 2_11；此处只做逻辑实体。
 public class Portal : MonoBehaviour, IDamageable, IGridOccupant, ISaveable
 {

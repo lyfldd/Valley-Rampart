@@ -20,6 +20,8 @@ public static class Valley_HH294_HH293Probe
     {
         var sb = new StringBuilder();
         sb.AppendLine("======== HH.294 片1-A（HH.293 并入项）读数 ========");
+        sb.AppendLine("环境: unity=" + Application.unityVersion + " isPlaying=" + Application.isPlaying
+                      + " seed=" + Seed + " 口径=Normal(diff2)｜256²+384² 两图 + 确定性复验");
 
         foreach (int size in new int[] { 256, 384 })
         {
@@ -85,8 +87,23 @@ public static class Valley_HH294_HH293Probe
         sb.AppendLine("---- [确定性] 同 seed 两次：" + (same ? "逐格一致 ✅（features+climateZones+spawns+nb）" : "不一致  " + why));
 
         sb.AppendLine("======== 读数完毕 ========");
+        WriteLog(sb.ToString());
         Debug.Log("[HH294-1A]\n" + sb.ToString());
         return sb.ToString();
+    }
+
+    /// <summary>落盘（**HH.294 补正 P4**：原仅 `Debug.Log` ⇒ 读数在磁盘上不可复核，撞 `L-02`「读数落盘缺口」家族）。
+    /// 路径 `Valley Rampart/Logs/hh294_hh293_probe.log`（与同批探针族同口径）。</summary>
+    static void WriteLog(string text)
+    {
+        try
+        {
+            string path = System.IO.Path.GetFullPath(
+                System.IO.Path.Combine(Application.dataPath, "..", "Logs", "hh294_hh293_probe.log"));
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+            System.IO.File.WriteAllText(path, "HH.294 片1-A（HH.293 并入项）读数 · " + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n" + text);
+        }
+        catch { }
     }
 
     static void Enq(MapData m, bool[] vis, Queue<int> q, int x, int y)
