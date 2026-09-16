@@ -837,8 +837,10 @@ public static class MapGenRules
                 int cursor = 0;
 
                 // 矿洞：2×2 整块优先（先占整块，再在剩余 Cell 填坑位）
+                // **HH.293 B3（D739）**：删「每大区块恒 ≥1 簇」地板（原 `if (mineClusters <= 0 && b[ResMine] > 0) mineClusters = 1;`）
+                //   —— 该地板把矿山锚点密度锁死在 1 簇/区块（4 格/256 格），与权重无关；拆除后 `round(E/4)` 可为 0。
+                //   ⚠️ 本项**只拆下限、不承诺"最少"**（要达成「4× 视域 2~3 个」须靠 `R-03` 方案 A′）。
                 int mineClusters = Mathf.RoundToInt(e[ResMine] / (MineClusterSide * MineClusterSide));
-                if (mineClusters <= 0 && b[ResMine] > 0) mineClusters = 1;
                 for (int k = 0; k < mineClusters; k++)
                     if (TryStampMineCluster(map, candidates, rng, cfg)) kindCount[ResMine]++;
 
@@ -977,6 +979,8 @@ public static class MapGenRules
             e[i] = T * (r[i] / sumR);
             b[i] = Mathf.FloorToInt(e[i] * ratio);
         }
+        // **HH.293 B3（D739）**：矿洞退出 `B_i` 保底 —— 否则 `b[ResMine] > 0` 会把已拆的密度地板顶回来。
+        b[ResMine] = 0;
     }
 
     // ========================================================================
@@ -1068,8 +1072,8 @@ public static class MapGenRules
                 int cursor = 0;
 
                 // 矿洞：按簇补足
+                // **HH.293 B3（D739）**：删「mineWant ≤ 0 且 b>0 ⇒ 1」地板（第二处，与 FillFeatures 同源）
                 int mineWant = Mathf.RoundToInt(e[ResMine] / (MineClusterSide * MineClusterSide));
-                if (mineWant <= 0 && b[ResMine] > 0) mineWant = 1;
                 int mineHave = have[ResMine] / (MineClusterSide * MineClusterSide);
                 while (mineHave + 1 <= mineWant)
                 {
@@ -1395,42 +1399,21 @@ public static class MapGenRules
     // ===== 步骤 11：naturalBuildings 派生（视觉层/一次性可采集实体，不反向改可走）=====
     // A+（HH.2）落地：树/雪山不再派生 Building 实体——它们归 2_10 Tilemap 特征层渲染 +
     // features 数据承载（装饰持续节点），不再建 1.6 万个 GameObject（消灭加载 20s 根因）。
-    // **HH.291 A6（F-09）修正**：`Mine` **必须**派生实体（双身份：Tilemap 特征层渲染 ＋ 产能建筑）——
-    //   否则 `mine.asset` 从未实例化 ⇒ 矿山不产石 ＋ 副产品链（水晶/火油/矿石）全断。
-    //   规模核：全图 ≈1536 簇（对照 Tree ≈7168 数据格）⇒ 量级可接受。
-    // 一次性可采集 `OreVein`/`WoodPile`/`StonePile` 保留 Building 实体（走 BuildingPanel 采集销毁链路，2_12 不受影响）。
+    // **HH.291 A6（F-09）修正：已于 HH.293 B1 回退**——`Mine` **不**派生实体（撤销原因见方法内注释：
+//   矿山锚点≠矿洞建筑；实机 Mine 实例 429 系误派生产物，且与 T6「mine 转型限位建造」冲突）。
+// 一次性可采集 `OreVein`/`WoodPile`/`StonePile` 保留 Building 实体（走 BuildingPanel 采集销毁链路，2_12 不受影响）。
     public static void DeriveNaturalBuildings(MapData map)
     {
         map.naturalBuildings.Clear();
-        bool[] mineCovered = null;   // HH.291 A6：矿洞 2×2 簇去重（每簇只派生 1 个 nb）
+        // **HH.293 B1（D737 强制回退）**：`FeatureType.Mine`（矿山锚点）**撤出**派生白名单 ——
+        //   实机曾因 HH.291 A6 加入该分支 ⇒ Mine 实例 429（改前 0）＝「矿山随处可见」直接来源，
+        //   且与「建筑体系重构批 T6」（mine 转型＝限位建造建筑）冲突必返工。
+        //   ⚠️ 只撤**派生白名单**：`BuildingMappingTable` 内 mine 映射保留（未来由 T6 转型接管）。
+        //   ⇒ 白名单回到 `e7fb9059^` 三型：OreVein／WoodPile／StonePile。
         for (int y = 0; y < map.height; y++)
             for (int x = 0; x < map.width; x++)
             {
                 var f = map.features[Idx(map, x, y)];
-
-                // **HH.291 A6（F-09）**：`Mine` 进派生 —— 每 2×2 簇**只派生 1 个** `NaturalBuilding`
-                //   （`w/h = 2×2`·对齐 `mine.footprint`；`BuildingFactory.InstantiateFromMap` 是「一 nb 一实体」
-                //   ⇒ 不产 4 份 GameObject）。缺此分支 ⇒ `mine.asset` 从未被实例化
-                //   ⇒ `BuildingFactory:310/318` 的 `ProducerComponent`(产石)／`MineByproductComponent`(副产品链) 永不执行。
-                if (f == FeatureType.Mine)
-                {
-                    if (mineCovered == null) mineCovered = new bool[map.features.Length];
-                    int mi = Idx(map, x, y);
-                    if (mineCovered[mi]) continue;
-                    if (!HasFullBlock(map, x, y, FeatureType.Mine, MineClusterSide))
-                    { mineCovered[mi] = true; continue; }   // 非整块（`PruneOrphanMineCells` 已保证 0 ⇒ 正常不命中）
-                    for (int dy = 0; dy < MineClusterSide; dy++)
-                        for (int dx = 0; dx < MineClusterSide; dx++)
-                            mineCovered[Idx(map, x + dx, y + dy)] = true;
-                    map.naturalBuildings.Add(new NaturalBuilding
-                    {
-                        cellX = x, cellY = y, w = MineClusterSide, h = MineClusterSide,
-                        feature = f,
-                        climate = ZoneOf(map, x, y),
-                        artId = f.ToString()
-                    });
-                    continue;
-                }
 
                 // HH.10 裁决三：一次性可采集实体扩到 OreVein/WoodPile/StonePile 三类。
                 //   （此前仅 OreVein → WoodPile/StonePile 格存在但无实体，工人采不到，木/石断供。）

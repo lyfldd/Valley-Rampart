@@ -202,7 +202,9 @@ public static class Valley_HH291_MapGenProbe
                $" ⇒ {(ok ? "✅ 每区块仍有资源" : "❌ 有空区块")}\n";
     }
 
-    /// <summary>A6（生成侧）：Mine 派生（每簇 1 nb·2×2）。</summary>
+    /// <summary>A6（生成侧）：Mine 派生（每簇 1 nb·2×2）。
+    /// ⚠️ **本段判据已作废（D737 · HH.293 B1 回退）**：`Mine` 撤出派生白名单 ⇒ `nb` **应为 0**（`ok` 恒 False 属预期）。
+    ///   保留代码仅作**回退见证**（改前 A6 nb=426/425·改后 0）；判读改用 `Valley_HH294_HH293Probe.Run()`。</summary>
     public static string MineDeriveRead(MapData m, string label, out bool ok)
     {
         int nb = 0, bad = 0, other = 0;
