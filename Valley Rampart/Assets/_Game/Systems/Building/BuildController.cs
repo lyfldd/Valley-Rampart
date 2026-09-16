@@ -169,16 +169,15 @@ public class BuildController : Singleton<BuildController>
         return new Vector2Int(w, h);
     }
 
-    /// <summary>ghost 世界坐标：origin 格 + footprint 中心偏移（多格建筑视觉居中）。</summary>
+    /// <summary>ghost 世界坐标：origin 格 + footprint 中心偏移（多格建筑视觉居中）。
+    /// 【HH.294 片3-A】换算统一走 `GridSystem.FootprintCenterWorld`（原先此处「就地展开」同一公式）。</summary>
     Vector3 GhostWorldPos(GridCoord sub, GateOrientation orient)
     {
         var grid = GridSystem.Instance;
         var origin = grid.SubToCell(sub);
         var fp = OrientedFootprint(orient);
-        Vector2 originWorld = grid.CoordToWorld(origin);
-        float cellW = grid.Config != null ? grid.Config.cellSize.x : 1.28f;
-        float cellH = grid.Config != null ? grid.Config.cellSize.y : 0.64f;
-        return originWorld + new Vector2((fp.x - 1) * 0.5f * cellW, (fp.y - 1) * 0.5f * cellH);
+        return GridSystem.FootprintCenterWorld(origin, fp,
+            grid.Config != null ? grid.Config.cellSize : MapRenderService.DefaultCellSize);
     }
 
     void TryPlace()
@@ -340,15 +339,14 @@ public class BuildController : Singleton<BuildController>
         return new Vector2Int(w, h);
     }
 
-    /// <summary>建筑落点世界坐标（footprint 中心；门面用，不依赖 _selectedDef/_footprint）。</summary>
+    /// <summary>建筑落点世界坐标（footprint 中心；门面用，不依赖 _selectedDef/_footprint）。
+    /// 【HH.294 片3-A】换算统一走 `GridSystem.FootprintCenterWorld`（原先此处「就地展开」同一公式）。</summary>
     static Vector3 BuildingWorldPos(GridSystem grid, GridCoord sub, BuildingDef def, GateOrientation orient)
     {
         var origin = grid.SubToCell(sub);
         var fp = OrientedFootprint(def, orient);
-        Vector2 originWorld = grid.CoordToWorld(origin);
-        float cellW = grid.Config != null ? grid.Config.cellSize.x : 1.28f;
-        float cellH = grid.Config != null ? grid.Config.cellSize.y : 0.64f;
-        return originWorld + new Vector2((fp.x - 1) * 0.5f * cellW, (fp.y - 1) * 0.5f * cellH);
+        return GridSystem.FootprintCenterWorld(origin, fp,
+            grid.Config != null ? grid.Config.cellSize : MapRenderService.DefaultCellSize);
     }
 
     /// <summary>找邻接桥段的 bridgeId（无邻接桥返回 null，开新链）。</summary>

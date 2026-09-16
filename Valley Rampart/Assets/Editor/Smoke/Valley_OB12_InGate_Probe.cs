@@ -337,9 +337,8 @@ public static class Valley_OB12_InGate_Probe
         }
         var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1, def.footprint.y > 0 ? def.footprint.y : 1);
         var coord = new GridCoord(cell.x, cell.y);
-        Vector3 world = g.Config != null
-            ? (Vector3)g.CoordToWorld(coord) + new Vector3((fp.x - 1) * 0.5f * g.Config.cellSize.x, (fp.y - 1) * 0.5f * g.Config.cellSize.y, 0f)
-            : new Vector3(coord.x, coord.y, 0f);
+        // 【HH.294 片3-A】中心点换算走 GridSystem 唯一内核（原先此处「就地展开」）
+        Vector3 world = GridSystem.FootprintCenterWorld(coord, fp, new Vector3(coord.x, coord.y, 0f));
         bool ok = BuildingFactory.Instance.CreateBuildingInstance(
             def, def.sourceType, coord, fp, world,
             isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,

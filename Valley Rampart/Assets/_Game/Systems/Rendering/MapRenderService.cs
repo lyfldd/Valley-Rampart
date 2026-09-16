@@ -85,36 +85,21 @@ public class MapRenderService : Singleton<MapRenderService>
         return DefaultCellSize;
     }
 
-    /// <summary>逻辑格 → 等轴渲染世界坐标（仅渲染层用）。</summary>
-    public static Vector2 GridToIso(GridCoord cell)
-    {
-        Vector2 cs = CellSize();
-        float halfW = cs.x * 0.5f;
-        float halfH = cs.y * 0.5f;
-        return new Vector2((cell.x - cell.y) * halfW, (cell.x + cell.y) * halfH);
-    }
+    /// <summary>逻辑格 → 等轴渲染世界坐标（仅渲染层用）。
+    /// 【HH.294 片3-A】⭐ **转调** `GridSystem` 唯一换算内核（本类**不再自带算式** —— 片3-A 前此处与
+    /// `GridSystem.CoordToWorld` 是两套并行实现）；无 GridSystem 实例时用 `CellSize()` 兜底默认格尺寸。</summary>
+    public static Vector2 GridToIso(GridCoord cell) => GridSystem.CellToWorld(cell, CellSize());
 
     /// <summary>
     /// 等轴世界坐标 → 逻辑格（逆投影，ScreenToGrid 底座；floor 取含点所在的菱形格）。
     /// 纯数学逆变换不校验越界，调用方（步骤3 CameraRig/ScreenToGrid）自行 clamp。
+    /// 【HH.294 片3-A】⭐ **转调** `GridSystem` 内核（本类不再自带算式）。
     /// </summary>
-    public static GridCoord IsoToCell(Vector2 iso)
-    {
-        Vector2 cs = CellSize();
-        float halfW = cs.x * 0.5f;
-        float halfH = cs.y * 0.5f;
-        // 由 isoX=(x-y)*hw, isoY=(x+y)*hh 反解：
-        float gx = iso.x / halfW * 0.5f + iso.y / halfH * 0.5f;
-        float gy = iso.y / halfH * 0.5f - iso.x / halfW * 0.5f;
-        return new GridCoord(Mathf.FloorToInt(gx), Mathf.FloorToInt(gy));
-    }
+    public static GridCoord IsoToCell(Vector2 iso) => GridSystem.WorldToCell(iso, CellSize());
 
-    /// <summary>垂直向量（世界码→世界屏幕用），供单位/悬浮物按等轴深度参与 Y-sort 的辅助（预留）。</summary>
-    public static float IsoDepth(GridCoord cell)
-    {
-        Vector2 cs = CellSize();
-        return (cell.x + cell.y) * cs.y * 0.5f; // 同 GridToIso 的 isoY，随行增即深度增
-    }
+    /// <summary>垂直向量（世界码→世界屏幕用），供单位/悬浮物按等轴深度参与 Y-sort 的辅助（预留）。
+    /// 【HH.294 片3-A】⭐ 转调 `GridToIso`（＝其 isoY 分量），不再自带算式。</summary>
+    public static float IsoDepth(GridCoord cell) => GridToIso(cell).y;
 
     // ========================================================================
     //  MonoBehaviour 生命周期

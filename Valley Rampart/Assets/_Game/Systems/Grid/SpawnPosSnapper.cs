@@ -77,7 +77,7 @@ public static class SpawnPosSnapper
                     if (!grid.IsInBounds(c)) continue;
                     // 与 IsSubWalkable 同语义（地形可走+非障碍）；扫描在宏格粒度（障碍即整格不可走，同 2_6 口径）
                     if (grid.IsWalkable(c) && !grid.IsObstacle(c))
-                        return new GridCoord(c.x * div + div / 2, c.y * div + div / 2);
+                        return grid.CellToSub(c, div / 2, div / 2);   // 【HH.294 片3-A】改走唯一换算入口
                 }
             }
         }

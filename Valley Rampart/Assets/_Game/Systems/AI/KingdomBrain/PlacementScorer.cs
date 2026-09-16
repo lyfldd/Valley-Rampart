@@ -66,21 +66,18 @@ public static class PlacementScorer
 
         // r2 修（HH.140 探针 P7 实锤）：特征距离坐标系统一——候选=sub 域（CellToSub），
         // 建筑/主城锚=cell 域（Building.coord）→跨域 Chebyshev 恒巨值→F1/F2/F3 恒 0=打分器退化首格。
-        // 锚点统一转 sub 域（CellToSub 线性映射 cell×div+sx）；密度统计反向转 cell 域（SubToCell）语义=格距。
+        // 锚点统一转 sub 域（【HH.294 片3-A】改走 `CellToSub` 唯一入口，不再就地 `×div` 展开）；密度统计反向转 cell 域（SubToCell）语义=格距。
         int div = grid.Config != null && grid.Config.subCellDivisor > 0 ? grid.Config.subCellDivisor : 4;
 
         // 特征锚点（确定性查询；威胁≈0/无关联建筑 → 对应特征置 0 退化通用）
         GridCoord? threatAnchor = ResolveThreatAnchor(sit);
         if (threatAnchor.HasValue)
-        {
-            var ta = threatAnchor.Value;
-            threatAnchor = new GridCoord(ta.x * div, ta.y * div, ta.layer);
-        }
+            threatAnchor = grid.CellToSub(threatAnchor.Value, 0, 0);
         List<GridCoord> links = linkId != null ? CollectKingdomBuildings(kingdomId, linkId) : null;
         if (links != null)
             for (int i = 0; i < links.Count; i++)
-                links[i] = new GridCoord(links[i].x * div, links[i].y * div, links[i].layer);
-        var castleSub = new GridCoord(anchor.x * div, anchor.y * div, anchor.layer);
+                links[i] = grid.CellToSub(links[i], 0, 0);
+        var castleSub = grid.CellToSub(anchor, 0, 0);
 
         // r4 修（HH.144 件2/D598 列报3 兑现）：F1 分母=max(主城-威胁锚实际 Chebyshev 距离, 带径 maxR×div)——
         // 病灶=分母仅带径（32 sub），威胁锚距主城>带径（实测 k1↔k2 45 格=常态地图形态）时带内 F1 恒 0

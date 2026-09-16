@@ -213,11 +213,8 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1,
                                def.footprint.y > 0 ? def.footprint.y : 1);
         var coord = new GridCoord(cell.x, cell.y);
-        var grid = GridSystem.Instance;
-        Vector3 world = grid != null && grid.Config != null
-            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
-                                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
-            : new Vector3(coord.x, coord.y, 0f);
+        // 【HH.294 片3-A】中心点换算统一走 GridSystem 唯一内核（原先此处「就地展开」同一公式）
+        Vector3 world = GridSystem.FootprintCenterWorld(coord, fp, new Vector3(coord.x, coord.y, 0f));
         if (BuildingFactory.Instance.CreateBuildingInstance(
                 def, def.sourceType, coord, fp, world,
                 isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
@@ -431,17 +428,12 @@ public class VagrantCampSystem : Singleton<VagrantCampSystem>, ISaveable
         return true;
     }
 
-    static Vector2 CellToWorld(Vector2Int cell)
-    {
-        var grid = GridSystem.Instance;
-        if (grid != null && grid.Config != null)
-        {
-            var v = grid.CoordToWorld(new GridCoord(cell.x, cell.y));
-            return new Vector2(v.x, v.y);
-        }
-        float cs = 2.26f;
-        return new Vector2(cell.x * cs, cell.y * cs);
-    }
+    /// <summary>地块中心世界坐标（＝1×1 footprint 的中心）。
+    /// 【HH.294 片3-A】⭐ **转调** `GridSystem.FootprintCenterWorld`（唯一换算内核）——本方法原先自带
+    /// `CoordToWorld + (fp−1)*0.5*cellSize` 一套并行算式，现已删除；仅保留旧档兜底常量 2.26。</summary>
+    static Vector3 CellToWorld(Vector2Int cell)
+        => GridSystem.FootprintCenterWorld(new GridCoord(cell.x, cell.y), new Vector2Int(1, 1),
+                                           new Vector3(cell.x * 2.26f, cell.y * 2.26f, 0f));
 
     // ===== 2_16 步骤9：营地聚落运行时数据（D301 结营 / D313 存续不清零 / D387 散营滞回带）=====
 

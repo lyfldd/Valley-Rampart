@@ -122,10 +122,15 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         // 填充网格 + 实例化自然建筑/主城（2_2）+ 发布事件（单图初始化）
         // 读档 v2 路径下跳过实例化（instantiateBuildings=false），避免与 B(SpawnFromSave) 双路径双份；网格映射仍保留。
         if (GridSystem.Instance != null)
+        {
             GridSystem.Instance.PopulateFromMap(playerMap);
-        // 【HH.294 补正 P1】守卫资源索引预建：装载期 1 次全图 features 扫（1 次/图），
-        // 换掉「每次玩家右键派兵全图扫」（SelectionController:270 + DeployGuard:120 各一次）。
-        GuardDeploymentSystem.RebuildResourceIndex(playerMap);
+            // 【HH.294 补正 P1】守卫资源索引预建：装载期 1 次全图 features 扫（1 次/图），
+            // 换掉「每次玩家右键派兵全图扫」（SelectionController:270 + DeployGuard:120 各一次）。
+            // 【HH.294 片3 R1】⭐ 必须**在 `GridSystem.Instance != null` 判定块内**：原在块外调用 ⇒
+            //   `grid == null` 时 `RebuildResourceIndex` 内 `CoordToWorld` 取不到 config ⇒ 索引世界坐标
+            //   全为 `Vector2.zero` 且 `_idxBuilt = true` ⇒ 懒重建兜底失效 ⇒ 恒返格号最小的资源点（静默错答）。
+            GuardDeploymentSystem.RebuildResourceIndex(playerMap);
+        }
         if (instantiateBuildings && BuildingFactory.Instance != null)
             BuildingFactory.Instance.InstantiateFromMap(playerMap);
         // MapGeneratedEvent 必须照常发（MapRenderService.RenderMap 渲染依赖，不发=读档白屏回归）

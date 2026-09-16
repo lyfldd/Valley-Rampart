@@ -200,9 +200,8 @@ public static class TestFixtureApi
         var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1, def.footprint.y > 0 ? def.footprint.y : 1);
         var coord = new GridCoord(cell.x, cell.y);
         var grid = GridSystem.Instance;
-        Vector3 world = grid != null && grid.Config != null
-            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x, (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
-            : new Vector3(coord.x, coord.y, 0f);
+        // 【HH.294 片3-A】中心点换算走 GridSystem 唯一内核（原先此处「就地展开」）
+        Vector3 world = GridSystem.FootprintCenterWorld(coord, fp, new Vector3(coord.x, coord.y, 0f));
         return BuildingFactory.Instance != null && BuildingFactory.Instance.CreateBuildingInstance(
             def, def.sourceType, coord, fp, world,
             isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,

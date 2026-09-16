@@ -92,7 +92,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
                 var coord = new GridCoord(nb.cellX, nb.cellY);
                 var fp = new Vector2Int(nb.w > 0 ? nb.w : 1, nb.h > 0 ? nb.h : 1);
-                var worldPos = FootprintCenterWorld(coord, fp);
+                var worldPos = GridSystem.FootprintCenterWorld(coord, fp, Vector3.zero);
                 if (CreateBuildingInstance(def, type.Value, coord, fp, worldPos,
                         isPlayerBuilt: false, grade: ResourceGrade.Normal,
                         isConsumable: def.isConsumable, initialState: BuildingState.Active,
@@ -112,7 +112,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
                 castleDef.footprint.x > 0 ? castleDef.footprint.x : 1,
                 castleDef.footprint.y > 0 ? castleDef.footprint.y : 1);
             if (CreateBuildingInstance(castleDef, BuildingType.CastleCore, coord, fp,
-                    FootprintCenterWorld(coord, fp),
+                    GridSystem.FootprintCenterWorld(coord, fp, Vector3.zero),
                     isPlayerBuilt: false, grade: ResourceGrade.Normal,
                     isConsumable: false, initialState: BuildingState.Abandoned))
                 count++;
@@ -141,20 +141,10 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         }
         var fp = new Vector2Int(1, 1);   // 一次性资源均是 1×1
         return CreateBuildingInstance(def, type.Value, coord, fp,
-            FootprintCenterWorld(coord, fp),
+            GridSystem.FootprintCenterWorld(coord, fp, Vector3.zero),
             isPlayerBuilt: false, grade: ResourceGrade.Normal,
             isConsumable: true, initialState: BuildingState.Active,
             kingdomId: -1);   // 2_16 步骤7 哨兵三分：重生自然建筑仍=-1，排除集不纳
-    }
-
-    /// <summary>footprint 中心世界坐标（origin 左上格 + w/h 中心偏移）。</summary>
-    static Vector3 FootprintCenterWorld(GridCoord coord, Vector2Int fp)
-    {
-        var grid = GridSystem.Instance;
-        if (grid == null || grid.Config == null) return Vector3.zero;
-        Vector2 origin = grid.CoordToWorld(coord);
-        return origin + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
-                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y);
     }
 
     /// <summary>按占用/注册/挂件/发事件创建 Building 实例。供地图与玩家放置共用逻辑（BuildController 保留自身放置路径）。</summary>
@@ -349,15 +339,18 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         int fw = data.footprintW > 0 ? data.footprintW : (def.footprint.x > 0 ? def.footprint.x : 1);
         int fh = data.footprintH > 0 ? data.footprintH : (def.footprint.y > 0 ? def.footprint.y : 1);
         var fp = new Vector2Int(Mathf.Max(1, fw), Mathf.Max(1, fh));
-        Vector3 worldPos = GridSystem.Instance != null
-            ? (Vector3)GridSystem.Instance.CoordToWorld(coord)
-            : new Vector3(coord.x * 2.26f, coord.y * 1.13f, 0);
-        if (fp.x > 1 || fp.y > 1)
+        // 【HH.294 片3-A】中心点换算统一走 `GridSystem` 唯一内核（原先此处「就地展开」同一公式）；
+        //   无网格兜底沿用改前常量 2.26/1.13（旧档重放路径，不属内核适用域）。
+        var gs = GridSystem.Instance;
+        Vector3 worldPos;
+        if (gs != null && gs.Config != null)
         {
-            float csX = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.x : 2.26f;
-            float csY = GridSystem.Instance != null && GridSystem.Instance.Config != null ? GridSystem.Instance.Config.cellSize.y : 1.13f;
-            worldPos.x += (fp.x - 1) * 0.5f * csX;
-            worldPos.y += (fp.y - 1) * 0.5f * csY;
+            worldPos = GridSystem.FootprintCenterWorld(coord, fp, gs.Config.cellSize);
+        }
+        else
+        {
+            worldPos = new Vector3(coord.x * 2.26f + (fp.x - 1) * 0.5f * 2.26f,
+                                   coord.y * 1.13f + (fp.y - 1) * 0.5f * 1.13f, 0);
         }
 
         BuildingState state = (BuildingState)data.state;

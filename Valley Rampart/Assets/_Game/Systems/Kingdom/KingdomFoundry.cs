@@ -175,7 +175,7 @@ public static class KingdomFoundry
 
             if (BuildingFactory.Instance != null &&
                 BuildingFactory.Instance.CreateBuildingInstance(
-                    def, def.sourceType, coord, fp, FootprintCenterWorld(cell, fp),
+                    def, def.sourceType, coord, fp, GridSystem.FootprintCenterWorld(coord, fp, new Vector3(cell.x, cell.y, 0f)),
                     isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
                     initialState: BuildingState.Active, kingdomId: kingdomId))
                 placed++;
@@ -270,18 +270,9 @@ public static class KingdomFoundry
         if (BuildingFactory.Instance == null) return;
         var coord = new GridCoord(x, y);
         BuildingFactory.Instance.CreateBuildingInstance(
-            def, def.sourceType, coord, fp, FootprintCenterWorld(new Vector2Int(x, y), fp),
+            def, def.sourceType, coord, fp, GridSystem.FootprintCenterWorld(coord, fp, new Vector3(x, y, 0f)),
             isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
             initialState: BuildingState.Active, kingdomId: kingdomId);
-    }
-
-    private static Vector3 FootprintCenterWorld(Vector2Int cell, Vector2Int fp)
-    {
-        var grid = GridSystem.Instance;
-        if (grid == null || grid.Config == null) return new Vector3(cell.x, cell.y, 0f);
-        return grid.CoordToWorld(new GridCoord(cell.x, cell.y)) +
-               new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
-                           (fp.y - 1) * 0.5f * grid.Config.cellSize.y);
     }
 
     // ===== 命名与性格扰动 =====
@@ -474,11 +465,8 @@ public static class KingdomFoundry
         var fp = new Vector2Int(def.footprint.x > 0 ? def.footprint.x : 1,
                                def.footprint.y > 0 ? def.footprint.y : 1);
         var coord = camp.centerCell;
-        var grid = GridSystem.Instance;
-        Vector3 world = grid != null && grid.Config != null
-            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
-                                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
-            : new Vector3(coord.x, coord.y, 0f);
+        // 【HH.294 片3-A】中心点换算统一走 GridSystem 唯一内核（原先此处「就地展开」同一公式）
+        Vector3 world = GridSystem.FootprintCenterWorld(coord, fp, new Vector3(coord.x, coord.y, 0f));
         BuildingFactory.Instance.CreateBuildingInstance(
             def, def.sourceType, coord, fp, world,
             isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
@@ -503,11 +491,8 @@ public static class KingdomFoundry
         var cell = MapGenRules.NearestWalkable(map, camp.centerCell.x + 1, camp.centerCell.y);
         if (cell.x < 0) { Debug.LogWarning($"[KingdomFoundry] 动态立国补井取点失败（castle 旁无可走格），跳过（id={kingdomId}）。"); return; }
         var coord = new GridCoord(cell.x, cell.y);
-        var grid = GridSystem.Instance;
-        Vector3 world = grid != null && grid.Config != null
-            ? grid.CoordToWorld(coord) + new Vector2((fp.x - 1) * 0.5f * grid.Config.cellSize.x,
-                                                     (fp.y - 1) * 0.5f * grid.Config.cellSize.y)
-            : new Vector3(coord.x, coord.y, 0f);
+        // 【HH.294 片3-A】中心点换算统一走 GridSystem 唯一内核（原先此处「就地展开」同一公式）
+        Vector3 world = GridSystem.FootprintCenterWorld(coord, fp, new Vector3(coord.x, coord.y, 0f));
         if (BuildingFactory.Instance.CreateBuildingInstance(
                 def, def.sourceType, coord, fp, world,
                 isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,

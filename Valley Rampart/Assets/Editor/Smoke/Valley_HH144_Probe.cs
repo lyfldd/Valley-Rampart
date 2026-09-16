@@ -219,8 +219,8 @@ public static class Valley_HH144_Probe
         {
             var gs = GridSystem.Instance;
             int div = gs != null && gs.Config != null && gs.Config.subCellDivisor > 0 ? gs.Config.subCellDivisor : 4;
-            var taSub = new GridCoord(threatCastle.Value.x * div, threatCastle.Value.y * div, threatCastle.Value.layer);
-            var ownSub = new GridCoord(ownCastle.Value.x * div, ownCastle.Value.y * div, ownCastle.Value.layer);
+            var taSub = gs.CellToSub(threatCastle.Value, 0, 0);   // 【HH.294 片3-A】改走唯一换算入口
+            var ownSub = gs.CellToSub(ownCastle.Value, 0, 0);
             int maxR = 8;
             int bandDenom = maxR * div;
             int denom = Mathf.Max(Chebyshev(ownSub, taSub), bandDenom);   // 与产品 TryPick 同式

@@ -13,11 +13,18 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     // ===== 分层存储布局（doc 1 §5.3）=====
     // 【HH.294 片2-A/B】`_terrain`(TerrainType) 与 `_plainSub`(PlainSubState) 两派生数组**已删**
     //   （`02_空间与粒度` §六：整层删）——地块属性一律**直读地表物** features（`_features` 引用，非拷贝）。
-    private int _w, _h;
-    private FeatureType[]  _features;      // W×H（= MapData.features 同引用；唯一功能源，只读）
-    private WalkFlags[]     _walkFlags;    // W×H（派生缓存：地表物 + 占格 + 桥）
-    private IGridOccupant[]  _occupants;   // W×H（footprint 每格同引用，2_14 A⁻ 泛化非 Building）
-    private GridCell[]      _cells;        // W×H，懒分配 null 起步
+    // 【HH.294 片3-B】⭐ 三个派生数组**已下移到小格子**（`02_空间与粒度` §2.4「逻辑最小单位＝小格子」）：
+    //   改前：`W×H`（**地块级**；384² 大图＝147,456 格）；改后：`SW×SH`（**小格子级**；384² 大图＝1536²＝2,359,296 格，面积 ×16）。
+    //   地块级读写口**签名不变**（消费端零改动），代表位＝「该地块的**首子格**」（sx=x*div, sy=y*div）；
+    //   写入类口（MarkOccupied/Free/SetBridge/MarkOccupiedFootprint/FreeFootprint）按**地块块**整块写（div² 子格 ⇒ 建筑尺寸「内部 ×16」）。
+    //   当前全库写入方皆**地块对齐**（地表物按地块派生／footprint 按地块／桥按地块）⇒ 同一地块的 div² 个子格**恒同值**
+    //   ⇒ 地块级口与改前**逐格等价**（探针全图 2,359,296 子格扫描 `0` 不一致为证）。
+    private int _w, _h;                    // 地块级（W×H）
+    private int _sw, _sh;                  // 小格子级（SW×SH = _w×div, _h×div）
+    private FeatureType[]  _features;      // 地块级 W×H（= MapData.features 同引用；唯一功能源，只读）
+    private WalkFlags[]     _walkFlags;    // ⭐ 小格子级 SW×SH（派生缓存：地表物 + 占格 + 桥）
+    private IGridOccupant[]  _occupants;   // ⭐ 小格子级 SW×SH（footprint 每子格同引用，2_14 A⁻ 泛化非 Building）
+    private GridCell[]      _cells;        // ⭐ 小格子级 SW×SH，懒分配 null 起步（**按地块首子格**分配 ⇒ 壳对象数与改前一致）
     private readonly Dictionary<UnitController, GridCoord> _unitSubCells = new Dictionary<UnitController, GridCoord>();
 
     public GridConfig Config => config;
@@ -25,12 +32,15 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     public int MapWidth  => _w;
     public int MapHeight => _h;
 
-    /// <summary>过渡：旧消费方（LOD 等）读总格数，2_4 重写后移除。</summary>
+    /// <summary>过渡：旧消费方（LOD 等）读总格数，2_4 重写后移除。（**地块级**总格数 W×H）</summary>
     public int MapCellCount => _w * _h;
 
     // ===== IPathGrid（微格坐标）=====
-    public int Width  => _w * Config.subCellDivisor;
-    public int Height => _h * Config.subCellDivisor;
+    public int Width  => _w * SubDiv;
+    public int Height => _h * SubDiv;
+
+    /// <summary>1 地块边长的小格子数（＝子格/地块换算的**唯一除数**；缺配置兜底 4）。</summary>
+    public int SubDiv => config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
 
     protected override void Awake()
     {
@@ -39,15 +49,22 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             config = Resources.Load<GridConfig>("Grid/GridConfig");
     }
 
-    private int ToIndex(int x, int y) => y * _w + x;
+    // ===== 索引与界（片3-B：地块级 / 小格子级**两套**，别混用）=====
+    private int ToIndex(int x, int y) => y * _w + x;                       // 地块级索引（features 用）
+    private int ToSubIndex(int sx, int sy) => sy * _sw + sx;               // 小格子级索引（三派生数组用）
+    /// <summary>地块 (x,y) 的**首子格**线性索引＝地块级读写口的代表位。</summary>
+    private int CellBaseIndex(int x, int y) => (y * SubDiv) * _sw + x * SubDiv;
     private bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < _w && y < _h;
+    private bool InSubBounds(int sx, int sy) => sx >= 0 && sy >= 0 && sx < _sw && sy < _sh;
     public bool IsInBounds(GridCoord c) => InBounds(c.x, c.y);
 
     // ===== 生命周期 =====
     public void Initialize(int w, int h)
     {
         _w = w; _h = h;
-        int n = w * h;
+        int div = SubDiv;
+        _sw = w * div; _sh = h * div;
+        int n = _sw * _sh;                    // ⭐ 小格子级（片3-B；384² 大图 ⇒ 2,359,296）
         _walkFlags = new WalkFlags[n];
         _occupants = new IGridOccupant[n];   // 2_14 A⁻：分配类型与声明 IGridOccupant[] 对齐（修 Portal 占格崩）
         _cells     = new GridCell[n];
@@ -61,20 +78,35 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         _features = map.features;
         if (map.features != null && map.features.Length == _w * _h)
         {
-            for (int i = 0; i < _walkFlags.Length; i++)
-                _walkFlags[i] = FeatureToWalkFlags(map.features[i]);
+            // 片3-B：地块级 features → 小格子级 walkFlags（每地块 div² 子格同写）
+            int div = SubDiv;
+            for (int y = 0; y < _h; y++)
+                for (int x = 0; x < _w; x++)
+                {
+                    WalkFlags wf = FeatureToWalkFlags(map.features[y * _w + x]);
+                    int baseIdx = (y * div) * _sw + x * div;
+                    for (int sy = 0; sy < div; sy++)
+                        for (int sx = 0; sx < div; sx++)
+                            _walkFlags[baseIdx + sy * _sw + sx] = wf;
+                }
         }
     }
 
     // ===== 2_1 §5.1 FeatureType→网格层派生映射（features 唯一功能源）=====
 
-    /// <summary>A+ 资源节点数据覆盖：按 feature 重刷单格 walkFlags（保留 occupant）。</summary>
+    /// <summary>A+ 资源节点数据覆盖：按 feature 重刷单格 walkFlags（保留 occupant）。片3-B：整块 div² 子格同写。</summary>
     public void RefreshCellFromFeature(GridCoord coord, FeatureType f)
     {
-        if (coord.x < 0 || coord.y < 0 || coord.x >= _w || coord.y >= _h) return;
-        int i = coord.y * _w + coord.x;
-        if (_walkFlags == null || i >= _walkFlags.Length) return;
-        _walkFlags[i] = FeatureToWalkFlags(f);
+        if (!InBounds(coord.x, coord.y) || _walkFlags == null) return;
+        int div = SubDiv;
+        WalkFlags wf = FeatureToWalkFlags(f);
+        int baseIdx = CellBaseIndex(coord.x, coord.y);
+        for (int sy = 0; sy < div; sy++)
+            for (int sx = 0; sx < div; sx++)
+            {
+                int i = baseIdx + sy * _sw + sx;
+                if (i >= 0 && i < _walkFlags.Length) _walkFlags[i] = wf;
+            }
     }
 
     private static WalkFlags FeatureToWalkFlags(FeatureType f)
@@ -96,6 +128,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     public void ClearAll()
     {
         _w = _h = 0;
+        _sw = _sh = 0;
         _features = null;
         _walkFlags = null;
         _occupants = null;
@@ -103,75 +136,132 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         _unitSubCells.Clear();
     }
 
-    // ===== 坐标换算（HH.3 裁决 2026-08-22 统一 iso：世界坐标=等轴嵌入，与 MapRenderService.GridToIso/IsoToCell 同一映射，doc 1 §1.6）=====
+    /// <summary>渲染/无实例场景用的格尺寸（config 缺失时回退渲染层默认，与改前一致）。</summary>
+    private Vector2 CellSizeOr() => config != null ? config.cellSize : MapRenderService.DefaultCellSize;
+
+    /// <summary>一格小格子的世界尺寸（＝cellSize ÷ div）。</summary>
+    private Vector2 SubCellSizeOr() => CellSizeOr() / SubDiv;
+
+    // ============================================================================
+    //  【HH.294 片3-A】⭐ 坐标换算 —— **全库唯一入口**（`02` §一：换算「×16/÷4 全库只允许一处」）
+    //
+    //  ⚠️ 调用前先认清**域**：同一格号在不同域指的不是同一个东西，混域＝静默错答（HH.140 P7 实锤）。
+    //     域 ①**世界坐标**（Vector2，等轴嵌入）：渲染 / 物理 / 单位 transform
+    //     域 ②**地块格号**（GridCoord 整数，0..W-1）：地皮瓦片 / `features` / footprint / 建筑 coord
+    //     域 ③**小格子格号**（GridCoord 整数，0..SW-1）：寻路 / 可走 / 占格 / 落位 / 采集寻址
+    //
+    //  ⭐ 何时用哪个（规则表 —— 新增调用点照此选，别自己推）：
+    //  ┌──────────────────────────────────────────────┬────────────────────────┬─────────┐
+    //  │ 你要什么                                      │ 用哪个                  │ 返回域   │
+    //  ├──────────────────────────────────────────────┼────────────────────────┼─────────┤
+    //  │ 世界 → 地块格号（越界 ⇒ null）                 │ `WorldToCoord`          │ 地块     │
+    //  │ 世界 → 小格子格号（越界 ⇒ null）                │ `WorldToSubCoord`       │ 小格子   │
+    //  │ 世界 → 格号（**不校验越界**，调用方自己 clamp）  │ `WorldToCell`（静态）   │ 地块     │
+    //  │ 地块格号 → 世界（格点＝等轴菱形下顶点）          │ `CoordToWorld`          │ 世界     │
+    //  │ 小格子格号 → 世界（格点）                       │ `SubCoordToWorld`       │ 世界     │
+    //  │ 小格子格号 → 地块格号                          │ `SubToCell`             │ 跨域     │
+    //  │ 地块格号 → 小格子格号（＋格内偏移 sx,sy）        │ `CellToSub`             │ 跨域     │
+    //  │ 地块格号 ＋ footprint(地块) → **世界中心点**     │ `FootprintCenterWorld`  │ 世界     │
+    //  │ 连续格号（小数）→ 世界                          │ `CellToWorldF`（静态）  │ 世界     │
+    //  │ 世界 → 连续格号（小数，不 floor）                │ `WorldToCellF`（静态）  │ 跨域     │
+    //  └──────────────────────────────────────────────┴────────────────────────┴─────────┘
+    //
+    //  ⛔ **禁**把算式抄进调用方「就地展开」（`(x−y)*halfW, (x+y)*halfH` ／ `(fp−1)*0.5*cellSize`）：
+    //     反面教材＝`FootprintCenterWorld` 曾在 4 处各写一套、`MapRenderService.GridToIso/IsoToCell`
+    //     曾与 `CoordToWorld/WorldToCoord` 两套并行 —— 片3-A 后二者**只做转调**，算式只此一处。
+    //  ✅ 静态内核（`CellToWorldF`/`CellToWorld`/`WorldToCellF`/`WorldToCell`）供**无 GridSystem 实例**的场景
+    //     （编辑器预览 / 渲染层纯投影）复用；有实例时一律走上表的实例口。
+    // ============================================================================
+
+    /// <summary>【换算内核·唯一】连续格号（可小数）→ 世界坐标。`cellSize`＝一格的世界尺寸。</summary>
+    public static Vector2 CellToWorldF(float gx, float gy, Vector2 cellSize)
+        => new Vector2((gx - gy) * cellSize.x * 0.5f, (gx + gy) * cellSize.y * 0.5f);
+
+    /// <summary>【换算内核·唯一】格号 → 世界坐标（格点＝等轴菱形下顶点）。</summary>
+    public static Vector2 CellToWorld(GridCoord g, Vector2 cellSize) => CellToWorldF(g.x, g.y, cellSize);
+
+    /// <summary>【换算内核·唯一】世界坐标 → 连续格号（可小数；**不 floor、不校验越界**）。</summary>
+    public static Vector2 WorldToCellF(Vector2 pos, Vector2 cellSize)
+    {
+        float halfW = cellSize.x * 0.5f, halfH = cellSize.y * 0.5f;
+        return new Vector2(pos.x / halfW * 0.5f + pos.y / halfH * 0.5f,
+                           pos.y / halfH * 0.5f - pos.x / halfW * 0.5f);
+    }
+
+    /// <summary>【换算内核·唯一】世界坐标 → 格号（floor；**不校验越界**，调用方 clamp）。</summary>
+    public static GridCoord WorldToCell(Vector2 pos, Vector2 cellSize)
+    {
+        Vector2 g = WorldToCellF(pos, cellSize);
+        return new GridCoord(Mathf.FloorToInt(g.x), Mathf.FloorToInt(g.y));
+    }
+
+    /// <summary>【换算内核·唯一】地块格号 ＋ footprint(地块) → **世界中心点**（origin 格点 ＋ (fp−1)/2 格偏移）。
+    /// ⚠️ 该式＝**视觉居中**约定，别处不得再抄（片3-A 前曾在 4 处各写一套）。</summary>
+    public static Vector3 FootprintCenterWorld(GridCoord origin, Vector2Int fp, Vector2 cellSize)
+        => CellToWorld(origin, cellSize) + new Vector2((fp.x - 1) * 0.5f * cellSize.x,
+                                                       (fp.y - 1) * 0.5f * cellSize.y);
+
+    /// <summary>【便捷】用**当前单例配置**算 footprint 世界中心点；无单例 / 无配置 ⇒ 返回 `fallback`
+    /// （各调用点兜底值不同，故由调用方传入）。调用方不必再各自判空。</summary>
+    public static Vector3 FootprintCenterWorld(GridCoord origin, Vector2Int fp, Vector3 fallback)
+        => Instance != null && Instance.Config != null
+           ? FootprintCenterWorld(origin, fp, Instance.Config.cellSize)
+           : fallback;
+
+    // ========================================================================
+    //  以下为实例口（＝上表；算式一律转调内核，本类内也无第二份）
+    // ========================================================================
+
+    /// <summary>世界 → 地块格号；越界返回 null（doc 1 D2）。</summary>
     public GridCoord? WorldToCoord(Vector2 pos)
     {
         if (config == null || _w <= 0 || _h <= 0) return null;
-        float cellW = config.cellSize.x, cellH = config.cellSize.y;
-        float halfW = cellW * 0.5f, halfH = cellH * 0.5f;
-        // 由 wx=(gx-gy)*halfW, wy=(gx+gy)*halfH 反解（同 IsoToCell，origin-free）
-        float gx = pos.x / halfW * 0.5f + pos.y / halfH * 0.5f;
-        float gy = pos.y / halfH * 0.5f - pos.x / halfW * 0.5f;
-        int x = Mathf.FloorToInt(gx);
-        int y = Mathf.FloorToInt(gy);
+        Vector2 g = WorldToCellF(pos, CellSizeOr());
+        int x = Mathf.FloorToInt(g.x), y = Mathf.FloorToInt(g.y);
         return InBounds(x, y) ? new GridCoord(x, y) : (GridCoord?)null;
     }
 
-    public Vector2 CoordToWorld(GridCoord coord)
-    {
-        float cellW = config != null ? config.cellSize.x : MapRenderService.DefaultCellSize.x;
-        float cellH = config != null ? config.cellSize.y : MapRenderService.DefaultCellSize.y;
-        return new Vector2((coord.x - coord.y) * cellW * 0.5f,
-                           (coord.x + coord.y) * cellH * 0.5f);
-    }
+    /// <summary>地块格号 → 世界坐标（格点）。</summary>
+    public Vector2 CoordToWorld(GridCoord coord) => CellToWorld(coord, CellSizeOr());
 
-    // ===== 微格 SubCell（HH.3 裁决 2026-08-22 统一 iso：与 CoordToWorld 同一条 iso 映射，doc 1 §1.6）=====
+    /// <summary>世界 → 小格子格号；越界返回 null。</summary>
     public GridCoord? WorldToSubCoord(Vector2 pos)
     {
         if (config == null || _w <= 0 || _h <= 0) return null;
-        int div = config.subCellDivisor > 0 ? config.subCellDivisor : 4;
-        float subW = config.cellSize.x / div, subH = config.cellSize.y / div;
-        float halfW = subW * 0.5f, halfH = subH * 0.5f;
-        float gx = pos.x / halfW * 0.5f + pos.y / halfH * 0.5f;
-        float gy = pos.y / halfH * 0.5f - pos.x / halfW * 0.5f;
-        int subWCount = _w * div, subHCount = _h * div;
-        int sx = Mathf.FloorToInt(gx);
-        int sy = Mathf.FloorToInt(gy);
-        return (sx >= 0 && sy >= 0 && sx < subWCount && sy < subHCount) ? new GridCoord(sx, sy) : (GridCoord?)null;
+        Vector2 g = WorldToCellF(pos, SubCellSizeOr());
+        int sx = Mathf.FloorToInt(g.x), sy = Mathf.FloorToInt(g.y);
+        return InSubBounds(sx, sy) ? new GridCoord(sx, sy) : (GridCoord?)null;
     }
 
-    public Vector2 SubCoordToWorld(GridCoord sub)
-    {
-        float cellW = config != null ? config.cellSize.x : MapRenderService.DefaultCellSize.x;
-        float cellH = config != null ? config.cellSize.y : MapRenderService.DefaultCellSize.y;
-        int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
-        float subW = cellW / div, subH = cellH / div;
-        return new Vector2((sub.x - sub.y) * subW * 0.5f,
-                           (sub.x + sub.y) * subH * 0.5f);
-    }
+    /// <summary>小格子格号 → 世界坐标（格点）。</summary>
+    public Vector2 SubCoordToWorld(GridCoord sub) => CellToWorldF(sub.x, sub.y, SubCellSizeOr());
 
+    /// <summary>小格子格号 → 地块格号（整数除法；子格域恒非负 ⇒ 与 floor 同）。</summary>
     public GridCoord SubToCell(GridCoord sub)
     {
-        int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
+        int div = SubDiv;
         return new GridCoord(sub.x / div, sub.y / div, sub.layer);
     }
 
+    /// <summary>地块格号 → 小格子格号（＋格内偏移 sx,sy；建筑落位 / 放置校验统一走此）。</summary>
     public GridCoord CellToSub(GridCoord cell, int sx, int sy)
     {
-        int div = config != null && config.subCellDivisor > 0 ? config.subCellDivisor : 4;
+        int div = SubDiv;
         return new GridCoord(cell.x * div + sx, cell.y * div + sy, cell.layer);
     }
 
+    /// <summary>小格子级可走（**精确到子格**；片3-A 前为「按地块近似」＝整格一体判定）。</summary>
     public bool IsSubWalkable(GridCoord sub)
     {
-        var cell = SubToCell(sub);
-        if (!IsWalkable(cell)) return false;
-        // 精确 footprint 覆盖推导归 2_6；此处分块粒度近似（建筑阻挡即整格不可走）
-        return !IsObstacle(cell);
+        if (_walkFlags == null || !InSubBounds(sub.x, sub.y)) return false;
+        if (!WalkableOf(_walkFlags[ToSubIndex(sub.x, sub.y)])) return false;
+        return !IsObstacleSub(sub);
     }
 
     // ===== 地块属性（地表物）/ 可行走层 =====
     // 【HH.294 片2-A】原 `GetTerrainAt`(TerrainType) 已随整层删除 —— 地块属性唯一读口＝**地表物**（features）。
+    // 【HH.294 片3-B】派生数组已降到**小格子**；下列**地块级读口**签名不变（消费端零改动），
+    //   代表位＝该地块**首子格**（`CellBaseIndex`）。当前写入方皆地块对齐 ⇒ 同地块 div² 子格恒同值 ⇒ 与改前等价。
     /// <summary>该格的地表物（FeatureType；越界/未装载返回 Plain）。唯一功能源＝MapData.features 同引用。</summary>
     public FeatureType GetFeatureAt(GridCoord c)
     {
@@ -179,59 +269,95 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         return _features[ToIndex(c.x, c.y)];
     }
 
+    /// <summary>可走判定（纯位测试；`TerrainWalkable` 且无 阻挡/锁/水 ，或 `Bridge`）。</summary>
+    private static bool WalkableOf(WalkFlags f)
+        => ((f & WalkFlags.TerrainWalkable) != 0
+            && (f & (WalkFlags.BuildingBlocked | WalkFlags.Locked | WalkFlags.Water)) == 0)
+           || (f & WalkFlags.Bridge) != 0;
+
+    /// <summary>【地块级便捷口】该地块的可走位（读＝首子格；见类头 片3-B 声明）。</summary>
     public WalkFlags GetWalkFlags(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _walkFlags == null) return WalkFlags.None;
-        return _walkFlags[ToIndex(c.x, c.y)];
+        return _walkFlags[CellBaseIndex(c.x, c.y)];
     }
 
-    public bool IsWalkable(GridCoord c)
+    /// <summary>⭐【小格子级·精确】该子格的可走位（片3-B 新增读口）。</summary>
+    public WalkFlags GetWalkFlagsSub(GridCoord sub)
     {
-        var f = GetWalkFlags(c);
-        return (f & WalkFlags.TerrainWalkable) != 0
-            && (f & (WalkFlags.BuildingBlocked | WalkFlags.Locked | WalkFlags.Water)) == 0
-            || (f & WalkFlags.Bridge) != 0;
+        if (!InSubBounds(sub.x, sub.y) || _walkFlags == null) return WalkFlags.None;
+        return _walkFlags[ToSubIndex(sub.x, sub.y)];
     }
+
+    /// <summary>【地块级便捷口】该地块是否可走（读＝首子格）。</summary>
+    public bool IsWalkable(GridCoord c) => WalkableOf(GetWalkFlags(c));
+
+    /// <summary>⭐【小格子级·精确】该子格是否可走。</summary>
+    public bool IsWalkableSub(GridCoord sub) => WalkableOf(GetWalkFlagsSub(sub));
 
     // ===== 建筑占用层 =====
     // 【HH.294 片2-C】原 `IsOccupied` 已删（与 `GetOccupant(c) != null` 完全等价、重复接口）—— 占用判据统一走 GetOccupant。
+    // 【HH.294 片3-B】占格数组已降到**小格子**；写入类口按**地块块**整块写（div² 子格）。
 
+    /// <summary>【地块级便捷口】该地块是否有阻挡占格物（读＝首子格）。</summary>
     public bool IsObstacle(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return false;
-        var o = _occupants[ToIndex(c.x, c.y)];
+        var o = _occupants[CellBaseIndex(c.x, c.y)];
         return o != null && o.IsGridObstacle;
     }
 
+    /// <summary>⭐【小格子级·精确】该子格是否有阻挡占格物。</summary>
+    public bool IsObstacleSub(GridCoord sub)
+    {
+        var o = GetOccupantSub(sub);
+        return o != null && o.IsGridObstacle;
+    }
+
+    /// <summary>【地块级便捷口】该地块的占格物（读＝首子格）。</summary>
     public IGridOccupant GetOccupant(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return null;
-        return _occupants[ToIndex(c.x, c.y)];
+        return _occupants[CellBaseIndex(c.x, c.y)];
     }
 
+    /// <summary>⭐【小格子级·精确】该子格的占格物（片3-B 新增读口）。</summary>
+    public IGridOccupant GetOccupantSub(GridCoord sub)
+    {
+        if (!InSubBounds(sub.x, sub.y) || _occupants == null) return null;
+        return _occupants[ToSubIndex(sub.x, sub.y)];
+    }
+
+    /// <summary>【地块级写口】登记/清空该地块占格（**整块 div² 子格同写**；壳对象按首子格分配）。</summary>
     public void MarkOccupied(GridCoord c, IGridOccupant occupant)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return;
-        int i = ToIndex(c.x, c.y);
-        _occupants[i] = occupant;
-        if (occupant != null)
-        {
-            if (occupant.IsGridObstacle) _walkFlags[i] |= WalkFlags.BuildingBlocked;
-            else _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
-            MarkCellOccupied(c);
-        }
-        else
-        {
-            _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
-        }
+        int div = SubDiv;
+        int baseIdx = CellBaseIndex(c.x, c.y);
+        for (int sy = 0; sy < div; sy++)
+            for (int sx = 0; sx < div; sx++)
+            {
+                int i = baseIdx + sy * _sw + sx;
+                _occupants[i] = occupant;
+                if (occupant != null && occupant.IsGridObstacle) _walkFlags[i] |= WalkFlags.BuildingBlocked;
+                else _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
+            }
+        if (occupant != null) MarkCellOccupied(c);
     }
 
+    /// <summary>【地块级写口】释放该地块占格（**整块 div² 子格同写**）。</summary>
     public void Free(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return;
-        int i = ToIndex(c.x, c.y);
-        _occupants[i] = null;
-        _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
+        int div = SubDiv;
+        int baseIdx = CellBaseIndex(c.x, c.y);
+        for (int sy = 0; sy < div; sy++)
+            for (int sx = 0; sx < div; sx++)
+            {
+                int i = baseIdx + sy * _sw + sx;
+                _occupants[i] = null;
+                _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
+            }
     }
 
     public void MarkOccupiedFootprint(GridCoord origin, int w, int h, IGridOccupant occupant)
@@ -248,17 +374,24 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
                 Free(new GridCoord(origin.x + dx, origin.y + dy, origin.layer));
     }
 
-    /// <summary>置/清桥面位（2_2 桥放置/拆除）。Bridge 置位后 IsWalkable 豁免 Water 阻挡（doc 1 §5.1）。</summary>
+    /// <summary>置/清桥面位（2_2 桥放置/拆除）。Bridge 置位后 IsWalkable 豁免 Water 阻挡（doc 1 §5.1）。
+    /// 片3-B：按**地块块**整块写（div² 子格）。</summary>
     public void SetBridge(GridCoord origin, int w, int h, bool on)
     {
+        int div = SubDiv;
         for (int dy = 0; dy < h; dy++)
             for (int dx = 0; dx < w; dx++)
             {
                 var c = new GridCoord(origin.x + dx, origin.y + dy, origin.layer);
                 if (!InBounds(c.x, c.y) || _walkFlags == null) continue;
-                int i = ToIndex(c.x, c.y);
-                if (on) _walkFlags[i] |= WalkFlags.Bridge;
-                else _walkFlags[i] &= ~WalkFlags.Bridge;
+                int baseIdx = CellBaseIndex(c.x, c.y);
+                for (int sy = 0; sy < div; sy++)
+                    for (int sx = 0; sx < div; sx++)
+                    {
+                        int i = baseIdx + sy * _sw + sx;
+                        if (on) _walkFlags[i] |= WalkFlags.Bridge;
+                        else _walkFlags[i] &= ~WalkFlags.Bridge;
+                    }
             }
     }
 
@@ -388,10 +521,12 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     }
 
     // ===== 内部辅助：GridCell 懒分配（承载单位列表，兼容旧消费方）=====
+    // 片3-B：`_cells` 数组本身已降到小格子（计入"三数组"内存），但**壳对象按地块首子格分配一件** ⇒
+    //   `GridCell` 实例数与改前一致（不因 ×16 而多分配小对象）；`GridCell.Coord` 仍为**地块坐标**。
     private void MarkCellOccupied(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _cells == null) return;
-        int i = ToIndex(c.x, c.y);
+        int i = CellBaseIndex(c.x, c.y);
         if (_cells[i] == null) _cells[i] = new GridCell { Coord = c };
     }
 

@@ -277,7 +277,7 @@ public static class Valley_HH140_Probe
         {
             var gsP = GridSystem.Instance;
             int divP = gsP != null && gsP.Config != null && gsP.Config.subCellDivisor > 0 ? gsP.Config.subCellDivisor : 4;
-            var taSub = new GridCoord(threatCastle.Value.x * divP, threatCastle.Value.y * divP, threatCastle.Value.layer);
+            var taSub = gsP.CellToSub(threatCastle.Value, 0, 0);   // 【HH.294 片3-A】改走唯一换算入口
             var miF1 = typeof(PlacementScorer).GetMethod("ComputeF1", BindingFlags.NonPublic | BindingFlags.Static);
             if (miF1 != null)
             {
