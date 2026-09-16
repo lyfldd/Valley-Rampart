@@ -310,8 +310,8 @@ public static Vector3 FootprintCenterWorld(GridCoord o, Vector2Int fp, Vector3 f
 
 | 项 | 读数 | 口径来源 |
 |---|---|---|
-| 编译 | **0 `error CS`** | `read_console(types=[error])` → `[]` |
-| 非 C# 控制台条目 | **1 条**：`240 node options failed to load and were skipped.` | 首次读（**重编前**）即在场（ShaderGraph 节点库装载消息）⇒ **非本片编译产物** |
+| 编译 | **0 `error CS`** | `read_console(types=[error])` 逐条判读：**无任何 `error CS`** |
+| ⚠️ `types=[error]` 内**非 C# 条目**（如实列出，共 3 条） | ① `240 node options failed to load and were skipped.`（**编译前**即在场·ShaderGraph 节点库装载消息）② `The referenced script on this Behaviour (Game Object 'ruler') is missing!`（**Play 期运行期消息**；`GameScene.unity` 属**并行会话未提交改动**，本片未碰）③ `No Theme Style Sheet set to PanelSettings , UI will not render properly`（**Play 期运行期消息**） | 编译后读 = 1 条；Play 后读 = 3 条 ⇒ ②③ 由 **Play 会话**产生，**非本片编译产物** |
 | warning | 本片**改动/新增文件 0 条**（实测 9 条全在未触碰文件：`ArtImportPipeline:267`／`Valley2_17_Smoke_5:91`／`Valley2_21A_Smoke:202`／`Valley2_17_Smoke_P0:225`／`Valley_HH128_Probe:75`／`Valley_HH80_Run:301`／`Valley_HH264_AnimProbe:182`／`Valley2_20_Smoke_Race:701,875`） | `read_console(types=[warning])`（重编后控制台自清 ⇒ 该 9 条＝最新一次编译全量） |
 | ⚠️ 施工中自查修正 | 初次编译暴露 **2 条本片新增 warning**（`Valley_HH294_Slice3Probe` 两处 `IGridOccupant == Building` 引用比较 `CS0252`）⇒ 已改 `ReferenceEquals` 并复编清零 | `read_console` 前后对照 |
 | 退 Play（`L-32`） | `Application.isPlaying=False`（探针收尾 `ExitTestRun ＋ QuitSmoke`） | `execute_code` 实读 ＋ 探针日志末行 |
