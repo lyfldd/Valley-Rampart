@@ -205,7 +205,7 @@ public static Vector3 FootprintCenterWorld(GridCoord o, Vector2Int fp, Vector3 f
 | 地图要素（384²·seed 21107·diff2） | 总格 **147,456**｜`Plain=109,090`｜`Tree=5,178`｜`Mine=3,760`｜`山=13,511`｜`水=4,052`｜`一次性=11,865`｜`climateZones=147,456` | ⭐ **与 `HH.297` §四 逐值相同**（零退化） |
 | 子格域 flood-fill（1536²=2,359,296 节点，源＝spawn0） | 可达 **2,076,081** 子格／单次 **143.54 ms**（两次复跑 154.10／143.54 ms） | — |
 | 走通：spawn0 → 其余 4 出生点 | `[1]=True [2]=True [3]=True [4]=True` | ✅ |
-| ⭐ 生产子格域 A*（`IPathGrid` → `IsSubWalkable`） | `status=Ready`／`waypoints=386`／`reachedExactGoal=True`／**78.5 ms** | ✅ 能走通 |
+| ⭐ 生产子格域 A*（`IPathGrid` → `IsSubWalkable`） | `status=Ready`／`waypoints=386`／`reachedExactGoal=True`／**69.5 ms**（两次复跑 78.5／69.5 ms） | ✅ 能走通 |
 | 编译 | **0 `error CS`**（`read_console(types=[error])`） | ✅ |
 
 ---
