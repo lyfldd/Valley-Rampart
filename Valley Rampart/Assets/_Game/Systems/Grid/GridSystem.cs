@@ -11,10 +11,11 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     [SerializeField] private GridConfig config;
 
     // ===== 分层存储布局（doc 1 §5.3）=====
+    // 【HH.294 片2-A/B】`_terrain`(TerrainType) 与 `_plainSub`(PlainSubState) 两派生数组**已删**
+    //   （`02_空间与粒度` §六：整层删）——地块属性一律**直读地表物** features（`_features` 引用，非拷贝）。
     private int _w, _h;
-    private TerrainType[]   _terrain;      // W×H
-    private PlainSubState[] _plainSub;     // W×H
-    private WalkFlags[]     _walkFlags;    // W×H
+    private FeatureType[]  _features;      // W×H（= MapData.features 同引用；唯一功能源，只读）
+    private WalkFlags[]     _walkFlags;    // W×H（派生缓存：地表物 + 占格 + 桥）
     private IGridOccupant[]  _occupants;   // W×H（footprint 每格同引用，2_14 A⁻ 泛化非 Building）
     private GridCell[]      _cells;        // W×H，懒分配 null 起步
     private readonly Dictionary<UnitController, GridCoord> _unitSubCells = new Dictionary<UnitController, GridCoord>();
@@ -47,8 +48,6 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     {
         _w = w; _h = h;
         int n = w * h;
-        _terrain   = new TerrainType[n];
-        _plainSub  = new PlainSubState[n];
         _walkFlags = new WalkFlags[n];
         _occupants = new IGridOccupant[n];   // 2_14 A⁻：分配类型与声明 IGridOccupant[] 对齐（修 Portal 占格崩）
         _cells     = new GridCell[n];
@@ -58,46 +57,24 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     public void PopulateFromMap(MapData map)
     {
         Initialize(map.width, map.height);
-        // 2_1 §1.3：features 为唯一功能源，terrain/plainSub/walkFlags 全部由此派生
+        // 2_1 §1.3：features 为唯一功能源 —— walkFlags 由此派生（terrain/plainSub 派生数组已删，HH.294 片2）
+        _features = map.features;
         if (map.features != null && map.features.Length == _w * _h)
         {
-            for (int i = 0; i < _terrain.Length; i++)
-            {
-                var f = map.features[i];
-                _terrain[i] = FeatureToTerrain(f);
-                _plainSub[i] = PlainSubState.Normal;
-                _walkFlags[i] = FeatureToWalkFlags(f);
-            }
+            for (int i = 0; i < _walkFlags.Length; i++)
+                _walkFlags[i] = FeatureToWalkFlags(map.features[i]);
         }
     }
 
     // ===== 2_1 §5.1 FeatureType→网格层派生映射（features 唯一功能源）=====
-    private static TerrainType FeatureToTerrain(FeatureType f)
-    {
-        switch (f)
-        {
-            case FeatureType.Plain: return TerrainType.Plain;
-            case FeatureType.Tree: return TerrainType.Forest;
-            case FeatureType.Mountain: return TerrainType.Mountain;
-            case FeatureType.SnowMountain: return TerrainType.Snow;
-            case FeatureType.Mine: return TerrainType.Quarry;
-            // 一次性资源坑位落在可走地皮上（对应地皮，视觉变体归 2_10）
-            case FeatureType.OreVein: case FeatureType.StonePile: case FeatureType.WoodPile: return TerrainType.Plain;
-            case FeatureType.River: return TerrainType.River;
-            case FeatureType.Ocean: return TerrainType.Ocean;
-            default: return TerrainType.Plain;
-        }
-    }
 
-    /// <summary>A+ 资源节点数据覆盖：按 feature 重刷单格 terrain/plainSub/walkFlags（保留 occupant）。</summary>
+    /// <summary>A+ 资源节点数据覆盖：按 feature 重刷单格 walkFlags（保留 occupant）。</summary>
     public void RefreshCellFromFeature(GridCoord coord, FeatureType f)
     {
         if (coord.x < 0 || coord.y < 0 || coord.x >= _w || coord.y >= _h) return;
         int i = coord.y * _w + coord.x;
-        if (i < 0 || i >= _terrain.Length) return;
-        _terrain[i] = FeatureToTerrain(f);
-        if (i < _plainSub.Length) _plainSub[i] = PlainSubState.Normal;
-        if (i < _walkFlags.Length) _walkFlags[i] = FeatureToWalkFlags(f);
+        if (_walkFlags == null || i >= _walkFlags.Length) return;
+        _walkFlags[i] = FeatureToWalkFlags(f);
     }
 
     private static WalkFlags FeatureToWalkFlags(FeatureType f)
@@ -116,20 +93,10 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         }
     }
 
-    private static bool TerrainIsWalkable(TerrainType t)
-    {
-        switch (t)
-        {
-            case TerrainType.Plain: case TerrainType.Forest: case TerrainType.Quarry: return true;
-            default: return false;
-        }
-    }
-
     public void ClearAll()
     {
         _w = _h = 0;
-        _terrain = null;
-        _plainSub = null;
+        _features = null;
         _walkFlags = null;
         _occupants = null;
         _cells = null;
@@ -203,32 +170,19 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         return !IsObstacle(cell);
     }
 
-    // ===== 地形 / 可行走层 =====
-    public TerrainType GetTerrainAt(GridCoord c)
+    // ===== 地块属性（地表物）/ 可行走层 =====
+    // 【HH.294 片2-A】原 `GetTerrainAt`(TerrainType) 已随整层删除 —— 地块属性唯一读口＝**地表物**（features）。
+    /// <summary>该格的地表物（FeatureType；越界/未装载返回 Plain）。唯一功能源＝MapData.features 同引用。</summary>
+    public FeatureType GetFeatureAt(GridCoord c)
     {
-        if (!InBounds(c.x, c.y) || _terrain == null) return TerrainType.Plain;
-        return _terrain[ToIndex(c.x, c.y)];
-    }
-
-    public PlainSubState GetPlainSubStateAt(GridCoord c)
-    {
-        if (!InBounds(c.x, c.y) || _plainSub == null) return PlainSubState.Normal;
-        return _plainSub[ToIndex(c.x, c.y)];
+        if (!InBounds(c.x, c.y) || _features == null) return FeatureType.Plain;
+        return _features[ToIndex(c.x, c.y)];
     }
 
     public WalkFlags GetWalkFlags(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _walkFlags == null) return WalkFlags.None;
         return _walkFlags[ToIndex(c.x, c.y)];
-    }
-
-    public void SetTerrain(GridCoord c, TerrainType t, PlainSubState sub = PlainSubState.Normal)
-    {
-        if (!InBounds(c.x, c.y) || _terrain == null) return;
-        int i = ToIndex(c.x, c.y);
-        _terrain[i] = t;
-        _plainSub[i] = sub;
-        _walkFlags[i] = TerrainIsWalkable(t) ? WalkFlags.TerrainWalkable : WalkFlags.None;
     }
 
     public bool IsWalkable(GridCoord c)
@@ -240,7 +194,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     }
 
     // ===== 建筑占用层 =====
-    public bool IsOccupied(GridCoord c) => InBounds(c.x, c.y) && _occupants != null && _occupants[ToIndex(c.x, c.y)] != null;
+    // 【HH.294 片2-C】原 `IsOccupied` 已删（与 `GetOccupant(c) != null` 完全等价、重复接口）—— 占用判据统一走 GetOccupant。
 
     public bool IsObstacle(GridCoord c)
     {
@@ -315,7 +269,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             {
                 var c = new GridCoord(origin.x + dx, origin.y + dy, origin.layer);
                 // 阻挡（地形/建筑/水域）或已被占用均不可摆放（doc 1 R6）
-                if (!IsWalkable(c) || IsOccupied(c)) return false;
+                if (!IsWalkable(c) || GetOccupant(c) != null) return false;
             }
         return true;
     }

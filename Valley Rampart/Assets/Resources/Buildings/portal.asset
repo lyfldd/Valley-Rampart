@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: portal
   displayName: "\u4F20\u9001\u95E8"
-  description: "\u5A01\u80C1\u81C2\u5EFA\u7B51\uFF08HH.155/D613\uFF0Cfootprint 2\u00D72\uFF09"
+  description: "\u5A01\u80C1\u81C2\u5EFA\u7B51\uFF08HH.155/D613\uFF0Cfootprint 2\xD72\uFF09"
   faction: 4
   role: 4
   cost:
@@ -22,8 +22,18 @@ MonoBehaviour:
     stone: 0
     wood: 0
     food: 0
+    metal: 0
+    stoneAmmo: 0
+    fireballAmmo: 0
+    magicAmmo: 0
   footprint: {x: 2, y: 2}
-  allowedTerrain: 0100000006000000
+  allowedTerrain: 
+  heightLayer: 0
+  canPlaceOnWater: 0
+  isBridge: 0
+  isGate: 0
+  rotatable: 0
+  moduleType: 0
   isObstacle: 1
   producer:
     kind: 0
@@ -35,14 +45,31 @@ MonoBehaviour:
     maxHp: 0
     range: 0
     damageType: 0
+    attackCooldown: 0
   levels: []
+  crewRequired: 0
+  crewRadiusCells: 0
+  outputResource: 0
+  isResourceNode: 0
+  isBlacksmith: 0
+  isSiegeWorkshop: 0
+  concurrentWorkers: 0
+  trainingSlots: 0
+  unlockLevel: 1
   interactableType: 0
   isPlayerBuilt: 0
   isDestructible: 0
+  maxHp: 100
   sourceType: 10
   isConsumable: 0
+  gatherSeconds: 2
   gradeScale:
   - 0.7
   - 1
   - 1.5
   prefab: {fileID: 0}
+  monsterTargetValue: 1
+  monsterIsHighValue: 0
+  raceId: -1
+  uniquePerKingdom: 0
+  isMineByproduct: 0

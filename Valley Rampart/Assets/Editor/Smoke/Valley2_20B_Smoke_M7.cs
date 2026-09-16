@@ -442,7 +442,7 @@ public static class Valley2_20B_Smoke_M7
             for (int y = 4; y < 24; y++)
             {
                 var c = new GridCoord(x, y);
-                if (!grid.IsObstacle(c) && !grid.IsOccupied(c)) return c;
+                if (!grid.IsObstacle(c) && grid.GetOccupant(c) == null) return c;
             }
         return new GridCoord(50, 50);
     }

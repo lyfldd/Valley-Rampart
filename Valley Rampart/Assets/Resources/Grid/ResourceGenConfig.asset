@@ -13,36 +13,21 @@ MonoBehaviour:
   m_Name: ResourceGenConfig
   m_EditorClassIdentifier: 
   baseCounts:
-  - terrain: 3
-    plainSubState: 0
+  - feature: 1
     producerMin: 1
     producerMax: 2
     pickupMin: 4
     pickupMax: 6
-  - terrain: 4
-    plainSubState: 0
+  - feature: 4
     producerMin: 1
     producerMax: 2
     pickupMin: 2
     pickupMax: 4
-  - terrain: 2
-    plainSubState: 0
-    producerMin: 0
-    producerMax: 0
-    pickupMin: 4
-    pickupMax: 6
-  - terrain: 0
-    plainSubState: 0
+  - feature: 0
     producerMin: 1
     producerMax: 1
     pickupMin: 1
     pickupMax: 3
-  - terrain: 0
-    plainSubState: 1
-    producerMin: 1
-    producerMax: 1
-    pickupMin: 2
-    pickupMax: 4
   densityByDifficulty:
   - 1
   - 0.8

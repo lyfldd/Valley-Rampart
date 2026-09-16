@@ -33,28 +33,26 @@ public class ResourceGenConfig : ScriptableObject
         return idx >= 0 && idx < densityByDifficulty.Length ? densityByDifficulty[idx] : 1.0f;
     }
 
-    /// <summary>按地形+子状态查持续性资源数量范围（3.2.1 第 6.6 节）。</summary>
-    public (int min, int max) GetProducerCount(TerrainType terrain, PlainSubState subState = PlainSubState.Normal)
+    /// <summary>按**地表物**查持续性资源数量范围（3.2.1 第 6.6 节）。
+    /// 【HH.294 片2-A】参数由 `TerrainType`＋`PlainSubState` 改读「地表物」`FeatureType`（`02_空间与粒度` §2.1）。</summary>
+    public (int min, int max) GetProducerCount(FeatureType feature)
     {
         if (baseCounts == null) return (0, 0);
         for (int i = 0; i < baseCounts.Length; i++)
         {
-            if (baseCounts[i].terrain != terrain) continue;
-            // 平原匹配子状态，其余地形忽略子状态
-            if (terrain == TerrainType.Plain && baseCounts[i].plainSubState != subState) continue;
+            if (baseCounts[i].feature != feature) continue;
             return (baseCounts[i].producerMin, baseCounts[i].producerMax);
         }
         return (0, 0);
     }
 
-    /// <summary>按地形+子状态查一次性资源数量范围（3.2.1 第 6.6 节）。</summary>
-    public (int min, int max) GetPickupCount(TerrainType terrain, PlainSubState subState = PlainSubState.Normal)
+    /// <summary>按**地表物**查一次性资源数量范围（3.2.1 第 6.6 节）。</summary>
+    public (int min, int max) GetPickupCount(FeatureType feature)
     {
         if (baseCounts == null) return (0, 0);
         for (int i = 0; i < baseCounts.Length; i++)
         {
-            if (baseCounts[i].terrain != terrain) continue;
-            if (terrain == TerrainType.Plain && baseCounts[i].plainSubState != subState) continue;
+            if (baseCounts[i].feature != feature) continue;
             return (baseCounts[i].pickupMin, baseCounts[i].pickupMax);
         }
         return (0, 0);
@@ -78,13 +76,12 @@ public class ResourceGenConfig : ScriptableObject
     }
 }
 
-/// <summary>资源点基础数量项（3.2.1 第 6.6 节，区分持续性/一次性）。</summary>
+/// <summary>资源点基础数量项（3.2.1 第 6.6 节，区分持续性/一次性）。
+/// 【HH.294 片2-A/B】键由 `terrain`(TerrainType)＋`plainSubState`(PlainSubState) 收敛为单一「地表物」`feature`。</summary>
 [Serializable]
 public struct ResourceCountEntry
 {
-    public TerrainType terrain;
-    [Tooltip("平原子状态（仅 Plain 有效，其余地形忽略）")]
-    public PlainSubState plainSubState;
+    public FeatureType feature;
     [Range(0, 10)] public int producerMin;  // 持续性资源 min（丘陵=0）
     [Range(0, 10)] public int producerMax;  // 持续性资源 max
     [Range(0, 10)] public int pickupMin;   // 一次性资源 min

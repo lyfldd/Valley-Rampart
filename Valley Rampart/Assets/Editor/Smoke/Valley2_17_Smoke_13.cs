@@ -46,13 +46,14 @@ public static class Valley2_17_Smoke_13
         if (reg.Count == 0) reg.EnsurePlayerRegistered();
         yield return null;
 
-        // 自含 fixture：裸 Play GridSystem 无地形 → 初始化全 Plain（绕开真实地形耦合）
-        var terrainF = typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (terrainF != null && terrainF.GetValue(grid) == null)
+        // 自含 fixture：裸 Play GridSystem 无派生层 → 初始化全 Plain（绕开真实地形耦合）
+        // 【HH.294 片2】`_terrain` 已删 ⇒ 未装载判定改看派生层 `_walkFlags`；置可走走 RefreshCellFromFeature(Plain)
+        var walkF = typeof(GridSystem).GetField("_walkFlags", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (walkF != null && walkF.GetValue(grid) == null)
         {
             grid.Initialize(128, 128);
             for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
-                grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+                grid.RefreshCellFromFeature(new GridCoord(x, y, 0), FeatureType.Plain);
         }
 
         // 他国 simMode 快照（防探针 focal 拨动污染真实王国；还原在 finally）

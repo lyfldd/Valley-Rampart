@@ -21,7 +21,9 @@ public class BuildingDef : ScriptableObject
     [Header("造价与占位")]
     public ResourcePack cost;          // 金/石/木/粮（走 RulerController.CanAfford/Spend）
     public Vector2Int footprint;       // 占用小区块尺寸 (w,h)，2D 全用
-    public TerrainType[] allowedTerrain;
+    [Tooltip("允许建造的**地表物**（FeatureType；空=不校验）。HH.294 片2-A：原 TerrainType 整层删 ⇒ 改读地表物。"
+             + "例：mine.asset=[Mine]（矿山锚点）——「矿洞只能建在矿山上」红线（D737）")]
+    public FeatureType[] allowedTerrain;
 
     [Header("2D 空间（2_2 建筑与占格）")]
     [Tooltip("纯视觉层数（美术规范 §1.2），不参与逻辑，只影响 sprite 尺寸（2_10 渲染用）")]

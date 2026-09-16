@@ -330,11 +330,12 @@ public static class Valley2_17_Smoke_12
         {
             // 2) 自含 fixture：裸 Play GridSystem 无地形 → 初始化全 Plain（绕开真实地形耦合），任意 midchunk 可走
             var grid = GridSystem.Instance;
-            if (grid != null && (typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
+            // 【HH.294 片2】`_terrain` 已删 ⇒ 未装载判定改看派生层 `_walkFlags`；置可走走 RefreshCellFromFeature(Plain)
+            if (grid != null && (typeof(GridSystem).GetField("_walkFlags", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
             {
                 grid.Initialize(128, 128);
                 for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
-                    grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+                    grid.RefreshCellFromFeature(new GridCoord(x, y, 0), FeatureType.Plain);
             }
             var baseMid = new Vector2Int(25, 25);   // 全 Plain 下必可走
             InjectTerritory(ts, baseMid, 99);
@@ -496,11 +497,12 @@ public static class Valley2_17_Smoke_12
         Camp probeCamp = null;
         try
         {
-            if (grid != null && (typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
+            // 【HH.294 片2】`_terrain` 已删 ⇒ 未装载判定改看派生层 `_walkFlags`；置可走走 RefreshCellFromFeature(Plain)
+            if (grid != null && (typeof(GridSystem).GetField("_walkFlags", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
             {
                 grid.Initialize(128, 128);
                 for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
-                    grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+                    grid.RefreshCellFromFeature(new GridCoord(x, y, 0), FeatureType.Plain);
             }
             var baseMid = new Vector2Int(30, 30);   // 界内（cell 120~123，128×128 网内）
             InjectTerritory(ts, baseMid, 99);
@@ -544,11 +546,12 @@ public static class Valley2_17_Smoke_12
         var grid = GridSystem.Instance;
         try
         {
-            if (grid != null && (typeof(GridSystem).GetField("_terrain", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
+            // 【HH.294 片2】`_terrain` 已删 ⇒ 未装载判定改看派生层 `_walkFlags`；置可走走 RefreshCellFromFeature(Plain)
+            if (grid != null && (typeof(GridSystem).GetField("_walkFlags", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(grid) == null))
             {
                 grid.Initialize(128, 128);
                 for (int x = 0; x < 128; x++) for (int y = 0; y < 128; y++)
-                    grid.SetTerrain(new GridCoord(x, y, 0), TerrainType.Plain);
+                    grid.RefreshCellFromFeature(new GridCoord(x, y, 0), FeatureType.Plain);
             }
             int capBase = Mathf.Max(1, KingdomBrain.LoadConfig().expandCapacityBase);
 

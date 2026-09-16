@@ -61,29 +61,10 @@ public enum UnitCategory
 }
 
 // ===== 地形类型 =====
-
-/// <summary>小地形类型（doc 1：语义从"每 Region"变"每格"）。</summary>
-public enum TerrainType
-{
-    Plain,      // 平原（子状态见 PlainSubState）
-    Wasteland,  // 荒地
-    Hills,      // 丘陵（万能缓冲 + 复合资源区）
-    Forest,     // 林地（木来源）
-    Quarry,     // 矿山（石来源）
-    Snow,       // 雪山
-    Coast,      // 海岸
-    Mountain,   // 山地（2_1 §5.1 映射：FeatureType.Mountain，阻挡）
-    River,      // 河流（2_1 §5.1 映射：FeatureType.River，水域阻挡）
-    Lake,       // 湖泊（2_1 §5.1 映射：FeatureType.Lake，水域阻挡）
-    Ocean       // 海洋（2_1 §5.1 映射：FeatureType.Ocean，边缘环绕阻挡）
-}
-
-/// <summary>平原子状态（仅 terrain==Plain 时有效）。</summary>
-public enum PlainSubState
-{
-    Normal,    // 普通平原（建造位为主）
-    Fertile    // 肥沃（农田位，粮来源）
-}
+// 【HH.294 片2-A／片2-B 已删】TerrainType(11 项) 与 PlainSubState(2 项) 整层删除（`02_空间与粒度` §2.1 / D750：
+//   「「地形」不是设计要的，是实现自造的抽象；材质是什么没有定义」⇒ 消费端改读「地表物」FeatureType）。
+//   原枚举值语义去向（迁移留痕）：Plain→FeatureType.Plain ／ Forest→Tree ／ Quarry→Mine ／ Snow→SnowMountain ／
+//   River→River ／ Ocean→Ocean；Wasteland/Hills/Coast/Lake **无对应地表物**（生成期从未产生，见 `FeatureToTerrain` 旧表）。
 
 // ===== 2_1 地图生成契约（features 唯一功能源，doc 1 §5.5 扩展）=====
 
@@ -99,7 +80,7 @@ public enum FeatureType
     Tree,              // 一次性木（可刷新，木无产能建筑 2_12）
     Mountain,          // 阻挡（HH.272 件④：山脉化生成）
     SnowMountain,      // 阻挡（同上）
-    Mine,              // 矿洞（石，需争夺；可走，Locked 由 2_2/2_7 置）
+    Mine,              // 矿山锚点（地形；其上可建 mine（矿洞·建筑）／quarry）——≠ mine.asset（建筑，2×2，allowedTerrain=[Quarry]）
     OreVein, StonePile, WoodPile,  // 一次性资源（可走）
     River, Ocean                   // 水（阻挡）
 }
@@ -220,10 +201,5 @@ public class GridCell
         get { var g = GridSystem.Instance; return g != null && g.IsObstacle(Coord); }
     }
 
-    /// <summary>[过渡已废弃] 此格地形。改用 GridSystem.GetTerrainAt。</summary>
-    [System.Obsolete("GridCell.terrain 已下沉 GridSystem._terrain，改用 GridSystem.GetTerrainAt")]
-    public TerrainType terrain
-    {
-        get { var g = GridSystem.Instance; return g != null ? g.GetTerrainAt(Coord) : TerrainType.Plain; }
-    }
+    // 【HH.294 片2-A】`GridCell.terrain`（TerrainType）已随整层删除；需读地块属性请用 `GridSystem.GetFeatureAt`（地表物）。
 }

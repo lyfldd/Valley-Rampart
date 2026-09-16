@@ -107,13 +107,14 @@ public static class PlacementValidator
                     if (!nodeOk) { result.reason = PlacementFailReason.Blocked; return result; }
                 }
 
-                // 地形合法（桥不校验地形，只校验 Water 位）
+                // 地块属性合法（桥不校验，只校验 Water 位）
+                // 【HH.294 片2-A】TerrainType 整层删 ⇒ 改读**地表物**（FeatureType，`grid.GetFeatureAt`）。
                 if (!def.canPlaceOnWater && def.allowedTerrain != null && def.allowedTerrain.Length > 0)
                 {
-                    var terrain = grid.GetTerrainAt(coord);
+                    var feature = grid.GetFeatureAt(coord);
                     bool ok = false;
                     for (int t = 0; t < def.allowedTerrain.Length; t++)
-                        if (def.allowedTerrain[t] == terrain) { ok = true; break; }
+                        if (def.allowedTerrain[t] == feature) { ok = true; break; }
                     if (!ok) { result.reason = PlacementFailReason.Terrain; return result; }
                 }
 

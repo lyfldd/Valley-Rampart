@@ -70,3 +70,6 @@ MonoBehaviour:
   prefab: {fileID: 0}
   monsterTargetValue: 100
   monsterIsHighValue: 1
+  raceId: -1
+  uniquePerKingdom: 0
+  isMineByproduct: 0
