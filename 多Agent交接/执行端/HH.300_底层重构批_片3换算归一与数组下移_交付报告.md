@@ -80,6 +80,8 @@ public static Vector3 FootprintCenterWorld(GridCoord o, Vector2Int fp, Vector3 f
 | `IsoToCell` | `MapRenderService.cs:98`（**一行转调**） | 1（转调口） |
 | `IsoDepth` | `MapRenderService.cs:102`（转调 `GridToIso`） | 1（转调口） |
 
+⭐ **口径勘正（提示词 ↔ 实盘命名）**：提示词 §第二步 点名 6 个函数为 `WorldToCoord`／`WorldToSubCoord`／**`SubToCoord`**／**`CoordToSub`**／`CoordToWorld`／`SubCoordToWorld`；其中 **`SubToCoord` 与 `CoordToSub` 全库零命中**（`git grep -n -E '\b(SubToCoord|CoordToSub)\b' -- '*.cs'` → **空**），实盘对应物为 **`SubToCell`／`CellToSub`**（同族、命名以「Cell」而非「Coord」）。⇒ 本表以**实盘名字**取证，共 **6 ＋ 1（`CellToSub`）** 个同族函数。（依 `L-39`：零命中只作线索，此处已回读代码坐实「是改名存在，非缺失」。）
+
 ⚠️ **排除项（`L-39`：零命中/命中只作线索）**：
 - `CellToWorld` 另有 1 个**同名别名**：`VagrantCampSystem.cs:434`（`static Vector3 CellToWorld(Vector2Int)`）——其**算式已删除**，现为**一行转调** `GridSystem.FootprintCenterWorld(..., fallback)`。⇒ 「`CellToWorld` 名字 2 处，**算式 1 处**」，如实列明。
 - grep 命中 `Valley2_17_Smoke_13.cs:158` 的 `CoordToWorld` 是**调用行**（`static Vector2 MidToWorld(...) => grid.CoordToWorld(...)`），**非定义**。
