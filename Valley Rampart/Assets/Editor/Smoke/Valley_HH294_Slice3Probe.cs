@@ -81,6 +81,8 @@ public static class Valley_HH294_Slice3Probe
         yield return Section_Occupancy(grid, div);
         yield return Section_Conversion(grid);
         yield return Section_GuardIndex(grid);
+        yield return Section_Determinism();
+        yield return Section_FrameWatch(grid);
 
         Note("");
         Line("==== 汇总：PASS=" + _pass + " FAIL=" + _fail + " ====", _fail == 0);
@@ -447,6 +449,65 @@ public static class Valley_HH294_Slice3Probe
              + " ms ／ min " + ms[0].ToString("0.000") + " ms（片1 基线：0.374 ms ／ 13,064 格）");
         Note("  ⇒ 本片前后**未变化**：索引为**地块级**（随 `MapData.features` 的 W×H）⇒ 不随三数组下移 ×16；"
              + "遍历格数＝索引条目数（与查询位置无关）");
+        yield return null;
+    }
+
+    // ================= 确定性（同 seed 两次 ⇒ 逐格一致） =================
+
+    static IEnumerator Section_Determinism()
+    {
+        Note("");
+        Note("【确定性：同 seed 两次生成地图 ⇒ 逐格一致（含 climateZones / spawns / nb）】");
+        var a = Valley_HH291_MapGenProbe.Build(Seed, 384, 384, 2);
+        yield return null;
+        var b = Valley_HH291_MapGenProbe.Build(Seed, 384, 384, 2);
+        bool same = Valley_HH291_MapGenProbe.SameMap(a, b, out var why);
+        Line("  384²·seed=" + Seed + " 两次生成：" + (same ? "逐格一致 ✅" : "不一致 ❌ " + why)
+             + "（比对域：features 逐格 ＋ climateZones 逐格 ＋ kingdomSpawns 逐个 ＋ naturalBuildings 逐项）", same);
+        yield return null;
+    }
+
+    // ================= 无每帧全图扫（存在性反证：空闲 N 帧内三数组零变更） =================
+
+    static IEnumerator Section_FrameWatch(GridSystem grid)
+    {
+        Note("");
+        Note("【无每帧全图扫 · 存在性反证（空闲 N 帧观察）】");
+        var wf = (WalkFlags[])Field(grid, "_walkFlags").GetValue(grid);
+        var oc = (IGridOccupant[])Field(grid, "_occupants").GetValue(grid);
+        var ce = (GridCell[])Field(grid, "_cells").GetValue(grid);
+        int frames = 120;
+        long wfChanged = 0, ocChanged = 0, ceChanged = 0;
+        var dt = new List<float>(frames);
+        var prevWf = (WalkFlags[])wf.Clone();
+        var prevOc = (IGridOccupant[])oc.Clone();
+        var prevCe = (GridCell[])ce.Clone();
+        for (int f = 0; f < frames; f++)
+        {
+            yield return null;
+            dt.Add(Time.unscaledDeltaTime * 1000f);
+            for (int i = 0; i < wf.Length; i++) if (wf[i] != prevWf[i]) { wfChanged++; break; }
+            for (int i = 0; i < oc.Length; i++) if (!ReferenceEquals(oc[i], prevOc[i])) { ocChanged++; break; }
+            for (int i = 0; i < ce.Length; i++) if (!ReferenceEquals(ce[i], prevCe[i])) { ceChanged++; break; }
+            Array.Copy(wf, prevWf, wf.Length);
+            Array.Copy(oc, prevOc, oc.Length);
+            Array.Copy(ce, prevCe, ce.Length);
+        }
+        dt.Sort();
+        Note("  观察 " + frames + " 帧（空闲·1x）：三数组**发生变更的帧数** = _walkFlags " + wfChanged
+             + " ／ _occupants " + ocChanged + " ／ _cells " + ceChanged + "（变更＝该帧内存在元素被改写）");
+        Note("  帧耗时（roundtrip 与本探针 3×2.36M 指纹扫描已含在内，仅供参考）：p50 "
+             + dt[frames / 2].ToString("0.0") + " ms ／ p95 " + dt[(int)(frames * 0.95)].ToString("0.0")
+             + " ms ／ max " + dt[frames - 1].ToString("0.0") + " ms");
+        Line("  ⭐ 存在性反证「无**每帧**写扫」：三数组变更帧数均 < 总帧数 "
+             + frames + "（实测 " + wfChanged + "／" + ocChanged + "／" + ceChanged + "）"
+             + " ⇒ 不存在「每帧都改写全数组」的路径",
+             wfChanged < frames && ocChanged < frames && ceChanged < frames);
+        Note("  ⚠️ 变更帧数 >0 时的成因＝运行期事件（资源重生/建筑放置等）**事件驱动**，非每帧；"
+             + "**「每帧只读扫」在运行期不可由本探针证否**（读不改变数组内容）");
+        Note("  ⚠️ 排除项（诚实声明）：「无每帧全图扫」的**主证据＝§三 代码审计逐点清单**"
+             + "（`GridSystem` 内数组访问点全部为建局/事件驱动，无 `Update` 内全数组循环）；"
+             + "本段为**辅助存在性反证**。（生产未插桩计数：插桩＝改动生产代码，超本片范围。）");
         yield return null;
     }
 
