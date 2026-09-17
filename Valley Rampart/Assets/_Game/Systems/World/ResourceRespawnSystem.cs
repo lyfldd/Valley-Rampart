@@ -72,6 +72,7 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
     readonly List<int> _candFreed = new List<int>();   // 空出过的空格（兜底原位）
     int _candFreshCursor, _candFreedCursor;
     System.Random _rng;    // 落点抽签（按 map.seed × 天 定种 ⇒ 同日可复现）
+    System.Random _gradeRng;   // 【HH.294 片 6-3·§6.9】重生 grade 重掷（**独立流**·由 map.seed 派生另盐 ⇒ 禁与 `_rng` 混用·防位移落点）
     bool _ready;
     int _lastSettleDay = -1;
     float[] _bandCap = new float[4];
@@ -205,6 +206,9 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
             }
 
         _rng = new System.Random(map.seed * 73856093 ^ 0x5bf03635);
+        // 【HH.294 片 6-3·`03` §6.9】grade 重掷流：**独立播种**（与落点 `_rng` 分开 ⇒ 不位移落点抽签；
+        //   另盐（+65537）与生成期流（seed*31+977）区分 ⇒ 两流互不干扰）。
+        _gradeRng = new System.Random(unchecked(map.seed * 31 + 65537));
         _ready = true;
         Debug.Log($"[ResourceRespawnSystem] 资源池建立（`03` §6.7）：{_cw}×{_ch} 区块，开局点数 **{totalPoints}**" +
                   $"（均值 {(_cw * _ch > 0 ? totalPoints / (float)(_cw * _ch) : 0f):0.0}/区块），难度 {_difficulty}，" +
@@ -380,7 +384,9 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
         bool fallback = _candFreshCursor == freshBefore;   // fresh 未推进 ⇒ 取自 freed 桶（兜底＝原位）
         int x2 = cell % map.width, y2 = cell / map.width;
         var coord = new GridCoord(x2, y2);
-        if (!MapGate.PlaceResourceNode(coord, feature)) return false;   // 增门（幂等：非空格 ⇒ false）
+        // 【HH.294 片 6-3·§6.9】重生落新点 ⇒ **重掷**等级（独立 grade 流；⛔ 不动落点抽签 `_rng`）
+        var grade = MapGenRules.RollGrade(MapCfg, _gradeRng);
+        if (!MapGate.PlaceResourceNode(coord, feature, grade)) return false;   // 增门（幂等：非空格 ⇒ false）
         _count[ci * KindCount + kind]++;
         if (fallback) FreedFallbackPlacements++;
         if (_freed[ci] != null) _freed[ci].Remove(cell);

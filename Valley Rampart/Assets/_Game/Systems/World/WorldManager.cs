@@ -172,10 +172,14 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             height = height,
             features = new FeatureType[width * height],
             climateZones = new ClimateZone[width * height],   // HH.272 件①：逐格存（原大区块口径废止）
+            grades = new ResourceGrade[width * height],       // 【HH.294 片 6-3·`03` §6.9】资源等级＝格表事实（W×H）
             kingdomSpawns = new List<Vector2Int>(),
             threatSpawns = new List<SpawnDef>(),
             naturalBuildings = new List<NaturalBuilding>()
         };
+        // 【HH.294 片 6-3·`03` §6.9】⚠️ `default(ResourceGrade)` ＝ `Barren`(0) ⇒ **禁依赖 default**：
+        //   建数组后立刻**显式填 `Normal`**（走门内写内核·全图 1 遍）；随后**管线末尾（步骤 11 之后）**的分配 pass 再按权重覆盖四型资源格。
+        for (int gi = 0; gi < map.grades.Length; gi++) MapGate.GenesisWriteGrade(map, gi, ResourceGrade.Normal);
 
         var rng = new System.Random(seed);   // 确定性单源（R4，禁 UnityEngine.Random）
 
@@ -200,6 +204,11 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         MapValidator.ValidateConnectivity(map);                                  // 水域后复跑连通（审计）
         MapGenRules.PlaceThreatSpawns(rng, map, _mapGenRulesConfig, difficulty); // 步骤10
         MapGenRules.DeriveNaturalBuildings(map);                                 // 步骤11
+        // 【HH.294 片 6-3·`F-14`·`03` §6.9（`D781` 勘正①）】**资源等级分配**（生成期后处理 pass）：
+        //   落点＝**全部特征写入完成之后 ＝ 管线末尾（步骤 11 之后）** —— 紧贴 6.6 会让 grades 在
+        //   「已非资源格」（连通修复 MapValidator:101／水域 Ocean·River／孤立矿清理 均写 features）上留残值 ⇒ 违反「非资源格恒 Normal」。
+        //   ⭐ 独立 rng 流（由 seed 派生）：⛔ 禁共用主流程 `rng` —— 共用会位移后续全部随机结果 ⇒ 整张地图变样（既有校准全废）。
+        MapGenRules.AssignResourceGrades(map, _mapGenRulesConfig, new System.Random(unchecked(seed * 31 + 977)));
 
         // 2_16 步骤5：第一代立国——消费 spawns[1..N]+kingdomTemplates（步骤3 已抽模板/放置），
         // 注册 AI 王国 + 错峰档预置建筑/人口台账/起始国库，发布立国事件。同 rng 链保确定性。

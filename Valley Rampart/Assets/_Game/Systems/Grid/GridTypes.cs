@@ -146,12 +146,13 @@ public enum BuildingType
     VagrantCamp  // 流浪汉营地（3.5.1 §4.1：开局 2-3 个，近王国区块必有 1 个，禁落核心区块）
 }
 
-/// <summary>资源点等级（影响产出/获得量）。</summary>
+/// <summary>资源点等级（影响产出/获得量）。⚠️ 数值口径**认字段**：`BuildingDef.gradeScale = {0.7, 1.0, 1.5}`
+/// （按本枚举序·`HH.294` 片 6-3 勘正：旧注释「×0.5／×2.0」系过时描述）。</summary>
 public enum ResourceGrade
 {
-    Barren,   // 贫瘠（×0.5）
+    Barren,   // 贫瘠（×0.7）
     Normal,   // 普通（×1.0）
-    Rich      // 富有（×2.0，高风险区倾向）
+    Rich      // 富有（×1.5）
 }
 
 // 注：BuildingPlaceholder 已删除（doc 1 §2.2：2D 化归 2_1 重新定义 NaturalBuilding）

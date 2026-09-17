@@ -1512,4 +1512,46 @@ public static class MapGenRules
     {
         map.naturalBuildings.Clear();   // 【HH.294 片 6-2 收尾】目标态：不再派生实体（资源点＝格表）
     }
+
+    // ===== 步骤 12：资源等级分配（`03` §6.9 · `HH.294` 片 6-3 · 兑现 `F-14`）=====
+
+    /// <summary>⭐ A/B 对照开关（`HH.294` 片 6-3）：`false` ⇒ <see cref="AssignResourceGrades"/> 全图落 `Normal`
+    /// （等价「grade 事实未赋值」态 ⇒ 改前读数**同一 build 内可实测**）。默认 `true`。</summary>
+    public static bool AssignGradesEnabled = true;
+
+    /// <summary>按 <see cref="MapGenRulesConfig.gradeWeights"/>（**枚举序** `{Barren, Normal, Rich}`）掷一个等级。
+    /// 权重和归一（配置可调）；缺配置／权重非法 ⇒ `Normal`（不抛）。
+    /// ⚠️ 调用方自备 **rng 流**（生成期＝`seed` 派生的**独立**流；运行期＝`ResourceRespawnSystem` 自己的 grade 流）——
+    /// ⛔ 禁共用主流程 `rng`（共用会位移后续全部随机结果 ⇒ 整张地图变样、既有校准全废）。</summary>
+    public static ResourceGrade RollGrade(MapGenRulesConfig cfg, System.Random rng)
+    {
+        var w = cfg != null ? cfg.gradeWeights : null;
+        if (w == null || w.Length < 3 || rng == null) return ResourceGrade.Normal;
+        float sum = 0f;
+        for (int i = 0; i < 3; i++) if (w[i] > 0f) sum += w[i];
+        if (sum <= 0f) return ResourceGrade.Normal;
+        double r = rng.NextDouble() * sum;
+        if (r < w[0]) return ResourceGrade.Barren;
+        if (r < w[0] + w[1]) return ResourceGrade.Normal;
+        return ResourceGrade.Rich;
+    }
+
+    /// <summary>⭐ 生成期**后处理 pass**（`03` §6.9「分配时机」）：扫全图 —— 凡 `features[i]` 命中四型
+    /// （<see cref="MapGate.IsGradeFeature"/>：`Tree`/`OreVein`/`WoodPile`/`StonePile`）⇒ 按权重掷等级；
+    /// 其余（含 `Mine` 与非资源格）**显式落 `Normal`**（⚠️ 禁依赖 `default`＝`Barren`）。
+    ///
+    /// <b>调用点纪律</b>：须排在**全部 features 写步之后**（净空区／配额补足／水域／复跑连通都会改 features）
+    /// ⇒ 只有**最终存活**的资源格才带等级（`03` §6.9）。`gradeRng` **必须是独立 rng 流**（由 `seed` 派生）。</summary>
+    public static void AssignResourceGrades(MapData map, MapGenRulesConfig cfg, System.Random gradeRng)
+    {
+        if (map == null || map.features == null) return;
+        int n = map.features.Length;
+        if (map.grades == null || map.grades.Length != n) map.grades = new ResourceGrade[n];
+        bool on = AssignGradesEnabled;
+        for (int i = 0; i < n; i++)
+        {
+            var g = on && MapGate.IsGradeFeature(map.features[i]) ? RollGrade(cfg, gradeRng) : ResourceGrade.Normal;
+            MapGate.GenesisWriteGrade(map, i, g);   // 走门内写内核（`MapGate.WriteGradeRaw`）
+        }
+    }
 }

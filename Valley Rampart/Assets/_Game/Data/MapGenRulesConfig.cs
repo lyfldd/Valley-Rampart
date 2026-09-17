@@ -65,6 +65,11 @@ public class MapGenRulesConfig : ScriptableObject
              "四带等概率 ⇒ 均值 1.0 ⇒ 全图总量基准不变、仅改变分布。")]
     public float[] bandResourceAbundance = new float[4] { 0.9f, 1.3f, 1.1f, 0.7f };
 
+    [Header("资源层 · 资源等级（`03` §6.9 · `HH.294` 片 6-3 · 兑现 `F-14`）")]
+    [Tooltip("资源等级分配权重（**按枚举序** {Barren, Normal, Rich}）：`03` §6.9「Rich 15%／Normal 70%／Barren 15%」。" +
+             "仅四型资源格（Tree/OreVein/WoodPile/StonePile）参与分配；数值消费口径见 `BuildingDef.gradeScale`。")]
+    public float[] gradeWeights = new float[3] { 0.15f, 0.70f, 0.15f };
+
     [Header("山脉化（HH.272 件④：脊线生成 + 沿线扩宽 ⇒ 带状）")]
     [Tooltip("每温度带的山体格数占比（索引 0/1/2/3 = 热带/亚热带/温带/寒带；寒带最多、热带最少）")]
     public float[] mountainCellRatio = new float[4] { 0.05f, 0.08f, 0.12f, 0.16f };

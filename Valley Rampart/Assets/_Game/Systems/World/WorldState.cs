@@ -25,6 +25,9 @@ public class MapData
     public int height;
     public ClimateZone[] climateZones;        // 温度带，**逐格存**（长度 = width*height；HH.272 件①：原「按大区块 16×16 存」废止）
     public FeatureType[] features;            // W×H，唯一功能源（可走/阻挡由此派生）
+    public ResourceGrade[] grades;            // 【HH.294 片 6-3·`03` §6.9】资源等级（格表事实）：W×H，与 features 同口径；
+                                              //   仅四型（Tree/OreVein/WoodPile/StonePile）可非 Normal，其余（含 Mine/非资源格）恒 Normal；
+                                              //   ⚠️ default(ResourceGrade)=Barren(0) ⇒ 建数组后必须显式填 Normal；⛔ 读口须容忍 null（探针夹具不填）
     public List<Vector2Int> kingdomSpawns;    // 王国出生点（0=玩家，1..N=AI 王国，2_1 生成）
     public List<KingdomDef> kingdomTemplates; // 与 kingdomSpawns 并行：0=null(玩家)，1..N=AI 模板绑定（2_16 步骤3 落，供步骤5 Foundry 立国用，保证放置/立国同模板）
     public List<SpawnDef>   threatSpawns;     // 敌人晚上刷点/威胁方向（2_1 写入、2_8 消费）

@@ -32,6 +32,15 @@ public static class MapGate
     /// <summary>⭐ 唯一写口。除本行外，生产码（`Assets/_Game/**`）**无任何** `features[...] =` 赋值。</summary>
     private static void WriteRaw(MapData map, int index, FeatureType f) => map.features[index] = f;
 
+    /// <summary>⭐【HH.294 片 6-3·`03` §6.9】**grade 唯一写口**。除本行外，生产码（`Assets/_Game/**`）
+    /// **无任何** `grades[...] =` 赋值。判据：`git grep -n -E "\.grades\s*\[[^]]*\]\s*=[^=]" -- 'Assets/_Game/**/*.cs'` 应只命中本行。</summary>
+    private static void WriteGradeRaw(MapData map, int index, ResourceGrade g)
+    {
+        if (map == null || map.grades == null) return;
+        if (index < 0 || index >= map.grades.Length) return;
+        map.grades[index] = g;
+    }
+
     /// <summary>
     /// <b>造世界专用口（0→1）</b>：`03` §6.1「造地形／气候／山脉**不算增**」——
     /// 生成规则（连通／地块大小／山脉）**不污染增的规则表**，故单列此口，仅 `MapGenRules` 生成期使用。
@@ -42,6 +51,14 @@ public static class MapGate
         if (map == null || map.features == null) return;
         if (index < 0 || index >= map.features.Length) return;
         WriteRaw(map, index, f);
+    }
+
+    /// <summary><b>造世界专用口（grade·0→1）</b>：仅生成期使用（`MapGenRules.AssignResourceGrades` 分配 pass ＋
+    /// `WorldManager.GenerateMap` 建数组后显式填 `Normal`）。⚠️ 运行期写 grade 一律走**门内语义**：
+    /// <see cref="SetFeature"/> 非四型复位 ／ <see cref="PlaceResourceNode"/> 重生重掷值 ／ <see cref="RemoveResourceNode"/> 删除复位。</summary>
+    public static void GenesisWriteGrade(MapData map, int index, ResourceGrade g)
+    {
+        WriteGradeRaw(map, index, g);
     }
 
     /// <summary><b>指定图的读口</b>（带 `map` 参数）：供**拿得到 map 的调用方**（渲染铺格 / 生成管线）走门，
@@ -72,6 +89,23 @@ public static class MapGate
     /// <summary><b>轻量单格读口</b>（GridCoord 版）。</summary>
     public static FeatureType GetFeatureAt(GridCoord c) => GetFeatureAt(c.x, c.y);
 
+    /// <summary><b>指定图的读口</b>（grade·带 `map` 参数·`03` §8.2 ①「资源等级」）：供拿得到 `map` 的调用方走门。
+    /// ⚠️ 越界／地图未就绪／`grades == null`（Editor 探针用 `new MapData{...}` 造夹具不会填该字段）⇒ `Normal`，**不抛**。</summary>
+    public static ResourceGrade ReadGradeAt(MapData map, int x, int y)
+    {
+        if (map == null || map.grades == null) return ResourceGrade.Normal;
+        if (x < 0 || y < 0 || x >= map.width || y >= map.height) return ResourceGrade.Normal;
+        int i = y * map.width + x;
+        return i >= 0 && i < map.grades.Length ? map.grades[i] : ResourceGrade.Normal;
+    }
+
+    /// <summary><b>轻量单格读口</b>（grade·走 `ActiveMap`）：与 <see cref="GetFeatureAt(int,int)"/> 同构（O(1) 无分配）。
+    /// 越界／未就绪／`grades == null` ⇒ `Normal`（不抛）。</summary>
+    public static ResourceGrade GetGradeAt(int x, int y) => ReadGradeAt(ActiveMap, x, y);
+
+    /// <summary><b>轻量单格读口</b>（grade·GridCoord 版）。</summary>
+    public static ResourceGrade GetGradeAt(GridCoord c) => GetGradeAt(c.x, c.y);
+
     /// <summary>当前活动地图的尺寸（上层枚举前先问界；越界查询一律返回 Plain/false，不抛）。</summary>
     public static int MapWidth => ActiveMap != null ? ActiveMap.width : 0;
     public static int MapHeight => ActiveMap != null ? ActiveMap.height : 0;
@@ -91,6 +125,7 @@ public static class MapGate
         public bool hasOccupant;         // 格上有没有东西
         public bool occupantIsObstacle;  // 该东西阻不阻挡
         public int unitCount;            // 格上单位数
+        public ResourceGrade grade;      // 【HH.294 片 6-3·§6.9】资源等级（格表事实；非四型格恒 Normal）
 
         public bool HasFeature(FeatureType f) => feature == f;
     }
@@ -105,10 +140,13 @@ public static class MapGate
         public bool walkable;
         public bool requireEmpty;        // 勾「格上无东西」
         public bool requireOccupied;     // 勾「格上有东西」
+        public bool useGrade;            // 【HH.294 片 6-3·§8.3 事实菜单「资源点 · 等级」】勾「资源等级＝某档」
+        public ResourceGrade grade;
 
         public static CellFilter Feature(FeatureType f) => new CellFilter { useFeature = true, feature = f };
         public static CellFilter Walkable(bool walkable) => new CellFilter { useWalkable = true, walkable = walkable };
         public static CellFilter Empty() => new CellFilter { requireEmpty = true };
+        public static CellFilter Grade(ResourceGrade g) => new CellFilter { useGrade = true, grade = g };
 
         public bool Accept(in CellInfo c)
         {
@@ -116,6 +154,7 @@ public static class MapGate
             if (useWalkable && c.walkable != walkable) return false;
             if (requireEmpty && c.hasOccupant) return false;
             if (requireOccupied && !c.hasOccupant) return false;
+            if (useGrade && c.grade != grade) return false;
             return true;
         }
     }
@@ -134,6 +173,8 @@ public static class MapGate
         info.coord = coord;
         info.feature = map.features != null && i < map.features.Length ? map.features[i] : FeatureType.Plain;
         info.climate = map.climateZones != null && i < map.climateZones.Length ? map.climateZones[i] : ClimateZone.Temperate;
+        // 【HH.294 片 6-3·§6.9】资源等级（格表事实）；grades == null ⇒ Normal（夹具容忍·不抛）
+        info.grade = map.grades != null && i < map.grades.Length ? map.grades[i] : ResourceGrade.Normal;
         info.walkable = grid.IsWalkable(coord);
         var occ = grid.GetOccupant(coord);
         info.hasOccupant = occ != null;
@@ -231,6 +272,8 @@ public static class MapGate
     /// ⚠️ 单值字段**只有两个**（归属／地表）；本口只管地表，归属走 `TerritorySystem`。
     /// ⛔ 不提供「改可走」——可走是派生缓存，本口只重算它。
     /// 返回是否实际改变（同值 ⇒ false，幂等）。
+    /// <para>【`HH.294` 片 6-3·§6.9】**grade 语义**：新 feature **非四型** ⇒ grade 复位 `Normal`
+    /// （新 feature 恰为四型时**不动** grade —— 由 <see cref="PlaceResourceNode"/> 的重掷值先写入）。</para>
     /// </summary>
     public static bool SetFeature(GridCoord coord, FeatureType f)
     {
@@ -243,6 +286,7 @@ public static class MapGate
         if (map.features[i] == f) return false;
 
         WriteRaw(map, i, f);
+        if (!IsGradeFeature(f)) WriteGradeRaw(map, i, ResourceGrade.Normal);   // 【片 6-3·§6.9】非四型 ⇒ grade 复位
         GuardDeploymentSystem.NotifyFeatureWritten(coord, f);   // 索引超集性（HH.294 补正 P1）
         grid.RefreshCellFromFeature(coord, f);                  // 派生缓存重算（可走）
         if (MapRenderService.Instance != null) MapRenderService.Instance.UpdateCell(coord);
@@ -283,8 +327,19 @@ public static class MapGate
     /// <summary>
     /// <b>增门（重生时机）</b>：资源点重生 ⇒ 格翻回原 feature（§6.3 时机②）。
     /// 与「铺」（生成期走 <see cref="GenesisWrite"/>）／「放置」共用同一套合法性口径，此处只做重生这一种。
+    /// <para>【`HH.294` 片 6-3·§6.9】`grade` ＝ 重生**重掷**的等级（**由调用方掷入** —— 运行期门内无 rng 源，⛔ 门内禁掷）：
+    /// 四型 ⇒ 先写入该值；非四型 ⇒ 由 <see cref="SetFeature"/> 复位 `Normal`（锚点返还等调用方的默认值即 `Normal`）。</para>
     /// </summary>
-    public static bool PlaceResourceNode(GridCoord coord, FeatureType f) => SetFeature(coord, f);
+    public static bool PlaceResourceNode(GridCoord coord, FeatureType f, ResourceGrade grade = ResourceGrade.Normal)
+    {
+        var map = ActiveMap;
+        if (map == null || map.features == null) return false;
+        if (coord.x < 0 || coord.y < 0 || coord.x >= map.width || coord.y >= map.height) return false;
+        int i = coord.y * map.width + coord.x;
+        if (i < 0 || i >= map.features.Length) return false;
+        if (IsGradeFeature(f)) WriteGradeRaw(map, i, grade);   // 【片 6-3】四型 ⇒ 落重掷值（非四型由 SetFeature 复位）
+        return SetFeature(coord, f);
+    }
 
     /// <summary>
     /// ⭐<b>删门 · 唯一入口</b>（§7.3）：**不区分死因**（采走／被打烂／被建筑覆盖，本层一视同仁）。
@@ -304,6 +359,7 @@ public static class MapGate
         if (!IsRemovableResourceFeature(f)) return false;   // 存在性校验：不是可删资源格 ⇒ 幂等跳过
 
         if (!SetFeature(coord, FeatureType.Plain)) return false;
+        WriteGradeRaw(map, i, ResourceGrade.Normal);   // 【片 6-3·§6.9】删除 ⇒ grade 复位（与 SetFeature 非四型口径同源·此处显式声明）
         // 守卫锚点语义（HH.3 §六 / HH.6 裁决二）：资源点被采走/覆盖 ⇒ 守卫区域失去覆盖
         GuardDeploymentSystem.HandleResourceConsumed(coord);
         return true;
@@ -321,6 +377,12 @@ public static class MapGate
     public static bool IsRemovableResourceFeature(FeatureType f)
         => f == FeatureType.Tree || f == FeatureType.Mine
         || f == FeatureType.OreVein || f == FeatureType.WoodPile || f == FeatureType.StonePile;
+
+    /// <summary>⭐【`HH.294` 片 6-3·`03` §6.9】**grade 作用域口径**：四型资源格
+    /// （`Tree`／`OreVein`／`WoodPile`／`StonePile`）——**不含 `Mine`**（有实体·等级走 `Building.grade` 现状 ⇒ 两处都写＝双写）。
+    /// 生成期分配 pass 与运行期写门（复位／重掷）**同一处口径**（探针可直调构造反证）。</summary>
+    public static bool IsGradeFeature(FeatureType f)
+        => f == FeatureType.Tree || f == FeatureType.OreVein || f == FeatureType.WoodPile || f == FeatureType.StonePile;
 
     // ==========================================================================
     //  5. 锚点消费 / 返还（§五 · §7.8）
