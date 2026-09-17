@@ -151,11 +151,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     [Tooltip("当前在册工人（建筑被摧毁时逃出存活）。ScheduleCenter 派工时登记")]
     public readonly List<UnitController> currentWorkers = new List<UnitController>();
 
-    // ===== QQQ.2 T19：一次性资源点采集锁定（RES-A4 / DR-11）=====
-    // 玩家点击确认采集后置 true（锁定防重复派发）；采集完成/中断后复位可再点击（RES-A2）。
-    // 不入档（QQQ.3 D14：读档后回未锁态可重新点击，进度重置语义一致）。
-    [Tooltip("是否已确认采集（一次性资源点锁定中，防连点/重复派发）")]
-    public bool isBeingGathered;
+    // ===== QQQ.2 T19：一次性资源点采集锁定 —— 【HH.294 片 6-2·6-D】随实体退役 **已删** =====
+    //   改前：`isBeingGathered`（玩家点确认置位 → `TryAdvertiseTask` 采集分支 → `StartGather`/`OnGatherCompleted` 复位）。
+    //   本批：资源点转纯数据（6-A）⇒ 一次性三型无 Building 实体 ⇒ 采集锁定并入
+    //   `ResourceRespawnSystem.ConfirmResourceGather` ＋ `WorldGatherSource`（源有效直至完成·调度器独占去重）。
+    //   grep 证据（改后）：`isBeingGathered` 全库 0 命中（改前消费点：`Building` 本文件 3 处 ＋
+    //   `TaskScheduler.cs:556` ＋ `BuildingPanel.cs:482`，三处随 6-D 同删）。
 
     // ===== 状态机 + 进度系统（3.3.4 批次3）=====
     [Header("生命周期")]
@@ -898,56 +899,17 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         Destroy(gameObject);
     }
 
-    /// <summary>
-    /// QQQ.2 T19 / DR-11：一次性资源点采集完成生命周期（由 TaskScheduler.Gather 完成时调）。
-    /// 三步：①释放网格占用（GridSystem.Free）②从 BuildingRegistry 移除 ③对象池 Despawn（不直接 Destroy）。
-    /// 采集任务由调度器派发，工人 Working 计时到后触发；资源入国库已在调度器 ExecuteCompletion 完成。
-    /// 【HH.294 片4·4-D】注销 4 项**已与 `Die` 合一**（`ReleaseLayerOwnedState`）——原本此处抄第二遍。
-    /// </summary>
-    public void OnGatherCompleted()
-    {
-        if (def == null || !def.isConsumable) return;
-        isBeingGathered = false;
-
-        // ①b QQQ.2 T8 / DR-21：采集后空地加入闲逛锚点池（王国多锚点之一，持久）
-        WanderAnchorPool.Instance.RegisterFreeSpot(transform.position);
-        // ① 释放占格 ＋ ② 注销（注册表/调度器/存档）＋ 锚点返还 ＝ 唯一实现
-        ReleaseLayerOwnedState(unregisterFromRegistry: true);
-        // ③ 守卫锚点语义（HH.3 §六 / HH.6 裁决二 / HH.7 验收）：一次性资源点（OreVein 等）采集销毁
-        //    = 该格高价值资源点失去 → 守卫该格的守卫区域随之失去覆盖 → 触发 GuardRegionLostEvent。
-        //    （Tree/Mine 非一次性，由 `MapGate.RemoveResourceNode` 建筑覆盖路径触发。）
-        if (GridSystem.Instance != null)
-            GuardDeploymentSystem.HandleResourceConsumed(coord);
-        // HH.10 裁决三：一次性可采实体（OreVein/WoodPile/StonePile）采集销毁 → 记实体路径重生，到点重建实体
-        if (ResourceRespawnSystem.HasInstance)
-            ResourceRespawnSystem.Instance.HandleEntityDepleted(coord, FeatureOf(sourceType));
-        // ③ 对象池回收（DR-11：不直接 Destroy，与 UnitFactory 一致）
-        if (BuildingFactory.Instance != null)
-            BuildingFactory.Instance.ReturnBuildingToPool(this);
-        else
-            Destroy(gameObject);
-        Debug.Log($"[Building] 一次性资源点 {def.id} 采集完成，已回收。");
-    }
-
-    /// <summary>BuildingType → FeatureType（HH.10 实体重生记录用；一次性可采资源映射）。</summary>
-    private static FeatureType FeatureOf(BuildingType bt) => bt switch
-    {
-        BuildingType.WoodPile => FeatureType.WoodPile,
-        BuildingType.StonePile => FeatureType.StonePile,
-        _ => FeatureType.OreVein   // OreVein 及未识别退化到矿脉
-    };
-
-    /// <summary>
-    /// QQQ.2 T19 / DR-11：玩家确认采集一次性资源点（BuildingPanel 采集按钮调）。
-    /// 锁定 isBeingGathered（RES-A4 防连点/重复派发），调度器下 tick 派发 Gather 任务。
-    /// </summary>
-    public void StartGather()
-    {
-        if (def == null || !def.isConsumable || !IsActive) return;
-        if (isBeingGathered) return;   // UI-A4：已确认/采集中，防连点
-        isBeingGathered = true;
-        Debug.Log($"[Building] 确认采集：{def.id}（预计 {def.gatherSeconds:F0} 秒），锁定待派发。");
-    }
+    // ===== 【HH.294 片 6-2·6-D】`OnGatherCompleted()` / `FeatureOf()` / `StartGather()` **随实体退役 已删** =====
+    //   改前职责链（一次性资源点）：`BuildingPanel` 采集按钮 → `StartGather`（锁 `isBeingGathered`）
+    //     → `TryAdvertiseTask` 采集分支 → 调度器派工 → 完成回调 `OnGatherCompleted`
+    //     （＝ 释放占格＋注销注册表＋守卫失去＋`HandleEntityDepleted`＋对象池回收）。
+    //   改后（数据寻址）：玩家 = `PrioritizeHarvestCommand` → `ResourceRespawnSystem.ConfirmResourceGather`
+    //     → `WorldGatherSource/TreeGatherSource` → 完成 = `ResourceRespawnSystem.HandleCellGathered`
+    //     （格翻 Plain＋守卫失去[门内 `MapGate:308`]＋游荡锚点登记＋池子减 1 点）。
+    //   语义承接（`D778` B-4 清单）：④ 游荡锚点登记 → `HandleCellGathered`（一次性三型·树不新增）；
+    //     ⑤ 对象池回收 → 随实体退役（`BuildingFactory.ReturnBuildingToPool` 同删）；
+    //     守卫失去通知 → 只留门内 `MapGate.cs:308`。
+    //   grep 证据（改后）：`OnGatherCompleted|StartGather|isBeingGathered` 全库 0 命中。
 
     /// <summary>
     /// 3.5 P1-15 工人逃出（3.5.3 §7.4 / 3.5.4 §8.5）：建筑被摧毁时当前在册工人存活。
@@ -1007,11 +969,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 按建筑类型声明任务（QQQ.2 §10.3 / DR-16）：
-    ///   ① 一次性资源点被确认采集（isBeingGathered）→ Gather（destType=Treasury）
-    ///   ② 生产建筑无工人在场且未满 → Production（destType=None）
-    ///   ③ 有存储且存量 ≥ capacity×transportThreshold → Transport（destType=NearestWarehouse）
-    ///   ④ 农场缺水（水网 Stored<waterThreshold）→ WaterHaul（destType=WaterNetwork）
+    ///   ① 生产建筑无工人在场且未满 → Production（destType=None）
+    ///   ② 有存储且存量 ≥ capacity×transportThreshold → Transport（destType=NearestWarehouse）
+    ///   ③ 农场缺水（水网 Stored<waterThreshold）→ WaterHaul（destType=WaterNetwork）
     /// 军事/其他不在此扩。无条件返回 false。
+    /// 【HH.294 片 6-2·6-D】原「①一次性资源点被确认采集 → Gather」分支**随实体退役已删**
+    ///   —— 采集任务改由 `WorldGatherSource`／`TreeGatherSource` 广告（数据寻址）。
     /// </summary>
     public bool TryAdvertiseTask(out KingdomTask task)
     {
@@ -1024,20 +987,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var storage = GetComponent<StorageComponent>();
         var sched = TaskScheduler.Instance;
 
-        // ① 采集：一次性资源点（isConsumable）被玩家确认采集 → Gather 任务（QQQ.2 T19 / DR-11）
-        if (def != null && def.isConsumable && isBeingGathered)
-        {
-            task = new KingdomTask(KingdomTaskType.Gather, this);
-            task.destType = KingdomDestType.Treasury;
-            var ga = new GatherTaskArgs
-            {
-                resourceType = def.outputResource,
-                amount = sched != null ? sched.gatherAmount : 5,
-                gatherSeconds = def.gatherSeconds
-            };
-            task.args = ga;
-            return true;
-        }
+        // ① 采集：一次性资源点（isConsumable）被玩家确认采集 → Gather 任务 —— 【片 6-2·6-D】已删（见方法头注）
 
         // ② 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：自动产水入网，不派生产任务）
         if (producer != null

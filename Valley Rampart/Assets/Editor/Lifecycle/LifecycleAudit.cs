@@ -45,10 +45,15 @@ public static class LifecycleAudit
     private static readonly ChainAuditCore.ExemptionTable ExemptEvents = new ChainAuditCore.ExemptionTable(
         "R1 事件豁免", new[]
     {
-        // ① 登记表 §4 B 组：无守卫零订阅噪音（DZ-077 组，13 项）
+        // ① 登记表 §4 B 组：无守卫零订阅噪音（DZ-077 组，原 13 项）
+        // 【HH.294 片 6-2·B-3（`D778` 裁）】`PrioritizeHarvestCommand` **已移出本豁免表** ——
+        //   本批起它有**生产订阅者**（`ResourceRespawnSystem.Awake:127` 玩家采集入口消费者）
+        //   ⇒ 不再属「零订阅噪音」豁免组；留在表内会让审计对「日后订阅被删」失去覆盖。
+        //    `D561`「豁免表变更须策划端确认」＝`D778` 本条裁决即确认（其余 12 项不动）。
+        //    基线数组 `Baseline54`（本文件下方）**不动** —— 那是「事件全集在场对账」，移出会产生假 `+ extra`。
         "BuildingPlacedEvent", "GameSavedEvent", "GateStateChangedEvent", "BuildingRuinedEvent",
         "BuildingRepairedEvent", "UnitCommandEvent", "FollowCommand", "GuardDeployCommand",
-        "PrioritizeHarvestCommand", "ExecutorArrivedEvent", "ExecutorMoveCompleteEvent",
+        "ExecutorArrivedEvent", "ExecutorMoveCompleteEvent",
         "ExecutorAnchorLostEvent", "PortalDestroyedEvent",
         // ② DifficultyChanged（DZ-066 难度死值家族·挂账关联，登记表 §4 C）
         "DifficultyChangedEvent",

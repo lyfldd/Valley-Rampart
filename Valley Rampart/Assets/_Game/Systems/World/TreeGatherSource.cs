@@ -53,10 +53,12 @@ public class TreeGatherSource : ITaskSource
     /// <summary>
     /// 采集完成回调（由 TaskScheduler.ExecuteCompletion 在木入背包后调用）。
     /// 职责：把该树格 feature Tree → Plain + 刷新渲染 + 记重生（数据路径，决不实体化）。
+    /// 【HH.294 片 6-2·6-D】改前调 `HandleTreeGathered` —— 与一次性实体链**合并**为
+    /// `HandleCellGathered`（同一实现·树/三型唯一差异在耗时与图里已消）。
     /// </summary>
     public void OnGatherCompletion()
     {
         if (ResourceRespawnSystem.HasInstance)
-            ResourceRespawnSystem.Instance.HandleTreeGathered(Cell);
+            ResourceRespawnSystem.Instance.HandleCellGathered(Cell);
     }
 }

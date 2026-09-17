@@ -552,8 +552,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private void Abandon(int npcId, KingdomTask task, NPCBrain brain)
     {
         // QQQ.2 T19 / RES-A2：Gather 中断（工人阵亡/被打断/源失效）→ 资源点解锁可再点击（进度重置不保留）
-        if (task != null && task.type == KingdomTaskType.Gather && task.source is Building gb)
-            gb.isBeingGathered = false;
+        // 【HH.294 片 6-2·B-4①】原 `gb.isBeingGathered = false`（Building 采集锁）**随实体退役已删** ——
+        //   数据寻址后「解锁」＝源自身失效退出 `_sources`（`WorldGatherSource.IsValid`／`TreeGatherSource` 一发即失效），
+        //   无锁需要复位；玩家可再次右键同名资源格重新立案（`ConfirmResourceGather` 幂等新建源）。
         if (brain != null)
         {
             brain.IsKingdomTaskWorker = false;
@@ -628,11 +629,11 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                         AddGatherOverflow(guc, ga.resourceType, gain);
                     }
                 }
-                // QQQ.2 T19：采集完成 → 资源点销毁三步（①GridSystem.Free ②BuildingRegistry移除 ③对象池Despawn）
-                if (comp is Building b) b.OnGatherCompleted();
-                // HH.10 裁决三：数据格树采集源（非实体）完成 → 格翻 Plain + 记重生（TreeGatherSource.OnGatherCompletion 处理）
-                else if (task.source is TreeGatherSource tg) tg.OnGatherCompletion();
-                // HH.221/D685 A①：世界资源点采集源（AI）完成 → 树路径同 TreeGatherSource；实体路径走 Building.OnGatherCompleted
+                // 【HH.294 片 6-2·B-4②】原 `if (comp is Building b) b.OnGatherCompleted();`（一次性资源点实体完成）
+                //   **随实体退役已删** —— 数据化后世界资源点采集源只剩下面两类（`WorldGatherSource` 覆盖四型全部）。
+                // 玩家侧树采集源（非实体）完成 → 格翻 Plain + 记重生（与三型合并走 HandleCellGathered）
+                if (task.source is TreeGatherSource tg) tg.OnGatherCompletion();
+                // 世界资源点采集源（玩家三型 ＋ AI 四型）完成 → 同上（数据寻址统一）
                 else if (task.source is WorldGatherSource wg) wg.OnGatherCompletion();
                 break;
         }
@@ -1127,8 +1128,11 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (task != null && task.type == KingdomTaskType.Gather && task.args is GatherTaskArgs ga)
         {
             float secs = ga.gatherSeconds;
+            // 【HH.294 片 6-2·6-D 观察】改前实体源以 `def.gatherSeconds` 为准（资源点资产 2s/4s/8s）；
+            //   实体退役后 Gather 源只剩 `TreeGatherSource`/`WorldGatherSource` ⇒ 本覆盖分支**结构性不可达**
+            //   （保留＝零行为影响·不属本批清单；随「验收后删旧路径」一并清理，见 HH.307 报告残余）。
             if (task.source is Building b && b.def != null && b.def.gatherSeconds > 0f)
-                secs = b.def.gatherSeconds;   // 以 def 为准（资源点资产已配 2s/4s/8s）
+                secs = b.def.gatherSeconds;
             return secs > 0f ? secs : workDuration;
         }
         return workDuration;
@@ -1147,7 +1151,10 @@ public class GatherTaskArgs
 {
     public ResourceType resourceType;
     public int amount;
-    /// <summary>采集耗时（秒，取自 BuildingDef.gatherSeconds，数据驱动）。</summary>
+    /// <summary>采集耗时（秒，数据驱动）。
+    /// 【HH.294 片 6-2·6-B 勘正】改前此值由源侧填：实体源＝`BuildingDef.gatherSeconds`（`GetTaskDuration` 处另有
+    /// 以 def 为准的覆盖）／树源＝`RespawnConfig.treeGatherSeconds`；**改后一律**由源侧按 feature 填
+    /// （`RespawnConfig.GatherSecondsOf`·逐型保原值），调度器**不再读 def**。</summary>
     public float gatherSeconds;
 }
 

@@ -1,4 +1,5 @@
-using System.Collections.Generic;
+// 【HH.294 片 6-2·B-4⑤】原 `using System.Collections.Generic;`（供 `_pool` 的 Dictionary/Stack）
+//   随对象池退役一并移除 —— 删后本文件零泛型容器使用。
 using UnityEngine;
 
 /// <summary>
@@ -46,16 +47,19 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
 
     // ===== 地图预置建筑实例化（2_2 步骤5：naturalBuildings 双来源之一）=====
 
-    /// <summary>FeatureType -> BuildingType（naturalBuildings 实例化映射；SnowMountain 无建筑实体，地形已阻挡）。</summary>
+    /// <summary>FeatureType -> BuildingType（naturalBuildings 实例化映射；SnowMountain 无建筑实体，地形已阻挡）。
+    /// 【HH.294 片 6-2·6-A】`OreVein`/`WoodPile`/`StonePile` 三分支＝**旧路径**（随 `MapGenRules.SpawnResourceEntities`
+    ///   对照开关；默认 false ⇒ 目标态不派生实体 ⇒ 本映射三型分支不被触达）。`Tree`/`Mine` 分支**保留**
+    ///   （Mine 供 T6 转型）。**验收后三型分支随开关一并删。**</summary>
     static BuildingType? FeatureToBuildingType(FeatureType f)
     {
         switch (f)
         {
             case FeatureType.Tree: return BuildingType.Tree;
             case FeatureType.Mine: return BuildingType.Mine;
-            case FeatureType.OreVein: return BuildingType.OreVein;
-            case FeatureType.WoodPile: return BuildingType.WoodPile;   // HH.10 裁决三：扩到三类
-            case FeatureType.StonePile: return BuildingType.StonePile;
+            case FeatureType.OreVein: return BuildingType.OreVein;       // 旧路径（对照开关 ON 时）
+            case FeatureType.WoodPile: return BuildingType.WoodPile;     // 旧路径（对照开关 ON 时·HH.10 裁决三扩到三类）
+            case FeatureType.StonePile: return BuildingType.StonePile;   // 旧路径（对照开关 ON 时）
             default: return null;   // SnowMountain 等纯视觉/地形阻挡特征物跳过
         }
     }
@@ -76,7 +80,10 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         }
 
         int count = 0;
-        if (map.naturalBuildings != null)
+        // 【HH.294 片 6-2·6-A】⭐ 自然建筑循环＝**旧路径**（对照开关 `MapGenRules.SpawnResourceEntities`·默认 false）：
+        //   目标态下 `DeriveNaturalBuildings` 已使 `naturalBuildings` 恒空 ⇒ 本循环不触达；
+        //   开关 ON 时逐字回旧行为（同一 build 内 A/B 对照用）。**验收后随开关一并删。**
+        if (MapGenRules.SpawnResourceEntities && map.naturalBuildings != null)
         {
             foreach (var nb in map.naturalBuildings)
             {
@@ -129,6 +136,9 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
     /// </summary>
     public bool ReSpawnNaturalBuilding(GridCoord coord, FeatureType feature)
     {
+        // 【HH.294 片 6-2·6-A】⭐ **退役（默认路径）**：唯一调用方 `ResourceRespawnSystem.SpawnEntityFor`
+        //   已在对照开关处返回；此处再加一道守卫防误用（开关 ON 时才逐字回旧行为）。
+        if (!MapGenRules.SpawnResourceEntities) return false;
         var type = FeatureToBuildingType(feature);
         if (!type.HasValue) return false;
         var table = GetMappingTable();
@@ -428,25 +438,9 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         BuildingRegistry.Instance.Clear();
     }
 
-    // ===== 对象池回收（QQQ.2 T19 / DR-11：一次性资源点采集后走池，不直接 Destroy）=====
-
-    /// <summary>
-    /// 回收一次性资源点建筑到对象池（由 Building.OnGatherCompleted 调）。
-    /// 建筑对象池按 def.id 分桶复用：出池时 CreateBuildingInstance 会重新初始化全字段，状态天然全新。
-    /// 采集后资源点应消失不留贴图——若复用于其他资源点，位置/占用在出池时重建。
-    /// </summary>
-    private readonly Dictionary<string, Stack<Building>> _pool = new Dictionary<string, Stack<Building>>();
-
-    public void ReturnBuildingToPool(Building b)
-    {
-        if (b == null || b.def == null) return;
-        string key = b.def.id;
-        if (!_pool.TryGetValue(key, out var stack))
-        {
-            stack = new Stack<Building>();
-            _pool[key] = stack;
-        }
-        b.gameObject.SetActive(false);
-        stack.Push(b);
-    }
+    // ===== 对象池回收 —— 【HH.294 片 6-2·B-4⑤】随实体退役 **已删** =====
+    //   改前：`Building.OnGatherCompleted:926` 调 `ReturnBuildingToPool`（一次性资源点采集后按 def.id 入池复用）。
+    //   本批：三型不再派生实体（6-A）⇒ 采集完成无实体可回收 ⇒ 本方法与 `_pool` 字段一并退役。
+    //   grep 证据（改后）：`ReturnBuildingToPool` 全库 0 命中（改前唯一调用点＝`Building.cs:926`，随采集面退役同删）；
+    //   `_pool` 在本文件 0 命中。T6 若将来重新引入「有实体的一次性资源」，需一并恢复本池或另立回收口。
 }

@@ -106,6 +106,19 @@ public static class PlacementValidator
                                   && WorldManager.Instance.IsResourceNodeAvailable(coord, requiredNode.Value);
                     if (!nodeOk) { result.reason = PlacementFailReason.Blocked; return result; }
                 }
+                // ⭐【HH.294 片 6-2·6-A 承接（占格面·HH.307 报告 §判据 2 附）】一次性资源格的阻挡**从实体面搬到格表面**：
+                //   改前：三型一次性资源（OreVein/WoodPile/StonePile）有 Building 实体 ⇒ 上方 `occupant != null ⇒ Blocked`
+                //         承担了「普通建筑不可压在资源格上」的阻挡（多数建筑 `allowedTerrain` 为空 ⇒ 地形校验不拦）。
+                //   6-A 实体退役后无 occupant ⇒ 若不补判 ⇒ 普通建筑**可压在资源格上**（净新增能力＝新空洞）。
+                //   ⇒ 按**格表**补回同一阻挡；口径**逐型对齐**：只三型（＝改前有实体者），
+                //     `Tree`/`Mine` **不在此列**（改前即无实体／本就允许 ⇒ 保持零行为变更）。
+                else if (grid.GetFeatureAt(coord) == FeatureType.OreVein
+                      || grid.GetFeatureAt(coord) == FeatureType.WoodPile
+                      || grid.GetFeatureAt(coord) == FeatureType.StonePile)
+                {
+                    result.reason = PlacementFailReason.Blocked;
+                    return result;
+                }
 
                 // 地块属性合法（桥不校验，只校验 Water 位）
                 // 【HH.294 片2-A】TerrainType 整层删 ⇒ 改读**地表物**（FeatureType，`grid.GetFeatureAt`）。

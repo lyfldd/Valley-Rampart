@@ -10,8 +10,8 @@ using UnityEngine;
 //  规格真源：HH.240 任务书 T4 ＋ 断链校验台_设计稿 §三 R3
 //
 //  扫描：ResourceType（GameEvents.cs:176）的**供给点** ↔ **消费点**
-//   供给：ProducerComponent（outputResource/rate）· MineByproductComponent · Gather/OnGatherCompleted
-//        · StorageComponent.Transform 产出侧 · TaxSystem（金）· RanchSystem（肉）· TreeGatherSource（木）
+//   供给：ProducerComponent（outputResource/rate）· MineByproductComponent · Gather（【片 6-2】数据寻址链）
+//        · StorageComponent.Transform 产出侧 · TaxSystem（金）· RanchSystem（肉）· WorldGatherSource（木·【片 6-2】承接 TreeGatherSource 口径）
 //   消费：BuildingDef.cost / BuildingDef.levels[].upgradeCost（建造/升级）· UtilityActionDef.costXxx（AI 行动）
 //        · TrainingDef.costGold/costCrystal/costMetal（训练/转职）· StorageComponent.Transform 输入侧（矿）
 //        · SiegeWorkshopBuilding 产弹原料（石/火油/水晶）· 源码硬扣 `ModifyResource(type,false,…)`
@@ -116,9 +116,14 @@ public static class R3_SupplyChain
                 Add(res.Supply, ResourceType.MagicAmmo, path + " SiegeWorkshopBuilding.CreateSubStores(L55-58)");
             }
 
-            // Gather/OnGatherCompleted（Building.cs L948-951：resourceType = def.outputResource；isConsumable 才走）
+            // 【HH.294 片 6-2·6-D 口径同步】一次性资源点的**采集供给**已从「实体链」改为「**数据寻址**」：
+            //   改前记 `Gather(OnGatherCompleted，Building.cs L948-951)`（实体销毁入账）；
+            //   改后＝格表（`MapGate`）→ `WorldGatherSource`（`RespawnConfig.GatherSecondsOf` 逐型耗时）
+            //          → 采集完成 `ResourceRespawnSystem.HandleCellGathered`（格翻 Plain＋池子减 1 点）。
+            //   供给资源面不变（`def.outputResource`：OreVein=Ore／WoodPile=Wood／StonePile=Stone）⇒ 图不产生假断链。
             if (def.isConsumable)
-                Add(res.Supply, def.outputResource, path + " Gather(OnGatherCompleted，Building.cs L948-951)");
+                Add(res.Supply, def.outputResource,
+                    path + " Gather(数据寻址·WorldGatherSource→HandleCellGathered，HH.294 片6-2)");
         }
     }
 
@@ -211,7 +216,10 @@ public static class R3_SupplyChain
         }
 
         // ── 已知专属锚点（设计稿 §三 R3 明列·不在上述通用模式内）────────────────
-        Add(res.Supply, ResourceType.Wood, "Assets/_Game/Systems/AI/TaskScheduling/TreeGatherSource.cs:44（数据格树源→Wood）");
+        // 【HH.294 片 6-2·6-B/6-C 口径同步】玩家/AI 四型的采集源统一为 `WorldGatherSource`（树＋一次性三型·
+            //   地表物→资源映射 `TryResourceOf`）；`TreeGatherSource` 已无生产调用方（类保留待清·其 Wood 口径由本行承接）。
+            Add(res.Supply, ResourceType.Wood,
+                "Assets/_Game/Systems/World/WorldGatherSource.cs（数据寻址四型·TryResourceOf→Wood）");
         Add(res.Supply, ResourceType.Meat, "Assets/_Game/Systems/Kingdom/RanchSystem.cs:203（屠宰→Meat）");
         Add(res.Consume, ResourceType.Ore, "Assets/_Game/Systems/Building/StorageComponent.cs:99/115（Transform 输入侧 Ore→Metal）");
         Add(res.Consume, ResourceType.Stone, "Assets/_Game/Systems/Kingdom/SiegeWorkshopBuilding.cs:184-186（石弹原料→Stone）");

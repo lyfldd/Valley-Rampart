@@ -513,7 +513,8 @@ public static class Valley_HH294_Slice5Probe
                 usedChunk.Add(ci);
                 eaten.Add(new GridCoord(x, y));
             }
-        foreach (var c in eaten) rs.HandleTreeGathered(c);
+        // 【HH.294 片 6-2·6-D】`HandleTreeGathered` ⇒ 与实体链合并后的 `HandleCellGathered`（同一实现）
+        foreach (var c in eaten) rs.HandleCellGathered(c);
         _log.AppendLine($"  构造：采走 {eaten.Count} 棵树（分处 {usedChunk.Count} 个区块）⇒ 采后仍非 Plain 的 = {CountNonPlain(map, eaten)}（须 0）");
         day++;
         rs.SettleDay(day);
@@ -536,14 +537,16 @@ public static class Valley_HH294_Slice5Probe
         {
             int wpChunk = (wp.y / 16) * rs.PoolChunkW + (wp.x / 16);
             int beforeCnt = rs.PointsOf(wpChunk, 2);
-            rs.HandleEntityDepleted(wp, FeatureType.WoodPile);
+            // 【HH.294 片 6-2·6-D】`HandleEntityDepleted(wp, feature)` ⇒ 合并后 `HandleCellGathered(cell)`
+            //   （feature 由回调内自行回读）；实体派生已随 6-A 退役（对照开关默认 false）⇒ 只判格表落新位。
+            rs.HandleCellGathered(wp);
             day++;
             rs.SettleDay(day);
             yield return FlushAll(rs);
             int afterCnt = rs.PointsOf(wpChunk, 2);
             _log.AppendLine($"  木堆格 ({wp.x},{wp.y}) 采集 ⇒ 池子木堆 {beforeCnt} → {afterCnt}；该格现值 = **{MapGate.ReadAt(map, wp.x, wp.y)}**" +
                             $"（须 Plain ⇒ 不在原位）；该区块木堆 feature 数 = {CountFeatureInChunk(map, wpChunk, FeatureType.WoodPile, rs.PoolChunkW)}" +
-                            $"（> 0 ⇒ 已落新位；实体由 `BuildingFactory.ReSpawnNaturalBuilding` 重建）");
+                            $"（> 0 ⇒ 已落新位；【片 6-2】实体已退役 ⇒ 不再由 `ReSpawnNaturalBuilding` 重建·纯格表）");
         }
         else _log.AppendLine("  未找到 WoodPile feature（跳过该子项）");
 

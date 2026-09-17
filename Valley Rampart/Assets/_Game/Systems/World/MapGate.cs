@@ -417,8 +417,83 @@ public static class MapGate
         public float depthY;          // 命中物深度键（与渲染同源同符号·报告对照用）
     }
 
-    /// <summary>拾取候选邻域半径（格）：点所在格 ＋ 8 邻域（3×3）。建筑/宝箱候选上限 ＝ 9（来源：footprint 反查）。</summary>
-    internal const int PickCellRadius = 1;
+    /// <summary>⭐ 拾取候选邻域半径（格）—— 【HH.294 片 6-2 搭车 `R1`】**按最大建筑 sprite 半高重推**（改前固定 1）。
+    ///
+    /// <b>为什么改</b>：改前 `= 1`（3×3 格 ＝ **3.84×1.92** 世界单位）**小于**建筑 sprite 溢出 —— 实测
+    /// `castle` sprite 4.00×**4.38** ⇒ 折算 **3.1×6.8 格**（`HH.305` 探针 §G0-B）⇒ 点其**可见上半部**落不进
+    /// 候选集（「看到的点不到」·片 6-1 验收残余 `R1`）。
+    ///
+    /// <b>算法</b>：`ceil(最大建筑 sprite 半高 ÷ 半格高)`（取样＝`Resources/Buildings` 全部 `BuildingDef.prefab`
+    /// 的 `SpriteRenderer`，含未激活子物体；按 prefab 层级 `lossyScale` 折算世界半高）——**一次性懒算 + 缓存**
+    /// （按 `cellSize.y` 失效重算）；夹取到 `[1, <see cref="PickCellRadiusMax"/>]`，无样本 ⇒ 兜底 1（改前值）。
+    ///
+    /// <b>成本特征（同 `03` §8.7 判据 7 记档口径）</b>：候选建筑 ≤ **(2r+1)²** 次 `BuildingRegistry.GetAt`
+    /// （O(1) 字典查）；单位/宝箱窗口同步放大（单位走 `FillUnitsInRect` O(单位数)、宝箱 O(宝箱数)）。
+    /// 实测 r 值 ＋ 单次 `PickAt` 代价见 `HH.307` 报告（判据 7）。</summary>
+    internal static int PickCellRadius
+    {
+        get
+        {
+            var grid = GridSystem.Instance;
+            var map = ActiveMap;
+            float cellH = grid != null && grid.Config != null ? grid.Config.cellSize.y : 0.64f;
+            if (!ReferenceEquals(map, _pickRadiusMap))   // 换图 ⇒ 清缓存（半高按图/局重算）
+            {
+                _pickRadiusMap = map;
+                _maxSpriteHalf = 0f;
+                _pickRadiusCache = -1;
+                _pickRadiusNextScan = 0f;
+            }
+            bool cellChanged = Mathf.Abs(_pickRadiusCellH - cellH) > 0.0001f;
+            if (_pickRadiusCache <= 0 || cellChanged || Time.time >= _pickRadiusNextScan)
+            {
+                _pickRadiusNextScan = Time.time + PickRadiusScanInterval;
+                _pickRadiusCellH = cellH;
+                float half = ScanMaxSpriteHalf();
+                if (half > _maxSpriteHalf) _maxSpriteHalf = half;   // 单调（同图内只增·防"建了更大的才变小"抖动）
+                _pickRadiusCache = _maxSpriteHalf <= 0f
+                    ? 1                                                            // 兜底＝改前值（无样本；零行为变更）
+                    : Mathf.Clamp(Mathf.CeilToInt(_maxSpriteHalf / Mathf.Max(0.0001f, cellH * 0.5f)), 1, PickCellRadiusMax);
+            }
+            return _pickRadiusCache;
+        }
+    }
+
+    /// <summary>候选窗口半径硬上限（成本上界的另一表述：候选建筑 ≤ (2×8+1)² ＝ 289 次 O(1) 字典查）。</summary>
+    public const int PickCellRadiusMax = 8;
+
+    /// <summary>半高重扫间隔（秒）：粘性单调 max ⇒ 首次扫定后基本不再变（重扫只为吸收"新建了更大 sprite 的建筑"）。</summary>
+    private const float PickRadiusScanInterval = 10f;
+
+    private static int _pickRadiusCache = -1;
+    private static float _pickRadiusCellH = -1f;
+    private static float _maxSpriteHalf;          // 全体在册建筑 sprite 世界半高的**单调**最大值
+    private static MapData _pickRadiusMap;
+    private static float _pickRadiusNextScan;
+
+    /// <summary>
+    /// 扫**全体在册建筑**的 sprite 世界半高取最大（见 <see cref="PickCellRadius"/>）。
+    /// ️ 取样面是**运行时实体**（`BuildingRegistry` 的 `SpriteRenderer`），**不是** `BuildingDef.prefab`
+    /// —— 真图经 `SpriteRefTable` 旁挂挂载（多数 def 的 `prefab` 为空）⇒ 读 prefab 会得 0（实测踩过）。
+    /// 代价：单次 O(建筑数) 次 `GetComponentInChildren`；每 ≥10s 至多一次（读数见 HH.307 报告 §判据 7）。
+    /// </summary>
+    private static float ScanMaxSpriteHalf()
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || reg.All == null) return 0f;
+        float maxHalf = 0f;
+        var all = reg.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b == null) continue;
+            var sr = b.GetComponentInChildren<SpriteRenderer>();
+            if (sr == null || sr.sprite == null) continue;
+            float half = sr.sprite.bounds.size.y * Mathf.Abs(sr.transform.lossyScale.y) * 0.5f;
+            if (half > maxHalf) maxHalf = half;
+        }
+        return maxHalf;
+    }
 
     /// <summary>⭐ <b>玩家侧拾取</b>（`03` §8.6，位于「§八 门」内 ⇒ 本口属**门**的读面；上层只调门，
     /// 禁自建第二套坐标换算——内部一律走 <see cref="GridSystem"/> 换算口）。
@@ -449,7 +524,8 @@ public static class MapGate
 
         bool has = false;
 
-        // 候选① 建筑：footprint 反查 3×3 邻域（≤9 座；sprite 溢出 footprint 半格仍可点）
+        // 候选① 建筑：footprint 反查 (2r+1)² 邻域（r＝PickCellRadius·按最大 sprite 半高重推·见该常量注释）
+        //   —— 改前固定 3×3 且注释曾称「溢出半格」（**低估**：`castle` 实测溢出 3.4 格 ⇒ 那片「看到的点不到」）
         var reg = BuildingRegistry.Instance;
         if (reg != null)
         {

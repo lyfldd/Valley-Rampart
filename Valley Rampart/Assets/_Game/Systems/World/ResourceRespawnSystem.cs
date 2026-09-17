@@ -15,10 +15,11 @@ using UnityEngine;
 ///   <item><b>落点</b>：走落点器**随机落新位**（同区块内）＋ 兜底＝原位（<see cref="PickCell"/>）。</item>
 /// </list>
 ///
-/// <b>两条采集链</b>（承 `HH.10` 裁决三，未变）：
-///   • 数据路径（Tree）：数据格，不建实体 —— 砍完格翻 Plain ⇒ <see cref="HandleTreeGathered"/> ⇒ 池子减 1 点。
-///   • 实体路径（OreVein/WoodPile/StonePile）：一次性实体（Building）采集销毁 ⇒ <see cref="HandleEntityDepleted"/>
-///      ⇒ 池子减 1 点；补量落格时重建实体（`BuildingFactory.ReSpawnNaturalBuilding`）。
+/// <b>采集链（`HH.294` 片 6-2 双写收敛后 ＝ **单链数据寻址**）</b>：
+///   • 四型（`Tree` ＋ `OreVein`/`WoodPile`/`StonePile`）统一：格存在 ＝ **格表（features）**，
+///     无 `Building` 实体 ⇒ 采集完成走 <see cref="HandleCellGathered"/>（格翻 Plain＋守卫失去＋池子减 1 点）。
+///   • 改前双链（树＝数据路径／三型＝实体路径 `Building.OnGatherCompleted`）**已合并**；
+///     实体派生由 `MapGenRules.SpawnResourceEntities` 对照开关保留一版（默认 false＝目标态；验收后删）。
 ///
 /// <b>单位口径（本片落地式）</b>：池子计「**点**」—— 树／石堆／木堆／矿脉各 1 坑位 ＝ 1 点；
 ///   **矿洞 1 簇（2×2 Cell）＝ 1 点**（据 `Σ_i E_i = cap` 自洽 ＋ `03` §6.7.1「矿洞 2.2（≈2 簇）」）。
@@ -121,6 +122,10 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
         base.Awake();   // Singleton：自动创建实例 + DontDestroyOnLoad
         if (_instance != this) return;
         EventBus.Subscribe<TimeDayChangedEvent>(OnDayChanged);   // 4-A：时间基准＝游戏天·每天推进一次
+        // 【HH.294 片 6-2·6-C（`D778` B-5 落点）】玩家采集入口消费者：
+        //   全工人 + 右键资源格（`SelectionController.cs:288-296` 发 D115）⇒ 本处确认采集。
+        //   口径：订阅落在**本系统自己的 Awake**（照 `DayCycleSettlement.Awake:17` 先例）；⛔ 禁 Start() 订阅。
+        EventBus.Subscribe<PrioritizeHarvestCommand>(OnPrioritizeHarvest);
         if (SaveManager.Instance != null) SaveManager.Instance.RegisterSaveable(this);
     }
 
@@ -128,6 +133,7 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
     {
         if (_instance != this) return;
         EventBus.Unsubscribe<TimeDayChangedEvent>(OnDayChanged);
+        EventBus.Unsubscribe<PrioritizeHarvestCommand>(OnPrioritizeHarvest);
         base.OnDestroy();
     }
 
@@ -413,9 +419,12 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
         return false;
     }
 
-    /// <summary>实体类资源（OreVein/WoodPile/StonePile）落格后**重建 Building 实体**（承 `HH.10`：格存在但无实体 ⇒ 断供）。</summary>
+    /// <summary>实体类资源（OreVein/WoodPile/StonePile）落格后**重建 Building 实体**（承 `HH.10`：格存在但无实体 ⇒ 断供）。
+    /// 【HH.294 片 6-2·6-A】⭐ **仅对照开关 ON 时生效**（`MapGenRules.SpawnResourceEntities`·旧路径一版·默认 false）
+    /// —— 目标态＝资源点转纯数据，补量落格**不再派生实体**（采集走数据寻址·6-B）。</summary>
     static void SpawnEntityFor(GridCoord coord, FeatureType feature)
     {
+        if (!MapGenRules.SpawnResourceEntities) return;   // 6-A：默认不派生实体（A/B 对照开关）
         if (feature != FeatureType.OreVein && feature != FeatureType.WoodPile && feature != FeatureType.StonePile) return;
         if (BuildingFactory.Instance != null)
             BuildingFactory.Instance.ReSpawnNaturalBuilding(coord, feature);
@@ -451,40 +460,76 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
     }
 
     // ==========================================================================
-    //  4. 采集 ⇒ 池子减 1 点（两条采集链）
+    //  4. 采集 ⇒ 池子减 1 点（【片 6-2·6-D】两链合一：HandleCellGathered 唯一实现）
+    //     入口二：① 玩家 = PrioritizeHarvestCommand → ConfirmResourceGather（6-C）
+    //             ② AI  = WorldGatherRegistry.Advertise → WorldGatherSource（数据寻址）
     // ==========================================================================
 
-    /// <summary>确认采集一棵树（数据格）：校验该格是 Tree feature → 创建 TreeGatherSource 注册进调度器。</summary>
-    public bool ConfirmTreeGather(GridCoord cell)
+    /// <summary>⭐ <b>玩家采集入口（`HH.294` 片 6-2·6-C · `D778` 裁「甲」＝接活死码）</b>：
+    /// 确认采集**一个资源格**（数据寻址·四型统一）→ 注册采集源进 `TaskScheduler`。
+    /// 改前＝`ConfirmTreeGather`（仅 `Tree`·零调用点死码）；本批由 `PrioritizeHarvestCommand` 消费者调用（见 <see cref="OnPrioritizeHarvest"/>）。
+    ///
+    /// 接受面＝<see cref="WorldGatherSource.IsHarvestFeature"/>（＝树 ＋ 一次性三型；
+    /// ⛔ **不含 `Mine`** —— 矿山锚点是**锚点**非采集对象、无产出资源映射；纳入会新增「玩家可采锚点」行为漂移）。
+    /// 派发形态＝**统一 `WorldGatherSource`**（四型同源：源有效直至采集完成 ⇒ 中断后自动重派）。
+    /// 耗时按 feature 取（B-1 逐型原值）；入包量**逐型保原口径**（树＝`treeGatherAmount`；三型＝`TaskScheduler.gatherAmount`）。
+    /// ⚠️ 为何树也走 `WorldGatherSource`（而非 `TreeGatherSource`）：玩家树链改前**零调用点死码**（`D776` 事实 A）
+    /// ⇒ 无"既有行为"可回归；而 `TreeGatherSource` 的「广告后即失效」形态与调度器
+    /// `UpdateAssignedTasks:388` 的 `!IsValid ⇒ Abandon` 有**已知竞态**（`WorldGatherSource` 头注在案：未被派工的
+    /// 那一 tick 会**永久失去再广告机会**——本批探针首跑实测：同一格首发丢失、须二次右键）⇒ 新入口取鲁棒形态。
+    /// （`TreeGatherSource` 类本身保留不动：现无生产调用方 ⇒ 列残余随"验收后删旧路径"一并清。）</summary>
+    public bool ConfirmResourceGather(GridCoord cell)
     {
         if (!Cfg || !Cfg.enabled) return false;
-        if (MapGate.GetFeatureAt(cell) != FeatureType.Tree) return false;
+        var feature = MapGate.GetFeatureAt(cell);
+        if (!WorldGatherSource.IsHarvestFeature(feature)) return false;
 
         Vector2 pos = GridSystem.Instance != null ? GridSystem.Instance.CoordToWorld(cell) : Vector2.zero;
-        var src = new TreeGatherSource(cell, pos, Cfg.treeGatherSeconds, Cfg.treeGatherAmount);
+        int amount = feature == FeatureType.Tree
+            ? Cfg.treeGatherAmount                                                  // 树＝改前树口径
+            : (TaskScheduler.HasInstance ? TaskScheduler.Instance.gatherAmount : 5); // 三型＝改前实体口径
+        var src = WorldGatherSource.ForCell(cell, feature, pos, 0, Cfg, amount);
+        if (src == null) return false;
         if (TaskScheduler.HasInstance) TaskScheduler.Instance.Register(src);
         else return false;
         return true;
     }
 
-    /// <summary>树被砍完成（TreeGatherSource.OnGatherCompletion 调）：格翻 Plain ＋ 守卫失去 ＋ **池子减 1 点**。</summary>
-    public void HandleTreeGathered(GridCoord cell)
+    /// <summary>⭐ 玩家采集入口消费者（`PrioritizeHarvestCommand`·D115「全工人 + 右键资源格」）：
+    /// 落点 → 格（走 `GridSystem` 换算口）→ <see cref="ConfirmResourceGather"/>。
+    /// 非资源格／不可采格 ⇒ 静默返回（零副作用；右键的直移保底仍由 `SelectionController` 走 MoveTo）。</summary>
+    void OnPrioritizeHarvest(PrioritizeHarvestCommand cmd)
     {
-        if (Cfg == null || !Cfg.enabled) return;
-        if (MapGate.RemoveResourceNode(cell))       // 删门（唯一入口·幂等）
-        {
-            // 守卫锚点语义（HH.3 §六 / HH.6）：高价值资源点（树）被采走/覆盖 ⇒ 守卫区域失覆盖 ⇒ LostEvent
-            GuardDeploymentSystem.HandleResourceConsumed(cell);
-            NotifyConsumed(cell, FeatureType.Tree);
-        }
+        var grid = GridSystem.Instance;
+        if (grid == null) return;
+        var cellOpt = grid.WorldToCoord(cmd.TargetPos);
+        if (cellOpt == null) return;
+        if (ConfirmResourceGather(cellOpt.Value))
+            Debug.Log($"[ResourceRespawnSystem] D115 优先采集立案：格 ({cellOpt.Value.x},{cellOpt.Value.y})"
+                      + $" feature={MapGate.GetFeatureAt(cellOpt.Value)}（工人 {cmd.Workers?.Count ?? 0} 名·待调度派发）");
     }
 
-    /// <summary>一次性实体被采集销毁（Building.OnGatherCompleted 调）：格翻 Plain ＋ **池子减 1 点**。</summary>
-    public void HandleEntityDepleted(GridCoord cell, FeatureType feature)
+    /// <summary>⭐ <b>采集完成 · 两链合一（`HH.294` 片 6-2·6-D）</b>：格翻 Plain（走删门·**唯一入口**·幂等）
+    /// ＋ 游荡锚点登记 ＋ **池子减 1 点**。
+    /// 改前＝`HandleTreeGathered`（树链）＋ `HandleEntityDepleted`（实体链）两条各写一遍；差异仅「实体链多一步
+    /// 对象池回收／注册表注销」（随实体退役消失）。
+    /// ⚠️ <b>守卫失去通知不在此处</b>：`MapGate.RemoveResourceNode` 门内已含（`MapGate.cs:308`）——
+    /// 改前树链在此多调一次（清洁项·已删；`HandleResourceConsumed` 幂等，重复调用零效果）。
+    /// ️ <b>游荡锚点面逐型保原口径</b>：改前仅**实体链**登记（`Building.OnGatherCompleted:913`·唯一调用点），
+    /// 树链不登记 ⇒ 本处只对**一次性三型**登记（树的闲逛锚点面**不新增**，避免游荡行为漂移）。</summary>
+    public void HandleCellGathered(GridCoord cell)
     {
         if (Cfg == null || !Cfg.enabled) return;
-        if (MapGate.RemoveResourceNode(cell))
-            NotifyConsumed(cell, feature);
+        var feature = MapGate.GetFeatureAt(cell);          // 先读（删门会把格翻 Plain）
+        if (!WorldGatherSource.IsHarvestFeature(feature)) return;
+        if (!MapGate.RemoveResourceNode(cell)) return;     // 删门（唯一入口·幂等；门内 `:308` 已含守卫失去通知）
+
+        // ①b 采集后空地加入闲逛锚点池（QQQ.2 T8 / DR-21；承接自 `Building.OnGatherCompleted:913`）
+        if (feature != FeatureType.Tree && WanderAnchorPool.Instance != null)
+            WanderAnchorPool.Instance.RegisterFreeSpot(GridSystem.Instance != null
+                ? GridSystem.Instance.CoordToWorld(cell) : Vector2.zero);
+
+        NotifyConsumed(cell, feature);
     }
 
     /// <summary>池子减 1 点 ＋ 记「该格刚空出」（供落点避让／兜底原位）。矿洞按簇计，单格消费不改点数（见交付报告）。</summary>

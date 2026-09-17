@@ -51,6 +51,8 @@ public static class Valley_HH272_MapGenProbe
             MapValidator.ValidateConnectivity(map);
         }
         MapGenRules.PlaceThreatSpawns(rng, map, cfg, difficulty);
+        // 【HH.294 片 6-2·6-A 同步】默认（`MapGenRules.SpawnResourceEntities=false`）⇒ `naturalBuildings` **恒空**
+        //   （资源点转纯数据）；本探针不读其内容（只 Mine 相关读数·恒 0 语义不变）。A/B 对照须显式置开关为 true。
         MapGenRules.DeriveNaturalBuildings(map);
         return map;
     }

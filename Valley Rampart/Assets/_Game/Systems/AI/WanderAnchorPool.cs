@@ -7,7 +7,7 @@ using UnityEngine;
 //  锚点来源：
 //    ├── 城堡中心 + 周边预设点（开局生成，15s 随城堡刷新自愈跨岛/新局）
 //    ├── 已建成建筑附近（BuildingRegistry 扫描，5s 重建——摧毁自动消失）
-//    ├── 资源点采集后空地（Building.OnGatherCompleted 显式注册，持久）
+//    ├── 资源点采集后空地（【HH.294 片 6-2·6-D】改由 `ResourceRespawnSystem.HandleCellGathered` 显式注册·持久）
 //    └── 道路节点/军队驻扎（地图生成/编队后可选接入，本版占位跳过）
 //  查询：
 //    TryPickAnchor  —— WanderStimulusProvider 闲逛抽点（近邻优先+随机抖动+最近N不重抽）
@@ -135,7 +135,8 @@ public class WanderAnchorPool : Singleton<WanderAnchorPool>
             ? GridSystem.Instance.Config.cellSize.x : 2.26f;
     }
 
-    /// <summary>资源点采集后空地锚点（持久；Building.OnGatherCompleted 调）。</summary>
+    /// <summary>资源点采集后空地锚点（持久；【HH.294 片 6-2·6-D】由 `ResourceRespawnSystem.HandleCellGathered` 调
+    /// —— 承接改前 `Building.OnGatherCompleted:913` 的唯一调用点）。</summary>
     public void RegisterFreeSpot(Vector2 worldPos)
     {
         if (_freeSpots.Count >= MaxFreeSpots) return;

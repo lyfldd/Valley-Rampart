@@ -1502,6 +1502,12 @@ public static class MapGenRules
     }
 
     // ===== 步骤 11：naturalBuildings 派生（视觉层/一次性可采集实体，不反向改可走）=====
+
+    /// <summary>⭐ <b>6-A 对照开关</b>（`HH.294` 片 6-2·`D778`）：true ＝ 保留改前旧路径（一次性三型派生
+    /// `Building` 实体 — 双写态，供**同一 build 内 A/B 对照**）；false（**默认**）＝ 目标态**纯数据**。
+    /// 治理三处：<see cref="DeriveNaturalBuildings"/>（派生白名单）／`BuildingFactory.InstantiateFromMap`
+    /// （自然建筑循环）／`ResourceRespawnSystem.SpawnEntityFor`（重生附加实体）。**验收后随旧路径一并删**。</summary>
+    public static bool SpawnResourceEntities = false;
     // A+（HH.2）落地：树/雪山不再派生 Building 实体——它们归 2_10 Tilemap 特征层渲染 +
     // features 数据承载（装饰持续节点），不再建 1.6 万个 GameObject（消灭加载 20s 根因）。
     // **HH.291 A6（F-09）修正：已于 HH.293 B1 回退**——`Mine` **不**派生实体（撤销原因见方法内注释：
@@ -1510,6 +1516,13 @@ public static class MapGenRules
     public static void DeriveNaturalBuildings(MapData map)
     {
         map.naturalBuildings.Clear();
+
+        // 【HH.294 片 6-2·6-A（`D778`）】**对照开关**：true ＝ 保留改前旧路径（三型派生 Building 实体），
+        //   供**同一 build 内 A/B 对照**；默认 false ＝ 目标态（资源点转**纯数据**，采集走数据寻址·6-B/6-C）。
+        //   ⇒ 默认路径下 `naturalBuildings` **恒为空**（判据 1：生成一张图 ⇒ 三型 Building 实例数 = 0）。
+        //   ️ 旧路径（本方法循环 ＋ `BuildingFactory.InstantiateFromMap` 自然建筑循环 ＋ `ResourceRespawnSystem.SpawnEntityFor`
+        //   ＋ `BuildingFactory.FeatureToBuildingType` 三型分支）**验收后随本开关一并删**。
+        if (!SpawnResourceEntities) return;
         // **HH.293 B1（D737 强制回退）**：`FeatureType.Mine`（矿山锚点）**撤出**派生白名单 ——
         //   实机曾因 HH.291 A6 加入该分支 ⇒ Mine 实例 429（改前 0）＝「矿山随处可见」直接来源，
         //   且与「建筑体系重构批 T6」（mine 转型＝限位建造建筑）冲突必返工。

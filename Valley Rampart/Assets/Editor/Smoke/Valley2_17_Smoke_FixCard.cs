@@ -9,7 +9,9 @@ using static BuildingFactory;
 //  2_17 修复卡 行为级冒烟（α 无主源先到先得 / β AI产出链 / γ AI物流 / 零污染）
 //  用法：菜单「Valley/验证/2_17_修复卡_行为级冒烟」——须 Play 上下文（先 Play 再点）。
 //  覆盖（依修复卡，全部行为级真派真产出）：
-//    α: 自然建筑(-1) isBeingGathered → Gather 任务真派到玩家工人（HasWorkerAssigned 为真、玩家工人 Working）
+//    α: 【HH.294 片 6-2·6-D 改写·`D778` B-4⑦】一次性资源点**数据寻址**：
+//       格表落 OreVein ＋ 玩家入口 `ConfirmResourceGather`（＝右键资源格的同一条链）→ Gather 任务真派到玩家工人
+//       （改前＝给 ore_vein Building 置 `isBeingGathered` 触发其广告；实体退役后该形态已不存在）
 //    β: AI 生产建筑(kingdomId>0)照常发布 Production → AI 工人被派且产出 tick（storage.storedAmount 增）
 //    γ: AI 建筑存储满 → Transport → AI 工人拉货 → 卸回 AI 仓库（同国 FindNearestAvailable，不落玩家库）
 //    零污染: 玩家工人紧贴 AI 源也不被派（Player worker 相邻 AI 源仍属 None）
@@ -85,18 +87,17 @@ public static class Valley2_17_Smoke_FixCard
 
         // ===== ① 构造受控对象（工厂 = 真初始化链路）=====
         // AI 生产建筑 P（quarry：Producer+Storage，产 Ore 非水依赖）；AI 纯存储 W（同 quarry def 拆成品库挂 Storage，
-        // 产出去势 + 撤销任务源 = 纯同储卸货落点）；自然矿 O（ore_vein：isConsumable，玩家采集）
+        // 产出去势 + 撤销任务源 = 纯同储卸货落点）。
+        // 【HH.294 片 6-2·6-D】原「自然矿 O（ore_vein Building）」**已删** —— 一次性资源点转纯数据，
+        //   α 段改走格表（`MapGate.PlaceResourceNode` ＋ `ConfirmResourceGather`）；O 保留为 null 形参位（诊断链兼容）。
         Building P = null, W = null, O = null;
         var prodDef = FindDefById("quarry");
-        var oreDef = FindDefById("ore_vein");
 
         Vector2 pPos = World(grid, 20, 20), wPos = World(grid, 21, 20), oPos = World(grid, 80, 80);
         if (prodDef != null)
             P = MakeBuilding(prodDef, BuildingType.Mine, pPos, 9, grid);
         if (prodDef != null)
             W = MakeBuilding(prodDef, BuildingType.Mine, wPos, 9, grid);
-        if (oreDef != null)
-            O = MakeBuilding(oreDef, BuildingType.OreVein, oPos, -1, grid);
 
         // 把 W 改成"纯 AI 接货仓库"：禁产 + 撤任务源（仍是 StorageComponent，留 WarehouseRegistry 同储匹配）
         if (W != null)
@@ -120,14 +121,15 @@ public static class Valley2_17_Smoke_FixCard
         var wpO = Worker(grid, 0, oC);
         yield return null;                    // 注册帧：npcId 稳定
 
-        if (P == null || W == null || O == null || wp1.unitId == 0 || Wa1.unitId == 0 || wpO.unitId == 0)
+        // 【片 6-2】O（改前自然矿实体）不再参与 setup 判否 —— α 段改走格表数据寻址（见下）
+        if (P == null || W == null || wp1.unitId == 0 || Wa1.unitId == 0 || wpO.unitId == 0)
         { checks.Add("setup-FAIL"); yield break; }
 
         // 清环境侧干扰（确定性关键）：销毁所有非受控单位；撤销所有非受控建筑的任务源。
         // → 只剩 P(产/运)、W(纯AI接货仓)、O(-1自然矿) 三个源 + 三个受控工人，每轮布尔串只由受控切片决定，
         //   屏蔽背景自动世界 GameOver/停滞/抢派/抢采 对两轮一致性的污染。
         ClearAmbient(new System.Collections.Generic.HashSet<int> { wp1.unitId, Wa1.unitId, wpO.unitId },
-                     new Building[] { P, W, O });
+                     new Building[] { P, W });   // 【片 6-2】O 不再是受控建筑（数据格资源·无实体）
         yield return WaitFrames(5);           // 让清理销毁落地，避免首 tick 派到被清单位
 
         // 物理到达容差（冒烟 harness）：多格生产建筑会把旁站工人推到距中心 ~0.7 处，而默认到达阈值
@@ -165,22 +167,37 @@ public static class Valley2_17_Smoke_FixCard
         checks.Add($"γAI物流卸回AI仓={(gammaTransported ? "OK" : "FAIL")}");
         LogDiag("gamma", sched, P, W, O, wp1, Wa1, wpO);
 
-        // ===== α : -1 无主源 = 先到先得池，玩家空闲工人即可承接采集 =====
-        // def.gatherSeconds 采集（含完成销毁时序）：在窗口内 EVER 捕获 HasWorkerAssigned/Working，避免窄窗误判。
+        // ===== α : 【HH.294 片 6-2·6-D 改写】一次性资源点**数据寻址** → 玩家入口立案 → 玩家工人承接 =====
+        //   改前形态：给 ore_vein Building 置 `isBeingGathered`（其 `TryAdvertiseTask` 广告 Gather）；
+        //   改后形态（本批目标态）：格表落 OreVein ＋ `ConfirmResourceGather`（= D115 右键资源格同一条链），
+        //   源 KingdomId=0 ⇒ 玩家池承接（与改前「-1 无主源先到先得」对玩家工人的效果同源）。
+        // 采集耗时＝8s（RespawnConfig.oreVeinGatherSeconds·逐型保原值）⇒ 60 帧 ≈1s 采样窗内可捕获 Moving/Working。
         bool alphaAssigned = false, alphaWorking = false;
-        if (O != null)
         {
-            O.isBeingGathered = true;   // 确认采集自然矿（-1 无主源）→ 发布 Gather
-            for (int i = 0; i < 60 && !(alphaAssigned && alphaWorking); i++)   // ≈1s 采样窗，远小于 2s 采集
+            // 找一块 Plain 自由格（沿 oPos 邻域扫；改前直接放实体不看地形，数据格需落在可放地表）
+            GridCoord? oCell = null;
+            for (int dy = -6; dy <= 6 && oCell == null; dy++)
+                for (int dx = -6; dx <= 6; dx++)
+                {
+                    var c = new GridCoord(80 + dx, 80 + dy);
+                    if (MapGate.GetFeatureAt(c) == FeatureType.Plain) { oCell = c; break; }
+                }
+            bool placed = oCell.HasValue && MapGate.PlaceResourceNode(oCell.Value, FeatureType.OreVein);
+            bool confirmed = placed && ResourceRespawnSystem.HasInstance
+                             && ResourceRespawnSystem.Instance.ConfirmResourceGather(oCell.Value);
+            Debug.Log($"[FixCard diag·alpha-setup] 格={(oCell.HasValue ? oCell.Value.ToString() : "无")}"
+                      + $" 落格={placed} 立案={confirmed}（WorldGatherSource·KingdomId=0 ⇒ 玩家池）");
+            for (int i = 0; i < 60 && !(alphaAssigned && alphaWorking); i++)   // ≈1s 采样窗（采集耗时 8s）
             {
                 Time.timeScale = 1f;
                 yield return null;
-                if (!alphaAssigned && sched.HasWorkerAssigned(O)) alphaAssigned = true;
-                if (!alphaWorking && sched.GetWorkerState(wpO.unitId) == TaskState.Working) alphaWorking = true;
+                var st = sched.GetWorkerState(wpO.unitId);
+                if (!alphaAssigned && (st == TaskState.MovingToSource || st == TaskState.Working)) alphaAssigned = true;
+                if (!alphaWorking && st == TaskState.Working) alphaWorking = true;
             }
         }
         LogDiag("alpha", sched, P, W, O, wp1, Wa1, wpO);
-        checks.Add($"α自然(-1)派工={(alphaAssigned ? "OK" : "FAIL")}");
+        checks.Add($"α数据格派工={(alphaAssigned ? "OK" : "FAIL")}");
         checks.Add($"α玩家工人采到(Working)={(alphaWorking ? "OK" : "FAIL")}");
 
         // 还原到达容差（harness 参数不用溢出到世界）

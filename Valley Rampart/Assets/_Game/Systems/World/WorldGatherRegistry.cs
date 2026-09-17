@@ -24,7 +24,7 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
     {
         public WorldGatherSource Source;
         public GridCoord Cell;
-        public bool IsTree;
+        // 【HH.294 片 6-2·6-B】原 `IsTree` 维度已消除：四型统一走数据寻址（格 ＋ 地表物），幂等键＝格。
     }
 
     private readonly Dictionary<int, List<Entry>> _byKingdom = new Dictionary<int, List<Entry>>();
@@ -48,7 +48,7 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
         if (map == null || map.features == null) return 0;
         int n = 0;
         for (int i = 0; i < list.Count; i++)
-            if (TryMatchPoint(map, list[i].Cell, resource, out _, out _)) n++;
+            if (TryMatchPoint(map, list[i].Cell, resource, out _)) n++;
         return n;
     }
 
@@ -102,17 +102,22 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
                 for (int x = mid.x * ms; x < (mid.x + 1) * ms; x++)
                 {
                     var cell = new GridCoord(x, y);
-                    if (!TryMatchPoint(map, cell, resource, out bool isTree, out Building entity)) continue;
+                    if (!TryMatchPoint(map, cell, resource, out var feature)) continue;
                     candidates++;
-                    if (Contains(list, cell, isTree)) continue;     // 幂等：已在册点不重复立案
+                    if (Contains(list, cell)) continue;             // 幂等：已在册点不重复立案
                     if (registered >= room) continue;               // 在册上限（仍有候选 ⇒ 明日/腾位后再立案）
 
                     var pos = grid.CoordToWorld(cell);
-                    var src = isTree
-                        ? WorldGatherSource.ForTree(cell, pos, kingdomId, resCfg)
-                        : WorldGatherSource.ForEntity(entity, pos, kingdomId, sched.gatherAmount);
+                    // 【HH.294 片 6-2·6-B】四型统一数据寻址（`ForEntity` 退役）。
+                    // 入包量**逐型保原口径**：树＝`RespawnConfig.treeGatherAmount`（改前 ForTree 口径），
+                    // 一次性三型＝`TaskScheduler.gatherAmount`（改前 ForEntity 口径）。
+                    int amount = feature == FeatureType.Tree
+                        ? (resCfg != null ? resCfg.treeGatherAmount : sched.gatherAmount)
+                        : sched.gatherAmount;
+                    var src = WorldGatherSource.ForCell(cell, feature, pos, kingdomId, resCfg, amount);
+                    if (src == null) continue;                      // 不可采地表物（含 Mine 锚点）⇒ 不生源
                     sched.Register(src);
-                    list.Add(new Entry { Source = src, Cell = cell, IsTree = isTree });
+                    list.Add(new Entry { Source = src, Cell = cell });
                     registered++;
                 }
             }
@@ -145,38 +150,29 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
         foreach (var mid in ts.GetKingdomTerritory(kingdomId))
             for (int y = mid.y * ms; y < (mid.y + 1) * ms; y++)
                 for (int x = mid.x * ms; x < (mid.x + 1) * ms; x++)
-                    if (TryMatchPoint(map, new GridCoord(x, y), resource, out _, out _)) return true;
+                    if (TryMatchPoint(map, new GridCoord(x, y), resource, out _)) return true;
         return false;
     }
 
-    /// <summary>该格是否本国可采的目标资源点（树=数据格 features；一次性实体=Building 注册表 + `isConsumable` + 产出匹配）。</summary>
-    private static bool TryMatchPoint(MapData map, GridCoord cell, ResourceType resource, out bool isTree, out Building entity)
+    /// <summary>该格是否本国可采的目标资源点（**只由格表决定**·`03` §8 判据 2）：
+    /// 地表物 → 产出资源映射（<see cref="WorldGatherSource.TryResourceOf"/> 单源），命中即中。
+    /// 【HH.294 片 6-2·6-B】改前 ② Building 实体分支（`isConsumable`＋`outputResource` 匹配）**已删** ——
+    /// 一次性资源点转纯数据后无实体可查；语义（四型 → 木/石/矿）由 feature 映射 1:1 承接。
+    /// ⛔ `Mine`（矿山锚点）不在映射内 ⇒ 与改前一致（锚点从不进采集立案）。</summary>
+    private static bool TryMatchPoint(MapData map, GridCoord cell, ResourceType resource, out FeatureType feature)
     {
-        isTree = false;
-        entity = null;
+        feature = FeatureType.Plain;
         if (cell.x < 0 || cell.y < 0 || cell.x >= map.width || cell.y >= map.height) return false;
-
-        // ① 数据格树（A+ 数据化，不建实体；木的唯一持续来源）
-        if (resource == ResourceType.Wood)
-        {
-            if (MapGate.ReadAt(map, cell.x, cell.y) == FeatureType.Tree) { isTree = true; return true; }   // 【HH.294 片4·4-A】读走查门
-        }
-
-        // ② 一次性可采实体（stone_pile／ore_vein／wood_pile：isConsumable=1 且产出该资源）
-        var reg = BuildingRegistry.Instance;
-        var b = reg != null ? reg.GetAt(cell) : null;
-        if (b != null && b.IsValid && b.def != null && b.def.isConsumable && b.def.outputResource == resource)
-        {
-            entity = b;
-            return true;
-        }
-        return false;
+        var f = MapGate.ReadAt(map, cell.x, cell.y);   // 【HH.294 片4·4-A】读走查门
+        if (!WorldGatherSource.TryResourceOf(f, out var rt) || rt != resource) return false;
+        feature = f;
+        return true;
     }
 
-    private static bool Contains(List<Entry> list, GridCoord cell, bool isTree)
+    private static bool Contains(List<Entry> list, GridCoord cell)
     {
         for (int i = 0; i < list.Count; i++)
-            if (list[i].Cell == cell && list[i].IsTree == isTree) return true;
+            if (list[i].Cell == cell) return true;
         return false;
     }
 

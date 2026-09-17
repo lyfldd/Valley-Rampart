@@ -474,22 +474,15 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             any = true;
         }
 
-        // 一次性资源点（QQQ.2 T19 / DR-11）：采集入口——显示资源类型 + 预计耗时，确认后发布 Gather 任务
-        if (def.isConsumable)
-        {
-            AddFunctionRow("资源", $"{def.outputResource} × {GatherAmount()}");
-            AddFunctionRow("预计耗时", $"{def.gatherSeconds:F0} 秒");
-            AddFunctionButton(_target.isBeingGathered ? "采集中…" : "采集", OnGatherClicked);
-            any = true;
-        }
+        // 一次性资源点采集入口（QQQ.2 T19 / DR-11）—— 【HH.294 片 6-2·6-D】**成死码 ⇒ 已退役**
+        //   改前：`if (def.isConsumable)` 行内「资源 ×N / 预计耗时 / 采集按钮」→ `_target.StartGather()`。
+        //   本批：① 资源点转纯数据（6-A）⇒ 一次性三型（ore_vein/stone_pile/wood_pile）**不再是 Building**，
+        //          本分支在实盘无活对象（`isConsumable=1` 余 `treasure_box`＝待退役死资产·无实例化路径）；
+        //        ② 玩家采集入口改走**右键资源格**（D115 `PrioritizeHarvestCommand` → `ConfirmResourceGather`，
+        //           `05` 交互层的数据格面板留中批次）。
+        //   ⇒ 按钮/耗时行/采集量读口一并退役（`StartGather`／`isBeingGathered` 同批删除）。
 
         _functionArea.style.display = any ? DisplayStyle.Flex : DisplayStyle.None;
-    }
-
-    /// <summary>一次性资源点采集量（对齐调度器 gatherAmount，数据驱动）。</summary>
-    private static int GatherAmount()
-    {
-        return TaskScheduler.HasInstance ? TaskScheduler.Instance.gatherAmount : 5;
     }
 
     /// <summary>威胁热度 → 等级文案（D118；阈值对齐 AttentionTuningConfig：敌压近 0.3 / 冲锋 0.6）。</summary>
@@ -585,13 +578,8 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         UIManager.Instance?.Push(machinePanel, _lastCtx);
     }
 
-    /// <summary>采集按钮（QQQ.2 T19 / DR-11）：确认采集 → 锁定资源点 → 调度器下 tick 派发 Gather；关闭面板。</summary>
-    private void OnGatherClicked()
-    {
-        if (_target == null) return;
-        _target.StartGather();
-        UIManager.Instance?.CloseCurrent();
-    }
+    // 【HH.294 片 6-2·6-D】原 `OnGatherClicked`（采集按钮 → `_target.StartGather()`）随「一次性资源点不再是
+    //   Building ⇒ 本入口成死码」**已退役**（见 `RefreshFunctions` 内退役注）；玩家采集入口改走右键资源格。
 
     private void OnCloseClicked()
     {

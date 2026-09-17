@@ -160,17 +160,58 @@ public class WanderStimulusProvider
         }
     }
 
-    /// <summary>从 BuildingRegistry 分拣资源点（废墟/采集点）与食物点（浆果/农田）世界坐标。</summary>
+    /// <summary>从 BuildingRegistry 分拣资源点（废墟/采集点）与食物点（浆果/农田）世界坐标；
+    /// ＋ 【HH.294 片 6-2·6-E / `D778` B-2b】**格表来源**：`OreVein` 格（一次性资源点转纯数据后，
+    /// `ore_vein` 实体消失 ⇒ 由格表补回其「游荡锚点候选」语义；**只 OreVein**，见下注）。</summary>
     void CollectResourceFoodSites(List<Vector2> resourceSites, List<Vector2> foodSites)
     {
-        if (BuildingRegistry.Instance == null) return;
-        foreach (var b in BuildingRegistry.Instance.All)
+        if (BuildingRegistry.Instance != null)
         {
-            if (b == null || b.def == null || !b.IsActive) continue;
-            bool food = IsFoodDef(b.def);
-            if (food) foodSites.Add((Vector2)b.GetPosition());
-            else if (IsResourceDef(b.def)) resourceSites.Add((Vector2)b.GetPosition());
+            foreach (var b in BuildingRegistry.Instance.All)
+            {
+                if (b == null || b.def == null || !b.IsActive) continue;
+                bool food = IsFoodDef(b.def);
+                if (food) foodSites.Add((Vector2)b.GetPosition());
+                else if (IsResourceDef(b.def)) resourceSites.Add((Vector2)b.GetPosition());
+            }
         }
+        AppendOreVeinCells(resourceSites);
+    }
+
+    // ===== 【HH.294 片 6-2·6-E / `D778` B-2b】`OreVein` 格表来源 =====
+    //   背景：改前 `ore_vein` 有 Building 实体（`isResourceNode=1`）⇒ `CollectResourceFoodSites` 收为候选；
+    //         6-A 实体退役 ⇒ 不收 ⇒ 静默丢「游荡锚点候选」语义。本处按格表（features）补回。
+    //   ⛔ **只 `OreVein`**：`stone_pile`/`wood_pile` 的 `isResourceNode=0` 是 **DZ-054/D617 已裁口径**
+    //     （「三资产值不齐＝语义差异非缺陷，不统一为 1——统一会造成批内行为漂移」，见 `IsResourceDef` 注）；
+    //     纳入两型＝新增游荡锚点 ⇒ 撞已裁。
+    //   ⚠️ 代价口径（`03` §8.7 判据 7 禁每帧）：全图 features 扫**共享缓存 ≥12s 才重建一次**
+    //     （静态 → 全 NPC 共用；`Reset()`／换图时按图引用失效），非每帧、非每 NPC。读数见 HH.307 报告。
+    private static readonly List<Vector2> _oreVeinCells = new List<Vector2>();
+    private static float _oreVeinCacheTime = float.NegativeInfinity;
+    private static MapData _oreVeinCacheMap;
+    private const float OreVeinCacheTtl = 12f;   // `D778` B-2b 指定：刷新口间隔 12s
+
+    private static void AppendOreVeinCells(List<Vector2> resourceSites)
+    {
+        var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
+        var grid = GridSystem.Instance;
+        if (map == null || map.features == null || grid == null) return;
+        if (!ReferenceEquals(map, _oreVeinCacheMap))   // 换图 ⇒ 立即失效（跨局/跨轮自愈）
+        {
+            _oreVeinCacheMap = map;
+            _oreVeinCacheTime = float.NegativeInfinity;
+        }
+        float now = Time.time;
+        if (now - _oreVeinCacheTime >= OreVeinCacheTtl)
+        {
+            _oreVeinCacheTime = now;
+            _oreVeinCells.Clear();
+            for (int y = 0; y < map.height; y++)
+                for (int x = 0; x < map.width; x++)
+                    if (MapGate.ReadAt(map, x, y) == FeatureType.OreVein)
+                        _oreVeinCells.Add(grid.CoordToWorld(new GridCoord(x, y)));
+        }
+        for (int i = 0; i < _oreVeinCells.Count; i++) resourceSites.Add(_oreVeinCells[i]);
     }
 
     static bool IsFoodDef(BuildingDef def) =>

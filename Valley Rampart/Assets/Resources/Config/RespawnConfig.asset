@@ -15,3 +15,6 @@ MonoBehaviour:
   enabled: 1
   treeGatherSeconds: 2
   treeGatherAmount: 5
+  oreVeinGatherSeconds: 8
+  stonePileGatherSeconds: 4
+  woodPileGatherSeconds: 2

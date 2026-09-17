@@ -637,7 +637,9 @@ public static class UtilityScorer
                 return true;
             case UtilityAction.GatherWorldResource:
                 // ㉗ 采集世界资源点（HH.221/D685 A②）：硬门槛＝**本国领土内存在可采该资源的点**
-                //（树=数据格 features；一次性实体=Building 注册表 isConsumable+产出匹配）——
+                //（【HH.294 片 6-2·6-B 勘正】一律＝**数据格 features**：树＋一次性三型的地表物→资源映射
+                //  `WorldGatherSource.TryResourceOf`；改前「一次性实体=Building 注册表 isConsumable+产出匹配」
+                //  已随实体退役删除）——
                 // 来源与选点层**同源单函数**（`WorldGatherRegistry.HasCandidate`，禁另抄匹配逻辑 L-31）。
                 // 无候选 ⇒ 不评（防"评分选中→执行空转→退避灌满"的 HH.193 同型缺陷）。
                 {
