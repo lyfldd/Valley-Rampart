@@ -72,7 +72,7 @@ public static class Valley_HH291_MapGenProbe
 
     static float TOfBand(MapGenRulesConfig cfg, int band, int difficulty, bool useOld)
     {
-        float T = cfg != null ? cfg.resourcesPerChunkBase : 120f;
+        float T = cfg != null ? cfg.poolCapBase : 96f;   // 【HH.294 片 5】`resourcesPerChunkBase` 已删 ⇒ 改读 `poolCapBase`（cap 基准）
         if (!useOld) T *= cfg != null ? cfg.GetBandAbundance((ClimateZone)band) : 1f;
         int di = Mathf.Clamp(difficulty - 1, 0, 2);
         float scale = cfg != null && cfg.difficultyResourceScale != null && cfg.difficultyResourceScale.Length > di
@@ -142,7 +142,7 @@ public static class Valley_HH291_MapGenProbe
                           $"（abundance={(cfg != null ? cfg.GetBandAbundance((ClimateZone)b) : 1f):0.0}）· 矿洞={pits[b, 4]}u（≈{pits[b, 4] / 4.0:0.0} 簇）");
         }
         float mean = 0f; for (int b = 0; b < 4; b++) mean += TOfBand(cfg, b, difficulty, false); mean /= 4f;
-        sb.AppendLine($"  [{label}] **M7**：T×abundance 四带均值 = **{mean:0.0}**（基准 resourcesPerChunkBase={cfg.resourcesPerChunkBase}，难度 {difficulty}）");
+        sb.AppendLine($"  [{label}] **M7**：T×abundance 四带均值 = **{mean:0.0}**（基准 poolCapBase={cfg.poolCapBase}，难度 {difficulty}）");
 
         // D736 §四：双列对照——「生成期配额」vs「运行期可采实体数」·逐类对照改前
         //   改前模型（1 格 = 1 资源实例）：配额=可采（1:1）；改后（坑位模型）：可采实体=容纳该类的格数。
@@ -261,7 +261,7 @@ public static class Valley_HH291_MapGenProbe
         _log.Clear();
         var cfg = Cfg();
         _log.AppendLine("======== HH.291 地图生成口径修复批 · 验收读数（生成层直调）========");
-        _log.AppendLine($"配置：resourcesPerChunkBase={cfg.resourcesPerChunkBase} guaranteeRatio={cfg.guaranteeRatio} 难度系数=[{string.Join(",", cfg.difficultyResourceScale)}] clearR={cfg.kingdomClearRadius}");
+        _log.AppendLine($"配置：poolCapBase={cfg.poolCapBase} guaranteeRatio={cfg.guaranteeRatio} 难度系数=[{string.Join(",", cfg.difficultyResourceScale)}] clearR={cfg.kingdomClearRadius}");
         _log.AppendLine($"      A3 bandResourceAbundance=[{string.Join(",", cfg.bandResourceAbundance)}] ｜ A2 mine w 四带=[{cfg.resourceWeights[0].mine},{cfg.resourceWeights[1].mine},{cfg.resourceWeights[2].mine},{cfg.resourceWeights[3].mine}]");
 
         _log.AppendLine("\n---- [256²/Normal(diff2)] ----");

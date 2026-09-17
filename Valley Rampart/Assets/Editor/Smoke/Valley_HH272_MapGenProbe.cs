@@ -133,7 +133,7 @@ public static class Valley_HH272_MapGenProbe
     public static string ResRead(MapData m, MapGenRulesConfig cfg, int difficulty, string label)
     {
         int cw = MapGenRules.ChunkW(m), ch = MapGenRules.ChunkH(m);
-        float T = cfg != null ? cfg.resourcesPerChunkBase : 120f;
+        float T = cfg != null ? cfg.poolCapBase : 96f;   // 【HH.294 片 5】`resourcesPerChunkBase` 已删 ⇒ 改读 `poolCapBase`（cap 基准）
         int di = Mathf.Clamp(difficulty - 1, 0, 2);
         float scale = cfg != null && cfg.difficultyResourceScale != null && cfg.difficultyResourceScale.Length > di
             ? cfg.difficultyResourceScale[di] : 1f;
@@ -354,7 +354,7 @@ public static class Valley_HH272_MapGenProbe
         var cfg = Cfg();
         var sb = new StringBuilder();
         sb.AppendLine("================ HH.272 地图生成重构批 · 验收读数 ================");
-        sb.AppendLine($"配置：resourcesPerChunkBase={cfg.resourcesPerChunkBase} guaranteeRatio={cfg.guaranteeRatio} " +
+        sb.AppendLine($"配置：poolCapBase={cfg.poolCapBase} guaranteeRatio={cfg.guaranteeRatio} " +
                       $"难度系数=[{string.Join(",", cfg.difficultyResourceScale)}] kingdomClearRadius={cfg.kingdomClearRadius}");
         sb.AppendLine($"      簇 min/typMin/typMax/max={cfg.clusterSizeMin}/{cfg.clusterSizeTypicalMin}/{cfg.clusterSizeTypicalMax}/{cfg.clusterSizeMax} " +
                       $"山体占比=[{string.Join(",", cfg.mountainCellRatio)}] 雪占比=[{string.Join(",", cfg.mountainSnowRatio)}]");

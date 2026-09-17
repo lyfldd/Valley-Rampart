@@ -207,8 +207,9 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         if (foundKingdoms)
             KingdomFoundry.FoundFirstGeneration(rng, map, difficulty);               // 2_16 步骤5
 
-        // HH.10：新地图/读档 → 清空全资源刷新重生记录（禁跨图残留幽灵坐标）
-        if (ResourceRespawnSystem.HasInstance) ResourceRespawnSystem.Instance.ResetRespawns();
+        // HH.10：新地图/读档 → 按当前地图**重建资源池**（`HH.294` 片 5：逐格到期表 ⇒ 区块池子表·禁跨图残留幽灵坐标）
+        // ⚠️ 必须显式传 `map`／`difficulty`：本调用点在 `_world.maps.Add(map)` **之前** ⇒ `ActiveMap` 仍为 null。
+        if (ResourceRespawnSystem.HasInstance) ResourceRespawnSystem.Instance.ResetRespawns(map, difficulty);
 
         Debug.Log($"[WorldManager] 地图生成（2_1）: mapId={mapId}, seed={seed}, {width}x{height}, " +
                   $"出生点={map.kingdomSpawns.Count}, 威胁点={map.threatSpawns.Count}, 自然建筑={map.naturalBuildings.Count}, " +

@@ -694,7 +694,7 @@ public static class MapGenRules
     // ========================================================================
 
     /// <summary>特征物填充。**HH.272 件②④**：① 山脉化（脊线 + 扩宽 ⇒ 带状，替代逐格概率散点）；
-    /// ② 资源按「坑位模型 + 权重表归一化配额」落位（T=`resourcesPerChunkBase` × 难度系数，保底 B_i）。</summary>
+    /// ② 资源按「坑位模型 + 权重表归一化配额」落位（`cap = poolCapBase × 丰度 × 难度`，开局目标 `E_i^open`，保底 B_i）。</summary>
     public static void FillFeatures(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty)
     {
         int n = map.width * map.height;
@@ -805,10 +805,11 @@ public static class MapGenRules
             Debug.Log($"[MapGenRules] 山脉化：清除 <{minSize} 格山体碎片 {pruned} 格（件④·4-连通最小尺寸约束）。");
     }
 
-    /// <summary>资源配额落格（件②）。每大区块：T = `resourcesPerChunkBase` × **地带丰度** × 难度系数；
-    /// 权重表归一化 p_i=(1−w_i)/Σ(1−w_j)；E_i=T×p_i；保底 B_i=floor(E_i×guaranteeRatio)。
+    /// <summary>资源配额落格（件②）。每大区块：`cap = poolCapBase × 地带丰度 × 难度系数`（`D774`/`D773`）；
+    /// 权重表归一化 `p_i=(1−w_i)/Σ(1−w_j)`；**落格目标＝开局目标** `E_i^open = cap × p_i × poolOpenRatio`；
+    /// 保底 `B_i = floor(E_i^open × guaranteeRatio)`（矿洞 ＝ 0）。
     /// **坑位模型（HH.291 A4）**：每 Cell 拆 2×2 子坑位（格内固定偏移·天然不重叠），**一格最多 4 个资源**
-    /// （同格**同型**——features 逐格唯一功能源）；矿洞例外＝**2×2 Cell 粒度**（先占整块，再在剩余 Cell 填坑位）。</summary>
+    /// （同格**同型**——features 逐格唯一功能源）；矿洞例外＝**2×2 Cell 粒度 ＝ 1 点**（先占整块，再在剩余 Cell 填坑位）。</summary>
     static void PlaceResourceQuota(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty, bool skipClearZone)
     {
         int cw = ChunkW(map), ch = ChunkH(map);
@@ -816,13 +817,15 @@ public static class MapGenRules
         var candidates = new List<int>(ChunkSize * ChunkSize);
         var e = new float[ResourceKindCount];
         var b = new int[ResourceKindCount];
+        var kindCap = new float[ResourceKindCount];
+        var share = new float[ResourceKindCount];
 
         for (int cy = 0; cy < ch; cy++)
             for (int cx = 0; cx < cw; cx++)
             {
                 for (int t = 0; t < ResourceKindCount; t++) kindCount[t] = 0;
                 var band = DominantZoneOfChunk(map, cx, cy);
-                ComputeQuota(cfg, band, difficulty, e, b);
+                ComputeQuota(cfg, band, difficulty, e, b, kindCap, share, out _);
 
                 // 候选 Cell：Plain ＋ 避开海洋带（PlaceOcean 后不会被覆写）＋ （保底时）避开主城净空区
                 candidates.Clear();
@@ -841,9 +844,10 @@ public static class MapGenRules
 
                 // 矿洞：2×2 整块优先（先占整块，再在剩余 Cell 填坑位）
                 // **HH.293 B3（D739）**：删「每大区块恒 ≥1 簇」地板（原 `if (mineClusters <= 0 && b[ResMine] > 0) mineClusters = 1;`）
-                //   —— 该地板把矿山锚点密度锁死在 1 簇/区块（4 格/256 格），与权重无关；拆除后 `round(E/4)` 可为 0。
-                //   ⚠️ 本项**只拆下限、不承诺"最少"**（要达成「4× 视域 2~3 个」须靠 `R-03` 方案 A′）。
-                int mineClusters = Mathf.RoundToInt(e[ResMine] / (MineClusterSide * MineClusterSide));
+                //   —— 该地板把矿山锚点密度锁死在 1 簇/区块（4 格/256 格），与权重无关；拆除后可为 0。
+                // ⚠️ 本项**只拆下限、不承诺"最少"**（要达成「4× 视域 2~3 个」须靠 `R-03` 方案 A′）。
+                // **HH.294 片 5**：`e[ResMine]` 单位＝**点**（1 簇 ＝ 1 点）⇒ 直接取整，不再 `÷4`（改动前 `÷4` 系「簇＝4 坑位」旧口径）。
+                int mineClusters = Mathf.RoundToInt(e[ResMine]);
                 for (int k = 0; k < mineClusters; k++)
                     if (TryStampMineCluster(map, candidates, rng, cfg)) kindCount[ResMine]++;
 
@@ -866,18 +870,18 @@ public static class MapGenRules
                     }
                 }
 
-                // 保底 B_i：逐区块统计实际数量（**坑位口径**），不足则补足（矿洞按簇补）
+                // 保底 B_i：逐区块统计实际数量（**点口径**：非矿＝坑位；矿洞＝簇），不足则补足（矿洞按簇补）
                 for (int t = 0; t < ResourceKindCount; t++)
                 {
                     if (b[t] <= 0) continue;
-                    int have = t == ResMine ? kindCount[ResMine] * MineClusterSide * MineClusterSide : kindCount[t];
+                    int have = kindCount[t];   // 本片起矿洞亦以「点（簇）」计 ⇒ 不再 ×4
                     int need = b[t] - have;
                     while (need > 0)
                     {
                         if (t == ResMine)
                         {
                             if (!TryStampMineCluster(map, candidates, rng, cfg)) break;
-                            kindCount[ResMine]++; need -= MineClusterSide * MineClusterSide;
+                            kindCount[ResMine]++; need -= 1;
                         }
                         else
                         {
@@ -956,20 +960,27 @@ public static class MapGenRules
         }
     }
 
-    /// <summary>配额解算（2_1_R1 §二第二层）：r_i=1−w_i ⇒ p_i=r_i/Σr × T ⇒ E_i=T×p_i ⇒ B_i=floor(E_i×ratio)。</summary>
-    static void ComputeQuota(MapGenRulesConfig cfg, ClimateZone band, int difficulty, float[] e, int[] b)
+    /// <summary>⭐ 池子口径解算（`03` §6.7 · `HH.294` 片 5）—— 生成期与运行期**共用一处**：
+    /// · `cap(band, difficulty) = poolCapBase × GetBandAbundance(band) × difficultyResourceScale[difficulty−1]`（`D773` 裁：难度乘在 cap 上）
+    /// · `p_i = (1−w_i) / Σ(1−w_j)`（**复用** `resourceWeights`；`D774` 定案表）
+    /// · `capKind_i = cap × p_i × kindCapRelax`（单类上限·松弛 1.5）
+    /// ⚠️ **单位口径（本片落地式）**：`点` —— 树/石堆/木堆/矿脉各 1 坑位 ＝ 1 点；**矿洞 1 簇（2×2 Cell）＝ 1 点**。
+    ///   依据：`Σ_i E_i = cap × Σ_i p_i = cap`（`03` §6.7.1 定案表自洽）；「矿洞 2.2（≈2 簇）」。
+    /// </summary>
+    public static void ResolvePoolQuota(MapGenRulesConfig cfg, ClimateZone band, int difficulty,
+                                        float[] share, float[] kindCap, out float cap)
     {
-        float T = cfg != null ? Mathf.Max(1f, cfg.resourcesPerChunkBase) : 120f;
-        T *= cfg != null ? cfg.GetBandAbundance(band) : 1f;   // HH.291 A3（R-01）：地带丰度
+        cap = cfg != null ? Mathf.Max(1f, cfg.poolCapBase) : 96f;
+        cap *= cfg != null ? cfg.GetBandAbundance(band) : 1f;              // HH.291 A3（R-01）：地带丰度
         int di = Mathf.Clamp(difficulty - 1, 0, 2);
         float scale = cfg != null && cfg.difficultyResourceScale != null && cfg.difficultyResourceScale.Length > di
             ? cfg.difficultyResourceScale[di] : 1f;
-        T *= Mathf.Max(0.01f, scale);
-        float ratio = cfg != null ? Mathf.Clamp01(cfg.guaranteeRatio) : 0.5f;
+        cap *= Mathf.Max(0.01f, scale);                                    // D773：难度系数乘在 cap 上
+        float relax = cfg != null ? Mathf.Max(0f, cfg.kindCapRelax) : 1.5f;
 
         var w5 = cfg != null ? cfg.GetResourceWeights(band) : null;
-        float sumR = 0f;
         var r = new float[ResourceKindCount];
+        float sumR = 0f;
         for (int i = 0; i < ResourceKindCount; i++)
         {
             float wi = w5 != null ? Mathf.Clamp01(w5[i]) : 0.5f;
@@ -978,12 +989,97 @@ public static class MapGenRules
         }
         for (int i = 0; i < ResourceKindCount; i++)
         {
-            if (sumR <= 0f) { e[i] = 0f; b[i] = 0; continue; }
-            e[i] = T * (r[i] / sumR);
+            share[i] = sumR > 0f ? r[i] / sumR : 0f;
+            kindCap[i] = cap * share[i] * relax;
+        }
+    }
+
+    /// <summary>配额解算（`03` §6.7 池子模型）：`e[i] = E_i^open = cap × p_i × poolOpenRatio`（**开局落格目标**·40%）
+    /// ⇒ `b[i] = B_i = floor(E_i^open × guaranteeRatio)`（矿洞＝0）；另出 `cap`（总上限）与 `kindCap[]`（单类上限）。
+    /// ⚠️ `e[]` 由改前的「满池 E_i」改为「**开局目标** `E_i^open`」——生成期落格与步骤 6.6 的 `target` **同取此值**（`D773` `P-4`）。</summary>
+    static void ComputeQuota(MapGenRulesConfig cfg, ClimateZone band, int difficulty,
+                             float[] e, int[] b, float[] kindCap, float[] shareBuf, out float cap)
+    {
+        ResolvePoolQuota(cfg, band, difficulty, shareBuf, kindCap, out cap);
+        float open = cfg != null ? Mathf.Clamp01(cfg.poolOpenRatio) : 0.4f;
+        float ratio = cfg != null ? Mathf.Clamp01(cfg.guaranteeRatio) : 0.5f;
+        for (int i = 0; i < ResourceKindCount; i++)
+        {
+            e[i] = cap * shareBuf[i] * open;
             b[i] = Mathf.FloorToInt(e[i] * ratio);
         }
         // **HH.293 B3（D739）**：矿洞退出 `B_i` 保底 —— 否则 `b[ResMine] > 0` 会把已拆的密度地板顶回来。
         b[ResMine] = 0;
+    }
+
+    // ========================================================================
+    //  区块点数统计（`03` §6.8 A 类 · 按锚点归属 · HH.294 片 5 · 4-C）
+    // ========================================================================
+
+    static readonly bool[] _claimBuf = new bool[ChunkSize * ChunkSize];
+    static readonly int[] _countBufHint = new int[ResourceKindCount];
+
+    /// <summary>⭐ <b>区块点数统计（按锚点归属）</b>：该大区块内各类资源**点数**
+    /// （非矿 ＝ 该格坑位数；**矿洞 1 簇（2×2）＝ 1 点**）。
+    /// <b>跨界不重算</b>：以「左上角锚点」为准 —— 逐格 row-major 认领式扫描，遇到未认领的 Mine 且以它为左上角的
+    /// 2×2 全为 Mine ⇒ 记 1 点并认领该 4 格；跨区块边界的簇仅在**锚点所在区块**被记一次（邻区块因不构成
+    /// 完整 2×2 块而不记）。返回写入点数总和。</summary>
+    public static int CountChunkPoints(MapData map, int cx, int cy, int[] dst)
+    {
+        if (dst == null) return 0;
+        for (int t = 0; t < ResourceKindCount; t++) dst[t] = 0;
+        if (map == null || map.features == null) return 0;
+        int total = 0;
+        int x0 = cx * ChunkSize, y0 = cy * ChunkSize;
+        int cw = Mathf.Min(ChunkSize, map.width - x0), chh = Mathf.Min(ChunkSize, map.height - y0);
+        if (cw <= 0 || chh <= 0) return 0;
+        System.Array.Clear(_claimBuf, 0, _claimBuf.Length);
+
+        for (int dy = 0; dy < chh; dy++)
+            for (int dx = 0; dx < cw; dx++)
+            {
+                int x = x0 + dx, y = y0 + dy;
+                var f = MapGate.ReadAt(map, x, y);
+                int kind = -1;
+                for (int t = 0; t < ResourceKindCount; t++)
+                    if (f == ResourceKindFeature[t]) { kind = t; break; }
+                if (kind < 0) continue;
+                int ci = dy * ChunkSize + dx;
+                if (kind == ResMine)
+                {
+                    if (_claimBuf[ci]) continue;                       // 已被本簇认领
+                    // 锚点判定用**整图**口径（`HasFullBlock` 自带界判定）⇒ 跨区块边界的簇由其锚点所在区块记 1 点，
+                    // 邻区块内的残余格不构成完整 2×2 块 ⇒ 不记（`03` §6.8 A 类「跨界不重算」）。
+                    if (!HasFullBlock(map, x, y, FeatureType.Mine, MineClusterSide)) continue;
+                    for (int sy = 0; sy < MineClusterSide; sy++)
+                        for (int sx = 0; sx < MineClusterSide; sx++)
+                        {
+                            int ux = dx + sx, uy = dy + sy;
+                            if (ux < cw && uy < chh) _claimBuf[uy * ChunkSize + ux] = true;
+                        }
+                    dst[ResMine] += 1; total += 1;                     // 矿洞：1 簇 ＝ 1 点
+                }
+                else
+                {
+                    int n = PitCountOfCell(Idx(map, x, y));
+                    dst[kind] += n; total += n;
+                }
+            }
+        return total;
+    }
+
+    /// <summary>便利口：整图按区块统计点数总和（供探针对照；`dstAll` 长度须 ≥ `ChunkW×ChunkH`）。</summary>
+    public static int CountAllChunkPoints(MapData map, int[] dstAll)
+    {
+        int cw = ChunkW(map), ch = ChunkH(map), sum = 0;
+        for (int cy = 0; cy < ch; cy++)
+            for (int cx = 0; cx < cw; cx++)
+            {
+                int v = CountChunkPoints(map, cx, cy, _countBufHint);
+                if (dstAll != null) { int ci = cy * cw + cx; if (ci < dstAll.Length) dstAll[ci] = v; }
+                sum += v;
+            }
+        return sum;
     }
 
     // ========================================================================
@@ -1039,21 +1135,27 @@ public static class MapGenRules
     }
 
     /// <summary>步骤 6.6：逐区块配额**补足**（在净空区之后跑，避免"保底把资源塞回净空区"）。
-    /// 统计本区块各资源实际数量（**HH.291 A4：坑位口径**；矿洞按 Cell），不足 `target_i = max(round(E_i), B_i)`
-    /// 时在区块内补足（跳过净空区/海洋带）；补足同样按**一格至多 4 个同型坑位**打包。</summary>
+    /// 统计本区块各资源实际数量（**点口径 · 按锚点归属**：非矿＝坑位；矿洞＝簇，跨界不重算 ⇒ `CountChunkPoints`），
+    /// 不足 `target_i = max(round(E_i^open), B_i)` 时在区块内补足（跳过净空区/海洋带）；
+    /// 补足同样按**一格至多 4 个同型坑位**打包。
+    /// ⚠️ **`D773` `P-4` 裁**：`target` 取**开局目标** `E_i^open`（**不是**满池 `E_i`）⇒ 6.6 只负责"不出现空区块"，
+    /// 不再把 40% 开局顶穿到满池。</summary>
     public static void EnsureChunkResourceQuota(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty)
     {
         int cw = ChunkW(map), ch = ChunkH(map);
         var e = new float[ResourceKindCount];
         var b = new int[ResourceKindCount];
+        var kindCap = new float[ResourceKindCount];
+        var share = new float[ResourceKindCount];
         var have = new int[ResourceKindCount];
         var candidates = new List<int>(ChunkSize * ChunkSize);
 
         for (int cy = 0; cy < ch; cy++)
             for (int cx = 0; cx < cw; cx++)
             {
-                ComputeQuota(cfg, DominantZoneOfChunk(map, cx, cy), difficulty, e, b);
-                for (int t = 0; t < ResourceKindCount; t++) have[t] = 0;
+                ComputeQuota(cfg, DominantZoneOfChunk(map, cx, cy), difficulty, e, b, kindCap, share, out _);
+                // 【HH.294 片 5·4-C】统计改「**按锚点归属**」：矿洞整簇只在其锚点（左上角）所在区块记 1 点 ⇒ 跨界不重算。
+                CountChunkPoints(map, cx, cy, have);
 
                 int x0 = cx * ChunkSize, y0 = cy * ChunkSize;
                 candidates.Clear();
@@ -1062,9 +1164,6 @@ public static class MapGenRules
                     {
                         int i = Idx(map, x, y);
                         var f = map.features[i];
-                        // HH.291 A4：非矿洞按**坑位**计（生成期坑位账）；矿洞例外按 Cell 计（1 簇＝4 Cell＝4 单位）
-                        for (int t = 0; t < ResourceKindCount; t++)
-                            if (f == ResourceKindFeature[t]) { have[t] += t == ResMine ? 1 : PitCountOfCell(i); break; }
                         if (x < OceanThickness || y < OceanThickness
                             || x >= map.width - OceanThickness || y >= map.height - OceanThickness) continue;
                         if (f != FeatureType.Plain) continue;
@@ -1074,10 +1173,10 @@ public static class MapGenRules
                 Shuffle(rng, candidates);
                 int cursor = 0;
 
-                // 矿洞：按簇补足
+                // 矿洞：按簇补足（`e[ResMine]` 单位＝点（簇）⇒ 不再 ÷4）
                 // **HH.293 B3（D739）**：删「mineWant ≤ 0 且 b>0 ⇒ 1」地板（第二处，与 FillFeatures 同源）
-                int mineWant = Mathf.RoundToInt(e[ResMine] / (MineClusterSide * MineClusterSide));
-                int mineHave = have[ResMine] / (MineClusterSide * MineClusterSide);
+                int mineWant = Mathf.RoundToInt(e[ResMine]);
+                int mineHave = have[ResMine];
                 while (mineHave + 1 <= mineWant)
                 {
                     if (!TryStampMineCluster(map, candidates, rng, cfg)) break;
@@ -1085,7 +1184,7 @@ public static class MapGenRules
                 }
                 for (int t = 0; t < ResMine; t++)
                 {
-                    int target = Mathf.Max(Mathf.RoundToInt(e[t]), b[t]);
+                    int target = Mathf.Max(Mathf.RoundToInt(e[t]), b[t]);   // e[] ＝ 开局目标 E_i^open（P-4）
                     int need = target - have[t];
                     while (need > 0)
                     {

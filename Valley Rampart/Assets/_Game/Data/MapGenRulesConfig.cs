@@ -37,25 +37,29 @@ public class MapGenRulesConfig : ScriptableObject
     [Tooltip("簇上限（格）：任一 4-连通簇超过该值即视为超限（生长期/归并期均受此约束）")]
     public int clusterSizeMax = 384;
 
-    [Header("资源层 · 归一化配额（HH.272 件②）")]
-    [Tooltip("每大区块目标资源数 T（坑位口径；难度系数乘在此值上）")]
-    public int resourcesPerChunkBase = 120;
-    [Tooltip("每温度带 × 每资源的权重表（索引 0/1/2/3 = 热带/亚热带/温带/寒带）。w 越大越稀有 ⇒ `1−w` 越小 ⇒ 占比越低。**HH.291 A2**：`mine` 四带提值（矿山应稀有）。")]
+    [Header("资源层 · 资源池（`03` §6.7 · `HH.294` 片 5）")]
+    [Tooltip("每大区块**池子上限基准**（基准值·上限，非必须填满）。" +
+             "实际上限 `cap(band, difficulty) = 本值 × 地带丰度 × 难度系数`（`D773` 裁：难度系数乘在 cap 上）。")]
+    public int poolCapBase = 96;
+    [Tooltip("开局初始铺量比例：`E_i^open = cap × p_i × 本值`（`03` §6.7「开局初始铺量 40%」，`D762`）。")]
+    [Range(0f, 1f)] public float poolOpenRatio = 0.40f;
+    [Tooltip("单类上限松弛系数：`capKind_i = cap × p_i × 本值`（`D773` 裁·可调）。")]
+    public float kindCapRelax = 1.5f;
+    [Tooltip("每温度带 × 每资源的权重表（索引 0/1/2/3 = 热带/亚热带/温带/寒带）。w 越大越稀有 ⇒ `1−w` 越小 ⇒ 占比越低。 **`D774` 落盘 `R-03` 方案 A′ 权重表**（热/亚热/温同表）。")]
     public BandResourceWeights[] resourceWeights = new BandResourceWeights[4]
     {
-        // Tropical：平原多、树多、无雪山
-        new BandResourceWeights { tree = 0.20f, stonePile = 0.45f, woodPile = 0.45f, oreVein = 0.50f, mine = 0.90f },
-        // Subtropical
-        new BandResourceWeights { tree = 0.20f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.45f, mine = 0.84f },
-        // Temperate：HH.291 A2 由 0.35 提至 0.80 ⇒ 配额占比 20.3% → ≈7.3%
-        new BandResourceWeights { tree = 0.25f, stonePile = 0.40f, woodPile = 0.40f, oreVein = 0.40f, mine = 0.80f },
-        // Cold：木堆不生成（w=1 ⇒ 1−w=0 ⇒ 配比 0）；HH.291 A2 mine 0.60→**0.92**（实测校准：
-        //   0.88 时实测占比 10.4% > 温带 6.6% ⇒ 梯度反了；Σ 小 + 2×2 簇整数量化 ⇒ 按实测回调）
-        new BandResourceWeights { tree = 0.60f, stonePile = 0.45f, woodPile = 1.00f, oreVein = 0.55f, mine = 0.92f },
+        // Tropical（`D774` 表）
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.50f, woodPile = 0.30f, oreVein = 0.70f, mine = 0.95f },
+        // Subtropical（`D774` 表·同温带）
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.50f, woodPile = 0.30f, oreVein = 0.70f, mine = 0.95f },
+        // Temperate（`D774`：tree 由 HH.291 A2 实盘的 0.25 降到 0.20 ⇒ 抬树占比）
+        new BandResourceWeights { tree = 0.20f, stonePile = 0.50f, woodPile = 0.30f, oreVein = 0.70f, mine = 0.95f },
+        // Cold：**只保留**「树最少 0.60」与「木堆不生成 1.00」（1−w=0 ⇒ 占比 0），其余同 `D774` 表
+        new BandResourceWeights { tree = 0.60f, stonePile = 0.50f, woodPile = 1.00f, oreVein = 0.70f, mine = 0.95f },
     };
-    [Tooltip("保底系数：B_i = floor(E_i × ratio)")]
+    [Tooltip("保底系数：B_i = floor(E_i^open × ratio)（开局目标口径）")]
     [Range(0f, 1f)] public float guaranteeRatio = 0.5f;
-    [Tooltip("难度资源系数（索引 0/1/2 = Easy/Normal/Hard），乘在 T 上")]
+    [Tooltip("难度资源系数（索引 0/1/2 = Easy/Normal/Hard），_D773 裁：乘在 `cap` 上_")]
     public float[] difficultyResourceScale = new float[3] { 0.7f, 1.0f, 1.3f };
     [Tooltip("**HH.291 A3（R-01）** 地带资源丰度（索引 0/1/2/3 = 热带/亚热带/温带/寒带），乘在 T 上。" +
              "四带等概率 ⇒ 均值 1.0 ⇒ 全图总量基准不变、仅改变分布。")]

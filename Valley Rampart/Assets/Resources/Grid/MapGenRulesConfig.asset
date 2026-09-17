@@ -21,28 +21,30 @@ MonoBehaviour:
   clusterSizeTypicalMin: 96
   clusterSizeTypicalMax: 384
   clusterSizeMax: 384
-  resourcesPerChunkBase: 120
+  poolCapBase: 96
+  poolOpenRatio: 0.4
+  kindCapRelax: 1.5
   resourceWeights:
   - tree: 0.2
-    stonePile: 0.45
-    woodPile: 0.45
-    oreVein: 0.5
-    mine: 0.9
+    stonePile: 0.5
+    woodPile: 0.3
+    oreVein: 0.7
+    mine: 0.95
   - tree: 0.2
-    stonePile: 0.4
-    woodPile: 0.4
-    oreVein: 0.45
-    mine: 0.84
-  - tree: 0.25
-    stonePile: 0.4
-    woodPile: 0.4
-    oreVein: 0.4
-    mine: 0.8
+    stonePile: 0.5
+    woodPile: 0.3
+    oreVein: 0.7
+    mine: 0.95
+  - tree: 0.2
+    stonePile: 0.5
+    woodPile: 0.3
+    oreVein: 0.7
+    mine: 0.95
   - tree: 0.6
-    stonePile: 0.45
+    stonePile: 0.5
     woodPile: 1
-    oreVein: 0.55
-    mine: 0.92
+    oreVein: 0.7
+    mine: 0.95
   guaranteeRatio: 0.5
   difficultyResourceScale:
   - 0.7
