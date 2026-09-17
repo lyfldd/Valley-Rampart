@@ -391,6 +391,188 @@ public static class MapGate
     }
 
     // ==========================================================================
+    //  6. 玩家侧拾取（`03` §8.6「PickAt ＝ 屏幕矩形 ＋ y 序」·HH.294 片 6-1）
+    // ==========================================================================
+
+    /// <summary>⭐ G0 实测符号结论（2026-09-17 · 探针 `Valley_HH294_Slice6PickProbe` §G0-A·构造用例像素读数）：
+    /// `ProjectSettings/GraphicsSettings.asset:42-43` ＝ `m_TransparencySortMode: 3`（CustomAxis）
+    /// ＋ `m_TransparencySortAxis: {x:0, y:1, z:0}` ⇒ 渲染叠放次序由世界 y 决定；
+    /// 实测【**世界 y 越小 ⇒ 渲染越靠前（后画覆盖先画）**】——两组交叉用例一致：
+    /// 组1（红 y=+0.5／蓝 y=−0.5）重叠中心像素=蓝；组2（红 y=−0.5／蓝 y=+0.5）重叠中心像素=红
+    /// ⇒ 两次都是 y=−0.5 者盖住对方 ⇒ 与直觉（大 y 在前）**相反**，故符号位＝false。
+    /// ⛔ 符号**由 G0 构造用例实测得出**（禁凭记忆断言）；<see cref="PickAt"/> 与渲染**共用同一键、同一符号**
+    /// （`03` §8.7 判据 6「拾取同源」）。深度键取「各自**实际**渲染排序点」：
+    /// 单位 `spriteSortPoint = Pivot`（`UnitController.cs:316`）⇒ 键＝SR 所属 `transform.position.y`；
+    /// 建筑/宝箱**未设** `spriteSortPoint`（默认 `Center`·`BuildingVisual.cs:148` 只设 `sortingOrder`）
+    /// ⇒ 键＝`SpriteRenderer.bounds.center.y`（两者二级投射点不同 ⇒ 按各自实际算，不假设统一）。</summary>
+    public const bool DepthMajorYInFront = false;   // G0 实测（2026-09-17）：小 y 在前 ⇒ 大 y 在前不成立，置 false
+
+    /// <summary>拾取命中（值类型·零分配）。source ∈ Building／UnitController／ChestEntity 之根；
+    /// 上层按需 <see cref="Component.GetComponentInParent{T}"/> 取接口（IInteractable／IClickInteractable／UnitController），
+    /// 与旧 `Physics2D.OverlapPoint` 后的用法完全同形。</summary>
+    public struct MapPickHit
+    {
+        public Component source;      // 命中物根
+        public int sortingOrder;      // 命中物渲染层带（读数/报告用）
+        public float depthY;          // 命中物深度键（与渲染同源同符号·报告对照用）
+    }
+
+    /// <summary>拾取候选邻域半径（格）：点所在格 ＋ 8 邻域（3×3）。建筑/宝箱候选上限 ＝ 9（来源：footprint 反查）。</summary>
+    internal const int PickCellRadius = 1;
+
+    /// <summary>⭐ <b>玩家侧拾取</b>（`03` §8.6，位于「§八 门」内 ⇒ 本口属**门**的读面；上层只调门，
+    /// 禁自建第二套坐标换算——内部一律走 <see cref="GridSystem"/> 换算口）。
+    ///
+    /// <b>「看到的＝点到的」</b>（`03` §8.7 判据 6）：返回**渲染上最靠前**的候选——
+    /// ① 层带 `sortingOrder` 大者在前（宝箱 5 ＞ 建筑/单位 1，与 Unity 层带渲染次序一致）；
+    /// ② 同层带按深度键（见 <see cref="DepthMajorYInFront"/> G0 符号结论）。
+    ///
+    /// <b>候选集（有界·⛔ 不走物理引擎·⛔ 禁全库遍历）</b>：
+    /// ① 建筑：footprint 反查 3×3 邻域（<see cref="BuildingRegistry.GetAt"/> O(1)×9 ⇒ 候选 ≤9 座）；
+    /// ② 单位：**单位索引**区域查询（<see cref="GridSystem.FillUnitsInRect"/>，cell 3×3 → 小格子域；buffer 复用零分配）；
+    /// ③ 宝箱：<see cref="ChestManager.FillChestsInCellRect"/>（cell 匹配 3×3）。
+    /// 包含判定＝实体主 <see cref="SpriteRenderer"/>（GetComponentInChildren 首个）的 `bounds`（世界 AABB）。
+    ///
+    /// <b>代价特征（判据面·同 `03` §8.7 判据 7 记档口径）</b>：单次 ＝ 9 次 O(1) 字典查 ＋ O(单位索引条目) 枚举
+    /// ＋ O(宝箱数) 匹配；**稳态零 GC**（static buffer 复用，候选规模稳定后不扩容）。
+    /// **hover 每帧调用**（`InteractionManager.UpdateHover`）已按此口径实测验收——单次 ms／GC 0 B／候选上限
+    /// 见 HH.294 片 6-1 交付报告探针读数。</summary>
+    public static bool PickAt(Vector2 worldPoint, out MapPickHit hit)
+    {
+        hit = default;
+        var grid = GridSystem.Instance;
+        if (grid == null || ActiveMap == null) return false;
+        var cellOpt = grid.WorldToCoord(worldPoint);
+        if (cellOpt == null) return false;
+        var cell = cellOpt.Value;
+        int r = PickCellRadius;
+
+        bool has = false;
+
+        // 候选① 建筑：footprint 反查 3×3 邻域（≤9 座；sprite 溢出 footprint 半格仍可点）
+        var reg = BuildingRegistry.Instance;
+        if (reg != null)
+        {
+            _pickBuildings.Clear();
+            for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    var b = reg.GetAt(new GridCoord(cell.x + dx, cell.y + dy));
+                    if (b != null && !_pickBuildings.Contains(b)) _pickBuildings.Add(b);
+                }
+            for (int i = 0; i < _pickBuildings.Count; i++)
+                ConsiderPick(_pickBuildings[i].GetComponentInChildren<SpriteRenderer>(), _pickBuildings[i], worldPoint, ref has, ref hit);
+        }
+
+        // 候选② 单位：单位索引区域查询（cell 3×3 → 小格子域；div 走 SubDiv 唯一除数）
+        _pickUnits.Clear();
+        int div = grid.SubDiv;
+        var subRect = new RectInt((cell.x - r) * div, (cell.y - r) * div, (2 * r + 1) * div, (2 * r + 1) * div);
+        grid.FillUnitsInRect(subRect, _pickUnits);
+        for (int i = 0; i < _pickUnits.Count; i++)
+        {
+            var u = _pickUnits[i];
+            if (u == null || !u.gameObject.activeInHierarchy) continue;
+            ConsiderPick(u.GetComponent<SpriteRenderer>(), u, worldPoint, ref has, ref hit);
+        }
+
+        // 候选③ 宝箱（ChestManager 列表短；cell 匹配 3×3）
+        if (ChestManager.HasInstance)
+        {
+            _pickChests.Clear();
+            ChestManager.Instance.FillChestsInCellRect(new RectInt(cell.x - r, cell.y - r, 2 * r + 1, 2 * r + 1), _pickChests);
+            for (int i = 0; i < _pickChests.Count; i++)
+                ConsiderPick(_pickChests[i].GetComponent<SpriteRenderer>(), _pickChests[i], worldPoint, ref has, ref hit);
+        }
+        return has;
+    }
+
+    /// <summary>拾取调度（双轨开关分流·`底层执行计划` §五回退预案）：默认走 <see cref="PickAt"/>（坐标拾取）；
+    /// <see cref="UseLegacyPhysicsPick"/>＝true 时回落旧物理路径（全层 OverlapPoint ＝ 改前 `mask = ~0` 等价口径）。</summary>
+    public static Component PickWorld(Vector2 worldPoint)
+        => UseLegacyPhysicsPick
+            ? Physics2D.OverlapPoint(worldPoint)
+            : (PickAt(worldPoint, out var h) ? h.source : null);
+
+    /// <summary>
+    /// 框选区域查询单位（HH.294 片 6-1·6-D④：**单位索引**区域查询，⛔ 不是 <see cref="QueryCells"/> 六项复合查询）。
+    /// 新路径＝世界 AABB 四角 → 小格子域包围盒（走 <see cref="GridSystem"/> 换算口，禁就地展开）→
+    /// <see cref="GridSystem.FillUnitsInRect"/>（buffer 复用**零分配**）；旧路径＝`Physics2D.OverlapAreaAll`
+    /// 仅 <see cref="UseLegacyPhysicsPick"/> 回退态使用（引擎侧有数组分配）。返回写入条数。
+    /// ⭐ 双轨旧路径在此**收容**：生产码 `Physics2D` 残留仅本文件（MapGate.cs）——上层（InteractionManager／SelectionController）零物理调用。
+    /// </summary>
+    public static int FillUnitsInWorldRect(Rect worldRect, List<UnitController> buffer)
+    {
+        if (buffer == null) return 0;
+        int before = buffer.Count;
+        if (UseLegacyPhysicsPick)
+        {
+            var cols = Physics2D.OverlapAreaAll(worldRect.min, worldRect.max);
+            for (int i = 0; i < cols.Length; i++)
+            {
+                var u = cols[i] != null ? cols[i].GetComponentInParent<UnitController>() : null;
+                if (u != null && !buffer.Contains(u)) buffer.Add(u);
+            }
+            return buffer.Count - before;
+        }
+        var grid = GridSystem.Instance;
+        if (grid == null || grid.MapWidth <= 0) return 0;
+        var a = SubClamp(grid, worldRect.min);
+        var b = SubClamp(grid, new Vector2(worldRect.xMin, worldRect.yMax));
+        var c = SubClamp(grid, new Vector2(worldRect.xMax, worldRect.yMin));
+        var d = SubClamp(grid, worldRect.max);
+        int sx0 = Mathf.Min(Mathf.Min(a.x, b.x), Mathf.Min(c.x, d.x));
+        int sx1 = Mathf.Max(Mathf.Max(a.x, b.x), Mathf.Max(c.x, d.x));
+        int sy0 = Mathf.Min(Mathf.Min(a.y, b.y), Mathf.Min(c.y, d.y));
+        int sy1 = Mathf.Max(Mathf.Max(a.y, b.y), Mathf.Max(c.y, d.y));
+        grid.FillUnitsInRect(new RectInt(sx0, sy0, sx1 - sx0 + 1, sy1 - sy0 + 1), buffer);
+        return buffer.Count - before;
+    }
+
+    /// <summary>世界点 → 小格子号（越界 clamp 到 [0, SubWidth/SubHeight-1]；走换算口不就地展开）。</summary>
+    private static Vector2Int SubClamp(GridSystem grid, Vector2 world)
+    {
+        var sub = grid.WorldToSubCoord(world);
+        if (sub.HasValue) return new Vector2Int(sub.Value.x, sub.Value.y);
+        var cs = grid.Config != null ? grid.Config.cellSize : new Vector2(1.28f, 0.64f);
+        int div = grid.SubDiv;
+        Vector2 f = GridSystem.WorldToCellF(world, new Vector2(cs.x / div, cs.y / div));
+        return new Vector2Int(Mathf.Clamp(Mathf.FloorToInt(f.x), 0, grid.Width - 1),
+                              Mathf.Clamp(Mathf.FloorToInt(f.y), 0, grid.Height - 1));
+    }
+
+    /// <summary>⭐ 双轨开关（`底层执行计划` §五 5-B 回退预案「门可先双轨，验收后再删」）：
+    /// true＝旧物理拾取路径（依赖 Collider2D；⚠️ 6-C 删建筑挂载后旧路径对建筑/宝箱**失效**——完全回退须连
+    /// `BuildingFactory`／`BuildController` 的挂载块一并 revert）；false（默认）＝坐标拾取。</summary>
+    public static bool UseLegacyPhysicsPick = false;
+
+    // 拾取 scratch buffer（主线程单线程消费；容量稳定后复用 ⇒ 稳态零 GC）
+    private static readonly List<Building> _pickBuildings = new List<Building>(9);
+    private static readonly List<UnitController> _pickUnits = new List<UnitController>(64);
+    private static readonly List<ChestEntity> _pickChests = new List<ChestEntity>(16);
+
+    /// <summary>单候选判定：渲染 bounds 含点 ⇒ 按「层带 → 深度键（G0 符号）」与当前最优比前。</summary>
+    private static void ConsiderPick(SpriteRenderer sr, Component src, Vector2 p, ref bool has, ref MapPickHit best)
+    {
+        if (sr == null || !sr.enabled || !src.gameObject.activeInHierarchy) return;
+        var b = sr.bounds;
+        if (!b.Contains(new Vector3(p.x, p.y, b.center.z))) return;
+        // 深度键＝各自实际渲染排序点（见 DepthMajorYInFront 注释）：Pivot ⇒ transform.y；Center（默认）⇒ bounds.center.y
+        float key = sr.spriteSortPoint == SpriteSortPoint.Pivot ? sr.transform.position.y : b.center.y;
+        int order = sr.sortingOrder;
+        if (!has || IsInFrontOf(order, key, best.sortingOrder, best.depthY))
+            best = new MapPickHit { source = src, sortingOrder = order, depthY = key };
+        has = true;
+    }
+
+    /// <summary>a 是否渲染在 b 前面（层带大者前；同层带按 G0 实测符号——与渲染同源同符号）。</summary>
+    private static bool IsInFrontOf(int orderA, float yA, int orderB, float yB)
+    {
+        if (orderA != orderB) return orderA > orderB;
+        return DepthMajorYInFront ? yA > yB : yA < yB;
+    }
+
+    // ==========================================================================
     //  内部
     // ==========================================================================
 

@@ -298,12 +298,9 @@ public class BuildController : Singleton<BuildController>
                                  + $"实际地表={MapGate.GetFeatureAt(coord)} ⇒ 该建筑**未消费锚点**（不返还）。");
         }
 
-        // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）
-        if (go.GetComponent<Collider2D>() == null)
-        {
-            var col = go.AddComponent<BoxCollider2D>();
-            col.size = Vector2.one;
-        }
+        // 【HH.294 片 6-1·6-C】原此处无条件挂 BoxCollider2D（size 局部 1x1，3.3.4 修复误触+碰撞盒）⇒
+        //   拾取已改道 MapGate.PickAt（`03` §8.6·不走物理，`HH.294` 片 6-1）后 Collider 无消费者（全库
+        //   Physics2D 拾取调用 0·OnTrigger/OnCollision 0），按批口径**删除挂载**；将来若确有物理需求再按需挂。
 
         grid.MarkOccupiedFootprint(coord, fp.x, fp.y, b);
 

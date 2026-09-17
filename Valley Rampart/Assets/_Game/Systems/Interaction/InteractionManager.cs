@@ -7,9 +7,8 @@ using UnityEngine;
 /// </summary>
 public class InteractionManager : Singleton<InteractionManager>
 {
-    [Header("交互设置")]
-    [Tooltip("交互用的层级（含建筑/资源点/裂隙等可交互物的 Collider）")]
-    public LayerMask interactableMask = ~0;
+    // 【HH.294 片 6-1】`interactableMask`（原 `~0` 全层物理掩码）已随拾取改道**退役**：
+    //   拾取不再走 Physics2D ⇒ 掩码无消费者（grep 证据见交付报告）；回退开关见 `MapGate.UseLegacyPhysicsPick`。
 
     private Camera _cam;
     private IInteractable _hovered;        // 当前悬停的可交互物（3.3.4 批次9 悬停高亮）
@@ -48,8 +47,9 @@ public class InteractionManager : Singleton<InteractionManager>
         if (_cam == null) return;
 
         Vector2 worldPos = _cam.ScreenToWorldPoint(Input.mousePosition);
-        var hit = Physics2D.OverlapPoint(worldPos, interactableMask);
-        var interactable = hit != null ? hit.GetComponentInParent<IInteractable>() : null;
+        // 【HH.294 片 6-1·6-D】hover 每帧路径：改走 MapGate.PickAt（坐标拾取·渲染最前·有界候选·稳态零 GC）
+        var hitSource = MapGate.PickWorld(worldPos);
+        var interactable = hitSource != null ? hitSource.GetComponentInParent<IInteractable>() : null;
 
         if (interactable != _hovered)
         {
@@ -84,14 +84,14 @@ public class InteractionManager : Singleton<InteractionManager>
         if (_cam == null) _cam = Camera.main;
         if (_cam == null) return;
 
-        // 鼠标屏幕坐标 → 世界坐标，用 2D OverlapPoint 检测命中
+        // 鼠标屏幕坐标 → 世界坐标，改走 MapGate.PickWorld（坐标拾取·渲染最前；双轨开关见 MapGate.UseLegacyPhysicsPick）
         Vector2 worldPos = _cam.ScreenToWorldPoint(Input.mousePosition);
-        var hit = Physics2D.OverlapPoint(worldPos, interactableMask);
+        var hitSource = MapGate.PickWorld(worldPos);
 
-        if (hit != null)
+        if (hitSource != null)
         {
-            // 沿父级链查找 IInteractable 实现（建筑 Collider 可能在子物体）
-            var interactable = hit.GetComponentInParent<IInteractable>();
+            // 沿父级链查找 IInteractable 实现（建筑 SpriteRenderer 可能在子物体）
+            var interactable = hitSource.GetComponentInParent<IInteractable>();
             if (interactable != null)
             {
                 var ctx = new Interactor(Faction.PlayerCamp, worldPos);
@@ -113,7 +113,7 @@ public class InteractionManager : Singleton<InteractionManager>
             }
 
             // 3.5.1 §六（E-S8）：NPC 统一点击交互回落（招募/训练/对话，优先级子系统裁决）
-            var clickTarget = hit.GetComponentInParent<IClickInteractable>();
+            var clickTarget = hitSource.GetComponentInParent<IClickInteractable>();
             if (clickTarget != null && ClickInteractDispatcher.TryDispatch(clickTarget))
                 return;
         }

@@ -81,6 +81,23 @@ public class ChestManager : Singleton<ChestManager>, ISaveable
         return n;
     }
 
+    /// <summary>
+    /// 格域矩形内宝箱（HH.294 片 6-1：PickAt 候选③来源；buffer 复用**零分配**）。返回写入条数。
+    /// 口径与 <see cref="GridSystem.FillUnitsInRect"/> 一致（RectInt xMax/yMax exclusive）。
+    /// </summary>
+    public int FillChestsInCellRect(RectInt cellRect, List<ChestEntity> buffer)
+    {
+        if (buffer == null) return 0;
+        int before = buffer.Count;
+        for (int i = 0; i < _chests.Count; i++)
+        {
+            var c = _chests[i];
+            if (c == null) continue;
+            if (cellRect.Contains(new Vector2Int(c.cell.x, c.cell.y))) buffer.Add(c);
+        }
+        return buffer.Count - before;
+    }
+
     private void EnforceCellLimit(GridCoord cell)
     {
         int max = ChestConfig.Instance != null ? Mathf.Max(1, ChestConfig.Instance.chestMaxPerCell) : 4;

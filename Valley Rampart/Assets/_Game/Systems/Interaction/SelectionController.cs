@@ -11,16 +11,19 @@ using UnityEngine;
 ///   - 右键：订阅 RightClickPressedEvent（批A InputManager 发布，含屏幕坐标）→ 世界坐标 → 统一指令分派
 ///     （Follow(D2)/PrioritizeHarvest(D115)/DeployGuard(D116)/MoveTo）。
 ///   - 点选：命中己方单位 → Selected；命中建筑 → SelectedBuilding（仅己方 kingdomId==0，2_17 守门员）。
-///   - 框选：屏幕矩形 → 世界矩形 → Physics2D.OverlapAreaAll → 收集己方单位（kingdomId==0 双条件过滤）。
+///   - 框选：屏幕矩形 → 世界矩形 → 单位索引区域查询（GridSystem.FillUnitsInRect·HH.294 片 6-1）→ 收集己方单位（kingdomId==0 双条件过滤）。
 ///   - dragThresholdPx 读 SelectionConfig SO（数值双落；默认 5px）。
 ///   - 摄像机中键 pan / 滚轮 zoom / WASD 平移由 CameraRig（2_10）自理，本类不重复。
 /// </summary>
 public class SelectionController : Singleton<SelectionController>
 {
-    [Tooltip("选择检测层级（默认 ~0 同 InteractionManager）")]
-    public LayerMask selectableMask = ~0;
+    // 【HH.294 片 6-1】`selectableMask`（原 `~0` 全层物理掩码）已随拾取改道**退役**：
+    //   点拾取走 MapGate.PickAt（`03` §8.6）；框选走单位索引区域查询（GridSystem.FillUnitsInRect）；
+    //   回退开关见 `MapGate.UseLegacyPhysicsPick`。
 
     private SelectionConfig _config;
+    /// <summary>框选 scratch buffer（复用零分配·HH.294 片 6-1）。</summary>
+    private readonly List<UnitController> _boxBuffer = new List<UnitController>(64);
 
     /// <summary>当前选中的己方单位（框选/点选）。</summary>
     public List<UnitController> Selected { get; } = new List<UnitController>();
@@ -244,9 +247,9 @@ public class SelectionController : Singleton<SelectionController>
             return;
         }
 
-        // 1) Follow（D2）：右键落在己方单位上（非选中者）
-        var hit = Physics2D.OverlapPoint(world, selectableMask);
-        var targetUnit = hit != null ? hit.GetComponentInParent<UnitController>() : null;
+        // 1) Follow（D2）：右键落在己方单位上（非选中者）——HH.294 片 6-1：改走 MapGate.PickWorld（渲染最前·坐标拾取）
+        var hitSource = MapGate.PickWorld(world);
+        var targetUnit = hitSource != null ? hitSource.GetComponentInParent<UnitController>() : null;
         // HH.81/D542 件1 配套：未入籍流浪（kingdomId=-1）放行——旧流浪挂玩家国(0)可被选中/跟随，
         // 置 -1 后此门须含 Vagrant，否则玩家招募点击交互（InteractAction）不可达=玩家招募链断。
         if (targetUnit != null && targetUnit.GetFaction() == Faction.PlayerCamp
@@ -332,7 +335,8 @@ public class SelectionController : Singleton<SelectionController>
     private void ClickSelect(Vector2 screenPos)
     {
         Vector2 world = ScreenToWorld(screenPos);
-        var hit = Physics2D.OverlapPoint(world, selectableMask);
+        // HH.294 片 6-1：改走 MapGate.PickWorld（渲染最前·坐标拾取；双轨开关 MapGate.UseLegacyPhysicsPick）
+        var hitSource = MapGate.PickWorld(world);
         // Shift+点击=加选/减选（2_13 步骤11C P1 输入档 D274；未按 Shift=常规重选）
         bool shiftHeld = UnityEngine.InputSystem.Keyboard.current != null &&
                          UnityEngine.InputSystem.Keyboard.current.shiftKey.isPressed;
@@ -342,10 +346,10 @@ public class SelectionController : Singleton<SelectionController>
             SelectedBuilding = null;
         }
 
-        if (hit != null)
+        if (hitSource != null)
         {
             // 己方单位优先（框选/点选仅收己方，R2）
-            var unit = hit.GetComponentInParent<UnitController>();
+            var unit = hitSource.GetComponentInParent<UnitController>();
             // 2_17 步骤3 双条件过滤（守门员）：仅玩家王国(kingdomId==0)单位可被选中——AI 工人以外籍身份(kingdomId>0)出场时
             // 不得被玩家选中下右键指令（GetFaction() 对 AI 工人仍返 PlayerCamp，须以 kingdomId 区分）。
             // HH.81/D542 件1 配套：未入籍流浪(kingdomId=-1)放行（玩家招募点击交互入口；AI 单位仍排除）。
@@ -364,7 +368,7 @@ public class SelectionController : Singleton<SelectionController>
                 return;
             }
             // 建筑：2_16 步骤7 补丁B——仅可选中己方王国（kingdomId==0），防玩家框选 AI 建筑下指令
-            var building = hit.GetComponentInParent<Building>();
+            var building = hitSource.GetComponentInParent<Building>();
             if (building != null && building.kingdomId == 0)
             {
                 SelectedBuilding = building;
@@ -380,20 +384,26 @@ public class SelectionController : Singleton<SelectionController>
         Vector2 s1 = ScreenToWorld(endScreen);
         float minX = Mathf.Min(s0.x, s1.x), maxX = Mathf.Max(s0.x, s1.x);
         float minY = Mathf.Min(s0.y, s1.y), maxY = Mathf.Max(s0.y, s1.y);
-        var cols = Physics2D.OverlapAreaAll(new Vector2(minX, minY), new Vector2(maxX, maxY), selectableMask);
 
         Selected.Clear();
         SelectedBuilding = null;
-        foreach (var c in cols)
+
+        // HH.294 片 6-1：框选改走**单位索引**区域查询（MapGate.FillUnitsInWorldRect；⛔ 不是 QueryCells 六项复合查询）。
+        // 双轨旧路径（OverlapAreaAll）收容在门内（MapGate.UseLegacyPhysicsPick 开关）；本层零物理调用。
+        _boxBuffer.Clear();
+        var worldRect = new Rect(minX, minY, maxX - minX, maxY - minY);
+        int candidates = MapGate.FillUnitsInWorldRect(worldRect, _boxBuffer);
+
+        foreach (var unit in _boxBuffer)
         {
-            var unit = c.GetComponentInParent<UnitController>();
+            if (unit == null) continue;
             // 2_17 步骤3：框选同做双条件过滤（仅玩家 kingdomId==0 单位，防纳 AI 工人）——
             // HH.81/D542 件1 配套：未入籍流浪(kingdomId=-1)放行（同点选门口径）。
-            if (unit != null && unit.GetFaction() == Faction.PlayerCamp
+            if (unit.GetFaction() == Faction.PlayerCamp
                 && (unit.kingdomId == 0 || unit.EffectiveOccupation == Occupation.Vagrant) && !Selected.Contains(unit))
                 Selected.Add(unit);
         }
-        Debug.Log($"[Selection] 框选 {Selected.Count} 个己方单位");
+        Debug.Log($"[Selection] 框选 {Selected.Count} 个己方单位（单位索引区域查询·HH.294 片 6-1；候选 {candidates}）");
     }
 
     // ===== 控制组（2_13 步骤11C D274：Ctrl+数字=保存，数字=调用）=====

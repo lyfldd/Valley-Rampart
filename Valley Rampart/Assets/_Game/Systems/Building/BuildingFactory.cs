@@ -223,11 +223,9 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
             return false;
         }
 
-        if (go.GetComponent<Collider2D>() == null)
-        {
-            var col = go.AddComponent<BoxCollider2D>();
-            col.size = Vector2.one;
-        }
+        // 【HH.294 片 6-1·6-C】原此处无条件挂 BoxCollider2D（地图预置/重生/双写三路共用）⇒
+        //   拾取已改道 MapGate.PickAt（`03` §8.6·不走物理）后 Collider 无消费者（全库 Physics2D 拾取 0·OnTrigger/OnCollision 0），
+        //   按批口径**删除挂载**；将来若确有物理需求再按需挂。
 
         try { if (GridSystem.Instance != null) GridSystem.Instance.MarkOccupiedFootprint(coord, fp.x, fp.y, b); }
         catch (System.Exception ex) { Debug.LogWarning("[BuildingFactory] MarkOccupiedFootprint 失败: " + ex.Message); }
