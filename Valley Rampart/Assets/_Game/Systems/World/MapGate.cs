@@ -144,7 +144,15 @@ public static class MapGate
     }
 
     /// <summary>⭐<b>区域枚举</b>（§8.2 ③）：范围（矩形）＋ 条件 ＋ 输出 buffer（**禁分配**：buffer 由调用方复用）。
-    /// 返回写入条数。原 `FillUnitsInRect` 只服务单位 ⇒ 本口**通用**（地表／可走／空置／有物皆可筛）。</summary>
+    /// 返回写入条数。原 `FillUnitsInRect` 只服务单位 ⇒ 本口**通用**（地表／可走／空置／有物皆可筛）。
+    ///
+    /// <b>⚠️ 成本特征（`03` §8.7 判据 7 · `D772` 实测 · 禁每帧调用）</b>：
+    /// 每格复合 **6 项**（地表／气候／可走／占格／归属／单位数）⇒ 成本 **O(格数 × 单位数)**；
+    /// 实测 **2401 格 · N=23 ⇒ ≈7.46 ms**（45% 帧预算）、N=500 ⇒ 76.88 ms（463%）。
+    /// 其中单位计数（`GetUnitCountInCell`·O(单位数)）占 ≈46%，余 ≈4 ms 来自归属查／占格查／组包
+    /// ⇒ ⚠️ **仅把单位计数治本为 O(1) 仍约需 4 ms（24% 帧预算）**。
+    /// ⛔ **禁在 `Update`／每帧路径调用**；**启用前须先治本**（块级单位计数 ⇒ O(1) → 按需取事实），
+    /// 治本批须给「正确性读数 ＋ 代价读数」两栏。</summary>
     public static int QueryCells(RectInt rect, CellFilter filter, List<CellInfo> buffer)
         => QueryCells(rect, filter, buffer, 0);
 
