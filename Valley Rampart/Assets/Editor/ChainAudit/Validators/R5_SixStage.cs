@@ -323,10 +323,16 @@ public static class R5_SixStage
             try { text = File.ReadAllText(file); } catch { continue; }
             string rel = ChainAuditCore.RelPath(file);
 
+            // 【HH.294 片 6-3·搭车 C3】先**剔注释**再扫描 —— 根因：改前全文匹配 ⇒ `GameEvents.cs:495`
+            //   注释里反引号包着的 `Subscribe<BuildingDestroyedEvent>` 被计成"真订阅" ⇒ 产出
+            //   「订阅×1／退订×0」假警报（`D780` 验收 `M2` 已定性）。本改＝**修正误报**（非放宽门禁：
+            //   真实调用仍逐条计入；字符串/字面量内的 `//`、`/*` 不误剔）。
+            string code = StripComments(text);
+
             var sub = new Dictionary<string, int>(StringComparer.Ordinal);
             var unsub = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (Match m in ReSub.Matches(text)) Bump(sub, m.Groups[1].Value);
-            foreach (Match m in ReUnsub.Matches(text)) Bump(unsub, m.Groups[1].Value);
+            foreach (Match m in ReSub.Matches(code)) Bump(sub, m.Groups[1].Value);
+            foreach (Match m in ReUnsub.Matches(code)) Bump(unsub, m.Groups[1].Value);
 
             foreach (var kv in sub)
             {
@@ -336,6 +342,84 @@ public static class R5_SixStage
             }
         }
         res.PairIssues.Sort(StringComparer.Ordinal);
+    }
+
+    /// <summary>⭐【HH.294 片 6-3·搭车 C3】**剔注释**（`//` 行注／`/* */` 块注）：成对扫描前的净化。
+    /// 口径：字符串（含转义 `\"`）／逐字字符串（`@"…"`，`""` 转义）／字符字面量**原样保留**（其内的 `//`、`/*` 不误剔）；
+    /// 注释内容以**等量字符**替换为空格（保留 `\n` 与整体长度 ⇒ 位置与行结构不变）。
+    /// ⚠️ 本器是**静态文本扫描**（非 Roslyn）⇒ 罕见形态（如插值字符串 `{…}` 内嵌注释）不在覆盖内，
+    ///   未覆盖即按原样处理 ⇒ 只会"少剔"不会"错剔"（保守取向：宁多计不漏计）。</summary>
+    private static string StripComments(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s ?? "";
+        var sb = new StringBuilder(s.Length);
+        int i = 0, n = s.Length;
+        while (i < n)
+        {
+            char c = s[i];
+
+            // 行注释：剔到行尾（换行保留）
+            if (c == '/' && i + 1 < n && s[i + 1] == '/')
+            {
+                while (i < n && s[i] != '\n') { sb.Append(s[i] == '\r' ? '\r' : ' '); i++; }
+                continue;
+            }
+            // 块注释：剔到 */（换行保留）
+            if (c == '/' && i + 1 < n && s[i + 1] == '*')
+            {
+                while (i < n && !(s[i] == '*' && i + 1 < n && s[i + 1] == '/'))
+                {
+                    sb.Append(s[i] == '\n' || s[i] == '\r' ? s[i] : ' ');
+                    i++;
+                }
+                if (i < n) { sb.Append("  "); i += 2; }   // 吃掉 `*/`
+                continue;
+            }
+            // 逐字字符串 @"…"（"" 表转义引号）
+            if (c == '@' && i + 1 < n && s[i + 1] == '"')
+            {
+                sb.Append(c).Append('"'); i += 2;
+                while (i < n)
+                {
+                    if (s[i] == '"')
+                    {
+                        if (i + 1 < n && s[i + 1] == '"') { sb.Append("\"\""); i += 2; continue; }
+                        sb.Append('"'); i++; break;
+                    }
+                    sb.Append(s[i]); i++;
+                }
+                continue;
+            }
+            // 普通字符串 "…"（\" 转义）
+            if (c == '"')
+            {
+                sb.Append(c); i++;
+                while (i < n)
+                {
+                    if (s[i] == '\\' && i + 1 < n) { sb.Append(s[i]).Append(s[i + 1]); i += 2; continue; }
+                    sb.Append(s[i]);
+                    if (s[i] == '"') { i++; break; }
+                    i++;
+                }
+                continue;
+            }
+            // 字符字面量 '…'（\' 转义）
+            if (c == '\'')
+            {
+                sb.Append(c); i++;
+                while (i < n)
+                {
+                    if (s[i] == '\\' && i + 1 < n) { sb.Append(s[i]).Append(s[i + 1]); i += 2; continue; }
+                    sb.Append(s[i]);
+                    if (s[i] == '\'') { i++; break; }
+                    i++;
+                }
+                continue;
+            }
+
+            sb.Append(c); i++;
+        }
+        return sb.ToString();
     }
 
     private static void Bump(Dictionary<string, int> map, string k)
