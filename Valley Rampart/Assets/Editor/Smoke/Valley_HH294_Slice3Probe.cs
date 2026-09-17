@@ -183,6 +183,12 @@ public static class Valley_HH294_Slice3Probe
         for (int cy = 0; cy < H; cy++)
             for (int cx = 0; cx < W; cx++)
             {
+                // 【HH.294 片4补正·R1 豁免声明 ①／②】下面两行是**子格数组索引算式**，**非坐标换算口** ⇒ 不走 `CellToSub`：
+                //   `wf` ＝ `GridSystem._walkFlags`（`WalkFlags[]`，**小格子域**一维扁平数组，长度 `SW×SH`）；
+                //   `SW` ＝ `grid.Width` ＝ `map.width * div` ＝ **子格域每行的跨距（行主序 stride）**；
+                //   `wf[(cy*div+sy) * SW + (cx*div+sx)]` 是「第 (cy*div+sy) 行第 (cx*div+sx) 列」的直接下标，
+                //   它自己**不产出任何格坐标**（无 `GridCoord` 输出、无域转换语义）⇒ 属纯下标运算，豁免。
+                //   （对照：本文件 `:359` 那一处**产出 `GridCoord`** ⇒ 是真换算口，已改走 `CellToSub`。）
                 WalkFlags first = wf[(cy * div) * SW + cx * div];
                 bool same = true;
                 for (int sy = 0; sy < div && same; sy++)
@@ -356,7 +362,8 @@ public static class Valley_HH294_Slice3Probe
                         for (int sx = 0; sx < div; sx++)
                         {
                             total++;
-                            var sub = new GridCoord((b.coord.x + dx) * div + sx, (b.coord.y + dy) * div + sy);
+                            // 【HH.294 片4补正·R1】原此处**就地展开** `(b.coord.x + dx) * div + sx` —— 改走唯一换算口 `GridSystem.CellToSub`
+                            var sub = grid.CellToSub(new GridCoord(b.coord.x + dx, b.coord.y + dy), sx, sy);
                             var occ = grid.GetOccupantSub(sub);
                             if (occ != null) nonNull++;
                             if (ReferenceEquals(occ, b)) hit++;

@@ -208,7 +208,9 @@ public static class MapGate
         int x1 = Mathf.Min(map.width, rect.xMax), y1 = Mathf.Min(map.height, rect.yMax);
         for (int y = y0; y < y1; y++)
             for (int x = x0; x < x1; x++)
-                if (map.features[y * map.width + x] == f) n++;
+                // 【HH.294 片4补正·M7】原为裸读 `map.features[y * map.width + x]`（**无** `i < Length` 保护，
+                //   与同文件 `ReadAt:54`／`GetFeatureAt:69`／`TryGetCell:135` 口径不一）⇒ 改走本类 `ReadAt`（含界保护与长度保护）。
+                if (ReadAt(map, x, y) == f) n++;
         return n;
     }
 
@@ -369,9 +371,15 @@ public static class MapGate
         if (consumer == null || consumer.ConsumedAnchorCoord == null) return false;
         var coord = consumer.ConsumedAnchorCoord.Value;
         var f = consumer.ConsumedAnchorFeature;
-        consumer.SetConsumedAnchor(null, FeatureType.Plain);
+        // 【HH.294 片4补正·M9】原序为「先清引用（`SetConsumedAnchor(null,…)`）**后**判定 `IsResourceNodeFeature(f)`」
+        //   ⇒ 若判定为假则**引用已清、锚点未返还**（静默丢锚点）。现改为**判定在前**：
+        //   ① 判定不通过 ⇒ 直接返回，引用原样保留（不存在「引用没了、锚点也没还」）；
+        //   ② 判定通过 ⇒ 已决定返还，引用必清（防「返还后的悬垂引用」再次触发写回）；
+        //   ③ 返回值＝**实际是否发生写回**（该格若已是同值 ⇒ 增门幂等返 false，引用仍清）。
         if (!IsResourceNodeFeature(f)) return false;
-        return PlaceResourceNode(coord, f);                // 锚点返还**走增门**
+        bool wrote = PlaceResourceNode(coord, f);          // 锚点返还**走增门**
+        consumer.SetConsumedAnchor(null, FeatureType.Plain);
+        return wrote;
     }
 
     // ==========================================================================

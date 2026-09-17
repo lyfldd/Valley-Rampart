@@ -286,7 +286,17 @@ public class BuildController : Singleton<BuildController>
         //   ⭐ 第 3 参＝**声明的锚点需求**（`03` §6.4「锚点校验需 anchorRequire 非空」）：门内再校验
         //   「该格地表与该声明相符」，不符即拒绝 ⇒ 幂等：落点格是 Tree 而声明是 Mine（或未声明）⇒ **零改写**。
         if (ResourceNodeMapping.RequiresResourceNode(def.id))
-            MapGate.ConsumeAnchor(coord, b, ResourceNodeMapping.GetResourceNode(def.id).Value);
+        {
+            // 【HH.294 片4补正·M4】原为**不检查返回值**的裸调用 ⇒ 声明不符／非锚点格时**静默**（无锚点、建造照常）。
+            //   现显式检查并告警。⛔ 本批**不做回滚**（回滚＝建造中途销毁已 `Init`＋`StartConstructing` 的半成品，
+            //   会新引入一条撤链路径，属行为变更、超「微瑕」范围）；此分支现实不可达的证据：
+            //   `PlacementValidator.cs:102-108` 对 `needsNode` 走 `WorldManager.IsResourceNodeAvailable(coord, requiredNode)`
+            //   （同源口径）⇒ 声明不符的落点**在放置校验即被拒**，到不了本行。告警落此只为「若真发生 ⇒ 可观测」。
+            if (!MapGate.ConsumeAnchor(coord, b, ResourceNodeMapping.GetResourceNode(def.id).Value))
+                Debug.LogWarning($"[BuildController] 【HH.294 片4·4-B】锚点消费被拒：def={def.id} coord={coord} "
+                                 + $"声明={ResourceNodeMapping.GetResourceNode(def.id).Value} "
+                                 + $"实际地表={MapGate.GetFeatureAt(coord)} ⇒ 该建筑**未消费锚点**（不返还）。");
+        }
 
         // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）
         if (go.GetComponent<Collider2D>() == null)

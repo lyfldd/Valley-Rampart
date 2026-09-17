@@ -115,7 +115,8 @@ public static class MapGenRules
         if (ox < 0 || oy < 0 || ox + side > map.width || oy + side > map.height) return false;
         for (int dy = 0; dy < side; dy++)
             for (int dx = 0; dx < side; dx++)
-                if (map.features[Idx(map, ox + dx, oy + dy)] != need) return false;
+                // 【HH.294 片4补正·R2】裸读收口：改走 `MapGate.ReadAt`（带 `map` 参数的读门）
+                if (MapGate.ReadAt(map, ox + dx, oy + dy) != need) return false;
         return true;
     }
 
@@ -125,7 +126,8 @@ public static class MapGenRules
         if (ox < 0 || oy < 0 || ox + side > map.width || oy + side > map.height) return false;
         for (int dy = 0; dy < side; dy++)
             for (int dx = 0; dx < side; dx++)
-                if (map.features[Idx(map, ox + dx, oy + dy)] != FeatureType.Plain) return false;
+                // 【HH.294 片4补正·R2】裸读收口：改走 `MapGate.ReadAt`
+                if (MapGate.ReadAt(map, ox + dx, oy + dy) != FeatureType.Plain) return false;
         return true;
     }
 
@@ -1267,7 +1269,10 @@ public static class MapGenRules
     /// <summary>就近找可走格（螺旋外扩，R6）。找不到返回 (-1,-1)。</summary>
     public static Vector2Int NearestWalkable(MapData map, int cx, int cy)
     {
-        if (InB(map, cx, cy) && IsWalkableFeature(map.features[Idx(map, cx, cy)])) return new Vector2Int(cx, cy);
+        // 【HH.294 片4补正·R2】裸读收口：本函数**运行期可达**（`KingdomFoundry`×7／`VagrantCampSystem`×3／
+        //   `MineByproductComponent:234` 等）⇒ 两处裸读改走 `MapGate.ReadAt`；原式 `InB(map,…) &&` **界保护已在**，
+        //   `ReadAt` 越界返 Plain 的差异路径在此不可达 ⇒ 等价。
+        if (InB(map, cx, cy) && IsWalkableFeature(MapGate.ReadAt(map, cx, cy))) return new Vector2Int(cx, cy);
         int maxR = Mathf.Max(map.width, map.height);
         for (int r = 1; r <= maxR; r++)
         {
@@ -1276,7 +1281,7 @@ public static class MapGenRules
                 {
                     if (Mathf.Abs(dx) != r && Mathf.Abs(dy) != r) continue;   // 只查当前环
                     int x = cx + dx, y = cy + dy;
-                    if (InB(map, x, y) && IsWalkableFeature(map.features[Idx(map, x, y)])) return new Vector2Int(x, y);
+                    if (InB(map, x, y) && IsWalkableFeature(MapGate.ReadAt(map, x, y))) return new Vector2Int(x, y);
                 }
         }
         return new Vector2Int(-1, -1);
