@@ -484,124 +484,326 @@ public static class HH294Slice62Probe
         Log("§F 代价对照：单次 PickAt（空白点）=" + (sw2.Elapsed.TotalMilliseconds / 2000).ToString("F4") + " ms");
     }
 
-    // ========================================================================
-    //  §G：判据 8（R2）独立渲染对照 —— 像素隐藏法（外部观测列）
-    //   方法：重叠点做 3 次 RT 采样（both / 隐藏A / 隐藏B）——
-    //     「隐藏谁 ⇒ 像素变」者＝**像素实测最前者**（外部观测·非 PickAt 同源重算）；
-    //     与 `PickAt` 返回者比对。覆盖 ① Pivot（单位-单位）② 跨层带（宝箱 5 ＞ 建筑/单位 1）。
+// ========================================================================
+    //  §G：判据 8（R2′）独立渲染对照 —— 像素隐藏法（外部观测列）·**三件套**（D779 §3.5 必改）
+    //   ① 身份可区分：两对象**先改名**（_A/_B）＋ 两列按**实例比对**（Component 引用·⛔ 禁按 name 比同类同精灵）；
+    //      日志逐例打印「拾取返回者 ∈ {A,B}（或第三方）」。
+    //   ② 对照点有效性（背景对照）：每点 **4 次采样**（both／hideA／hideB／hideBoth）——
+    //      「chA ∧ hideA≠hideBoth ⇒ A 遮挡 B」（对称判 B）；hideA==hideBoth ⇒ A 之下无内容贡献
+    //      ＝**该点无效·跳过**（旧版 chA^chB 把「遮挡」与「对方在该像素无贡献」混为一谈 ⇒ 无鉴别力）。
+    //   ③ 覆盖：① 同类（两单位·Pivot·**不同 sprite**——同图同色会让 hideA==hideB==both ⇒ 有效点恒 0）
+    //      ② 异类（单位×建筑：Pivot vs Center **两种排序点**）③ 跨层带（宝箱 order5 ＞ 建筑 order1·保留）；
+    //      每例 **候选 5×5 ＋ 有效点 ≥3**（⛔ 禁「首点即定论」）。
+    //   鉴别力自证（批内两次跑）：临时取反 `MapGate.DepthMajorYInFront` ⇒ ①② 必须 ❌；复原 ⇒ 必须 ✅（读数见报告）。
     // ========================================================================
     private static IEnumerator Case_RenderCompare()
     {
         Log("");
-        Log("## §G 判据8（R2）独立渲染对照（RT 像素隐藏法·外部观测列）");
+        Log("## §G 判据8（R2′）独立渲染对照（RT 像素隐藏法·外部观测列·三件套）");
         var cam = Camera.main;
         if (cam == null) { Log("§G ❌ Camera.main 不在场"); yield break; }
         var grid = GridSystem.Instance;
         if (grid == null) { Log("§G ❌ GridSystem 不在场"); yield break; }
 
-        // ---- 用例① 单位-单位（Pivot 排序点）----
+        bool ok1 = false, ok2 = false, ok3 = false;
+        yield return Case_UnitVsUnit(cam, grid, r => ok1 = r);
+        yield return Case_UnitVsBuilding(cam, grid, r => ok2 = r);
+        yield return Case_LayerBand(cam, grid, r => ok3 = r);
+
+        Log("");
+        Log("§G  总判定（三件套）：用例①（同类·两单位）=" + (ok1 ? "✅" : "❌")
+            + " ｜ 用例②（异类·单位×建筑）=" + (ok2 ? "✅" : "❌")
+            + " ｜ 用例③（跨层带）=" + (ok3 ? "✅" : "❌")
+            + " ⇒ **" + (ok1 && ok2 && ok3 ? "✅ 判据成立（两列一致·有效点 ≥3）" : "❌ 判据不成立") + "**");
+        Log("§G 鉴别力声明：**若被测实现反向（`DepthMajorYInFront` 取反）⇒ 用例①② 的「拾取返回者」应变"
+            + "为与像素列相反 ⇒ 两例 ❌**（用例③＝层带规则·不受深度键符号影响）；两侧预期值不同 ⇒ 判据有鉴别力。");
+    }
+
+    /// <summary>单例汇总：先按「第三方过滤」净点，再四点采样 → 像素列（外部观测·实例）＋ 拾取列（有效点逐点 PickAt·实例比对）→ 一致性。
+    /// 过滤参数 `allow`＝null 时不过滤；非 null 时仅保留 allow(pt)==true 的点（排除被第三方 sprite 覆盖的点）。</summary>
+    private static bool ReportCase(string label, Camera cam, List<Vector2> pts,
+        SpriteRenderer srA, Component instA, SpriteRenderer srB, Component instB, bool overlap, bool synced,
+        System.Func<Vector2, bool> allow = null)
+    {
+        int dropped = 0;
+        if (allow != null)
+        {
+            var keep = new List<Vector2>();
+            for (int i = 0; i < pts.Count; i++)
+            {
+                if (allow(pts[i])) keep.Add(pts[i]); else dropped++;
+            }
+            pts = keep;
+        }
+        // [ZOOM] RT 采样前**临时放大**（正交相机·同帧复原）：小 sprite（宝箱/单位）在 10 单位机位下仅占数像素
+        //   ⇒ 细网格落点大量落在其 AABB 的透明区 ⇒ 有效点不足。放大只改投影尺度，不改世界内容与渲染次序。
+        float ortho0 = cam.orthographicSize;
+        if (cam.orthographic) cam.orthographicSize = Mathf.Max(0.5f, ortho0 * 0.35f);
+        int voteA, voteB; List<int> valid; string ev;
+        HideTestFrontMulti4(cam, pts, srA, srB, out voteA, out voteB, out valid, out ev);
+        if (cam.orthographic) cam.orthographicSize = ortho0;   // 同帧复原
+        int n = (int)Mathf.Round(Mathf.Sqrt(pts.Count));
+        Log("§G " + label + "：A=" + srA.name + "（深度键=" + DepthKeyOf(srA).ToString("F3") + "）"
+            + " B=" + srB.name + "（深度键=" + DepthKeyOf(srB).ToString("F3") + "）"
+            + " bounds相交=" + overlap + " 单位格注册=" + synced + " 候选点=" + pts.Count + "（" + n + "×" + n + "·第三方过滤剔除 " + dropped + "）有效点=**" + valid.Count + "**");
+        Log("§G " + label + " 逐点读数：" + ev);
+
+        int hitA = 0, hitB = 0, hitThird = 0, hitNull = 0; string third = "";
+        for (int i = 0; i < valid.Count; i++)
+        {
+            var p = pts[valid[i]];
+            if (!MapGate.PickAt(p, out var h) || h.source == null) { hitNull++; continue; }
+            if (ReferenceEquals(h.source, instA)) hitA++;
+            else if (ReferenceEquals(h.source, instB)) hitB++;
+            else { hitThird++; if (third.Length == 0) third = h.source.name + "/" + h.source.GetType().Name; }
+        }
+        bool pixelKnown = valid.Count >= 3 && (voteA > 0 || voteB > 0)
+            && Mathf.Max(voteA, voteB) >= 2 * Mathf.Max(1, Mathf.Min(voteA, voteB));   // 多数票 >= 2:1（边缘像素可有个别相反票）
+        Component pixelInst = voteA == voteB ? null : (voteA > voteB ? instA : instB);
+        bool pickKnown = hitThird == 0 && hitNull == 0 && !(hitA > 0 && hitB > 0) && (hitA > 0 || hitB > 0);
+        Component pickInst = hitA > hitB ? instA : (hitB > hitA ? instB : null);
+        bool consistent = pixelKnown && pickKnown && ReferenceEquals(pixelInst, pickInst);
+
+        Log("§G " + label + " 两列（**实例比对**·有效点 " + valid.Count + " 点）：**拾取返回者**="
+            + PickDesc(hitA, hitB, hitThird, hitNull, third, instA, instB)
+            + " ｜ **像素实测最前者（外部观测）**=" + (pixelInst != null ? pixelInst.name : "不确定")
+            + " ｜ 一致=" + (consistent ? "✅" : "❌"));
+        Log("§G " + label + " 判据三件套：①身份可区分（改名 _A/_B ＋ 实例比对）✅ ｜ ②背景对照（hideBoth·有效点判据）="
+            + (valid.Count >= 3 ? "有效点 " + valid.Count + " ≥3 ✅" : "有效点不足 ❌") + " ｜ ③票型 A=" + voteA + " B=" + voteB
+            + (voteA > 0 && voteB > 0 ? "（混票·取多数·须 >=2:1）" : "（单侧）") + " ｜ **本例=" + (consistent ? "✅" : "❌") + "**");
+        return consistent;
+    }
+
+    // ---- 用例①：同类（两单位·Pivot·不同 sprite）----
+    private static IEnumerator Case_UnitVsUnit(Camera cam, GridSystem grid, System.Action<bool> setResult)
+    {
+        Log("");
+        Log("── §G 用例①：同类（两单位·Pivot·不同 sprite——同图同色会让 hideA==hideB==both ⇒ 有效点恒 0，故取异 sprite）");
         var units = Object.FindObjectsOfType<UnitController>();
         UnitController ua = null, ub = null;
+        Texture2D texA = null;
         for (int i = 0; i < units.Length; i++)
         {
-            if (units[i] == null || units[i].GetComponent<SpriteRenderer>() == null) continue;
-            if (units[i].GetFaction() != Faction.PlayerCamp) continue;
-            if (ua == null) ua = units[i]; else { ub = units[i]; break; }
+            var u = units[i];
+            if (u == null) continue;
+            if (u.GetFaction() != Faction.PlayerCamp) continue;
+            var sru = u.GetComponent<SpriteRenderer>();
+            if (sru == null || sru.sprite == null) continue;
+            if (ua == null) { ua = u; texA = sru.sprite.texture; continue; }
+            if (sru.sprite.texture != texA) { ub = u; break; }
         }
-        if (ua == null || ub == null) Log("§G 用例①（单位-单位）：❌ 玩家单位样本 <2（跳过）");
-        else
+        if (ua != null && ub == null && UnitFactory.Instance != null)
         {
-            var srA = ua.GetComponent<SpriteRenderer>();
-            var srB = ub.GetComponent<SpriteRenderer>();
-            var posA = ua.transform.position; var posB = ub.transform.position;
-            var subA = grid.GetUnitCoord(ua); var subB = grid.GetUnitCoord(ub);
-            // 冻结（**防 NPCBrain 位移把两点拉开** —— 首跑实测 0.2 偏移被漂移放大到 0.53 ⇒ bounds 不交）
-            var sched0 = TaskScheduler.HasInstance ? TaskScheduler.Instance : null;
-            var brainA = ua.GetComponent<NPCBrain>(); var brainB = ub.GetComponent<NPCBrain>();
-            bool enA = brainA != null && brainA.enabled, enB = brainB != null && brainB.enabled;
-            if (sched0 != null) { sched0.AbandonTask(ua.npcId); sched0.AbandonTask(ub.npcId); }
-            if (brainA != null) brainA.enabled = false;
-            if (brainB != null) brainB.enabled = false;
-            // 拉到相机前近旁（G0-A 同款隔离位：不改变 renderer 参数，只移位）
-            var center = cam.transform.position + cam.transform.forward * 10f;
-            ua.transform.position = new Vector3(center.x, center.y + 0.02f, 0f);
-            ub.transform.position = new Vector3(center.x, center.y - 0.18f, 0f);   // 小 y ⇒ 渲染更前（G0 结论）
-            SyncUnitCell(grid, ua); SyncUnitCell(grid, ub);
-            // ⚠️ **同帧**采样（不等帧）：NPCBrain 冻结已防主动移动，但同帧内完成「定位→取样→拾取→复原」
-            //   可根除任何帧间漂移（首跑实测：等帧后两点被拉开 0.53 ⇒ bounds 不交）。
-            bool overlap;
-            var pts = GridPoints(srA, srB, 3, out overlap);
-            var front = HideTestFrontMulti(cam, pts, srA, srB, out var ev);
-            var pt = pts.Count > 0 ? pts[pts.Count / 2] : new Vector2(srA.bounds.center.x, srA.bounds.center.y);
-            bool picked = MapGate.PickAt(pt, out var hit);
-            Log("§G 用例①（Pivot·单位-单位）：A=" + ua.name + "(Pivot,t=" + ua.transform.position.y.ToString("F2")
-                + ",bounds.c=" + srA.bounds.center.ToString("F2") + ") B=" + ub.name + "(t=" + ub.transform.position.y.ToString("F2")
-                + ",bounds.c=" + srB.bounds.center.ToString("F2") + ") bounds相交=" + overlap + " 采样点=" + pt.ToString("F2"));
-            Log("§G 用例① 像素读数列：" + ev);
-            Log("§G 用例① 两列：**拾取返回者**=" + (picked && hit.source != null ? hit.source.name : "(null)")
-                + " ｜ **像素实测最前者（外部观测）**=" + front
-                + " ｜ 一致=" + (picked && hit.source != null && hit.source.name == front ? "✅" : "❌"));
-
-            ua.transform.position = posA; ub.transform.position = posB;
-            SyncUnitCell(grid, ua, subA); SyncUnitCell(grid, ub, subB);
-            if (brainA != null) brainA.enabled = enA;
-            if (brainB != null) brainB.enabled = enB;
+            var gc = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, ua.transform.position + new Vector3(0.2f, 0f), 0);
             yield return null;
-            Log("§G 用例① 实体位置与脑（enabled）已复原");
+            ub = gc != null ? gc.GetComponent<UnitController>() : null;
+            Log("§G 用例① 补造第二个单位（不同 sprite·Worker）：" + (ub != null ? ub.name : "(失败)"));
         }
+        if (ua == null || ub == null) { Log("§G 用例① ❌ 玩家单位样本 <2（跳过）"); setResult(false); yield break; }
 
-        // ---- 用例② 跨层带（宝箱 sortingOrder=5 ＞ 建筑/单位 1）----
-        var chestMgr = ChestManager.HasInstance ? ChestManager.Instance : null;
+        var srA = ua.GetComponent<SpriteRenderer>();
+        var srB = ub.GetComponent<SpriteRenderer>();
+        string nA = ua.name, nB = ub.name;
+        ua.name = nA + "_A"; ub.name = nB + "_B";            // ① 身份可区分
+        var posA = ua.transform.position; var posB = ub.transform.position;
+        var subA = grid.GetUnitCoord(ua); var subB = grid.GetUnitCoord(ub);
+        var sched0 = TaskScheduler.HasInstance ? TaskScheduler.Instance : null;
+        var brainA = ua.GetComponent<NPCBrain>(); var brainB = ub.GetComponent<NPCBrain>();
+        bool enA = brainA != null && brainA.enabled, enB = brainB != null && brainB.enabled;
+        if (sched0 != null) { sched0.AbandonTask(ua.npcId); sched0.AbandonTask(ub.npcId); }
+        if (brainA != null) brainA.enabled = false;
+        if (brainB != null) brainB.enabled = false;
+
+        // 隔离位（相机前 10 单位·G0-A 同款：不动 renderer 参数，只移位）；A 大 y／B 小 y（按实现小 y 应在前）
+        var c = cam.transform.position + cam.transform.forward * 10f;
+        ua.transform.position = new Vector3(c.x + 0.04f, c.y + 0.05f, 0f);   // 间距 ±0.05（小 sprite 人形：过大 y 间距会让 A∩B 只剩细条 ⇒ 有效点 0）
+        ub.transform.position = new Vector3(c.x - 0.04f, c.y - 0.05f, 0f);
+        SyncUnitCell(grid, ua); SyncUnitCell(grid, ub);
+        bool synced = grid.GetUnitCoord(ua).HasValue && grid.GetUnitCoord(ub).HasValue;
+        bool overlap;
+        var pts = GridPoints(srA, srB, 5, out overlap);
+        bool ok = ReportCase("用例①（同类·两单位 Pivot）", cam, pts, srA, ua, srB, ub, overlap, synced,
+            pt => PointClearOfThirdParties(pt, ua, ub));
+        setResult(ok);
+
+        // 复原（位置/所属格/脑/名）
+        ua.transform.position = posA; ub.transform.position = posB;
+        SyncUnitCell(grid, ua, subA); SyncUnitCell(grid, ub, subB);
+        if (brainA != null) brainA.enabled = enA;
+        if (brainB != null) brainB.enabled = enB;
+        ua.name = nA; ub.name = nB;
+        yield return null;
+        Log("§G 用例① 收尾：位置/所属格/脑(enabled)/名 已复原");
+    }
+
+    // ---- 用例②：异类（单位×建筑·Pivot vs Center 两种排序点·多候选重试）----
+    private static IEnumerator Case_UnitVsBuilding(Camera cam, GridSystem grid, System.Action<bool> setResult)
+    {
+        Log("");
+        Log("── §G 用例②：异类（单位×建筑·Pivot vs Center——两种排序点来源）");
+        // 候选建筑＝sprite 面积降序（castle 加权）；逐个尝试，取首个「第三方过滤后净点 >=3」者
+        //   ⚠ 建筑候选＝`BuildingRegistry` footprint 反查（**按在册坐标**）⇒ 建筑不可移形；
+        //   改为**临时把相机对准建筑**（同帧：平移→采样→拾取→复位；不改建筑位置/renderer 参数）
         var reg = BuildingRegistry.Instance;
-        Building bld = null;
+        var cands = new List<Building>();
         if (reg != null)
             for (int i = 0; i < reg.All.Count; i++)
             {
                 var b = reg.All[i];
-                if (b != null && b.GetComponentInChildren<SpriteRenderer>() != null) { bld = b; break; }
+                if (b == null) continue;
+                var sr = b.GetComponentInChildren<SpriteRenderer>();
+                if (sr == null || sr.sprite == null) continue;
+                cands.Add(b);
             }
-        if (chestMgr == null || bld == null) Log("§G 用例②（跨层带）： 宝箱管理器/建筑样本缺失（跳过）");
-        else
+        cands.Sort((x, y) => ScoreBld(y).CompareTo(ScoreBld(x)));
+        if (cands.Count == 0) { Log("§G 用例② ❌ 全库无可用建筑样本（跳过）"); setResult(false); yield break; }
+
+        float cellH = grid.Config != null ? grid.Config.cellSize.y : 0.64f;
+        var offsets = new[] { 1.6f, 1.9f, 2.2f, 1.3f };
+        var camPos0 = cam.transform.position;
+        bool done = false; bool ok = false;
+        for (int ci = 0; ci < cands.Count && ci < 8 && !done; ci++)
         {
-            var srB2 = bld.GetComponentInChildren<SpriteRenderer>();
-            var bPos = bld.transform.position;
-            // 建筑先移到**相机前隔离位**（G0-A 同款：避开地面 Tilemap 层干扰），宝箱再贴同一屏点
-            var spot2 = cam.transform.position + cam.transform.forward * 10f;
-            bld.transform.position = new Vector3(spot2.x, spot2.y, 0f);
-            yield return null;
-            var cellOpt = grid.WorldToCoord(spot2);
-            if (cellOpt == null) Log("§G 用例②：❌ 隔离位越界（跳过）");
-            else
+            var bld = cands[ci];
+            var srBld = bld.GetComponentInChildren<SpriteRenderer>();
+            var bc = srBld.bounds.center;
+            GameObject go = null; UnitController uc = null; bool synced = false;
+            for (int k = 0; k < offsets.Length && !synced; k++)
             {
-                var chest = chestMgr.SpawnChest(cellOpt.Value, new ResourcePack { wood = 1 }, Faction.PlayerCamp);
+                var wp = new Vector2(bc.x, bc.y - offsets[k] * cellH);
+                go = UnitFactory.Instance != null ? UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, wp, 0) : null;
+                uc = go != null ? go.GetComponent<UnitController>() : null;
+                if (uc == null) break;
                 yield return null;
-                if (chest == null) Log("§G 用例②：❌ SpawnChest 返回 null（跳过）");
-                else
-                {
-                    // 宝箱贴到建筑 sprite 中心（同一屏点；宝箱 order=5 ⇒ 层带应压制 order=1 的建筑）
-                    chest.transform.position = new Vector3(srB2.bounds.center.x, srB2.bounds.center.y, 0f);
-                    yield return null;
-                    var srC = chest.GetComponent<SpriteRenderer>();
-                    // 采样点集＝**宝箱 ∩ 建筑** AABB 内 3×3（多点：真图上"中心恰为透明像素"会让单点判不出）
-                    bool ovC;
-                    var ptsC = GridPoints(srC, srB2, 3, out ovC);
-                    var frontC = HideTestFrontMulti(cam, ptsC, srC, srB2, out var evC);
-                    var ptC = ptsC.Count > 0 ? ptsC[ptsC.Count / 2] : new Vector2(srC.bounds.center.x, srC.bounds.center.y);
-                    bool pickedC = MapGate.PickAt(ptC, out var hitC);
-                    Log("§G 用例②（跨层带·宝箱 vs 建筑）：宝箱 order=" + srC.sortingOrder + "（layer=" + srC.sortingLayerName + "）"
-                        + " 建筑 order=" + srB2.sortingOrder + "（layer=" + srB2.sortingLayerName + "）"
-                        + " bounds相交=" + ovC + " 采样点=" + ptC.ToString("F2")
-                        + "（宝箱中心=" + srC.bounds.center.ToString("F2") + " 建筑中心=" + srB2.bounds.center.ToString("F2") + "）");
-                    Log("§G 用例② 像素读数列：" + evC);
-                    Log("§G 用例② 两列：**拾取返回者**=" + (pickedC && hitC.source != null ? hitC.source.name : "(null)")
-                        + " ｜ **像素实测最前者（外部观测）**=" + frontC
-                        + " ｜ 一致=" + (pickedC && hitC.source != null && hitC.source.name == frontC ? "✅" : "❌"));
-                    chestMgr.Remove(chest);   // 用完即清（L-23 探针纪律）
-                    Log("§G 用例② 宝箱已清理（Count=" + chestMgr.Count + "）");
-                }
+                grid.ExitCurrentCell(uc);
+                var sub = grid.WorldToSubCoord(uc.transform.position);
+                if (sub.HasValue && grid.TryEnter(uc, sub.Value)) synced = true;
+                if (!synced) { Object.Destroy(go); go = null; uc = null; yield return null; }
             }
-            bld.transform.position = bPos;
+            if (uc == null) { Log("§G 用例② 候选 " + ci + " 单位生成/格注册失败 ⇒ 换下一候选"); continue; }
+
+            var srU = uc.GetComponent<SpriteRenderer>();
+            string nU = uc.name, nB2 = bld.name;
+            uc.name = nU + "_A"; bld.name = nB2 + "_B";           // ① 身份可区分（A=单位·Pivot；B=建筑·Center）
+            var brainU = uc.GetComponent<NPCBrain>();
+            bool enU = brainU != null && brainU.enabled;
+            if (TaskScheduler.HasInstance) TaskScheduler.Instance.AbandonTask(uc.npcId);
+            if (brainU != null) brainU.enabled = false;
+            bool overlap;
+            var vc0 = camPos0 + cam.transform.forward * 10f;
+            cam.transform.position = camPos0 + new Vector3(bc.x - vc0.x, bc.y - vc0.y, 0f);
+            var pts = GridPoints(srU, srBld, 5, out overlap);
+            int keepN = 0;
+            for (int i = 0; i < pts.Count; i++) if (PointClearOfThirdParties(pts[i], uc, bld)) keepN++;   // 预判净点（不足 ⇒ 不空跑采样）
+            if (keepN >= 3)
+            {
+                ok = ReportCase("用例②（异类·单位×建筑·候选 " + ci + "・相机临时对准）", cam, pts, srU, uc, srBld, bld, overlap, synced,
+                    pt => PointClearOfThirdParties(pt, uc, bld));
+                done = true;
+                Log("§G 用例② 采用候选 " + ci + "：def=" + (bld.def != null ? bld.def.id : "?") + " coord=" + bld.coord
+                    + "（净点 " + keepN + "/" + pts.Count + "）");
+            }
+            cam.transform.position = camPos0;   // 复位（同帧完成）
+            bld.name = nB2;
+            if (brainU != null) brainU.enabled = enU;
+            if (go != null) Object.Destroy(go);
+            yield return null;
+            if (!done) Log("§G 用例② 候选 " + ci + "（def=" + (bld.def != null ? bld.def.id : "?") + "）过滤后净点 " + keepN + " <3 ⇒ 换下一候选");
         }
+        if (!done) Log("§G 用例② ❌ 8 个候选均无「净点 >=3」⇒ 本例如实判 ❌（未达成对照点有效性）");
+        setResult(ok);
+        Log("§G 用例② 收尾：测试单位已销毁·建筑名/相机已复原（建筑未移动）");
+    }
+
+    /// <summary>建筑候选评分（用例②用）：sprite 面积 ＋ castle 加权（sprite 最大最稳）。</summary>
+    private static float ScoreBld(Building b)
+    {
+        var sr = b.GetComponentInChildren<SpriteRenderer>();
+        float area = sr != null ? sr.bounds.size.x * sr.bounds.size.y : 0f;
+        return area + (b.def != null && b.def.id == "castle" ? 1000f : 0f);
+    }
+
+    // ---- 用例③：跨层带（层带规则：order 5 > order 1·受控构造）----
+    private static IEnumerator Case_LayerBand(Camera cam, GridSystem grid, System.Action<bool> setResult)
+    {
+        Log("");
+        Log("── §G 用例③：跨层带（层带大者前·order 5 vs order 1）");
+        // ⚠ 与片 6-2 版差异（如实列报）：原用「宝箱 order=5」实测 **连续 3 跑有效点 <=1**
+        //   （宝箱 sprite 的绘制内容只占其 AABB 极小比例 ⇒ 9×9 细网格也命不中）⇒ 本批改**受控构造**：
+        //   把测试单位的 `sortingOrder` **临时置 5**（测毕复原），建筑保持 order=1 ⇒ 本例只验「层带规则」
+        //   （不受深度键符号影响·鉴别力自证期的稳定对照例）。
+        var reg = BuildingRegistry.Instance;
+        var cands = new List<Building>();
+        if (reg != null)
+            for (int i = 0; i < reg.All.Count; i++)
+            {
+                var b = reg.All[i];
+                if (b == null) continue;
+                var sr = b.GetComponentInChildren<SpriteRenderer>();
+                if (sr == null || sr.sprite == null) continue;
+                cands.Add(b);
+            }
+        cands.Sort((x, y) => ScoreBld(y).CompareTo(ScoreBld(x)));
+        if (cands.Count == 0) { Log("§G 用例③ ❌ 全库无可用建筑样本（跳过）"); setResult(false); yield break; }
+
+        float cellH = grid.Config != null ? grid.Config.cellSize.y : 0.64f;
+        var offsets = new[] { 1.6f, 1.9f, 2.2f, 1.3f };
+        var camPos0 = cam.transform.position;
+        bool done = false; bool ok = false;
+        for (int ci = 0; ci < cands.Count && ci < 8 && !done; ci++)
+        {
+            var bld = cands[ci];
+            var srBld = bld.GetComponentInChildren<SpriteRenderer>();
+            var bc = srBld.bounds.center;
+            GameObject go = null; UnitController uc = null; bool synced = false;
+            for (int k = 0; k < offsets.Length && !synced; k++)
+            {
+                var wp = new Vector2(bc.x, bc.y - offsets[k] * cellH);
+                go = UnitFactory.Instance != null ? UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, wp, 0) : null;
+                uc = go != null ? go.GetComponent<UnitController>() : null;
+                if (uc == null) break;
+                yield return null;
+                grid.ExitCurrentCell(uc);
+                var sub = grid.WorldToSubCoord(uc.transform.position);
+                if (sub.HasValue && grid.TryEnter(uc, sub.Value)) synced = true;
+                if (!synced) { Object.Destroy(go); go = null; uc = null; yield return null; }
+            }
+            if (uc == null) { Log("§G 用例③ 候选 " + ci + " 单位生成/格注册失败 ⇒ 换下一候选"); continue; }
+
+            var srU = uc.GetComponent<SpriteRenderer>();
+            int order0 = srU.sortingOrder;
+            string nU = uc.name, nB2 = bld.name;
+            uc.name = nU + "_A"; bld.name = nB2 + "_B";           // ① 身份可区分（A=单位·**临时 order=5**；B=建筑 order=1）
+            srU.sortingOrder = 5;                                  // 受控构造：层带 5 > 1（测毕复原）
+            var brainU = uc.GetComponent<NPCBrain>();
+            bool enU = brainU != null && brainU.enabled;
+            if (TaskScheduler.HasInstance) TaskScheduler.Instance.AbandonTask(uc.npcId);
+            if (brainU != null) brainU.enabled = false;
+            bool overlap;
+            var vc0 = camPos0 + cam.transform.forward * 10f;
+            cam.transform.position = camPos0 + new Vector3(bc.x - vc0.x, bc.y - vc0.y, 0f);
+            var pts = GridPoints(srU, srBld, 5, out overlap);
+            int keepN = 0;
+            for (int i = 0; i < pts.Count; i++) if (PointClearOfThirdParties(pts[i], uc, bld)) keepN++;
+            if (keepN >= 3)
+            {
+                ok = ReportCase("用例③（跨层带·单位 order=5 vs 建筑 order=1·候选 " + ci + "）", cam, pts, srU, uc, srBld, bld, overlap, synced,
+                    pt => PointClearOfThirdParties(pt, uc, bld));
+                done = true;
+                Log("§G 用例③ 采用候选 " + ci + "：def=" + (bld.def != null ? bld.def.id : "?") + " coord=" + bld.coord
+                    + "（净点 " + keepN + "/" + pts.Count + "·单位 order 原值 " + order0 + " ⇒ 临时 5）");
+            }
+            cam.transform.position = camPos0;   // 复位（同帧完成）
+            srU.sortingOrder = order0;          // 复原（层带构造不残留）
+            bld.name = nB2;
+            if (brainU != null) brainU.enabled = enU;
+            if (go != null) Object.Destroy(go);
+            yield return null;
+            if (!done) Log("§G 用例③ 候选 " + ci + " 过滤后净点 " + keepN + " <3 ⇒ 换下一候选");
+        }
+        if (!done) Log("§G 用例③ ❌ 8 个候选均无「净点 >=3」⇒ 本例如实判 ❌");
+        setResult(ok);
+        Log("§G 用例③ 收尾：测试单位已销毁·单位 order/建筑名/相机已复原");
     }
 
     private static void SyncUnitCell(GridSystem grid, UnitController u)
@@ -631,41 +833,93 @@ public static class HH294Slice62Probe
         return list;
     }
 
-    /// <summary>
-    /// **多点像素隐藏法**（外部观测）：逐点做 3 次 RT 采样（both／隐藏 A／隐藏 B）；
-    /// 「隐藏谁 ⇒ 该点像素变」者＝**像素实测最前者**；取**首个结论明确**的点定论（其余点读数一并落盘可复算）。
-    /// 单点法在真图上有"中心恰为透明像素"的坑（本批实测：宝箱中心透明 ⇒ 单点判不出）⇒ 多点扫描。
-    /// </summary>
-    private static string HideTestFrontMulti(Camera cam, List<Vector2> pts, SpriteRenderer a, SpriteRenderer b, out string evidence)
+    /// <summary>⭐ 四点采样 + 逐点有效性（三件套②·背景对照）：
+    /// 「chA ∧ hideA≠hideBoth」⇒ A 遮挡 B（计一票·记有效点）；「chB ∧ hideB≠hideBoth」⇒ B 遮挡 A；
+    /// 其余（含双向/无效）⇒ **该点无效·跳过**（旧版 `chA^chB` 无鉴别力：混淆「遮挡」与「对方无贡献」）。</summary>
+    private static void HideTestFrontMulti4(Camera cam, List<Vector2> pts, SpriteRenderer a, SpriteRenderer b,
+        out int voteA, out int voteB, out List<int> validIdx, out string evidence)
     {
+        voteA = 0; voteB = 0; validIdx = new List<int>();
         var sb = new StringBuilder();
-        string verdict = "不确定";
         for (int i = 0; i < pts.Count; i++)
         {
             var c0 = SampleAtWorld(cam, pts[i], 256);
             a.enabled = false; var cA = SampleAtWorld(cam, pts[i], 256); a.enabled = true;
             b.enabled = false; var cB = SampleAtWorld(cam, pts[i], 256); b.enabled = true;
+            a.enabled = false; b.enabled = false; var cAB = SampleAtWorld(cam, pts[i], 256);
+            a.enabled = true; b.enabled = true;
             bool chA = ColorChanged(c0, cA), chB = ColorChanged(c0, cB);
-            bool conclusive = chA ^ chB;
+            bool underA = ColorChanged(cA, cAB);   // 遮 A 后与"遮双"不同 ⇒ A 之下有内容贡献（背景对照）
+            bool underB = ColorChanged(cB, cAB);
+            bool validA = chA && underA, validB = chB && underB;
+            string tag;
+            if (validA && !validB) { voteA++; validIdx.Add(i); tag = "A遮挡B"; }
+            else if (validB && !validA) { voteB++; validIdx.Add(i); tag = "B遮挡A"; }
+            else if (validA && validB) tag = "双向?(跳过)";
+            else tag = "无效(跳过)";
             sb.Append("#").Append(i).Append(pts[i].ToString("F2"))
               .Append(" both=").Append(Fmt(c0))
-              .Append(" hideA=").Append(Fmt(cA)).Append("(").Append(chA ? "变" : "不变").Append(")")
-              .Append(" hideB=").Append(Fmt(cB)).Append("(").Append(chB ? "变" : "不变").Append(")")
-              .Append(conclusive ? " ★" : "").Append(" ; ");
-            if (conclusive)
-            {
-                verdict = chA ? a.name : b.name;
-                break;
-            }
+              .Append(" hideA=").Append(Fmt(cA)).Append("(").Append(chA ? "变" : "不变").Append(",").Append(underA ? "露物" : "露底").Append(")")
+              .Append(" hideB=").Append(Fmt(cB)).Append("(").Append(chB ? "变" : "不变").Append(",").Append(underB ? "露物" : "露底").Append(")")
+              .Append(" hideBoth=").Append(Fmt(cAB))
+              .Append(" ⇒ ").Append(tag).Append(" ; ");
         }
         evidence = sb.ToString();
-        return verdict;
+    }
+
+    /// <summary>点净化（R2′ 强化）：该点若被**第三方**（除 A/B 外的建筑/单位/宝箱）sprite bounds 覆盖 ⇒ 排除。
+    /// 依据＝`MapGate.ConsiderPick` 只认「bounds 含点」的候选 ⇒ 第三方在此点根本不可能被拾取到，
+    /// 留在点集只会污染两列（片 6-2 收尾实锚：`farm`(F-15 footprint 重叠) 曾整例压过 `castle`）。</summary>
+    private static bool PointClearOfThirdParties(Vector2 p, Component instA, Component instB)
+    {
+        var z = 0f;
+        var reg = BuildingRegistry.Instance;
+        if (reg != null)
+            for (int i = 0; i < reg.All.Count; i++)
+            {
+                var b = reg.All[i];
+                if (b == null || ReferenceEquals(b, instA) || ReferenceEquals(b, instB)) continue;
+                var sr = b.GetComponentInChildren<SpriteRenderer>();
+                if (sr != null && sr.enabled && sr.bounds.Contains(new Vector3(p.x, p.y, sr.bounds.center.z))) return false;
+            }
+        var units = Object.FindObjectsOfType<UnitController>();
+        for (int i = 0; i < units.Length; i++)
+        {
+            var u = units[i];
+            if (u == null || ReferenceEquals(u, instA) || ReferenceEquals(u, instB)) continue;
+            var sr = u.GetComponent<SpriteRenderer>();
+            if (sr != null && sr.enabled && sr.bounds.Contains(new Vector3(p.x, p.y, sr.bounds.center.z))) return false;
+        }
+        var chests = Object.FindObjectsOfType<ChestEntity>();
+        for (int i = 0; i < chests.Length; i++)
+        {
+            var c = chests[i];
+            if (c == null || ReferenceEquals(c, instA) || ReferenceEquals(c, instB)) continue;
+            var sr = c.GetComponent<SpriteRenderer>();
+            if (sr != null && sr.enabled && sr.bounds.Contains(new Vector3(p.x, p.y, sr.bounds.center.z))) return false;
+        }
+        return true;
+    }
+
+    /// <summary>深度键（仅报告复算用·与 `MapGate.ConsiderPick` 同式）：Pivot ⇒ transform.y；Center ⇒ bounds.center.y。
+    /// ⛔ 本函数只用于**日志对照列**，像素列（外部观测）不依赖它。</summary>
+    private static float DepthKeyOf(SpriteRenderer sr)
+        => sr.spriteSortPoint == SpriteSortPoint.Pivot ? sr.transform.position.y : sr.bounds.center.y;
+
+    /// <summary>拾取列描述（⛔ 必含「返回者 ∈ {A,B}／第三方」判定·实例比对）。</summary>
+    private static string PickDesc(int hitA, int hitB, int hitThird, int hitNull, string third, Component instA, Component instB)
+    {
+        string detail = "（A=" + hitA + " B=" + hitB + " 第三=" + hitThird + " 空=" + hitNull + "）";
+        if (hitThird > 0) return "**第三方**(" + third + ")" + detail;
+        if (hitA > 0 && hitB > 0) return "混票" + detail;
+        if (hitA > 0) return instA.name + "（∈{A}）" + detail;
+        if (hitB > 0) return instB.name + "（∈{B}）" + detail;
+        return "(null)" + detail;
     }
 
     private static bool ColorChanged(Color x, Color y)
         => Mathf.Abs(x.r - y.r) + Mathf.Abs(x.g - y.g) + Mathf.Abs(x.b - y.b) > 0.02f;
     private static string Fmt(Color c) => "(" + c.r.ToString("F2") + "," + c.g.ToString("F2") + "," + c.b.ToString("F2") + ")";
-
     /// <summary>把相机渲到 RT 并取「世界点投影处」像素（外部观测·不依赖任何拾取键）。</summary>
     private static Color SampleAtWorld(Camera cam, Vector3 world, int rtSize)
     {
