@@ -29,7 +29,7 @@
 |---|---|---|
 | **1** 写点 | 改前（`12497dd6^`）生产码宽式 **12 处 / 4 文件**（`MapGenRules 9`／`MapValidator 1`／`ResourceRespawnSystem 1`／`WorldManager 1`）→ 改后 **1 处**（`MapGate.cs:33` `WriteRaw`，**private**）；另一命中 `:27` 为注释。能力句成立 | ✅ |
 | **2** 裸读面 | 改前 **46**（逐文件与报告全同）→ 改后命中 **32 行** ＝ 门内 11（**8 代码 ＋ 3 注释**）＋ 生成期 18 ＋ 他文件注释 3 ⇒ **真裸读 25**（门内真读 7 ＋ 生成期 18）⚠️ 报告写 29（见 `M3`）⚠️ **能力句限定不成立**（见 `R2`） | ⚠️ |
-| **3** 4-B 禁抹树 | 原件：Tree 格 (31,2) 经「声明不符消费／声明相符消费／真实 `quarry` 建造」三条路径后 **features 仍 = Tree**；`quarry` ⇒ `TryBuild = False`；门内声明校验真在（`MapGate.cs:349` ＋ `MatchesDeclaredAnchor:357-359`）；`BuildController:288` 改后**带声明传参** ✅ 治本 | ✅ |
+| **3** 4-B 禁抹树 | 原件：Tree 格 (31,2) 经「声明不符消费／声明相符消费／真实 `quarry` 建造」三条路径后 **features 仍 = Tree**；`quarry` ⇒ `TryBuild = False`；门内声明校验真在（`MapGate.cs:349` ＋ `MatchesDeclaredAnchor:357-359`）；`BuildController.cs:289` 改后**带声明传参** ✅ 治本 | ✅ |
 | **4** 4-C 单一删门 | `TryConsumeResourceNode` **定义 ＋ 调用全删**（全库命中尽为注释／探针反射取证）；`MapGate.RemoveResourceNode:286` 唯一删入口；`SetFeature:225` 通用改口 | ✅ |
 | **5** 4-D 注销合一 | `ReleaseLayerOwnedState` **实现 1 处**（`Building.cs:847`，private）＋ `Die:887`／`OnGatherCompleted:915` 各调一次（原抄两遍已合一）；`BuildingDestroyedEvent` 定义已删（`GameEvents.cs:494` 注释块留痕）＋ **0 订阅 0 发布**；`LifecycleAudit.cs:131` 白名单字符串残留（报告已诚实单列） | ✅ |
 | **6** 4-E 锚点返还 | 原件 ①消费 `True` → ②消费后不可再消费 `False` → ③返还 `True` ＋ 引用清 `null` → ⭐④返还后**可再消费** `True` → ⑤幂等 `False`；`IAnchorConsumer:323`；`BuildingSaveData` 尾插 3 字段（`-1` 表无·零 bump） | ✅ |
@@ -102,7 +102,7 @@
 | `M1` | 判据 4「改后仅注释 3 处」：实测**生产码注释 8 行**（`GuardDeployment 3`／`BuildController 1`／`MapGate 2`／`ResourceRespawnSystem 1`／`WorldManager 1`）＋ Editor 3 ⇒ **数字错**（`L-02` 家族） |
 | `M2` | 判据 1 宽窄正则漏计的**归因位置错**：§一 称漏的是 `MapValidator` 那处 `cells[k]`，实测漏的是 **`MapGenRules.cs:798`**（`map.features[cells[k]] = …`）；§四 勘正 4 又写 `:799`（实为 **`:798`**）⇒ 同一条勘正三个数字两处错 |
 | `M3` | 判据 2「报告所有真裸读数字均已手工剔除注释行」与实测不符：**门内 3 行注释未剔** ⇒ "29" 应为 **25** |
-| `M4` | `BuildController:288` 调 `MapGate.ConsumeAnchor(...)` **未检查返回值** ⇒ 声明不符／非锚点格时**静默**（无锚点、建造照常）⇒ 宜 `if (!…) { 回滚/告警 }` |
+| `M4` | `BuildController.cs:289` 调 `MapGate.ConsumeAnchor(...)` **未检查返回值** ⇒ 声明不符／非锚点格时**静默**（无锚点、建造照常）⇒ 宜 `if (!…) { 回滚/告警 }` |
 | `M5` | `ReleaseLayerOwnedState(bool unregisterFromRegistry)` 两处调用**恒传 `true`** ⇒ **死参数**（注释称"采集路径自行处理"，但采集路径同样传 true） |
 | `M6` | `PlaceResourceNode:277` 直接 `=> SetFeature(coord, f)` ⇒ **未做「位置空闲」校验**（`03` §7.4 增门口径＝位置空闲）；落点非 Plain 时**直接覆写** |
 | `M7` | `MapGate.CountFeatures:211` 无 `i < map.features.Length` 保护（同文件 `ReadAt:54`／`GetFeatureAt:69`／`TryGetCell:135` 皆有）⇒ **保护口径不统一** |
@@ -116,6 +116,8 @@
 1. **判据 7 未要求耗时** ⇒ 执行端只报分配不报耗时（`R3` 的直接后果）。
 2. **判据 2 未要求"逐函数 ＋ 调用面"两列** ⇒ 它按**文件**分列，因而把运行期可达的 `ZoneOf`／`NearestWalkable` 混入"生成期"一栏（`R2` 的直接后果）。**缺口在"可达性"维度**。
 3. **我上轮片 3 验收正则 `.x * div` 不够宽** ⇒ 漏 `(b.coord.x + dx) * div`（`R1` 的 `:359`）。
+4. ⭐ **本报告自身有 1 处行号错（当场自查勘正）**：初稿把 `BuildController` 里 `MapGate.ConsumeAnchor(...)` 的调用写成 **`:288`**，复核实读为 **`:289`** ⇒ 与批给执行端的 `R2`（未核调用面）**同一类失误**，只是层级更小。已勘正本报告 §一 判据 3 ／ §二 `M4` 两处。
+   ⚠️ **附注（写提示词时的复核结果·同时修正三处行号精度）**：`GridSystem.GetOccupant` 声明 `:325`（慢路径 `:331-338`）、`GetUnitCountInCell` 声明 `:522`、`IsObstacle` 声明 `:306`；`MapGate.CountFeatures` 声明 `:202`（无保护的那行在 `:211`）、`PlaceResourceNode:277`、`ReturnAnchor:367`、`WriteRaw:33`。
 
 ---
 
