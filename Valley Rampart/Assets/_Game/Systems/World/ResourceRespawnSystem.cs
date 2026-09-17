@@ -19,7 +19,7 @@ using UnityEngine;
 ///   • 四型（`Tree` ＋ `OreVein`/`WoodPile`/`StonePile`）统一：格存在 ＝ **格表（features）**，
 ///     无 `Building` 实体 ⇒ 采集完成走 <see cref="HandleCellGathered"/>（格翻 Plain＋守卫失去＋池子减 1 点）。
 ///   • 改前双链（树＝数据路径／三型＝实体路径 `Building.OnGatherCompleted`）**已合并**；
-///     实体派生由 `MapGenRules.SpawnResourceEntities` 对照开关保留一版（默认 false＝目标态；验收后删）。
+///     实体派生与 A/B 对照开关**已随片 6-2 收尾批清场删除**（目标态＝纯数据·改前读数见 `HH.307`）。
 ///
 /// <b>单位口径（本片落地式）</b>：池子计「**点**」—— 树／石堆／木堆／矿脉各 1 坑位 ＝ 1 点；
 ///   **矿洞 1 簇（2×2 Cell）＝ 1 点**（据 `Σ_i E_i = cap` 自洽 ＋ `03` §6.7.1「矿洞 2.2（≈2 簇）」）。
@@ -384,8 +384,7 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
         _count[ci * KindCount + kind]++;
         if (fallback) FreedFallbackPlacements++;
         if (_freed[ci] != null) _freed[ci].Remove(cell);
-        SpawnEntityFor(coord, feature);
-        return true;
+        return true;   // 【HH.294 片 6-2 收尾】旧路径 `SpawnEntityFor`（附加实体重建）已清场删除：落格即纯数据
     }
 
     /// <summary>矿洞落点：同区块内侧向 2×2 整块（避开海洋带 / 主城净空区）⇒ **1 簇 ＝ 1 点**。</summary>
@@ -417,17 +416,6 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
             return true;
         }
         return false;
-    }
-
-    /// <summary>实体类资源（OreVein/WoodPile/StonePile）落格后**重建 Building 实体**（承 `HH.10`：格存在但无实体 ⇒ 断供）。
-    /// 【HH.294 片 6-2·6-A】⭐ **仅对照开关 ON 时生效**（`MapGenRules.SpawnResourceEntities`·旧路径一版·默认 false）
-    /// —— 目标态＝资源点转纯数据，补量落格**不再派生实体**（采集走数据寻址·6-B）。</summary>
-    static void SpawnEntityFor(GridCoord coord, FeatureType feature)
-    {
-        if (!MapGenRules.SpawnResourceEntities) return;   // 6-A：默认不派生实体（A/B 对照开关）
-        if (feature != FeatureType.OreVein && feature != FeatureType.WoodPile && feature != FeatureType.StonePile) return;
-        if (BuildingFactory.Instance != null)
-            BuildingFactory.Instance.ReSpawnNaturalBuilding(coord, feature);
     }
 
     /// <summary>⭐ 重生条件（`03` §6.7 表）：① 总点数 < `cap` ② 该类点数 < 单类上限 `capKind_i`。
@@ -473,11 +461,11 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
     /// ⛔ **不含 `Mine`** —— 矿山锚点是**锚点**非采集对象、无产出资源映射；纳入会新增「玩家可采锚点」行为漂移）。
     /// 派发形态＝**统一 `WorldGatherSource`**（四型同源：源有效直至采集完成 ⇒ 中断后自动重派）。
     /// 耗时按 feature 取（B-1 逐型原值）；入包量**逐型保原口径**（树＝`treeGatherAmount`；三型＝`TaskScheduler.gatherAmount`）。
-    /// ⚠️ 为何树也走 `WorldGatherSource`（而非 `TreeGatherSource`）：玩家树链改前**零调用点死码**（`D776` 事实 A）
-    /// ⇒ 无"既有行为"可回归；而 `TreeGatherSource` 的「广告后即失效」形态与调度器
-    /// `UpdateAssignedTasks:388` 的 `!IsValid ⇒ Abandon` 有**已知竞态**（`WorldGatherSource` 头注在案：未被派工的
-    /// 那一 tick 会**永久失去再广告机会**——本批探针首跑实测：同一格首发丢失、须二次右键）⇒ 新入口取鲁棒形态。
-    /// （`TreeGatherSource` 类本身保留不动：现无生产调用方 ⇒ 列残余随"验收后删旧路径"一并清。）</summary>
+    /// ️ 为何树也走 `WorldGatherSource`（而非改前 A+ 遗留的旧树源类·已随片 6-2 收尾批删除）：
+    /// 玩家树链改前**零调用点死码**（`D776` 事实 A）⇒ 无"既有行为"可回归；而旧树源「广告后即失效」形态
+    /// （一次性 `_active=false`）与调度器 `UpdateAssignedTasks:388` 的 `!IsValid ⇒ Abandon` 有**已知竞态**
+    /// （`WorldGatherSource` 头注在案：未被派工的那一 tick 会**永久失去再广告机会**——片 6-2 探针首跑实测：
+    /// 同一格首发丢失、须二次右键）⇒ 新入口取鲁棒形态。</summary>
     public bool ConfirmResourceGather(GridCoord cell)
     {
         if (!Cfg || !Cfg.enabled) return false;

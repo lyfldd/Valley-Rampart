@@ -11,7 +11,7 @@ using UnityEngine;
 //
 //  扫描：ResourceType（GameEvents.cs:176）的**供给点** ↔ **消费点**
 //   供给：ProducerComponent（outputResource/rate）· MineByproductComponent · Gather（【片 6-2】数据寻址链）
-//        · StorageComponent.Transform 产出侧 · TaxSystem（金）· RanchSystem（肉）· WorldGatherSource（木·【片 6-2】承接 TreeGatherSource 口径）
+//        · StorageComponent.Transform 产出侧 · TaxSystem（金）· RanchSystem（肉）· WorldGatherSource（木·【片 6-2】数据寻址四型唯一源）
 //   消费：BuildingDef.cost / BuildingDef.levels[].upgradeCost（建造/升级）· UtilityActionDef.costXxx（AI 行动）
 //        · TrainingDef.costGold/costCrystal/costMetal（训练/转职）· StorageComponent.Transform 输入侧（矿）
 //        · SiegeWorkshopBuilding 产弹原料（石/火油/水晶）· 源码硬扣 `ModifyResource(type,false,…)`
@@ -217,7 +217,7 @@ public static class R3_SupplyChain
 
         // ── 已知专属锚点（设计稿 §三 R3 明列·不在上述通用模式内）────────────────
         // 【HH.294 片 6-2·6-B/6-C 口径同步】玩家/AI 四型的采集源统一为 `WorldGatherSource`（树＋一次性三型·
-            //   地表物→资源映射 `TryResourceOf`）；`TreeGatherSource` 已无生产调用方（类保留待清·其 Wood 口径由本行承接）。
+            //   地表物→资源映射 `TryResourceOf`）；旧数据格树源类已随片 6-2 收尾批清场删除（其 Wood 口径由本行承接）。
             Add(res.Supply, ResourceType.Wood,
                 "Assets/_Game/Systems/World/WorldGatherSource.cs（数据寻址四型·TryResourceOf→Wood）");
         Add(res.Supply, ResourceType.Meat, "Assets/_Game/Systems/Kingdom/RanchSystem.cs:203（屠宰→Meat）");

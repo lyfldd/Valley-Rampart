@@ -158,12 +158,12 @@ public static class Smoke_2_23RB
         Log("P5 S 级保命负探针：缺石时 Repair eff=" + repairEff + " == 死表 S=" + sVal,
             Mathf.Approximately(repairEff, sVal) && Mathf.Approximately(sVal, 4f));
 
-        // ---- P6 玩家源负探针：kingdomId=0（TreeGatherSource=玩家采集真实载体，非 Building 源）----
-        var tg = new TreeGatherSource(new GridCoord(10, 10), new Vector2(1f, 1f), 2f, 5);
+        // ---- P6 玩家源负探针：kingdomId=0（`WorldGatherSource`＝玩家采集真实载体·【片 6-2 收尾】旧树源类已删）----
+        var tg = WorldGatherSource.ForCell(new GridCoord(10, 10), FeatureType.StonePile, new Vector2(1f, 1f), 0, RespawnConfig.Instance, 5);
         var pTask = new KingdomTask(KingdomTaskType.Gather, tg);
         pTask.args = new GatherTaskArgs { resourceType = ResourceType.Stone, amount = 5, gatherSeconds = 2f };
         float pEff = Eff(sched, pTask);
-        Log("P6 玩家源负探针：缺石时玩家采石（TreeGatherSource, kingdomId=0）eff=" + pEff
+        Log("P6 玩家源负探针：缺石时玩家采石（WorldGatherSource, kingdomId=0）eff=" + pEff
             + " == 死表 " + baseGather, Mathf.Approximately(pEff, baseGather));
 
         // ---- P8 clamp 上界：bias/缺口满 → 权重 == maxWeight ----

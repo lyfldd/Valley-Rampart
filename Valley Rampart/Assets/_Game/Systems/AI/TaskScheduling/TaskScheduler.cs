@@ -553,7 +553,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     {
         // QQQ.2 T19 / RES-A2：Gather 中断（工人阵亡/被打断/源失效）→ 资源点解锁可再点击（进度重置不保留）
         // 【HH.294 片 6-2·B-4①】原 `gb.isBeingGathered = false`（Building 采集锁）**随实体退役已删** ——
-        //   数据寻址后「解锁」＝源自身失效退出 `_sources`（`WorldGatherSource.IsValid`／`TreeGatherSource` 一发即失效），
+        //   数据寻址后「解锁」＝源自身失效退出 `_sources`（`WorldGatherSource.IsValid`：完成/放弃即失效），
         //   无锁需要复位；玩家可再次右键同名资源格重新立案（`ConfirmResourceGather` 幂等新建源）。
         if (brain != null)
         {
@@ -630,11 +630,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     }
                 }
                 // 【HH.294 片 6-2·B-4②】原 `if (comp is Building b) b.OnGatherCompleted();`（一次性资源点实体完成）
-                //   **随实体退役已删** —— 数据化后世界资源点采集源只剩下面两类（`WorldGatherSource` 覆盖四型全部）。
-                // 玩家侧树采集源（非实体）完成 → 格翻 Plain + 记重生（与三型合并走 HandleCellGathered）
-                if (task.source is TreeGatherSource tg) tg.OnGatherCompletion();
-                // 世界资源点采集源（玩家三型 ＋ AI 四型）完成 → 同上（数据寻址统一）
-                else if (task.source is WorldGatherSource wg) wg.OnGatherCompletion();
+                //   **随实体退役已删**；收尾批清场后世界资源点采集源只剩 `WorldGatherSource`（覆盖四型全部）。
+                // 世界资源点采集源（玩家四型 ＋ AI 四型）完成 → 格翻 Plain ＋ 记重生（数据寻址统一）
+                if (task.source is WorldGatherSource wg) wg.OnGatherCompletion();
                 break;
         }
     }
@@ -1089,8 +1087,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         }
     }
 
-    /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源如 TreeGatherSource 归玩家 kingdomId=0；
-    /// 无主源 -1（自然建筑）在路由时降级为先到先得池，任何国可匹配）。
+    /// <summary>2_17 步骤3 池隔离：任务源归属国（非 Building 源未单列者归玩家 kingdomId=0；
+    /// `WorldGatherSource`／`Component` 二者各有专属分支见下，其余（无主源 -1 自然建筑）在路由时降级为先到先得池，任何国可匹配）。
     /// DZ-072a：矿洞副产组件任务源（MineByproductComponent 挂 Building 本体）按父建筑归属国路由——
     /// AI 领土内 mine 副产任务入 AI 池（旧逻辑非 Building 恒归 0=错入玩家池）。
     /// HH.221/D685 A①：世界资源点采集源（`WorldGatherSource`，非 Component）按**per-命令绑定王国**路由——
@@ -1122,17 +1120,14 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return brain != null && brain.Config != null ? brain.Config.abandonThreshold : 0.8f;
     }
 
-    /// <summary>任务 Working 时长（QQQ.2 T19/DR-11：Gather 按资源点 def.gatherSeconds，其余统一 workDuration）。</summary>
+    /// <summary>任务 Working 时长（QQQ.2 T19/DR-11：Gather 按源侧 `GatherTaskArgs.gatherSeconds`，其余统一 workDuration）。
+    /// 【HH.294 片 6-2 收尾】原 `if (task.source is Building …) secs = b.def.gatherSeconds;` **死分支已删** ——
+    /// 实体资源点退役 ⇒ Gather 源只剩 `WorldGatherSource`（耗时由源侧按 feature 逐型填入·B-1 逐型原值）。</summary>
     private float GetTaskDuration(KingdomTask task)
     {
         if (task != null && task.type == KingdomTaskType.Gather && task.args is GatherTaskArgs ga)
         {
             float secs = ga.gatherSeconds;
-            // 【HH.294 片 6-2·6-D 观察】改前实体源以 `def.gatherSeconds` 为准（资源点资产 2s/4s/8s）；
-            //   实体退役后 Gather 源只剩 `TreeGatherSource`/`WorldGatherSource` ⇒ 本覆盖分支**结构性不可达**
-            //   （保留＝零行为影响·不属本批清单；随「验收后删旧路径」一并清理，见 HH.307 报告残余）。
-            if (task.source is Building b && b.def != null && b.def.gatherSeconds > 0f)
-                secs = b.def.gatherSeconds;
             return secs > 0f ? secs : workDuration;
         }
         return workDuration;

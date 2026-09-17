@@ -13,7 +13,7 @@ using UnityEngine;
 ///     副产无等级门槛，原 ProducerComponent Lv2/Lv3 门槛随 mine levels=[] 不适用——已裁决策）。
 ///   - 在岗才产（D704 A 批·OB1-2）：本组件自持 ITaskSource 广告 Production（source＝组件·原地劳作）；无在岗（Working）⇒ 三槽停产。
 ///     在岗＝HasWorkerAssigned(本组件)（任意任务类型 Working 均算在场）；石头采集链的工人派工与本组件互不相干。
-///   - 搬运：本组件实现 ITaskSource（TreeGatherSource 非 Building 任务源先例），子仓存量达
+///   - 搬运：本组件实现 ITaskSource（随 `WorldGatherSource` 一脉的非 Building 任务源形态），子仓存量达
 ///     transportThreshold 时发 Transport（destType=NearestWarehouse；args 带子仓资源类型，
 ///     TaskScheduler.LoadInventoryFromSource 按 args 资源类型取子仓）。
 ///   - 由 ProductionSystem 逐秒调度（与 ProducerComponent/BlacksmithBuilding/SiegeWorkshopBuilding 并列）。
@@ -39,7 +39,7 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
     private bool _crystalFullLogged;   // 满仓停产分频：满时只记一次，消耗后复位（防逐秒刷屏）
     private bool _fireOilFullLogged;
     private bool _oreFullLogged;
-    private bool _registered;          // TaskScheduler 懒注册（调度器未就绪时跳过，首 Tick 补挂——TreeGatherSource 懒注册同语义）
+    private bool _registered;          // TaskScheduler 懒注册（调度器未就绪时跳过，首 Tick 补挂——与采集源懒注册同语义）
 
     public void Init(Building building)
     {
@@ -158,7 +158,7 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         }
     }
 
-    // ===== ITaskSource（搬运广告；TreeGatherSource 非 Building 任务源先例）=====
+    // ===== ITaskSource（搬运广告；非 Building 任务源形态，同 `WorldGatherSource` 一脉）=====
 
     public bool IsValid => this != null && _building != null && _building.IsValid;
 

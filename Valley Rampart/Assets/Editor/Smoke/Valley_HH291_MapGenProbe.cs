@@ -64,9 +64,9 @@ public static class Valley_HH291_MapGenProbe
             MapValidator.ValidateConnectivity(map);
         }
         MapGenRules.PlaceThreatSpawns(rng, map, cfg, difficulty);
-        // 【HH.294 片 6-2·6-A 同步】默认（`MapGenRules.SpawnResourceEntities=false`）⇒ `naturalBuildings` **恒空**
+        // 【HH.294 片 6-2 收尾 同步】清场后（实体派生路径与对照开关已删）⇒ `naturalBuildings` **恒空**
         //   （一次性三型转纯数据·不再派生 Building）。本探针的 nb 读数只涉 `Mine`（HH.293 B1 起恒 0）与
-        //   `SameMap` 逐项比对（两侧同为空 ⇒ 仍一致）⇒ 判定语义不变；A/B 对照须显式置开关为 true。
+        //   `SameMap` 逐项比对（两侧同为空 ⇒ 仍一致）⇒ 判定语义不变。
         MapGenRules.DeriveNaturalBuildings(map);
         return map;
     }
@@ -206,7 +206,8 @@ public static class Valley_HH291_MapGenProbe
     }
 
     /// <summary>A6（生成侧）：Mine 派生（每簇 1 nb·2×2）。
-    /// ⚠️ **本段判据已作废（D737 · HH.293 B1 回退）**：`Mine` 撤出派生白名单 ⇒ `nb` **应为 0**（`ok` 恒 False 属预期）。
+    /// ⚠️ **本段判据已作废（D737 · HH.293 B1 回退 ＋ `HH.294` 片 6-2 收尾清场）**：`Mine` 撤出派生白名单
+    ///   且 `naturalBuildings` 现**恒空** ⇒ `nb` 恒 0（`ok` 恒 False 属预期·非缺陷）。
     ///   保留代码仅作**回退见证**（改前 A6 nb=426/425·改后 0）；判读改用 `Valley_HH294_HH293Probe.Run()`。</summary>
     public static string MineDeriveRead(MapData m, string label, out bool ok)
     {
@@ -221,14 +222,24 @@ public static class Valley_HH291_MapGenProbe
                $" ⇒ {(ok ? "✅" : "❌")}\n";
     }
 
-    /// <summary>M6：spawn→最近 Mine 簇距离。</summary>
+    /// <summary>M6：spawn→最近 Mine 簇距离。
+    /// 【HH.294 片 6-2 收尾·数据源改道（`D779` 残余 `S1`）】旧读口 `m.naturalBuildings`（现**恒空** ⇒ 读数退化为
+    /// 恒「无 Mine」）⇒ 改读**格表**（features）：Mine 簇角 = 左/上邻非 Mine 的 Mine 格（2×2 簇重建·语义与原读口一致）。
+    /// ⛔ 只改读口、不改判据存在性（本读数为信息项，不进「判定」行）。</summary>
     public static string SpawnMineDistanceRead(MapData m, string label)
     {
         var anchors = new List<Vector2Int>();
-        foreach (var nb in m.naturalBuildings) if (nb.feature == FeatureType.Mine) anchors.Add(new Vector2Int(nb.cellX, nb.cellY));
+        for (int y = 0; y < m.height; y++)
+            for (int x = 0; x < m.width; x++)
+            {
+                if (m.features[y * m.width + x] != FeatureType.Mine) continue;
+                bool left = x > 0 && m.features[y * m.width + x - 1] == FeatureType.Mine;
+                bool up = y > 0 && m.features[(y - 1) * m.width + x] == FeatureType.Mine;
+                if (!left && !up) anchors.Add(new Vector2Int(x, y));   // 簇左上角（原读口口径＝nb.cellX/cellY）
+            }
         var sb = new StringBuilder();
         int r = Cfg() != null ? Cfg().kingdomClearRadius : 4;
-        sb.AppendLine($"  [{label}] **M6** spawn→最近 Mine 簇（切比雪夫·格）：Mine 簇={anchors.Count}·净空区半宽={1 + r}");
+        sb.AppendLine($"  [{label}] **M6** spawn→最近 Mine 簇（切比雪夫·格·【片 6-2 收尾】改读格表 features）：Mine 簇={anchors.Count}·净空区半宽={1 + r}");
         for (int i = 0; i < m.kingdomSpawns.Count; i++)
         {
             var sp = m.kingdomSpawns[i]; int best = int.MaxValue;
@@ -248,6 +259,8 @@ public static class Valley_HH291_MapGenProbe
             { why = $"首差 idx={i} feat {a.features[i]}/{b.features[i]}"; return false; }
         if (a.kingdomSpawns.Count != b.kingdomSpawns.Count) { why = "出生点数不同"; return false; }
         for (int i = 0; i < a.kingdomSpawns.Count; i++) if (a.kingdomSpawns[i] != b.kingdomSpawns[i]) { why = $"spawn[{i}] 不同"; return false; }
+        // 【HH.294 片 6-2 收尾】`naturalBuildings` 恒空 ⇒ 本段比对恒等（**不失真**：主域 features/climateZones/spawns
+        //   逐格/逐个比对仍是确定性判据主体）。保留段＝契约槽位比对（若未来该字段复活即自动生效）。
         if (a.naturalBuildings.Count != b.naturalBuildings.Count) { why = "nb 数不同"; return false; }
         for (int i = 0; i < a.naturalBuildings.Count; i++)
         {
@@ -288,7 +301,7 @@ public static class Valley_HH291_MapGenProbe
         _log.AppendLine("\n---- [确定性·同 seed 两次 / 异 seed] ----");
         var a1 = Build(SEED, 256, 256, 2); var a2 = Build(SEED, 256, 256, 2); var a3 = Build(SEED + 1, 256, 256, 2);
         bool same = SameMap(a1, a2, out var why);
-        _log.AppendLine($"  同 seed 两次：{(same ? "逐格一致 ✅（features+climateZones+spawns+nb）" : "不一致 ❌ " + why)}");
+        _log.AppendLine($"  同 seed 两次：{(same ? "逐格一致 ✅（features+climateZones+spawns；nb 恒空·该段恒等——见 SameMap 注）" : "不一致 ❌ " + why)}");
         _log.AppendLine($"  异 seed 出异图：{(!SameMap(a1, a3, out _) ? "✅" : "❌")}");
 
         _log.AppendLine("\n---- [难度三档·资源单位比（目标 0.7:1.0:1.3）] ----");
@@ -303,7 +316,7 @@ public static class Valley_HH291_MapGenProbe
         if (counts[1] > 0)
             _log.AppendLine($"  归一化比 = {counts[0] / (double)counts[1]:0.000} : 1.000 : {counts[2] / (double)counts[1]:0.000}");
 
-        _log.AppendLine($"\n===== 判定：PitOk={pitOk} ChunkOk={chunkOk} MineDeriveOk={mineOk} SameSeedOk={same} =====");
+        _log.AppendLine($"\n===== 判定：PitOk={pitOk} ChunkOk={chunkOk} MineDeriveOk={mineOk}(作废项·恒预期 False) SameSeedOk={same} =====");
         WriteLog();
         Debug.Log(TAG + " 编辑态探针完成 → Logs/hh291_probe.log");
         return _log.ToString();
@@ -357,9 +370,10 @@ public static class Valley_HH291_MapGenProbe
             }
         }
         int nbMine = 0;
-        foreach (var nb in map.naturalBuildings) if (nb.feature == FeatureType.Mine) nbMine++;
+        foreach (var nb in map.naturalBuildings) if (nb.feature == FeatureType.Mine) nbMine++;   // 【片6-2收尾】nb 恒空 ⇒ 恒 0
         bool a6a = mineInst > 0;
-        _log.AppendLine($"  **A6①** Mine Building 实例数 = **{mineInst}**（须>0）· 建筑实例总数={totalB} · 地图 Mine nb={nbMine}");
+        _log.AppendLine($"  **A6①** Mine Building 实例数 = **{mineInst}**（须>0）· 建筑实例总数={totalB} · 地图 Mine nb={nbMine}（恒 0）"
+                        + $"（【片 6-2 收尾】`naturalBuildings` 恒空 ⇒ nb 恒 0·Mine 锚点现由 features 承载，见 M6 读口）");
         _log.AppendLine($"  **A6②** 组件在场：`ProducerComponent` = **{mineProducer}**/{mineInst} ｜ `MineByproductComponent` = **{mineByprod}**/{mineInst}");
         _log.AppendLine($"    口径勘正（实读）：`mine` 为 `isResourceNode=1` 采集点身份 ⇒ `BuildingFactory.AttachComponents:295`" +
                         $"（`!def.isResourceNode` 排除通用产能分支）**结构性不挂 `ProducerComponent`**；" +
@@ -370,8 +384,8 @@ public static class Valley_HH291_MapGenProbe
                         $"outputResource={(mineDef != null ? mineDef.outputResource.ToString() : "null")} " +
                         $"producer.rate={(mineDef != null ? mineDef.producer.rate : -1):0.###} kind={(mineDef != null ? mineDef.producer.kind.ToString() : "null")} " +
                         $"footprint={(mineDef != null ? mineDef.footprint.ToString() : "null")}");
-        _log.AppendLine($"  [A6 对照] 改前 mine 实例数 = 0（HH.2 A+ 起派生白名单不含 Mine；仅 `KingdomFoundry` 立国预置 4 座" +
-                        $"＝本次实测 {mineInst} 中扣掉 A6 新增 {nbMine} 后的余数）");
+        _log.AppendLine($"  [A6 对照] 改前 mine 实例数 = 0（HH.2 A+ 起派生白名单不含 Mine；仅 `KingdomFoundry` 立国预置" +
+                        $"＝本次实测 {mineInst} 的构成；【片 6-2 收尾】nbMine 恒 0（锚点不再派生实体）)");
         bool a6b = mineByprod > 0;   // 能力句改判：可挂组件在场（副产链）
 
         int aiKid = -1;

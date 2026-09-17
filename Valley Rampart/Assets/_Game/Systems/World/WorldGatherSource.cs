@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// HH.221（**A①**，D685 裁 A）「世界资源点采集源」＝面向 AI 的 `ITaskSource` 包装
-/// （照 `TreeGatherSource` 先例，禁另起炉灶；任务书 §一.A.2）。
+/// （照既有数据格采集源先例，禁另起炉灶；任务书 §一.A.2）。
 ///
 /// <b>【HH.294 片 6-2（`D778`）双写收敛后】本类＝世界资源点采集的**统一数据寻址源**</b>：
 /// 源只记「**格 ＋ 地表物**」（不再持有 `Building` 实体）——
@@ -15,10 +15,10 @@ using UnityEngine;
 /// 覆盖（改后）：数据格 `Tree` ＋ 一次性 `OreVein`／`WoodPile`／`StonePile`——全部「格表 ＋ 门」判定，
 /// 不再依赖 `BuildingRegistry` 实体（`03` §8「资源格的存在性只由格表决定」）。
 ///
-/// **与 `TreeGatherSource` 的关系**（`HH.294` 片 6-2 后）：本类＝**全部世界资源点采集源的唯一载体**
-/// —— AI 四型（`WorldGatherRegistry.Advertise`）与玩家四型（`ResourceRespawnSystem.ConfirmResourceGather`）皆走本类；
-/// `TreeGatherSource` **退居无生产调用方**（改前玩家树链本就是零调用死码·`D776` 事实 A；
-/// 其「广告后即失效」形态与调度器 `!IsValid ⇒ Abandon` 有已知竞态）——类保留待随旧路径清理。
+/// **唯一性**（`HH.294` 片 6-2 收尾·`D779` 残余 `S1` 清场后）：本类＝**全库唯一**世界资源点采集源 ——
+/// AI 四型（`WorldGatherRegistry.Advertise`）与玩家四型（`ResourceRespawnSystem.ConfirmResourceGather`）皆走本类；
+/// 改前并存的旧数据格树源类**已删**（改前玩家树链本就是零调用死码·`D776` 事实 A；
+/// 其「广告后即失效」形态与调度器 `!IsValid ⇒ Abandon` 有已知竞态）。
 /// 形态＝有效直至采集完成，重复广告由调度器 `HasAssignedTaskForSourceType` 独占去重拦下。
 ///
 /// **与玩家侧同源等价**（任务书 §一.A.3）：同样产 `KingdomTaskType.Gather` ＋ `GatherTaskArgs`，

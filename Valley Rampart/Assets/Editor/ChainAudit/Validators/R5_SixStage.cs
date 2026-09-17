@@ -41,10 +41,22 @@ public static class R5_SixStage
     /// <summary>声明面（登记表 §1）路径（R6 同源·只读）。</summary>
     private const string RegistryRel = "河谷防线开发计划书具体内容/改造计划/生命周期登记表.md";
 
-    /// <summary>地图自然生成可达的 sourceType（与 BuildingFactory.FeatureToBuildingType 同源口径）。</summary>
-    private static readonly HashSet<BuildingType> MapNaturalTypes = new HashSet<BuildingType>
+    /// <summary>⭐【HH.294 片 6-2 收尾·口径同步（`D779` 残余 `S1`）】**格表资源点（非实体出口）**：
+    /// 经「格表 ＋ 门」（`MapGate`）进世界、采集走数据寻址 —— 旧口径「与 `BuildingFactory.FeatureToBuildingType`
+    /// 同源」已随该函数删除失效（实体派生路径已清场·`naturalBuildings` 恒空）。
+    /// 纳入 <see cref="Row.HasAny"/> ⇒ 如实记为「**有出口（非 Building 路径）**」。
+    /// ⛔ 不含 `Mine`（锚点·T6 转型面 ⇒ 单列 <see cref="GridAnchorTypes"/>）。</summary>
+    private static readonly HashSet<BuildingType> GridTableResourceTypes = new HashSet<BuildingType>
     {
-        BuildingType.Tree, BuildingType.Mine, BuildingType.OreVein, BuildingType.WoodPile, BuildingType.StonePile
+        BuildingType.Tree, BuildingType.OreVein, BuildingType.WoodPile, BuildingType.StonePile
+    };
+
+    /// <summary>格表锚点（`Mine`·T6 转型面）：`HH.293 B1` 起不派生实体；**单列声明**、不混入「资源点」列，
+    /// 也不纳入 <see cref="Row.HasAny"/> —— 锚点是世界特征，非建筑生成路径（`mine` 建筑实例走 AI 预置，
+    /// 实锚见 `KingdomDef.baseBuildingDefIds`）。列报期为人工审读保留该事实。</summary>
+    private static readonly HashSet<BuildingType> GridAnchorTypes = new HashSet<BuildingType>
+    {
+        BuildingType.Mine
     };
 
     /// <summary>动态立国同批预置（KingdomFoundry.PlaceCampCastle/PlaceCampWell 独立于 baseBuildingDefIds 链）。</summary>
@@ -66,14 +78,15 @@ public static class R5_SixStage
     {
         public string Id;
         public bool PlayerMenu;     // isPlayerBuilt
-        public bool MapNatural;     // sourceType ∈ 映射集
+        public bool GridTable;      // ⭐ 格表资源点（非实体出口·Tree/OreVein/WoodPile/StonePile）
+        public bool GridAnchor;     // ⭐ 格表锚点（Mine·T6 转型面·单列声明·不纳入 HasAny）
         public bool AiPreset;       // ∈ KingdomDef.baseBuildingDefIds 并集
         public bool AiAction;       // ∈ UtilityActionConfig buildingId 集
         public bool DynamicFound;   // ∈ 动态立国集
         public bool CodeSpawn;      // 代码驱动生成（FindDefById("id") / 常量 *_DEF_ID = "id"）
-        public bool EntityClass;    // 同名实体类在场（走独立管线，非 Building 路径）⇒ 🟡单列
+        public bool EntityClass;    // 同名实体类在场（走独立管线，非 Building 路径）⇒ 单列
         public bool Declared;       // ∈ 登记表 §1（声明面已登 ⇒ 已知态，不硬拦）
-        public bool HasAny => PlayerMenu || MapNatural || AiPreset || AiAction || DynamicFound || CodeSpawn;
+        public bool HasAny => PlayerMenu || GridTable || AiPreset || AiAction || DynamicFound || CodeSpawn;
 
         /// <summary>判定分级：🔴＝未声明 ∧ 无任何入口（真·新断链）；🟡＝已声明 or 独立管线实体。</summary>
         public bool IsStructuralBreak => !HasAny && !Declared && !EntityClass;
@@ -108,7 +121,8 @@ public static class R5_SixStage
                 {
                     Id = d.id,
                     PlayerMenu = d.isPlayerBuilt,
-                    MapNatural = MapNaturalTypes.Contains(d.sourceType),
+                    GridTable = GridTableResourceTypes.Contains(d.sourceType),
+                    GridAnchor = GridAnchorTypes.Contains(d.sourceType),
                     AiPreset = presetIds.Contains(d.id),
                     AiAction = actionIds.Contains(d.id),
                     DynamicFound = DynamicFoundingIds.Contains(d.id),
@@ -134,7 +148,7 @@ public static class R5_SixStage
             if (Exempt.Contains(row.Id)) continue;
             if (row.HasAny) continue;
 
-            string matrix = "（玩家菜单✗ 地图自然✗ AI预置✗ AI行动✗ 动态立国✗ 代码驱动✗）";
+            string matrix = "（玩家菜单✗ 格表资源✗ 格表锚点✗ AI预置✗ AI行动✗ 动态立国✗ 代码驱动✗）";
             if (row.IsStructuralBreak)
                 res.Violations.Add(new ChainAuditCore.Violation("R5.生成入口缺失", ChainAuditCore.Severity.Red,
                     "BuildingDef " + row.Id + matrix,
@@ -353,7 +367,7 @@ public static class R5_SixStage
     {
         sb.AppendLine("===== R5 六阶段完整性（静态·机器可判子集）=====");
         sb.AppendLine("  判据子集：①生成入口存在性 ②存档 ISaveable ③注册注销成对；**语义面不自动化**（不报）");
-        sb.AppendLine("  生成入口六路＝玩家菜单/地图自然/AI预置/AI行动/动态立国/**代码驱动**（FindDefById 实锚）");
+        sb.AppendLine("  生成入口六路＝玩家菜单/**格表资源（非实体出口·Tree/OreVein/WoodPile/StonePile）**/AI预置/AI行动/动态立国/**代码驱动**（FindDefById 实锚）；**格表锚点（Mine·T6 转型面）单列**、不计入口");
         sb.AppendLine("  误报抑噪：已声明（登记表 §1·只读）/ 独立管线实体 ⇒ 🟡列报；仅「无入口 ∧ 未声明」⇒ 🔴硬拦");
         sb.AppendLine("  BuildingDef 实盘=" + res.DefTotal + "；声明面已登=" + res.DeclaredCount
                       + "；代码驱动命中=" + res.CodeSpawnCount
@@ -363,10 +377,11 @@ public static class R5_SixStage
         sb.AppendLine("  ── ① 生成入口矩阵 ──");
         foreach (var r in res.Rows)
             sb.AppendLine("   " + Pad(r.Id) + (r.PlayerMenu ? "玩家菜单✓ " : "玩家菜单✗ ")
-                          + (r.MapNatural ? "地图自然✓ " : "地图自然✗ ") + (r.AiPreset ? "AI预置✓ " : "AI预置✗ ")
+                          + (r.GridTable ? "格表资源✓ " : "格表资源✗ ") + (r.GridAnchor ? "格表锚点✓ " : "格表锚点✗ ")
+                          + (r.AiPreset ? "AI预置✓ " : "AI预置✗ ")
                           + (r.AiAction ? "AI行动✓ " : "AI行动✗ ") + (r.DynamicFound ? "动态立国✓ " : "动态立国✗ ")
                           + (r.CodeSpawn ? "代码驱动✓" : "代码驱动✗")
-                          + (!r.HasAny ? (r.IsStructuralBreak ? "  🔴无任何入口" : "  🟡已知态无入口") : ""));
+                          + (!r.HasAny ? (r.IsStructuralBreak ? "  🔴无任何入口" : "  🟡已知态无入口") : (r.GridAnchor ? "  (格表锚点·T6 转型面)" : "")));
         sb.AppendLine();
         sb.AppendLine("  ── ③ 注册注销成对（file 级）──");
         sb.AppendLine("   订阅无退订文件数=" + res.PairIssues.Count);

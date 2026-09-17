@@ -244,7 +244,7 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
         _stores.Clear();
     }
 
-    // ===== ITaskSource（D704 A 批：组件自持 Production 广告；源＝组件；`TreeGatherSource` 非 Building 任务源先例）=====
+    // ===== ITaskSource（D704 A 批：组件自持 Production 广告；源＝组件；非 Building 任务源形态同 `WorldGatherSource` 一脉）=====
 
     /// <summary>在岗判定（D704 §三-3-②）：组件源 ⇒ `HasWorkerAssigned(本组件)`（任意任务类型 Working 均算在场）。</summary>
     bool HasWorkerOnDuty => TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(this);

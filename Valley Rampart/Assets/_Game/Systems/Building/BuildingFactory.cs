@@ -45,29 +45,12 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         return null;
     }
 
-    // ===== 地图预置建筑实例化（2_2 步骤5：naturalBuildings 双来源之一）=====
-
-    /// <summary>FeatureType -> BuildingType（naturalBuildings 实例化映射；SnowMountain 无建筑实体，地形已阻挡）。
-    /// 【HH.294 片 6-2·6-A】`OreVein`/`WoodPile`/`StonePile` 三分支＝**旧路径**（随 `MapGenRules.SpawnResourceEntities`
-    ///   对照开关；默认 false ⇒ 目标态不派生实体 ⇒ 本映射三型分支不被触达）。`Tree`/`Mine` 分支**保留**
-    ///   （Mine 供 T6 转型）。**验收后三型分支随开关一并删。**</summary>
-    static BuildingType? FeatureToBuildingType(FeatureType f)
-    {
-        switch (f)
-        {
-            case FeatureType.Tree: return BuildingType.Tree;
-            case FeatureType.Mine: return BuildingType.Mine;
-            case FeatureType.OreVein: return BuildingType.OreVein;       // 旧路径（对照开关 ON 时）
-            case FeatureType.WoodPile: return BuildingType.WoodPile;     // 旧路径（对照开关 ON 时·HH.10 裁决三扩到三类）
-            case FeatureType.StonePile: return BuildingType.StonePile;   // 旧路径（对照开关 ON 时）
-            default: return null;   // SnowMountain 等纯视觉/地形阻挡特征物跳过
-        }
-    }
+    // ===== 地图预置建筑实例化（【HH.294 片 6-2 收尾】目标态：只剩玩家出生点主城）=====
 
     /// <summary>
     /// 把 MapData 的自然建筑占位（2_1 naturalBuildings）转为 Building 实例（2_2 接管）。
-    /// 树/矿洞/矿脉按 BuildingMappingTable 查 BuildingDef 实例化；
-    /// 另在玩家出生点放主城（CastleCore）保建造解锁链路（正式主城锚点归 2_12）。
+    /// 【HH.294 片 6-2 收尾·旧路径清场】目标态：`naturalBuildings` 恒空（资源点＝格表 ⇒ 不派生实体）——
+    /// 树/矿/一次性三型不再实例化；只保留「玩家出生点放主城（CastleCore）」保建造解锁链路（主城锚点归 2_12）。
     /// </summary>
     public int InstantiateFromMap(MapData map)
     {
@@ -75,38 +58,11 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         var table = GetMappingTable();
         if (table == null)
         {
-            Debug.LogWarning("[BuildingFactory] BuildingMappingTable 未加载，跳过自然建筑实例化");
+            Debug.LogWarning("[BuildingFactory] BuildingMappingTable 未加载，跳过地图预置建筑实例化");
             return 0;
         }
 
         int count = 0;
-        // 【HH.294 片 6-2·6-A】⭐ 自然建筑循环＝**旧路径**（对照开关 `MapGenRules.SpawnResourceEntities`·默认 false）：
-        //   目标态下 `DeriveNaturalBuildings` 已使 `naturalBuildings` 恒空 ⇒ 本循环不触达；
-        //   开关 ON 时逐字回旧行为（同一 build 内 A/B 对照用）。**验收后随开关一并删。**
-        if (MapGenRules.SpawnResourceEntities && map.naturalBuildings != null)
-        {
-            foreach (var nb in map.naturalBuildings)
-            {
-                if (nb == null) continue;
-                var type = FeatureToBuildingType(nb.feature);
-                if (!type.HasValue) continue;   // SnowMountain：地形阻挡已就位，无建筑实体
-                var def = table.Get(type.Value);
-                if (def == null)
-                {
-                    Debug.LogWarning($"[BuildingFactory] naturalBuildings 类型 {type.Value} 未配置 BuildingDef，跳过");
-                    continue;
-                }
-
-                var coord = new GridCoord(nb.cellX, nb.cellY);
-                var fp = new Vector2Int(nb.w > 0 ? nb.w : 1, nb.h > 0 ? nb.h : 1);
-                var worldPos = GridSystem.FootprintCenterWorld(coord, fp, Vector3.zero);
-                if (CreateBuildingInstance(def, type.Value, coord, fp, worldPos,
-                        isPlayerBuilt: false, grade: ResourceGrade.Normal,
-                        isConsumable: def.isConsumable, initialState: BuildingState.Active,
-                        kingdomId: -1))   // 2_16 步骤7 哨兵三分：野生自然建筑=-1（非玩家非 AI，排除集不纳）
-                    count++;
-            }
-        }
 
         // 玩家出生点放主城（2_2 过渡桥：保建造解锁链路；主城=王座/旗帜锚点归 2_12 重做）
         // 沿用 1D 流程：Abandoned 废墟态放置，玩家经 BuildingPanel 修复 -> CastleLevel=1 解锁建造
@@ -125,36 +81,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
                 count++;
         }
 
-        Debug.Log($"[BuildingFactory] 2D 地图预置建筑实例化完成：{count} 个（自然建筑 + 主城）");
+        Debug.Log($"[BuildingFactory] 2D 地图预置建筑实例化完成：{count} 个（主城·自然建筑自 HH.294 片 6-2 收尾起不再派生）");
         return count;
-    }
-
-    /// <summary>
-    /// 单体一次性资源实体重建（HH.10 裁决三：实体路径到点重生调）。
-    /// 由 ResourceRespawnSystem 在记录格到期时调用，重建一棵被采走的 OreVein/WoodPile/StonePile。
-    /// 逻辑镜像 InstantiateFromMap 内循环（feature→type→def→CreateBuildingInstance），不做整图重派生。
-    /// </summary>
-    public bool ReSpawnNaturalBuilding(GridCoord coord, FeatureType feature)
-    {
-        // 【HH.294 片 6-2·6-A】⭐ **退役（默认路径）**：唯一调用方 `ResourceRespawnSystem.SpawnEntityFor`
-        //   已在对照开关处返回；此处再加一道守卫防误用（开关 ON 时才逐字回旧行为）。
-        if (!MapGenRules.SpawnResourceEntities) return false;
-        var type = FeatureToBuildingType(feature);
-        if (!type.HasValue) return false;
-        var table = GetMappingTable();
-        if (table == null) return false;
-        var def = table.Get(type.Value);
-        if (def == null)
-        {
-            Debug.LogWarning($"[BuildingFactory] 资源重生：{feature} 未配置 BuildingDef，跳过");
-            return false;
-        }
-        var fp = new Vector2Int(1, 1);   // 一次性资源均是 1×1
-        return CreateBuildingInstance(def, type.Value, coord, fp,
-            GridSystem.FootprintCenterWorld(coord, fp, Vector3.zero),
-            isPlayerBuilt: false, grade: ResourceGrade.Normal,
-            isConsumable: true, initialState: BuildingState.Active,
-            kingdomId: -1);   // 2_16 步骤7 哨兵三分：重生自然建筑仍=-1，排除集不纳
     }
 
     /// <summary>按占用/注册/挂件/发事件创建 Building 实例。供地图与玩家放置共用逻辑（BuildController 保留自身放置路径）。</summary>

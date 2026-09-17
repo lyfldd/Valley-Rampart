@@ -904,7 +904,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     //     → `TryAdvertiseTask` 采集分支 → 调度器派工 → 完成回调 `OnGatherCompleted`
     //     （＝ 释放占格＋注销注册表＋守卫失去＋`HandleEntityDepleted`＋对象池回收）。
     //   改后（数据寻址）：玩家 = `PrioritizeHarvestCommand` → `ResourceRespawnSystem.ConfirmResourceGather`
-    //     → `WorldGatherSource/TreeGatherSource` → 完成 = `ResourceRespawnSystem.HandleCellGathered`
+    //     → `WorldGatherSource` → 完成 = `ResourceRespawnSystem.HandleCellGathered`
     //     （格翻 Plain＋守卫失去[门内 `MapGate:308`]＋游荡锚点登记＋池子减 1 点）。
     //   语义承接（`D778` B-4 清单）：④ 游荡锚点登记 → `HandleCellGathered`（一次性三型·树不新增）；
     //     ⑤ 对象池回收 → 随实体退役（`BuildingFactory.ReturnBuildingToPool` 同删）；
@@ -974,7 +974,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     ///   ③ 农场缺水（水网 Stored<waterThreshold）→ WaterHaul（destType=WaterNetwork）
     /// 军事/其他不在此扩。无条件返回 false。
     /// 【HH.294 片 6-2·6-D】原「①一次性资源点被确认采集 → Gather」分支**随实体退役已删**
-    ///   —— 采集任务改由 `WorldGatherSource`／`TreeGatherSource` 广告（数据寻址）。
+    ///   —— 采集任务改由 `WorldGatherSource` 广告（数据寻址·唯一天然资源采集源）。
     /// </summary>
     public bool TryAdvertiseTask(out KingdomTask task)
     {

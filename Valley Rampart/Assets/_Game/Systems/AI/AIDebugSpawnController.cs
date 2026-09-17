@@ -455,7 +455,8 @@ public class AIDebugSpawnController : MonoBehaviour
     /// 一键生成：水井（产水入网）+ 农场（耗水产粮）+ 仓库（卸货目标）+ 木头堆（采集点）+ 3 工人。
     /// 验证链（依赖 QQQ.4 T1-T12）：
     ///   ① 农场双任务（T1/T2）：初始水网缺水(&lt;20) → 农场同时派 Production（耕作）+ WaterHaul（挑水）→ 2 工人分工
-    ///   ② 采集入背包（T8/T10/T12）：点击木头堆采集 → 工人采集入背包 → 搬运到仓库 → 左上角资源增加
+    ///   ② 采集入背包（T8/T10/T12）：**右键**木头堆资源格（`PrioritizeHarvestCommand`·【片 6-2】玩家采集入口）→
+    ///      工人采集入背包 → 搬运到仓库 → 左上角资源增加
     ///   ③ 流浪汉营地徘徊（T4/T5）：流浪汉仅在营地 ±3 格活动，不朝主城
     /// </summary>
     public void SpawnLifecycleScenario()
@@ -471,8 +472,17 @@ public class AIDebugSpawnController : MonoBehaviour
         PlaceBuilding("Buildings/farm", center + new Vector2(1f * cs, 0f));
         // ③ 仓库（接收背包卸货入仓）
         PlaceBuilding("Buildings/Warehouse", center + new Vector2(3f * cs, 0f));
-        // ④ 木头堆（采集点，玩家点击 StartGather 触发采集入背包链路）
-        PlaceBuilding("Buildings/wood_pile", center + new Vector2(6f * cs, 0f));
+        // ④ 木头堆（【HH.294 片 6-2 收尾】改走**格表落点**：旧 `PlaceBuilding("Buildings/wood_pile")`
+        //    在实体退役后会放出**无采集链的孤立建筑** ⇒ 改为 `MapGate.PlaceResourceNode` 落 WoodPile 格）；
+        //    采集链＝右键该格（`PrioritizeHarvestCommand` → `ResourceRespawnSystem.ConfirmResourceGather`
+        //    → `WorldGatherSource`）→ 工人到点采集 → 完成格翻 Plain ＋ 池子 −1（数据寻址·验证新采集链）。
+        {
+            var wp = center + new Vector2(6f * cs, 0f);
+            var wpCell = GridSystem.Instance != null ? GridSystem.Instance.WorldToCoord(wp) : null;
+            bool placed = wpCell.HasValue && MapGate.PlaceResourceNode(wpCell.Value, FeatureType.WoodPile);
+            if (!placed) Debug.LogWarning("[AIDebugSpawn] 木头堆格表落点失败（越界/非空格）。");
+            else Debug.Log("[AIDebugSpawn] 木头堆资源格已落 (" + wpCell.Value.x + "," + wpCell.Value.y + ")——右键该格验证采集链。");
+        }
         // ⑤ 3 个工人（1 耕作 + 1 挑水 + 1 采集搬运）
         Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(-1f * cs, 0f));
         Spawn(DebugSpawnType.PlayerCivilian, center + new Vector2(2f * cs, 0f));

@@ -72,7 +72,7 @@ public class BlacksmithBuilding : MonoBehaviour, IBuildingComponent, ITaskSource
         }
     }
 
-    // ===== ITaskSource（D704 A 批：组件自持 Production 广告；源＝组件；`TreeGatherSource` 非 Building 任务源先例）=====
+    // ===== ITaskSource（D704 A 批：组件自持 Production 广告；源＝组件；非 Building 任务源形态同 `WorldGatherSource` 一脉）=====
 
     public bool IsValid => this != null && _building != null && _building.IsValid;
 

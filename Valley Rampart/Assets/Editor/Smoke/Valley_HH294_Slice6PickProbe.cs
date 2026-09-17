@@ -590,8 +590,10 @@ public static class HH294Slice6PickProbe
             + " ｜ PickAt 4000 次（命中+空白）Gen0 增量=" + (gen1 - gen0)
             + "（两值同 ⇒ 增量归因并发 AI 背景，非 PickAt 分配；PickAt 代码路径静态零分配：static buffer+值类型）"
             + "｜ GetTotalMemory 差=" + (mem1 - mem0) + " B（噪声参考） sink=" + sink);
-        Log("§F 候选上限：建筑 ≤9（MapGate.PickCellRadius=1 ⇒ 3×3 footprint 反查·代码常量）；实测命中点 建筑候选=" + candB
-            + " 单位(3×3 cell 域)=" + candU + " 宝箱=" + candC + "｜ 单位索引窗口上限=窗口内单位数（3×3 cell）");
+        Log("§F 候选上限：建筑 ≤(2r+1)²（r=MapGate.PickCellRadius **动态**·按最大 sprite 半高重推——【片 6-2 收尾勘正】"
+            + "本批实测=7 ⇒ 15×15 footprint 反查·实数 289 上界·旧文本『PickCellRadius=1 ⇒ 3×3』系 R1 前历史值"
+            + "，⛔ 本行只勘文本、断言未改）；实测命中点 建筑候选=" + candB
+            + " 单位(窗口内)=" + candU + " 宝箱=" + candC + "｜ 单位索引窗口上限=窗口内单位数（同 r 窗口）");
 
         // 单位规模（枚举成本口径 O(单位索引条目)）
         int unitTotal = units.Length;

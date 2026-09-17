@@ -13,19 +13,18 @@ using UnityEngine;
 //
 //  入口纪律（test-harness-first 铁律1）：**走正门** TestHarnessApi.EnterTestRun（禁裸跑）。
 //  收尾纪律（L-32）：真暂停(Time.timeScale=0) → Save → ExitTestRun → 退 Play。
-//  两段式（承 6-1 教训：同局二次 EnterTestRun 会杀探针协程）：
-//    第 1 段＝目标态（`SpawnResourceEntities=false` 默认）全量读数；
-//    第 2 段＝**对照段**（探针开场置开关 true = 改前旧路径）⇒ 判据 1 的 A/B 两读数 ＋ 同 seed hash 对比。
+//  【HH.294 片 6-2 收尾（`D779` 残余 `S1`）】旧路径清场后**单段**＝目标态全量读数：
+//    A/B 对照开关（`SpawnResourceEntities`）已删 ⇒ 不再跑对照段（改前读数已落盘 `HH.307` §一，不复须）。
 //
 //  判据面：
-//    §A 判据 1  三型 Building 实例数 = 0（+ 开关 ON 对照读数 + 改前/改后 Registry 总数）   §A
+//    §A 判据 1  三型 Building 实例数 = 0（＋ Registry 总数 对照上批读数 21）                §A
 //    §B 占格面  资源格不占格 ＋ 放置阻挡承接（压资源格 ⇒ Blocked）                        §A/B
 //    §C 判据 3  玩家入口：消费者在场 ＋ 四型各 1 次「命令 → 派工」读数                     §C
 //    §D 判据 4  采集完成 ⇒ 格翻 Plain ＋ 池子 −1（前后读数）＋ 删门/守卫通知幂等           §D
 //    §E 判据 6  6-E：OreVein 格表来源候选数对照 ＋ 反证 ＋ 12s 缓存代价                    §E
 //    §F 判据 7  R1：PickCellRadius 重推值 ＋ castle 上沿命中（存在性反证）＋ 代价          §F
-//    §G 判据 8  R2：独立渲染对照（像素隐藏法）≥2 例（Pivot 单位 / 跨层带宝箱）             §G
-//    §H 判据 11 同 seed 逐格一致（features+climateZones hash·两段对比）
+//    §G 判据 8  R2′：独立渲染对照（像素隐藏法·三件套：身份可区分／背景对照／每例 ≥3 有效点）  §G
+//    §H 判据 11 同 seed 跨跑次逐格一致（features+climateZones hash）
 //  落盘：Logs/hh294_slice6_2/hh294_slice6_2_probe.txt（稳定名）＋ 时间戳副本
 // ============================================================================
 public static class HH294Slice62Probe
@@ -49,14 +48,10 @@ public static class HH294Slice62Probe
         if (_running) { Debug.LogWarning("[" + Tag + "] 探针已在跑（幂等守卫）。"); return; }
         _running = true;
         Sb.Length = 0;
-        bool isSecond = File.Exists(HashFile());
-        Sb.AppendLine(isSecond
-            ? "# HH.294 片 6-2 双写收敛探针【第 2 段·对照段（旧路径开关 ON）】（正门 EnterTestRun·seed=" + PROBE_SEED + " 槽=" + PROBE_SLOT + "）"
-            : "# HH.294 片 6-2 双写收敛探针【第 1 段·目标态全量】（正门 EnterTestRun·seed=" + PROBE_SEED + " 槽=" + PROBE_SLOT + "）");
+        Sb.AppendLine("# HH.294 片 6-2 双写收敛探针【目标态全量·收尾清场后单段】（正门 EnterTestRun·seed=" + PROBE_SEED + " 槽=" + PROBE_SLOT + "）");
         Sb.AppendLine("# 跑次：" + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                      + "｜MapGate.DepthMajorYInFront=" + MapGate.DepthMajorYInFront
-                      + "｜SpawnResourceEntities（开场值）=" + MapGenRules.SpawnResourceEntities);
-        new GameObject("HH294S62ProbeHost").AddComponent<Host>().Go(Run(isSecond));
+                      + "｜MapGate.DepthMajorYInFront=" + MapGate.DepthMajorYInFront);
+        new GameObject("HH294S62ProbeHost").AddComponent<Host>().Go(Run());
     }
 
     private class Host : MonoBehaviour { public void Go(IEnumerator r) => StartCoroutine(r); }
@@ -67,21 +62,14 @@ public static class HH294Slice62Probe
         Debug.Log("[" + Tag + "] " + line);
     }
 
-    private static IEnumerator Run(bool isSecond)
+    private static IEnumerator Run()
     {
-        // 第 2 段＝对照段：**开场**置旧路径开关（改前行为），供判据 1 的 A/B 两读数。
-        if (isSecond)
-        {
-            MapGenRules.SpawnResourceEntities = true;
-            Log("── 对照段：MapGenRules.SpawnResourceEntities := true（旧路径·同一 build 内 A/B）");
-        }
-
         var cfg = new NewGameConfig
         {
             worldSeed = PROBE_SEED, mapSeed = PROBE_SEED, raceId = 0, difficulty = 2,
             worldSize = WorldSize.Medium, selectedSlotId = PROBE_SLOT, kingdomName = "河谷王国"
         };
-        Log("── 正门进局");
+        Log("── 正门进局（单段·目标态）");
         yield return TestHarnessApi.EnterTestRun(cfg);
         yield return null; yield return null;
 
@@ -89,74 +77,29 @@ public static class HH294Slice62Probe
         Log("── hash（建局即取）features+climateZones：" + hash.ToString("X16"));
         long prev = WriteHash(hash);
 
-        // 判据 1（两段都取：A/B 对照的两读数）
         Log("");
         Log("## §A 判据1 生成期不派生实体（三型 Building 实例数）");
-        Case_NoEntities(isSecond);
-
-        // 判据 2/4/3/6/7/8 只在目标态段跑（对照段世界是改前形态，读数面不同）
-        if (isSecond)
-        {
-            // 6-E 对照读数：改前来源＝`def.isResourceNode && IsActive` 的建筑（本段世界＝旧路径 ⇒ 含 ore_vein 实体）
-            Log("");
-            Log("## §E-对照 判据6（6-E）改前来源读数（旧路径段）");
-            var reg2 = BuildingRegistry.Instance;
-            int oreV = 0, resNodeAll = 0;
-            if (reg2 != null)
-                for (int i = 0; i < reg2.All.Count; i++)
-                {
-                    var b = reg2.All[i];
-                    if (b == null || b.def == null || !b.IsActive) continue;
-                    if (b.sourceType == BuildingType.OreVein) oreV++;
-                    if (b.def.isResourceNode) resNodeAll++;
-                }
-            Log("§E-对照 `def.isResourceNode && IsActive` 建筑 = **" + resNodeAll + "**（其中 OreVein 实体 = " + oreV + "）"
-                + " ⇒ 改前「ore_vein 游荡锚点候选」来源规模；改后＝格表 OreVein 格（目标态段读数）1:1 承接");
-
-            // 占格承接 A/B 对照：旧路径段同一格（实体占格）也应 Blocked ⇒ 与改后（格表判定）同结果
-            var g2 = GridSystem.Instance;
-            var m2 = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
-            var houseDef2 = BuildingFactory.FindDefById("House");
-            GridCoord? oc = null;
-            if (g2 != null && m2 != null && houseDef2 != null)
-            {
-                for (int i = 0; i < reg2.All.Count; i++)
-                {
-                    var b = reg2.All[i];
-                    if (b != null && b.sourceType == BuildingType.OreVein) { oc = b.coord; break; }
-                }
-                if (oc.HasValue)
-                {
-                    var r2 = PlacementValidator.ValidatePlacement(houseDef2, g2.CellToSub(oc.Value, 0, 0), GateOrientation.Horizontal);
-                    Log("§B-对照 旧路径段：House 压 ore_vein **实体**格 (" + oc.Value.x + "," + oc.Value.y + ") ⇒ ok=" + r2.ok
-                        + " reason=" + r2.reason + "（应与目标态格表判定同结果 ⇒ Blocked）");
-                }
-            }
-
-            Log("");
-            Log("## §H 判据11 同 seed 两次建局对比（判据：逐格一致）");
-            Log("§H 上次=" + prev.ToString("X16") + " 本次=" + hash.ToString("X16")
-                + " ⇒ " + (prev == hash && prev != 0 ? "逐格一致（hash+长度双同）✅" : "❌ 不一致"));
-            MapGenRules.SpawnResourceEntities = false;   // 复原（防静态开关泄漏到后续会话）
-            Log("── 对照段收尾：SpawnResourceEntities 复原 := " + MapGenRules.SpawnResourceEntities);
-            Finish();
-            yield break;
-        }
+        Case_NoEntities();
 
         Case_Occupancy();                    // §B 占格面（含放置阻挡承接）
         yield return Case_PlayerEntry();     // §C 判据 3
         Case_CellGathered();                 // §D 判据 4 ＋ 幂等
         Case_OreVeinSource();                // §E 判据 6（6-E）
         Case_PickRadius();                   // §F 判据 7（R1）
-        yield return Case_RenderCompare();   // §G 判据 8（R2）
+        yield return Case_RenderCompare();   // §G 判据 8（R2′）
+
+        Log("");
+        Log("## §H 判据11 同 seed 跨跑次建局对比（判据：逐格一致）");
+        Log("§H 上次=" + prev.ToString("X16") + " 本次=" + hash.ToString("X16")
+            + " ⇒ " + (prev == hash && prev != 0 ? "逐格一致（hash 双同）✅" : "（首跑无对照 or 不一致）"));
 
         Finish();
     }
 
     // ========================================================================
-    //  §A：判据 1（三型 Building 实例数 ＋ 改前/改后 Registry 总数）
+    //  §A：判据 1（三型 Building 实例数 ＋ Registry 总数 对照上批读数）
     // ========================================================================
-    private static void Case_NoEntities(bool legacyPath)
+    private static void Case_NoEntities()
     {
         var reg = BuildingRegistry.Instance;
         if (reg == null) { Log("§A ❌ BuildingRegistry 不在场"); return; }
@@ -178,10 +121,9 @@ public static class HH294Slice62Probe
             if (samples.Length < 200 && (b.sourceType == BuildingType.OreVein || b.sourceType == BuildingType.StonePile || b.sourceType == BuildingType.WoodPile))
                 samples.Append(b.name).Append(";");
         }
-        Log("§A BuildingRegistry 总数 = **" + total + "**（" + (legacyPath ? "对照段·旧路径开关 ON ⇒ 改前读数" : "目标态·开关 OFF ⇒ 改后读数") + "）");
+        Log("§A BuildingRegistry 总数 = **" + total + "**（清场后目标态；对照上批 `HH.307` 目标态读数 **21** ⇒ 须不变）");
         Log("§A 三型实例数：OreVein=" + ore + " StonePile=" + stone + " WoodPile=" + wood
-            + " ⇒ 合计 = **" + (ore + stone + wood) + "**"
-            + (legacyPath ? "（对照段应 > 0）" : "（目标态应 = 0）" + ((ore + stone + wood) == 0 ? " ✅" : " ")));
+            + " ⇒ 合计 = **" + (ore + stone + wood) + "**（目标态应 = 0）" + ((ore + stone + wood) == 0 ? " ✅" : " "));
         Log("§A 对照类目：mine 建筑（按 sourceType）=" + mineT + "（按 def.id）=" + mineF
             + " —— 判据1 只涉三型；mine＝AI 预置/T6 转型面，**不在本批**");
         if (samples.Length > 0) Log("§A 三型实例抽样：" + samples);

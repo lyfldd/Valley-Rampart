@@ -546,7 +546,7 @@ public static class Valley_HH294_Slice5Probe
             int afterCnt = rs.PointsOf(wpChunk, 2);
             _log.AppendLine($"  木堆格 ({wp.x},{wp.y}) 采集 ⇒ 池子木堆 {beforeCnt} → {afterCnt}；该格现值 = **{MapGate.ReadAt(map, wp.x, wp.y)}**" +
                             $"（须 Plain ⇒ 不在原位）；该区块木堆 feature 数 = {CountFeatureInChunk(map, wpChunk, FeatureType.WoodPile, rs.PoolChunkW)}" +
-                            $"（> 0 ⇒ 已落新位；【片 6-2】实体已退役 ⇒ 不再由 `ReSpawnNaturalBuilding` 重建·纯格表）");
+                            $"（> 0 ⇒ 已落新位；【片 6-2/收尾】实体已退役（重建函数已删）⇒ 纯格表）");
         }
         else _log.AppendLine("  未找到 WoodPile feature（跳过该子项）");
 

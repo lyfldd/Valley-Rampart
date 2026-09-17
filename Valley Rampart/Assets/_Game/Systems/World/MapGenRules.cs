@@ -1501,49 +1501,15 @@ public static class MapGenRules
         }
     }
 
-    // ===== 步骤 11：naturalBuildings 派生（视觉层/一次性可采集实体，不反向改可走）=====
+    // ===== 步骤 11：naturalBuildings（【HH.294 片 6-2 收尾】目标态：恒空·不再派生实体）=====
 
-    /// <summary>⭐ <b>6-A 对照开关</b>（`HH.294` 片 6-2·`D778`）：true ＝ 保留改前旧路径（一次性三型派生
-    /// `Building` 实体 — 双写态，供**同一 build 内 A/B 对照**）；false（**默认**）＝ 目标态**纯数据**。
-    /// 治理三处：<see cref="DeriveNaturalBuildings"/>（派生白名单）／`BuildingFactory.InstantiateFromMap`
-    /// （自然建筑循环）／`ResourceRespawnSystem.SpawnEntityFor`（重生附加实体）。**验收后随旧路径一并删**。</summary>
-    public static bool SpawnResourceEntities = false;
-    // A+（HH.2）落地：树/雪山不再派生 Building 实体——它们归 2_10 Tilemap 特征层渲染 +
-    // features 数据承载（装饰持续节点），不再建 1.6 万个 GameObject（消灭加载 20s 根因）。
-    // **HH.291 A6（F-09）修正：已于 HH.293 B1 回退**——`Mine` **不**派生实体（撤销原因见方法内注释：
-//   矿山锚点≠矿洞建筑；实机 Mine 实例 429 系误派生产物，且与 T6「mine 转型限位建造」冲突）。
-// 一次性可采集 `OreVein`/`WoodPile`/`StonePile` 保留 Building 实体（走 BuildingPanel 采集销毁链路，2_12 不受影响）。
+    /// <summary>【HH.294 片 6-2 收尾·旧路径清场（`D779` 残余 `S1`）】**目标态：资源点＝格表**——
+    /// 一次性三型（`OreVein`／`WoodPile`／`StonePile`）与树一致**不再派生 `Building` 实体**
+    /// （改前双写态与 A/B 对照开关已随本批删除；改前读数落盘于 `HH.307` 报告 §一）。
+    /// 本方法保留作**契约槽位**（`WorldManager.cs:202` 与 2 处 Editor 探针仍调用）——
+    /// 语义＝清空 `naturalBuildings`（该字段保留·`WorldState.cs:31` 契约槽位·现恒空）。</summary>
     public static void DeriveNaturalBuildings(MapData map)
     {
-        map.naturalBuildings.Clear();
-
-        // 【HH.294 片 6-2·6-A（`D778`）】**对照开关**：true ＝ 保留改前旧路径（三型派生 Building 实体），
-        //   供**同一 build 内 A/B 对照**；默认 false ＝ 目标态（资源点转**纯数据**，采集走数据寻址·6-B/6-C）。
-        //   ⇒ 默认路径下 `naturalBuildings` **恒为空**（判据 1：生成一张图 ⇒ 三型 Building 实例数 = 0）。
-        //   ️ 旧路径（本方法循环 ＋ `BuildingFactory.InstantiateFromMap` 自然建筑循环 ＋ `ResourceRespawnSystem.SpawnEntityFor`
-        //   ＋ `BuildingFactory.FeatureToBuildingType` 三型分支）**验收后随本开关一并删**。
-        if (!SpawnResourceEntities) return;
-        // **HH.293 B1（D737 强制回退）**：`FeatureType.Mine`（矿山锚点）**撤出**派生白名单 ——
-        //   实机曾因 HH.291 A6 加入该分支 ⇒ Mine 实例 429（改前 0）＝「矿山随处可见」直接来源，
-        //   且与「建筑体系重构批 T6」（mine 转型＝限位建造建筑）冲突必返工。
-        //   ⚠️ 只撤**派生白名单**：`BuildingMappingTable` 内 mine 映射保留（未来由 T6 转型接管）。
-        //   ⇒ 白名单回到 `e7fb9059^` 三型：OreVein／WoodPile／StonePile。
-        for (int y = 0; y < map.height; y++)
-            for (int x = 0; x < map.width; x++)
-            {
-                var f = map.features[Idx(map, x, y)];
-
-                // HH.10 裁决三：一次性可采集实体扩到 OreVein/WoodPile/StonePile 三类。
-                //   （此前仅 OreVein → WoodPile/StonePile 格存在但无实体，工人采不到，木/石断供。）
-                //   Tree 走数据格采集（数据化，不建实体，防止 A+ 复辟），故不在此派生。
-                if (f != FeatureType.OreVein && f != FeatureType.WoodPile && f != FeatureType.StonePile) continue;
-                map.naturalBuildings.Add(new NaturalBuilding
-                {
-                    cellX = x, cellY = y, w = 1, h = 1,
-                    feature = f,
-                    climate = ZoneOf(map, x, y),
-                    artId = f.ToString()
-                });
-            }
+        map.naturalBuildings.Clear();   // 【HH.294 片 6-2 收尾】目标态：不再派生实体（资源点＝格表）
     }
 }
