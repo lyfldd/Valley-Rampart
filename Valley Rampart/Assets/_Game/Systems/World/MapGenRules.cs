@@ -133,7 +133,7 @@ public static class MapGenRules
     {
         for (int dy = 0; dy < side; dy++)
             for (int dx = 0; dx < side; dx++)
-                map.features[Idx(map, ox + dx, oy + dy)] = need;
+                MapGate.GenesisWrite(map, Idx(map, ox + dx, oy + dy), need);   // 【HH.294 片4·4-A】造世界口（0→1，不算增）
     }
 
     /// <summary>某格是否处于「完整 side×side 同特征块」内（D618 验收：无孤立矿山格 的判定反向口径）。</summary>
@@ -696,7 +696,7 @@ public static class MapGenRules
     public static void FillFeatures(System.Random rng, MapData map, MapGenRulesConfig cfg, int difficulty)
     {
         int n = map.width * map.height;
-        for (int i = 0; i < n; i++) map.features[i] = FeatureType.Plain;
+        for (int i = 0; i < n; i++) MapGate.GenesisWrite(map, i, FeatureType.Plain);   // 【HH.294 片4·4-A】造世界口
         _pitMask = new byte[n];                      // HH.291 A4：坑位账按图重建（生成期口径）
 
         PlaceMountainRidges(rng, map, cfg);          // 件④：山脉化
@@ -759,7 +759,8 @@ public static class MapGenRules
         if (x < 0 || y < 0 || x >= map.width || y >= map.height) return;
         var band = ZoneOf(map, x, y);
         float snow = cfg != null ? cfg.GetMountainSnowRatio(band) : (band == ClimateZone.Cold ? 1f : 0.3f);
-        map.features[Idx(map, x, y)] = rng.NextDouble() < snow ? FeatureType.SnowMountain : FeatureType.Mountain;
+        MapGate.GenesisWrite(map, Idx(map, x, y),
+            rng.NextDouble() < snow ? FeatureType.SnowMountain : FeatureType.Mountain);   // 【HH.294 片4·4-A】造世界口
     }
 
     /// <summary>山脉簇最小尺寸约束（件④）：4-连通簇 &lt; `mountainClusterMinSize` 的山体碎片回落 Plain。</summary>
@@ -795,7 +796,7 @@ public static class MapGenRules
             }
             if (cells.Count < minSize)
             {
-                for (int k = 0; k < cells.Count; k++) { map.features[cells[k]] = FeatureType.Plain; pruned++; }
+                for (int k = 0; k < cells.Count; k++) { MapGate.GenesisWrite(map, cells[k], FeatureType.Plain); pruned++; }   // 【HH.294 片4·4-A】造世界口
             }
         }
         if (pruned > 0)
@@ -905,7 +906,7 @@ public static class MapGenRules
             while ((mask & (1 << slot)) != 0) slot = (slot + 1) & 3;   // 该坑位已占 ⇒ 顺移下一个空坑位
             mask |= 1 << slot;
         }
-        map.features[cell] = ResourceKindFeature[kind];
+        MapGate.GenesisWrite(map, cell, ResourceKindFeature[kind]);   // 【HH.294 片4·4-A】造世界口
         if (_pitMask != null && cell >= 0 && cell < _pitMask.Length) _pitMask[cell] = (byte)mask;
         return slots;
     }
@@ -1030,7 +1031,7 @@ public static class MapGenRules
                 int i = Idx(map, x, y);
                 var f = map.features[i];
                 if (f == FeatureType.Tree || f == FeatureType.OreVein || f == FeatureType.StonePile || f == FeatureType.WoodPile)
-                { map.features[i] = FeatureType.Plain; cleared++; }
+                { MapGate.GenesisWrite(map, i, FeatureType.Plain); cleared++; }   // 【HH.294 片4·4-A】造世界口
             }
         return cleared;
     }
@@ -1317,7 +1318,7 @@ public static class MapGenRules
             {
                 if (map.features[Idx(map, x, y)] != FeatureType.Mine) continue;
                 if (InFullBlock(map, x, y, FeatureType.Mine, MineClusterSide)) continue;
-                map.features[Idx(map, x, y)] = FeatureType.Plain;
+                MapGate.GenesisWrite(map, Idx(map, x, y), FeatureType.Plain);   // 【HH.294 片4·4-A】造世界口
                 pruned++;
             }
         if (pruned > 0)
@@ -1330,7 +1331,7 @@ public static class MapGenRules
         for (int y = 0; y < map.height; y++)
             for (int x = 0; x < map.width; x++)
                 if (x < thickness || y < thickness || x >= map.width - thickness || y >= map.height - thickness)
-                    map.features[Idx(map, x, y)] = FeatureType.Ocean;
+                    MapGate.GenesisWrite(map, Idx(map, x, y), FeatureType.Ocean);   // 【HH.294 片4·4-A】造世界口
     }
 
     /// <summary>主干河：从一边界随机走到对边界，标记 River（不做分支 D34）。</summary>
@@ -1348,7 +1349,7 @@ public static class MapGenRules
             // DZ-084：不覆盖矿山簇（河穿矿=该格岩石出露，河在此断开——D618 认可语义）
             // HH.272 件④：亦**不覆盖山/雪山**（2_1 §3.6「绕行特殊地形·不穿雪地」；否则山脊被河切断 ⇒ 产 <4 格碎片）
             if (cur != FeatureType.Mine && cur != FeatureType.Mountain && cur != FeatureType.SnowMountain)
-                map.features[Idx(map, x, y)] = FeatureType.River;
+                MapGate.GenesisWrite(map, Idx(map, x, y), FeatureType.River);   // 【HH.294 片4·4-A】造世界口
             // 朝对岸推进 + 随机侧移
             if (horizontal) { x++; if (rng.NextDouble() < 0.4) y += rng.Next(-1, 2); }
             else { y++; if (rng.NextDouble() < 0.4) x += rng.Next(-1, 2); }

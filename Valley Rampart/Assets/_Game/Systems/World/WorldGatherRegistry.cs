@@ -159,8 +159,7 @@ public class WorldGatherRegistry : Singleton<WorldGatherRegistry>
         // ① 数据格树（A+ 数据化，不建实体；木的唯一持续来源）
         if (resource == ResourceType.Wood)
         {
-            int i = cell.y * map.width + cell.x;
-            if (map.features[i] == FeatureType.Tree) { isTree = true; return true; }
+            if (MapGate.ReadAt(map, cell.x, cell.y) == FeatureType.Tree) { isTree = true; return true; }   // 【HH.294 片4·4-A】读走查门
         }
 
         // ② 一次性可采实体（stone_pile／ore_vein／wood_pile：isConsumable=1 且产出该资源）

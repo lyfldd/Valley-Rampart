@@ -37,4 +37,9 @@ public struct BuildingSaveData
     public int totalInvested;   // 建造+升级累加投入总量
     // 2_16 步骤2：王国归属（D329 门面）。旧档缺字段→默认 0（玩家），向后兼容。
     public int kingdomId;       // 王国归属 id（0=玩家；AI/动态王国=Registry id）
+    // 【HH.294 片4·4-E】锚点消费记录（`03` §7.8 锚点返还对偶：拆了建筑要还锚点）。
+    // 尾插 ＋ 旧档缺字段→默认 0/-1 向前兼容（-1 ＝ 无锚点，零 bump）。
+    public int anchorCoordX;    // 消费掉的锚点格 x（-1 ＝ 无）
+    public int anchorCoordY;    // 消费掉的锚点格 y（-1 ＝ 无）
+    public int anchorFeature;   // (int)FeatureType（-1 ＝ 无）
 }

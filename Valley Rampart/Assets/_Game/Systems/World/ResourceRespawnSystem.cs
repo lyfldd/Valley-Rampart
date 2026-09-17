@@ -109,10 +109,8 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
     public bool ConfirmTreeGather(GridCoord cell)
     {
         if (!Cfg || !Cfg.enabled) return false;
-        var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
-        if (map == null || map.features == null) return false;
-        int i = cell.y * map.width + cell.x;
-        if (i < 0 || i >= map.features.Length || map.features[i] != FeatureType.Tree) return false;
+        // 【HH.294 片4·4-A】读口收口：不再裸读 `map.features[i]`，走门（判据 2 上层裸读面）。
+        if (MapGate.GetFeatureAt(cell) != FeatureType.Tree) return false;
 
         Vector2 pos = GridSystem.Instance != null ? GridSystem.Instance.CoordToWorld(cell) : Vector2.zero;
         var src = new TreeGatherSource(cell, pos, Cfg.treeGatherSeconds, Cfg.treeGatherAmount);
@@ -168,19 +166,22 @@ public class ResourceRespawnSystem : Singleton<ResourceRespawnSystem>, ISaveable
         _ => Cfg.oreRespawnDays
     };
 
-    /// <summary>把一格 feature 改为目标值 + 刷新地形/可走 + 渲染。返回是否实际改变。</summary>
+    /// <summary>把一格 feature 改为目标值。返回是否实际改变。
+    /// **【HH.294 片4·4-A／4-C】** 原此处**直接对该格 features 赋值**（`target` 覆写）并存着「刷派生＋刷渲染」——
+    /// 与 `WorldManager.TryConsumeResourceNode`（消耗路径）**各写一遍同样的链**，即任务书的「两条删除路径」。
+    /// 现**收口到门**：写一律走 <see cref="MapGate.PlaceResourceNode"/>（重生时机）/ <see cref="MapGate.RemoveResourceNode"/>（消耗时机），
+    /// 本类不再有 `features[...] =` 赋值（判据 1／4）。</summary>
     private bool SetFeature(GridCoord cell, FeatureType target)
     {
         var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
         if (map == null || map.features == null) return false;
-        int i = cell.y * map.width + cell.x;
-        if (i < 0 || i >= map.features.Length || map.features[i] == target) return false;
-        map.features[i] = target;
-        // 【HH.294 补正 P1】守卫资源索引增量登记（重生写回**原格** ⇒ 索引超集性；消耗写 Plain 被内部自过滤）
-        GuardDeploymentSystem.NotifyFeatureWritten(cell, target);
-        if (GridSystem.Instance != null) GridSystem.Instance.RefreshCellFromFeature(cell, target);
-        if (MapRenderService.Instance != null) MapRenderService.Instance.UpdateCell(cell);
-        return true;
+        if (cell.x < 0 || cell.y < 0 || cell.x >= map.width || cell.y >= map.height) return false;
+        if (MapGate.ReadAt(map, cell.x, cell.y) == target) return false;   // 幂等：同值不改
+
+        bool changed = target == FeatureType.Plain
+            ? MapGate.RemoveResourceNode(cell)        // 删门（唯一入口·幂等）
+            : MapGate.PlaceResourceNode(cell, target); // 增门（重生时机）
+        return changed;
     }
 
     private void RebuildEntity(GridCoord cell, FeatureType feature)

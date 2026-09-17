@@ -83,7 +83,7 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             for (int y = 0; y < _h; y++)
                 for (int x = 0; x < _w; x++)
                 {
-                    WalkFlags wf = FeatureToWalkFlags(map.features[y * _w + x]);
+                    WalkFlags wf = FeatureToWalkFlags(MapGate.ReadAt(map, x, y));   // 【HH.294 片4·4-A】读走查门
                     int baseIdx = (y * div) * _sw + x * div;
                     for (int sy = 0; sy < div; sy++)
                         for (int sx = 0; sx < div; sx++)
@@ -299,11 +299,13 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     // 【HH.294 片2-C】原 `IsOccupied` 已删（与 `GetOccupant(c) != null` 完全等价、重复接口）—— 占用判据统一走 GetOccupant。
     // 【HH.294 片3-B】占格数组已降到**小格子**；写入类口按**地块块**整块写（div² 子格）。
 
-    /// <summary>【地块级便捷口】该地块是否有阻挡占格物（读＝首子格）。</summary>
+    /// <summary>【地块级便捷口】该地块是否有阻挡占格物。
+    /// 【HH.294 片4·搭车 R3（`D770` 请裁-4）】**已迁移到子格域**：块内**任一**子格阻挡 ⇒ true
+    /// （改前＝只读**首子格**代表位 ⇒ 「子格级部分占格」会**失真**为 false）。
+    /// 快路径：代表位命中即返回（常见情形 1 次读）；否则扫同块其余 div²−1 子格。</summary>
     public bool IsObstacle(GridCoord c)
     {
-        if (!InBounds(c.x, c.y) || _occupants == null) return false;
-        var o = _occupants[CellBaseIndex(c.x, c.y)];
+        var o = GetOccupant(c);
         return o != null && o.IsGridObstacle;
     }
 
@@ -314,11 +316,27 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         return o != null && o.IsGridObstacle;
     }
 
-    /// <summary>【地块级便捷口】该地块的占格物（读＝首子格）。</summary>
+    /// <summary>【地块级便捷口】该地块的占格物。
+    /// 【HH.294 片4·搭车 R3（`D770` 请裁-4）】**已迁移到子格域**：块内**任一**子格非空即返回该占格物
+    /// （改前＝只读**首子格**代表位，前提「同块 div² 子格同值」；一旦出现「子格级部分占格」，
+    /// 代表位落在空子格 ⇒ 静默错答 null）。快路径：代表位命中即返回（常见情形 1 次读）；
+    /// 否则扫同块其余 div²−1 子格 ⇒ **部分占格下不失真**。
+    /// ⚠️ 跨格建筑的「哪一格是主格」语义不变（本口只回答「这块上有没有东西」）。</summary>
     public IGridOccupant GetOccupant(GridCoord c)
     {
         if (!InBounds(c.x, c.y) || _occupants == null) return null;
-        return _occupants[CellBaseIndex(c.x, c.y)];
+        int baseIdx = CellBaseIndex(c.x, c.y);
+        var o = _occupants[baseIdx];
+        if (o != null) return o;                       // 快路径：代表位命中
+        int div = SubDiv;
+        for (int sy = 0; sy < div; sy++)               // 慢路径：同块其余子格（部分占格兜底）
+            for (int sx = 0; sx < div; sx++)
+            {
+                if (sx == 0 && sy == 0) continue;
+                var cand = _occupants[baseIdx + sy * _sw + sx];
+                if (cand != null) return cand;
+            }
+        return null;
     }
 
     /// <summary>⭐【小格子级·精确】该子格的占格物（片3-B 新增读口）。</summary>
@@ -326,6 +344,27 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
     {
         if (!InSubBounds(sub.x, sub.y) || _occupants == null) return null;
         return _occupants[ToSubIndex(sub.x, sub.y)];
+    }
+
+    /// <summary>⭐【小格子级·精确】登记/清空**单个子格**占格（片3-B 读口 `GetOccupantSub` 的写对偶；
+    /// 【HH.294 片4·搭车 R3】地块级口已迁到子格域 ⇒ 子格级写口需对称存在，供「子格级部分占格」这类精细写入）。
+    /// 不影响同块其他子格；`BuildingBlocked` 位按 `IsGridObstacle` 同置同清。</summary>
+    public void MarkOccupiedSub(GridCoord sub, IGridOccupant occupant)
+    {
+        if (!InSubBounds(sub.x, sub.y) || _occupants == null) return;
+        int i = ToSubIndex(sub.x, sub.y);
+        _occupants[i] = occupant;
+        if (occupant != null && occupant.IsGridObstacle) _walkFlags[i] |= WalkFlags.BuildingBlocked;
+        else _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
+    }
+
+    /// <summary>⭐【小格子级·精确】释放**单个子格**占格（与 <see cref="MarkOccupiedSub"/> 对偶）。</summary>
+    public void FreeSub(GridCoord sub)
+    {
+        if (!InSubBounds(sub.x, sub.y) || _occupants == null) return;
+        int i = ToSubIndex(sub.x, sub.y);
+        _occupants[i] = null;
+        _walkFlags[i] &= ~WalkFlags.BuildingBlocked;
     }
 
     /// <summary>【地块级写口】登记/清空该地块占格（**整块 div² 子格同写**；壳对象按首子格分配）。</summary>
@@ -372,6 +411,37 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         for (int dy = 0; dy < h; dy++)
             for (int dx = 0; dx < w; dx++)
                 Free(new GridCoord(origin.x + dx, origin.y + dy, origin.layer));
+    }
+
+    /// <summary>
+    /// ⭐【HH.294 片4·搭车 R2】**按 `BuildingRegistry` 重建占格**（装配期兜底口）。
+    ///
+    /// <b>断链根因（实读取证）</b>：`KingdomFoundry.FoundFirstGeneration` 在 `WorldManager.GenerateMap`
+    /// **步骤5**创建 AI 王国预置建筑 ⇒ 其 `BuildingFactory.CreateBuildingInstance` 调
+    /// <see cref="MarkOccupiedFootprint"/> 时，<see cref="PopulateFromMap"/> **尚未执行**
+    /// （`_w/_h = 0` ⇒ <see cref="InBounds"/> 为 false ⇒ 一个占格都没写）；随后
+    /// `PopulateFromMap → `Initialize`` 又 `new` 掉 `_occupants`/`_walkFlags` ⇒ 即便写进旧数组也被抹。
+    /// 症状＝片3 观察项：抽样的 AI 预置建筑「footprint 内非空子格 = 0」且「地块级 `GetOccupant` = null」。
+    ///
+    /// <b>本口</b>：在装配顺序的**网格就绪之后**调用（`WorldManager.GenerateWorld` 紧接 `PopulateFromMap`），
+    /// 把注册表里每座建筑的 footprint 重登记一遍（幂等；含桥面位）。返回重登记座数。
+    /// </summary>
+    public int RebuildOccupancyFromRegistry()
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null || _occupants == null) return 0;
+        var all = reg.All;
+        int n = 0;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b == null) continue;
+            int w = Mathf.Max(1, b.footprint.x), h = Mathf.Max(1, b.footprint.y);
+            MarkOccupiedFootprint(b.coord, w, h, b);
+            if (b.def != null && b.def.isBridge) SetBridge(b.coord, w, h, true);
+            n++;
+        }
+        return n;
     }
 
     /// <summary>置/清桥面位（2_2 桥放置/拆除）。Bridge 置位后 IsWalkable 豁免 Water 阻挡（doc 1 §5.1）。
@@ -445,6 +515,16 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             if (SubToCell(s) == cell) result.Add(kv.Key);
         }
         return result;
+    }
+
+    /// <summary>【地块级·**无分配**读口】该地块上的单位数（不 `new List`）。
+    /// 【HH.294 片4·4-F】供 `MapGate` 区域枚举每格取「有没有单位」用 —— `03` §8.7 判据 4「区域查询稳态零分配」。</summary>
+    public int GetUnitCountInCell(GridCoord cell)
+    {
+        int n = 0;
+        foreach (var kv in _unitSubCells)
+            if (SubToCell(kv.Value) == cell) n++;
+        return n;
     }
 
     public List<UnitController> GetUnitsInCellByCategory(GridCoord cell, UnitCategory category)

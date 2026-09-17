@@ -338,7 +338,7 @@ public static class GuardDeploymentSystem
         {
             int i = cells[k];
             if (i < 0 || i >= map.features.Length) continue;
-            FeatureType f = map.features[i];              // 实时回读：功能源仍是 features，索引只作候选集
+            FeatureType f = MapGate.ReadAt(map, i % width, i / width);   // 【HH.294 片4·4-A】读走查门·实时回读：功能源仍是 features，索引只作候选集
             if (!IsGuardResourceFeature(f)) continue;
             Vector2 wp = worlds[k];
             float dx = wp.x - pos.x, dy = wp.y - pos.y;   // 与改造前 ((Vector2)CoordToWorld(c) - pos).sqrMagnitude **逐位同式**

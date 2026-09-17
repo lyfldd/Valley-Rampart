@@ -491,12 +491,22 @@ public readonly struct BuildingPlacedEvent
     public BuildingPlacedEvent(Building building) { Building = building; }
 }
 
-// 建筑摧毁/拆除事件。[3.4 退役] 建筑死亡改走 UnitDiedEvent（Cause 区分 Killed/Demolished）。
-// 保留定义仅为编译兼容，不再发布。BuildingPanel 已改订阅 UnitDiedEvent。
-public readonly struct BuildingDestroyedEvent
+// 【HH.294 片4】`BuildingDestroyedEvent` **已删**（原 [3.4 退役] 保留定义仅为编译兼容、零发布零订阅）：
+//   先决证据＝`git grep -c "Subscribe<BuildingDestroyedEvent>" -- '*.cs'` = 0 ／ `new BuildingDestroyedEvent` = 0；
+//   建筑死亡一律走 `UnitDiedEvent`（Cause 区分 Killed/Demolished），消费方 `BuildingPanel` 已改订阅。
+
+// ===== 地图层事件（HH.294 片4 · 03 §9.3 / §8.2⑤）=====
+
+// ⭐ 存在替换事件（03 §9.3）：一次替换**只发一条**（**不是** `Removed` ＋ `Added` 两条）。
+// 由 `MapGate.ReplaceFeature` 发布；高级层**自己决定**“换皮（保留实体）”还是“重建”。
+// 为何必须一条：否则中间态会被别处读到（“这里什么都没有”），统计会记成“拆一座＋建一座”。
+public readonly struct MapReplacedEvent
 {
-    public readonly Building Building;
-    public BuildingDestroyedEvent(Building building) { Building = building; }
+    public readonly GridCoord Coord;
+    public readonly FeatureType OldFeature;
+    public readonly FeatureType NewFeature;
+    public MapReplacedEvent(GridCoord coord, FeatureType oldFeature, FeatureType newFeature)
+    { Coord = coord; OldFeature = oldFeature; NewFeature = newFeature; }
 }
 
 // 建筑升级事件。由 BuildingPanel.Upgrade 发布。UI 订阅刷新面板。

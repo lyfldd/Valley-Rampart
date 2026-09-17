@@ -54,7 +54,7 @@ public class MapVisualizer : MonoBehaviour
             for (int x = 0; x < map.width; x++)
             {
                 int i = y * map.width + x;
-                pixels[i] = GetFeatureColor(map.features[i]);
+                pixels[i] = GetFeatureColor(MapGate.ReadAt(map, x, y));   // 【HH.294 片4·4-A】读走查门
             }
         }
         tex.SetPixels(pixels);

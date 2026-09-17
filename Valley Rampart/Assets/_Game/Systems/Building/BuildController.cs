@@ -248,13 +248,13 @@ public class BuildController : Singleton<BuildController>
         if (!CanPayBuild(kingdomId, def.cost)) return false;
         if (!PayBuild(kingdomId, def.cost)) return false;
 
-        // 放置即改造：工具建筑（采石场/农场）建在资源格上，覆盖原资源节点
-        // A+（HH.2）：树/矿不再建 Building 实体；改为数据覆盖该格 feature（Tree/Mine→Plain）+ 刷新渲染
-        if (ResourceNodeMapping.RequiresResourceNode(def.id)
-            && WorldManager.Instance != null)
-        {
-            WorldManager.Instance.TryConsumeResourceNode(coord);
-        }
+        // 【HH.294 片4·4-B】⛔ **禁「顺手抹树」** —— 原此处无条件调
+        //   `WorldManager.TryConsumeResourceNode(coord)`：只要 `ResourceNodeMapping.RequiresResourceNode(def.id)`
+        //   就**把落点格的 Tree/Mine 一并抹成 Plain**。这与 `03` 差异清单 #3「建造时**顺手抹树** ⇒ 禁止
+        //   （**先采才能建**）」直接冲突。
+        //   改后＝**锚点消费走门**（见下方 b.Init 之后）：仅当该建筑类型**显式声明了锚点需求**
+        //   （`anchorRequire` 前缀匹配，当前唯一映射 `quarry → Mine`）时，才经 `MapGate.ConsumeAnchor`
+        //   **走删门**消费该锚点；未被任何建筑声明的资源格（**Tree**）**永不**经此路径改写。
 
         // 实例化 Building（世界坐标 = footprint 中心）
         Vector3 worldPos = BuildingWorldPos(grid, sub, def, orient);
@@ -279,6 +279,14 @@ public class BuildController : Singleton<BuildController>
         // HH.86/DZ-040 件2a：faction 按 kingdomId 派生（b.Init→ApplyDef 时归属未写入=仍 def.faction，此处补覆写）
         b.faction = kingdomId > 0 ? Faction.AiKingdom : def.faction;
         b.StartConstructing();     // 建造走 Constructing 进度（玩家手工与 AI 同一条链）
+
+        // 【HH.294 片4·4-B／4-E】锚点消费（`03` §6.4 门内第 2 步）：**走删门**把锚点格地表抹掉，
+        //   并把「消费了哪个锚点（类型 ＋ 位置）」**记到建筑身上**（`03` §五「这属'属性自己装'」），
+        //   供拆除时 `4-E` 锚点返还。
+        //   ⭐ 第 3 参＝**声明的锚点需求**（`03` §6.4「锚点校验需 anchorRequire 非空」）：门内再校验
+        //   「该格地表与该声明相符」，不符即拒绝 ⇒ 幂等：落点格是 Tree 而声明是 Mine（或未声明）⇒ **零改写**。
+        if (ResourceNodeMapping.RequiresResourceNode(def.id))
+            MapGate.ConsumeAnchor(coord, b, ResourceNodeMapping.GetResourceNode(def.id).Value);
 
         // 确保 Collider2D（size 局部 1x1，由 localScale 统一缩放，3.3.4 修复误触+碰撞盒）
         if (go.GetComponent<Collider2D>() == null)

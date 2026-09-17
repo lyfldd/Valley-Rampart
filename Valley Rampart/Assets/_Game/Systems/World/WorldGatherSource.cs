@@ -128,7 +128,6 @@ public class WorldGatherSource : ITaskSource
         var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;
         if (map == null || map.features == null) return false;
         if (Cell.x < 0 || Cell.y < 0 || Cell.x >= map.width || Cell.y >= map.height) return false;
-        int i = Cell.y * map.width + Cell.x;
-        return map.features[i] == FeatureType.Tree;
+        return MapGate.ReadAt(map, Cell.x, Cell.y) == FeatureType.Tree;   // 【HH.294 片4·4-A】读走查门
     }
 }

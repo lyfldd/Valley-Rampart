@@ -3,7 +3,9 @@ using UnityEngine;
 
 /// <summary>
 /// 2D 地图校验（2_1 §5.2 步骤5/步骤9 复跑）。连通性 flood-fill + 打通走廊。
-/// 直接改 map.features（把路径上的阻挡格改 Plain），保证所有出生点彼此可达。
+/// **【HH.294 片4·4-A】** 本类**不再是写方**：改读走 <see cref="MapGate"/> 读口，改走
+/// <see cref="MapGate.GenesisWrite"/>（打通走廊＝**造世界 0→1**，`03` §6.1「地形变化不算增」，
+/// 故走造世界口而非运行期增/删门）。判据 1 的「除门内生产码无直接写」由此成立。
 /// 岛屿可被水隔断（§3.5），但王国出生点必须连通。
 /// </summary>
 public static class MapValidator
@@ -62,7 +64,7 @@ public static class MapValidator
         if (x < 0 || y < 0 || x >= w || y >= h) return;
         int i = y * w + x;
         if (visited[i]) return;
-        if (!MapGenRules.IsWalkableFeature(m.features[i])) return;
+        if (!MapGenRules.IsWalkableFeature(MapGate.GenesisRead(m, x, y))) return;
         visited[i] = true; q.Enqueue(i);
     }
 
@@ -93,8 +95,10 @@ public static class MapValidator
         int node = t;
         while (node != s)
         {
-            if (!MapGenRules.IsWalkableFeature(map.features[node]) && map.features[node] != FeatureType.Ocean)
-                map.features[node] = FeatureType.Plain;
+            int nx = node % w, ny = node / w;
+            var cur = MapGate.GenesisRead(map, nx, ny);
+            if (!MapGenRules.IsWalkableFeature(cur) && cur != FeatureType.Ocean)
+                MapGate.GenesisWrite(map, node, FeatureType.Plain);
             node = parent[node];
         }
     }

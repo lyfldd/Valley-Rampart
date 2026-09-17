@@ -124,6 +124,13 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
         if (GridSystem.Instance != null)
         {
             GridSystem.Instance.PopulateFromMap(playerMap);
+            // 【HH.294 片4·搭车 R2】⭐ 预置建筑占格重建：
+            //   断链＝`GenerateMap` **步骤5**（`KingdomFoundry.FoundFirstGeneration`）创建 AI 王国预置建筑时，
+            //   `MarkOccupiedFootprint` 跑到**网格尚未 Initialize 之前**（`_w/_h = 0` ⇒ 界判定直接 return，
+            //   一个占格都没写）；等到此处 `PopulateFromMap` 才建数组。片3 观察项「24 座建筑图网格零登记」即此。
+            //   判据：生成一图后，`BuildingRegistry` 中每座建筑 footprint 内**任一格** `GetOccupant != null`。
+            int rb = GridSystem.Instance.RebuildOccupancyFromRegistry();
+            Debug.Log($"[WorldManager] 【HH.294 片4·R2】预置建筑占格重建：{rb} 座（网格就绪后按 BuildingRegistry 补登记）");
             // 【HH.294 补正 P1】守卫资源索引预建：装载期 1 次全图 features 扫（1 次/图），
             // 换掉「每次玩家右键派兵全图扫」（SelectionController:270 + DeployGuard:120 各一次）。
             // 【HH.294 片3 R1】⭐ 必须**在 `GridSystem.Instance != null` 判定块内**：原在块外调用 ⇒
@@ -229,43 +236,19 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
     // ========================================================================
     //  A+（HH.2）：资源节点数据覆盖
     //  树/矿不再创建 Building 实体（装饰持续节点，归 features 数据 + Tilemap 特征层渲染）。
-    //  玩家把工具建筑（采石场/农场）放在资源格上时，覆盖该格 feature → Plain 并刷新渲染。
+    //  【HH.294 片4·4-A／4-C】原 `TryConsumeResourceNode`（消耗路径）**已删** ——
+    //    它与 `ResourceRespawnSystem.SetFeature`（重生路径）是**两条各写一遍的删除路径**（任务书 #4）。
+    //    现**唯一入口 ＝ `MapGate.RemoveResourceNode`**（`03` §7.3「Remove 唯一、不区分死因」）。
+    //    本类不再有任何 `features[...] =` 赋值（判据 1）。
     // ========================================================================
 
     /// <summary>
-    /// 消耗一格的资源节点（树/矿 feature → Plain），供工具建筑放置覆盖使用。
-    /// 若该格是 Tree/Mine feature 则改 Plain + 刷新 GridSystem 地形/可走 + MapRenderService 渲染。
-    /// 返回是否覆盖成功（该格本就是资源节点）。
-    /// </summary>
-    public bool TryConsumeResourceNode(GridCoord coord)
-    {
-        var map = ActiveMap;
-        if (map == null || map.features == null) return false;
-        if (coord.x < 0 || coord.y < 0 || coord.x >= map.width || coord.y >= map.height) return false;
-        int i = coord.y * map.width + coord.x;
-        var f = map.features[i];
-        if (f != FeatureType.Tree && f != FeatureType.Mine) return false;   // 非可覆盖资源节点
-
-        map.features[i] = FeatureType.Plain;
-        // 网格派生刷新（GridSystem.PopulateFromMap 同源逻辑）
-        if (GridSystem.Instance != null)
-            GridSystem.Instance.RefreshCellFromFeature(coord, FeatureType.Plain);
-        if (MapRenderService.Instance != null)
-            MapRenderService.Instance.UpdateCell(new GridCoord(coord.x, coord.y));
-        // A+ 守卫锚点语义（HH.3 §六 / HH.6 裁决二）：资源点被建筑覆盖即失去守卫意义，
-        // 守卫该格的守卫区域随之失去覆盖 → 触发 GuardRegionLostEvent。
-        GuardDeploymentSystem.HandleResourceConsumed(coord);
-        return true;
-    }
-
-    /// <summary>该格是否满足资源点放置（Tree/Mine；A+ 下由 features 数据判定，非 Building 实体）。
+    /// 该格是否满足资源点放置（Tree/Mine；A+ 下由 features 数据判定，非 Building 实体）。
+    /// **【HH.294 片4·4-A】** 读口收口：改走 <see cref="MapGate.GetFeatureAt"/>（本类不再裸读 `features[]`）。
     /// **HH.272 件⑤**：`BuildingType.Farmland` 分支已摘除（农田＝玩家建筑·非资源锚点 ⇒ 恒真死分支，撞 `L-26`）。</summary>
     public bool IsResourceNodeAvailable(GridCoord coord, BuildingType requiredNode)
     {
-        var map = ActiveMap;
-        if (map == null || map.features == null) return false;
-        if (coord.x < 0 || coord.y < 0 || coord.x >= map.width || coord.y >= map.height) return false;
-        var f = map.features[coord.y * map.width + coord.x];
+        var f = MapGate.GetFeatureAt(coord);
         switch (requiredNode)
         {
             case BuildingType.Tree:      return f == FeatureType.Tree;
@@ -273,6 +256,10 @@ public class WorldManager : Singleton<WorldManager>, ISaveable
             default: return false;
         }
     }
+
+    /// <summary>该格的地表物（**过渡读口**；新代码请直接用 `MapGate.GetFeatureAt`）。
+    /// 【HH.294 片4·4-A】本口只是转调，防外部散落读点裸读 `map.features[]`。</summary>
+    public FeatureType GetFeatureAt(GridCoord coord) => MapGate.GetFeatureAt(coord);
 
     // ========================================================================
     //  跨岛远征 + 王国征服（保留壳；单图征服语义归 2_8）

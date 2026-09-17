@@ -165,8 +165,10 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             }
         }
 
-        // 拆除按钮（条件渲染：玩家建造 + 可拆 + 非资源节点（树/矿/农田等天然资源不可拆））
-        bool canDemolish = _target.isPlayerBuilt && def.isDestructible && !def.isResourceNode;
+        // 拆除按钮（条件渲染）
+        // 【HH.294 片4·4-H】⭐ **「可否拆」不再在 UI 现算**（原 `_target.isPlayerBuilt && def.isDestructible && !def.isResourceNode`
+        //   三字段组合写在 UI 里）⇒ 挪到**数据栏**：判据归数据（`Building.CanDemolish`），UI 只读结果。
+        bool canDemolish = _target.CanDemolish;
         if (_demolishButton != null)
             _demolishButton.style.display = canDemolish ? DisplayStyle.Flex : DisplayStyle.None;
 
@@ -377,8 +379,8 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
 
     private void OnDemolishClicked()
     {
-        if (_target == null || _target.def == null) return;
-        if (!_target.isPlayerBuilt || !_target.def.isDestructible) return;
+        if (_target == null) return;
+        if (!_target.CanDemolish) return;   // 【HH.294 片4·4-H】判据归数据栏（同源，禁 UI 复算）
 
         // Demolish 内部按 HP 比例返还 + Die（3.3.4 批次3）
         _target.Demolish();

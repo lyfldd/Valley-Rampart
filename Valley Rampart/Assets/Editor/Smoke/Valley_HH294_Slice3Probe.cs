@@ -243,7 +243,9 @@ public static class Valley_HH294_Slice3Probe
         int SW = grid.Width, SH = grid.Height;
         var spawns = map.kingdomSpawns;
         var src = spawns != null && spawns.Count > 0 ? spawns[0] : new Vector2Int(map.width / 2, map.height / 2);
-        int sSubX = src.x * div, sSubY = src.y * div;
+        // 【HH.294 片4·搭车 R1】原此处就地展开 `src.x * div` —— 改走 `GridSystem.CellToSub`（片3-A 规则表：⛔ 禁就地展开）
+        var srcSub = grid.CellToSub(new GridCoord(src.x, src.y), 0, 0);
+        int sSubX = srcSub.x, sSubY = srcSub.y;
         if (sSubX < 0 || sSubY < 0 || sSubX >= SW || sSubY >= SH) { sSubX = SW / 2; sSubY = SH / 2; }
 
         var visited = new bool[subCells];
@@ -272,7 +274,9 @@ public static class Valley_HH294_Slice3Probe
         {
             for (int i = 1; i < spawns.Count; i++)
             {
-                int sx = spawns[i].x * div, sy = spawns[i].y * div;
+                // 【HH.294 片4·搭车 R1】就地展开 ⇒ 改走 `GridSystem.CellToSub`
+                var sSub = grid.CellToSub(new GridCoord(spawns[i].x, spawns[i].y), 0, 0);
+                int sx = sSub.x, sy = sSub.y;
                 bool ok = sx >= 0 && sy >= 0 && sx < SW && sy < SH && visited[sy * SW + sx];
                 allReach &= ok;
                 reachStr += "[" + i + "]=" + ok + " ";
@@ -283,8 +287,9 @@ public static class Valley_HH294_Slice3Probe
 
         if (spawns != null && spawns.Count > 1)
         {
-            var from = new GridCoord(spawns[0].x * div, spawns[0].y * div);
-            var to = new GridCoord(spawns[spawns.Count - 1].x * div, spawns[spawns.Count - 1].y * div);
+            // 【HH.294 片4·搭车 R1】就地展开 ⇒ 改走 `GridSystem.CellToSub`
+            var from = grid.CellToSub(new GridCoord(spawns[0].x, spawns[0].y), 0, 0);
+            var to = grid.CellToSub(new GridCoord(spawns[spawns.Count - 1].x, spawns[spawns.Count - 1].y), 0, 0);
             var swA = new Stopwatch();
             swA.Start();
             PathResult pr = AStarSolver.Solve(grid, from, to, 400000);

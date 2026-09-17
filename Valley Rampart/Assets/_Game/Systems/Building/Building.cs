@@ -26,8 +26,35 @@ public enum BuildingState
 /// 地图预置建筑（树/矿/裂隙/主城）由 BuildingFactory 实例化，isPlayerBuilt=false；
 /// 玩家建造由 BuildController 实例化，isPlayerBuilt=true。
 /// </summary>
-public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, ITaskSource, IGridOccupant
+public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, ITaskSource, IGridOccupant, MapGate.IAnchorConsumer
 {
+    // ===== 【HH.294 片4·4-E】MapGate.IAnchorConsumer（锚点消费记录，`03` §五／§7.8 对偶）=====
+
+    /// <summary>我消费掉的锚点位置（null ＝ 未消费）。</summary>
+    public GridCoord? ConsumedAnchorCoord
+        => HasConsumedAnchor ? new GridCoord(anchorCoordX, anchorCoordY) : (GridCoord?)null;
+
+    /// <summary>我消费掉的锚点地表类型。</summary>
+    public FeatureType ConsumedAnchorFeature
+        => anchorFeature >= 0 ? (FeatureType)anchorFeature : FeatureType.Plain;
+
+    /// <summary>写入／清除锚点引用（返还时清 null ⇒ 各字段回 -1）。</summary>
+    public void SetConsumedAnchor(GridCoord? coord, FeatureType feature)
+    {
+        if (coord.HasValue)
+        {
+            anchorCoordX = coord.Value.x;
+            anchorCoordY = coord.Value.y;
+            anchorFeature = (int)feature;
+        }
+        else
+        {
+            anchorCoordX = -1;
+            anchorCoordY = -1;
+            anchorFeature = -1;
+        }
+    }
+
     // ===== ISaveable（3.5 实施计划 P0 步骤3）=====
     /// <summary>全局唯一存档 ID（Building_{guid}）。Awake 分配，读档时由 BuildingFactory.SpawnFromSave 覆盖。</summary>
     public string SaveId { get; private set; }
@@ -57,8 +84,21 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public Vector2Int footprint = Vector2Int.one; // 占地 w×h（小区块，2_2）
     public bool isObstacle = false;
 
-    /// <summary>IGridOccupant 实现：是否阻挡通行（对应 isObstacle，2_14 A⁻）。</summary>
+    /// <summary>建筑是否阻挡通行（对应 isObstacle，2_14 A⁻）。</summary>
     public bool IsGridObstacle => isObstacle;
+
+    // ===== 【HH.294 片4·4-E】锚点消费记录（`03` §五：「锚点＝某个东西身上的一个字段」；
+    //   建筑需记住「我消费了哪个锚点（类型 ＋ 位置）」——这属「属性自己装」）=====
+    /// <summary>我消费掉的锚点位置（null ＝ 未消费任何锚点）。入档（BuildingSaveData）。</summary>
+    [HideInInspector] public int anchorCoordX = -1;
+    [HideInInspector] public int anchorCoordY = -1;
+    /// <summary>我消费掉的锚点地表类型（(int)FeatureType；-1 ＝ 无）。入档。</summary>
+    [HideInInspector] public int anchorFeature = -1;
+
+    /// <summary>是否有未返还的锚点（供 `MapGate.ReturnAnchor` 与探针判读）。
+    /// 判据用 `anchorFeature > 0`（可消费锚点恒为 Tree=1／Mine=4 ⇒ **0=Plain 与 -1 皆视为无**，
+    /// 这样旧档缺字段（默认 0）不会误判为「有锚点」）。</summary>
+    public bool HasConsumedAnchor => anchorCoordX >= 0 && anchorCoordY >= 0 && anchorFeature > 0;
 
     /// <summary>桥链 id（2_2 §3.5：1×N 桥段共享同一 bridgeId；运行时派生，不入档）。</summary>
     [HideInInspector] public string bridgeId;
@@ -599,10 +639,17 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     // ===== 拆除（按 HP 比例返还资源）=====
 
+    /// <summary>
+    /// ⭐【HH.294 片4·4-H】**「可否拆」＝数据栏判据**（`03` §7.5「本层不判'能不能删'⇒ 业务规则归**高级层／数据栏**」）。
+    /// 改前该三字段组合**写在 UI 里现算**（`BuildingPanel.cs:169`）——判定归数据，UI 只读结果。
+    /// 与 `Demolish()` 的守卫**同源**（同一表达式，禁两处各写一遍）。
+    /// </summary>
+    public bool CanDemolish => isPlayerBuilt && def != null && def.isDestructible && !def.isResourceNode;
+
     /// <summary>拆除建筑（由 BuildingPanel 调）。按累计投入×HP 比例返还（2_12 步骤7 / D162）。</summary>
     public void Demolish()
     {
-        if (!isPlayerBuilt || def == null || !def.isDestructible || def.isResourceNode) return;
+        if (!CanDemolish) return;
         float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
         // D162：返还 = 累计投入 × (当前HP/满HP)。累计投入按 def.cost 四资源占比摊回 pack。
         int invested = totalInvested > 0 ? totalInvested
@@ -648,7 +695,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             byproductOreAmount = mineByprodSaved.ore,
             grade = (int)grade,   // QQQ.3 B8-5 / LC-B2：grade 入档
             totalInvested = totalInvested,  // 2_12 步骤7 / D155：累计投入入档
-            kingdomId = kingdomId   // 2_16 步骤8：王国归属入档（读档恢复 AI/玩家归属）
+            kingdomId = kingdomId,  // 2_16 步骤8：王国归属入档（读档恢复 AI/玩家归属）
+            // 【HH.294 片4·4-E】锚点消费记录入档（`03` §7.8：拆除时须能还回原锚点）
+            anchorCoordX = anchorCoordX,
+            anchorCoordY = anchorCoordY,
+            anchorFeature = anchorFeature
         };
         return new SavePayload
         {
@@ -691,6 +742,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         totalInvested = data.totalInvested > 0
             ? data.totalInvested
             : (isPlayerBuilt && def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food : 0);
+
+        // 【HH.294 片4·4-E】锚点消费记录恢复（旧档缺字段默认 0 ⇒ 与坐标 0 混淆，故按「有锚点类型」判有效）
+        anchorCoordX = data.anchorFeature >= 0 ? data.anchorCoordX : -1;
+        anchorCoordY = data.anchorFeature >= 0 ? data.anchorCoordY : -1;
+        anchorFeature = data.anchorFeature >= 0 ? data.anchorFeature : -1;
 
         var storage = GetComponent<StorageComponent>();
         if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
@@ -783,6 +839,34 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     }
 
     /// <summary>
+    /// ⭐【HH.294 片4·4-D】**本层注销 · 唯一实现**（`03` §7.2「本层删的**不是"那个东西"，是本层赋予它的那几样**」）。
+    /// 改前 `Die()` 与 `OnGatherCompleted()` **各写一遍同样的 4~5 项注销**（抄两遍）——此处合一。
+    /// 顺序照 `03` §7.3 删门七步：**锚点返还（第 2 步）→ 释放占格（第 4 步）→ 注销（第 5 步）**。
+    /// `footprintUnregister` ＝ 是否连注册表一起注销（采集路径自行处理，故由此开关区分）。
+    /// </summary>
+    private void ReleaseLayerOwnedState(bool unregisterFromRegistry)
+    {
+        // 第 2 步 · 锚点返还（§7.8 通用，非仅矿山）：当初消费掉的锚点写回原位 ⇒ 可再被引用
+        if (HasConsumedAnchor)
+            MapGate.ReturnAnchor(this);
+
+        // 第 4 步 · 释放占格（2_2：footprint w×h 全块）
+        if (GridSystem.Instance != null)
+        {
+            GridSystem.Instance.FreeFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y));
+            if (def != null && def.isBridge)
+                GridSystem.Instance.SetBridge(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), false);
+        }
+
+        // 第 5 步 · 注销（本层索引）：注册表／任务调度器／存档
+        if (unregisterFromRegistry) BuildingRegistry.Instance?.Unregister(this);
+        // QQQ.2 T17：从任务调度器注销（清指向本建筑的在派任务）
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
+        // QQQ.3 B8-9 / LC-B8：显式注销 Saveable（否则 _saveables 留残留条目，本应主动清理而非等兜底）
+        if (SaveManager.Instance != null) SaveManager.Instance.UnregisterSaveable(this);
+    }
+
+    /// <summary>
     /// 死亡处理。3.4 改造：加 DeathCause 参数区分拆除/被击杀；
     /// 改发 UnitDiedEvent（BuildingDestroyedEvent 退役）。
     /// 3.5 P1-15：扫描 currentWorkers → 工人逃出存活（位置 +1 格偏移，变无任务状态，不死亡）。
@@ -799,18 +883,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TrainingSystem.Instance != null)
             TrainingSystem.Instance.OnBuildingDestroyed(this);
 
-        // 2_2：footprint w×h 全释放；桥清 Bridge 位（水面恢复阻挡）
-        if (GridSystem.Instance != null)
-        {
-            GridSystem.Instance.FreeFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y));
-            if (def != null && def.isBridge)
-                GridSystem.Instance.SetBridge(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), false);
-        }
-        BuildingRegistry.Instance?.Unregister(this);
-        // QQQ.2 T17：从任务调度器注销（清指向本建筑的在派任务）
-        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
-        // QQQ.3 B8-9 / LC-B8：Die 显式注销 Saveable（否则 _saveables 留残留条目，本应主动清理而非等兜底）
-        if (SaveManager.Instance != null) SaveManager.Instance.UnregisterSaveable(this);
+        // 【HH.294 片4·4-D】本层注销（锚点返还 ＋ 释放占格 ＋ 注销）＝ 唯一实现
+        ReleaseLayerOwnedState(unregisterFromRegistry: true);
 
         // 3.4：改发 UnitDiedEvent（建筑也走此事件，BuildingDestroyedEvent 退役）
         EventBus.Publish(new UnitDiedEvent(
@@ -828,26 +902,20 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// QQQ.2 T19 / DR-11：一次性资源点采集完成生命周期（由 TaskScheduler.Gather 完成时调）。
     /// 三步：①释放网格占用（GridSystem.Free）②从 BuildingRegistry 移除 ③对象池 Despawn（不直接 Destroy）。
     /// 采集任务由调度器派发，工人 Working 计时到后触发；资源入国库已在调度器 ExecuteCompletion 完成。
+    /// 【HH.294 片4·4-D】注销 4 项**已与 `Die` 合一**（`ReleaseLayerOwnedState`）——原本此处抄第二遍。
     /// </summary>
     public void OnGatherCompleted()
     {
         if (def == null || !def.isConsumable) return;
         isBeingGathered = false;
 
-        // ① 释放网格占用（2_2：footprint w×h）
-        if (GridSystem.Instance != null)
-            GridSystem.Instance.FreeFootprint(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y));
         // ①b QQQ.2 T8 / DR-21：采集后空地加入闲逛锚点池（王国多锚点之一，持久）
         WanderAnchorPool.Instance.RegisterFreeSpot(transform.position);
-        // ② 从注册表移除
-        BuildingRegistry.Instance?.Unregister(this);
-        // 从任务调度器注销（清可能残留的在派任务）
-        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
-        // 存档注销（防 SaveManager 残留条目）
-        if (SaveManager.Instance != null) SaveManager.Instance.UnregisterSaveable(this);
+        // ① 释放占格 ＋ ② 注销（注册表/调度器/存档）＋ 锚点返还 ＝ 唯一实现
+        ReleaseLayerOwnedState(unregisterFromRegistry: true);
         // ③ 守卫锚点语义（HH.3 §六 / HH.6 裁决二 / HH.7 验收）：一次性资源点（OreVein 等）采集销毁
         //    = 该格高价值资源点失去 → 守卫该格的守卫区域随之失去覆盖 → 触发 GuardRegionLostEvent。
-        //    （Tree/Mine 非一次性，由 WorldManager.TryConsumeResourceNode 建筑覆盖路径触发。）
+        //    （Tree/Mine 非一次性，由 `MapGate.RemoveResourceNode` 建筑覆盖路径触发。）
         if (GridSystem.Instance != null)
             GuardDeploymentSystem.HandleResourceConsumed(coord);
         // HH.10 裁决三：一次性可采实体（OreVein/WoodPile/StonePile）采集销毁 → 记实体路径重生，到点重建实体

@@ -178,7 +178,7 @@ public class MapRenderService : Singleton<MapRenderService>
         {
             for (int y = 0; y < map.height; y++)
                 for (int x = 0; x < map.width; x++)
-                    SetCell(x, y, map.features[y * map.width + x]);
+                    SetCell(x, y, MapGate.ReadAt(map, x, y));   // 【HH.294 片4·4-A】读走查门（原裸读 map.features[...]）
             Debug.Log($"[MapRenderService] RenderMap 全量铺格完成: {map.width}x{map.height}");
         }
     }
@@ -190,7 +190,7 @@ public class MapRenderService : Singleton<MapRenderService>
         if (map == null || map.features == null) return;
         if (cell.x < 0 || cell.y < 0 || cell.x >= map.width || cell.y >= map.height) return;
         _blockAnchorMemo.Clear();    // ③：features 可能已变（采集/刷新）⇒ 块锚分解重算
-        SetCell(cell.x, cell.y, map.features[cell.y * map.width + cell.x]);
+        SetCell(cell.x, cell.y, MapGate.ReadAt(map, cell.x, cell.y));   // 【HH.294 片4·4-A】读走查门
         // ③：多格占位特征的整块随之刷新（锚格变动会影响同块 4 格的渲染）
         RefreshMultiCellNeighborhood(cell.x, cell.y, map);
     }
@@ -207,7 +207,7 @@ public class MapRenderService : Singleton<MapRenderService>
                     int nx = x + ox, ny = y + oy;
                     if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) continue;
                     if (nx == x && ny == y) continue;
-                    SetCell(nx, ny, map.features[ny * map.width + nx]);
+                    SetCell(nx, ny, MapGate.ReadAt(map, nx, ny));   // 【HH.294 片4·4-A】读走查门
                 }
         }
     }
@@ -285,7 +285,7 @@ public class MapRenderService : Singleton<MapRenderService>
         bool anchor = true;
         for (int dy = 0; dy < side && anchor; dy++)
             for (int dx = 0; dx < side; dx++)
-                if (map.features[(y + dy) * map.width + (x + dx)] != ft) { anchor = false; break; }
+                if (MapGate.ReadAt(map, x + dx, y + dy) != ft) { anchor = false; break; }   // 【HH.294 片4·4-A】读走查门
 
         if (anchor)
         {
@@ -360,7 +360,7 @@ public class MapRenderService : Singleton<MapRenderService>
         if (x0 >= _map.width || y0 >= _map.height) return;
         for (int y = y0; y < y1; y++)
             for (int x = x0; x < x1; x++)
-                SetCell(x, y, _map.features[y * _map.width + x]);
+                SetCell(x, y, MapGate.ReadAt(_map, x, y));   // 【HH.294 片4·4-A】读走查门
         _loadedChunks.Add(key);
         OnChunkRendered?.Invoke(cx, cy);   // 铺设完成钩子（D445②）
     }
