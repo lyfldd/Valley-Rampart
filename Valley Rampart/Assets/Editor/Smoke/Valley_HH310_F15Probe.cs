@@ -10,6 +10,7 @@ using UnityEngine;
 //  口径真源：最高优先级文档/03_地图即数据库.md §6.5 新增条（`D782`）
 //           ＋ 台账 §五十三（取向＝「允许重叠 ＋ 显式化」）
 //           ＋ `HH.310` 施工清单 §三 判据 1~8
+//           ＋ `HH.312` 收尾批（删 A/B 对照开关 ⇒ §C 段删·§D 单段·§F 单列）
 //
 //  入口纪律（test-harness-first 铁律1）：**走正门** TestHarnessApi.EnterTestRun（禁裸跑）。
 //  收尾纪律（L-32）：真暂停(Time.timeScale=0) → Save → ExitTestRun → 退 Play。
@@ -17,10 +18,10 @@ using UnityEngine;
 //  判据面：
 //    §A 判据1 用例 A（重叠：A 先 B 后）—— 构① 字面（同 coord 同 footprint）＋ 构② 补全（错位 1 格 ⇒ 三格类）
 //    §B 判据2 用例 B（无重叠·单座）⇒ 全格 GetAt == null
-//    §C 判据3 ⭐ 鉴别力自证（同 build 两段）：ON ⇒ 1(b) == null ❌／OFF ⇒ == B ✅
-//    §D 判据4 无重叠零扰动（同局 Registry 逐座逐格 GetAt·OFF/ON 两段 diff = 0）
+//    §C 判据3 ⭐ 鉴别力自证 —— **已随 A/B 对照开关删除**（`HH.312` 收尾批；改前读数落盘 `HH.311` 报告 §三）
+//    §D 判据4 无重叠零扰动（同局 Registry 逐座逐格 GetAt·单段）
 //    §E 判据5 零地图变更（同 seed features+climateZones(+spawns) hash）
-//    §F 判据7 ⚠️ 已知限制同报：GridSystem.GetOccupant(共享格) 改前/改后两列（⛔ 本批不动）
+//    §F 判据7 ⚠️ 已知限制同报：GridSystem.GetOccupant(共享格) 单列（⛔ 本批不动）
 //  落盘：Logs/hh310_f15/hh310_probe.txt（稳定名）＋ 时间戳副本 ＋ hash 文件
 // ============================================================================
 public static class HH310F15Probe
@@ -49,7 +50,7 @@ public static class HH310F15Probe
         Sb.Length = 0;
         Sb.AppendLine("# HH.310 · F-15 修法小批 验证探针（正门 EnterTestRun·seed=" + PROBE_SEED + " 槽=" + PROBE_SLOT + "）");
         Sb.AppendLine("# 跑次：" + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                      + "｜BuildingRegistry.LegacyUnconditionalRemove=" + BuildingRegistry.LegacyUnconditionalRemove);
+                      + "｜归属判定＝唯一路径（A/B 对照开关已删·`HH.312` 收尾批）");
         new GameObject("HH310F15ProbeHost").AddComponent<Host>().Go(Run());
     }
 
@@ -112,7 +113,7 @@ public static class HH310F15Probe
         Log("构造区·3×3 origin=" + spot + "（3×3 全格：GetAt==null ∧ GetOccupant==null ∧ 无 BuildingBlocked 位）");
 
         Case_A_Literal(reg, def, spot);        // §A 构①（字面）
-        Case_A_Offset(reg, def, spot);         // §A 构②（补全）＋ §C 鉴别力自证
+        Case_A_Offset(reg, def, spot);         // §A 构②（补全）（§C 已随开关删除）
         Case_B_Single(reg, def, spot);         // §B 判据2
         Case_F_GridKnownLimit(reg, def, spot); // §F 判据7（已知限制·同报）
 
@@ -128,7 +129,6 @@ public static class HH310F15Probe
     {
         Log("");
         Log("## §A 判据1 用例 A·构①（字面：同一 coord ＋ 同一 footprint·2×2 ⇒ **全格皆共享格**）");
-        BuildingRegistry.LegacyUnconditionalRemove = false;   // 新语义
         var a = Make(def, o, new Vector2Int(2, 2));
         var b = Make(def, o, new Vector2Int(2, 2));
         if (a == null || b == null) { Log("❌ 构造失败"); return; }
@@ -152,7 +152,8 @@ public static class HH310F15Probe
     }
 
     // ========================================================================
-    //  §A 构②：补全（错位 1 格 ⇒ A 独占 / 共享 / B 独占 三格类）＋ §C 鉴别力自证
+    //  §A 构②：补全（错位 1 格 ⇒ A 独占 / 共享 / B 独占 三格类）
+    //  （原 §C 鉴别力自证段已随 A/B 开关删除·`HH.312` 收尾批）
     // ========================================================================
     private static void Case_A_Offset(BuildingRegistry reg, BuildingDef def, GridCoord o)
     {
@@ -164,12 +165,11 @@ public static class HH310F15Probe
         var aOnly = new[] { new GridCoord(o.x, o.y), new GridCoord(o.x, o.y + 1) };
         var bOnly = new[] { new GridCoord(o.x + 2, o.y), new GridCoord(o.x + 2, o.y + 1) };
 
-        // ---- 段 1：OFF（新语义）----
-        BuildingRegistry.LegacyUnconditionalRemove = false;
+        // ---- 单段：现行语义（归属判定）----
         var aOff = Make(def, o, new Vector2Int(2, 2));
         var bOff = Make(def, new GridCoord(o.x + 1, o.y), new Vector2Int(2, 2));
         if (aOff == null || bOff == null) { Log("❌ 构造失败"); return; }
-        Log("§A-② 段 OFF（新语义）：A=B#" + aOff.GetInstanceID() + "（先注册）｜B=B#" + bOff.GetInstanceID() + "（后注册）");
+        Log("§A-② A=B#" + aOff.GetInstanceID() + "（先注册）｜B=B#" + bOff.GetInstanceID() + "（后注册）");
         Log("§A-② 建后：A 独占=[" + CellsStr(reg, aOnly) + "]｜共享=[" + CellsStr(reg, shared)
             + "]｜B 独占=[" + CellsStr(reg, bOnly) + "] ⇒ "
             + (AllEqual(reg, aOnly, aOff) && AllEqual(reg, shared, bOff) && AllEqual(reg, bOnly, bOff) ? "✅ 与「后写者胜」自洽" : "❌"));
@@ -186,30 +186,7 @@ public static class HH310F15Probe
         Log("§A-②(d) 继 Unregister(B) 后 GetAt(共享格)=[" + CellsStr(reg, shared) + "] ⇒ 必须 == null ⇒ " + (offA4 ? "✅（B 是最后写入者）" : "❌"));
         Kill(aOff); Kill(bOff);
 
-        // ---- 段 2：ON（改前语义）＝ 鉴别力自证 ----
-        Log("");
-        Log("## §C 判据3 ⭐ 鉴别力自证（同一 build 内两段·`LegacyUnconditionalRemove` 开关）");
-        BuildingRegistry.LegacyUnconditionalRemove = true;
-        var aOn = Make(def, o, new Vector2Int(2, 2));
-        var bOn = Make(def, new GridCoord(o.x + 1, o.y), new Vector2Int(2, 2));
-        if (aOn == null || bOn == null) { Log("❌ 构造失败"); return; }
-        Log("§C 段 ON（改前语义·无条件 Remove）：A=B#" + aOn.GetInstanceID() + "（先注册）｜B=B#" + bOn.GetInstanceID() + "（后注册）");
-        int before = CountEqual(reg, shared, bOn);
-        reg.Unregister(aOn);
-        int after = CountEqual(reg, shared, bOn);
-        bool onNull = AllNull(reg, shared);
-        Log("§C 段 ON：Unregister(A) 前 共享格命中 B 数=" + before + "/" + shared.Length + " ⇒ 后=" + after + "/"
-            + shared.Length + "（GetAt=[" + CellsStr(reg, shared) + "]）⇒ 判据 1(b) "
-            + (onNull ? "**变成 == null ❌**（改前缺陷复现）" : "⚠️ 仍命中 B（**无鉴别力**）"));
-        Log("§C 段 ON 旁证：A 独占格（" + (AllNull(reg, aOnly) ? "== null" : "未清")
-            + " ⇒ 该列两段同值＝无鉴别力）｜B 独占格=[" + CellsStr(reg, bOnly) + "]（两段同值）");
-        reg.Unregister(bOn);
-        Kill(aOn); Kill(bOn);
-
-        Log("§C 鉴别力结论：判据 1(b) —— ON=" + (onNull ? "null ❌" : "命中 B") + " vs OFF=" + (offA2 ? "== B ✅" : "非 B ❌")
-            + " ⇒ " + ((onNull && offA2) ? "**两段读数不同 ⇒ 判据有鉴别力 ✅**"
-                                        : "**ON/OFF 读数相同（或均非目标）⇒ 判据无鉴别力·作废重写**"));
-        BuildingRegistry.LegacyUnconditionalRemove = false;   // 复原默认
+        // §C 判据3 鉴别力自证 已随 A/B 开关删除（HH.312 收尾批）——改前读数落盘 HH.311 报告 §三／Logs/hh310_f15/
     }
 
     // ========================================================================
@@ -219,7 +196,6 @@ public static class HH310F15Probe
     {
         Log("");
         Log("## §B 判据2 用例 B（无重叠·单座）⇒ footprint 全格 GetAt 必须 == null（零行为变更）");
-        BuildingRegistry.LegacyUnconditionalRemove = false;
         var c = new GridCoord(o.x, o.y + 2);   // 自由块第 3 行（与前述构造不重叠）
         var b = Make(def, c, new Vector2Int(2, 2));
         if (b == null) { Log("❌ 构造失败"); return; }
@@ -231,46 +207,36 @@ public static class HH310F15Probe
     }
 
     // ========================================================================
-    //  §D 判据4：无重叠零扰动（Registry 逐座逐格 GetAt·OFF/ON 两段等值）
+    //  §D 判据4：无重叠零扰动（Registry 逐座逐格 GetAt·单段）
     // ========================================================================
-    /// <summary>判据 4：无重叠零扰动。⚠️ 本判据**本身无鉴别力**（见下），作业面＝「新语义是否对**他座**造成附带清除」。
+    /// <summary>判据 4：无重叠零扰动。⚠️ 本判据**本身无鉴别力**（见下），作业面＝「现行语义是否对**他座**造成附带清除」。
     /// 做法：先在在册 21 座上取签名 S0；再在**自由块**构造非重叠测试座 ⇒ `Unregister` ⇒ 复取签名 S1；
-    /// 段 OFF / 段 ON 各一遍 ⇒ `diff(S0,S1)` 必须 0 且两段一致。
+    /// 要求 `diff(S0,S1)` == 0。
     /// ⚠️ **鉴别力声明（`L-30`）**：本判据的 `Unregister` 只触及测试座自身 footprint 的键，
-    /// 而归属守卫只在**键冲突**（重叠）时才分叉 ⇒ 本判据**结构上抓不到 1(b) 那个缺陷**；
-    /// 缺陷鉴别力由 §C（重叠构造·两段读数 2/2 → 0/2）承担。此处**不冒充**为缺陷判据。</summary>
+    /// 而归属守卫只在**键冲突**（重叠）时才分叉 ⇒ 本判据**结构上抓不到 1(b) 那个缺陷**。
+    /// ⚠️ **§C 已随开关删除（`HH.312` 收尾批）**：改前语义不再可构造 ⇒ 原本由 §C 承担的缺陷鉴别力**本批已无对照面**
+    /// ⇒ ⛔ **不得因 §C 删除而把本判据升格声称缺陷判据**（改前读数落盘 `HH.311` 报告 §三）。</summary>
     private static void Case_D_NoDisturb(BuildingRegistry reg, BuildingDef def, GridCoord freeSpot)
     {
         Log("");
-        Log("## §D 判据4 无重叠零扰动（在册 21 座签名 × 两段各自跑一遍真实 Unregister 周期）");
-        BuildingRegistry.LegacyUnconditionalRemove = false;
+        Log("## §D 判据4 无重叠零扰动（在册 21 座签名 × 单段跑一遍真实 Unregister 周期）");
         var s0 = Snapshot(reg, out int c0, out int n0, out int o0, out int sf0);
         Log("§D S0（基线·在册 " + reg.All.Count + " 座）：条目=" + s0.Count + "｜格数=" + c0
             + "｜指向本座=" + sf0 + "｜指向他座=" + o0 + "｜空格=" + n0);
 
-        bool offCleared = RunOneCycle(reg, def, freeSpot, false, s0, out var s1off, out int dOff);
-        bool onCleared = RunOneCycle(reg, def, freeSpot, true, s0, out var s1on, out int dOn);
+        bool cleared = RunOneCycle(reg, def, freeSpot, s0, out var s1, out int d);
 
-        Log("§D 段 OFF（新语义）：测试座注销后其 footprint 全格=" + (offCleared ? "== null ✅" : "❌ 未清净")
-            + "｜在册 21 座签名 diff(S0,S1)=" + dOff + " ⇒ " + (dOff == 0 ? "0 ✅ 无附带清除" : "❌ 有附带清除"));
-        Log("§D 段 ON（改前语义）：测试座注销后其 footprint 全格=" + (onCleared ? "== null ✅" : "❌ 未清净")
-            + "｜在册 21 座签名 diff(S0,S1)=" + dOn + " ⇒ " + (dOn == 0 ? "0 ✅ 无附带清除" : "❌ 有附带清除"));
-
-        int dd = 0, first = -1;
-        int n = Mathf.Min(s1off.Count, s1on.Count);
-        for (int i = 0; i < n; i++) if (s1off[i] != s1on[i]) { dd++; if (first < 0) first = i; }
-        Log("§D 两段互比 diff(S1_OFF, S1_ON)=" + dd + (first >= 0 ? "（首差异 idx=" + first + "：" + s1off[first] + " vs " + s1on[first] + "）" : "")
-            + " ⇒ " + ((dd == 0 && s1off.Count == s1on.Count) ? "**diff = 0 ✅「无重叠零扰动」成立**" : "❌ 非 0"));
+        Log("§D 单段（现行语义）：测试座注销后其 footprint 全格 " + (cleared ? "== null ✅" : "❌ 未清净")
+            + "｜在册 21 座签名 diff(S0,S1)=" + d + " ⇒ " + (d == 0 ? "0 ✅ 无附带清除" : "❌ 有附带清除"));
         Log("§D ⚠️ **鉴别力声明（`L-30`）**：本判据的 Unregister 只触及**测试座自身** footprint 的键 ⇒ "
             + "归属守卫（只在**键冲突**处分叉）**结构上抓不到 1(b) 缺陷** ⇒ 本判据不等于缺陷判据；"
-            + "缺陷鉴别力由 §C 承担（重叠构造·ON 2/2 → 0/2 **vs** OFF 2/2 → 2/2）。");
+            + "⚠️ §C 已随开关删除（改前语义不再可构造）⇒ 本批**无对照面**，⛔ 不得据此升格声称缺陷判据。");
     }
 
     /// <summary>段内跑一遍：构造非重叠测试座 → Unregister → 复取在册签名 → 清场。返回「测试座全格已清」。</summary>
-    private static bool RunOneCycle(BuildingRegistry reg, BuildingDef def, GridCoord o, bool legacy,
+    private static bool RunOneCycle(BuildingRegistry reg, BuildingDef def, GridCoord o,
                                    List<string> s0, out List<string> s1, out int diff)
     {
-        BuildingRegistry.LegacyUnconditionalRemove = legacy;
         var cells = Footprint(o, 2, 2);
         var t = Make(def, o, new Vector2Int(2, 2));
         if (t == null) { s1 = s0; diff = -1; return false; }
@@ -282,7 +248,6 @@ public static class HH310F15Probe
         for (int i = 0; i < n; i++) if (s0[i] != s1[i]) diff++;
         if (s0.Count != s1.Count) diff = -1;
         Kill(t);
-        BuildingRegistry.LegacyUnconditionalRemove = false;
         return cleared;
     }
 
@@ -322,32 +287,19 @@ public static class HH310F15Probe
         var shared = new GridCoord(o.x + 1, o.y);
         var aOnly = new GridCoord(o.x, o.y);
 
-        // A 列：改前语义（ON）
-        BuildingRegistry.LegacyUnconditionalRemove = true;
-        var a1 = Make(def, o, new Vector2Int(2, 2));
-        var b1 = Make(def, new GridCoord(o.x + 1, o.y), new Vector2Int(2, 2));
-        if (a1 == null || b1 == null) { Log("§F ❌ 构造失败"); return; }
-        Log("§F 建后（两座重叠·后写者胜）：GetOccupant(共享格)=" + Name(grid.GetOccupant(shared))
-            + "｜GetOccupant(A 独占格)=" + Name(grid.GetOccupant(aOnly)));
-        reg.Unregister(a1);
-        var occOn = grid.GetOccupant(shared);
-        Log("§F **改前语义（ON）**：Unregister(A) 后 GetOccupant(共享格)=" + Name(occOn));
-        reg.Unregister(b1); Kill(a1); Kill(b1);
-
-        // B 列：改后语义（OFF）
-        BuildingRegistry.LegacyUnconditionalRemove = false;
+        // 单列：现行语义
         var a2 = Make(def, o, new Vector2Int(2, 2));
         var b2 = Make(def, new GridCoord(o.x + 1, o.y), new Vector2Int(2, 2));
         if (a2 == null || b2 == null) { Log("§F ❌ 构造失败"); return; }
+        Log("§F 建后（两座重叠·后写者胜）：GetOccupant(共享格)=" + Name(grid.GetOccupant(shared))
+            + "｜GetOccupant(A 独占格)=" + Name(grid.GetOccupant(aOnly)));
         reg.Unregister(a2);
-        var occOff = grid.GetOccupant(shared);
-        Log("§F **改后语义（OFF）**：Unregister(A) 后 GetOccupant(共享格)=" + Name(occOff));
+        var occ = grid.GetOccupant(shared);
+        Log("§F **单列（现行语义）**：Unregister(A) 后 GetOccupant(共享格)=" + Name(occ));
 
-        // 两列命中的是「同一语义位」（后注册者）而非同一实例 ⇒ 按语义比对，不按实例
-        bool sameSemantics = occOn != null && occOff != null;
-        Log("§F ⇒ 两列**同一语义**（皆为「后注册者」；因两段各自新建实例 ⇒ 实例 ID 必不同，按语义比对）"
-            + " ⇒ **Unregister 不触 GridSystem**（`BuildingRegistry` 与 `GridSystem._occupants` 双写、各自独立）"
-            + " ⇒ 本批**未改**该面（`03` §6.5 ④「已知限制」照旧登记·不计 FAIL）" + (sameSemantics ? "" : " ⚠️ 有列为空"));
+        // §F 改前语义（A 列）已随 A/B 开关删除（HH.312 收尾批）——改前读数落盘 HH.311 报告 §三／Logs/hh310_f15/
+        Log("§F ⇒ Unregister 不触 GridSystem（`BuildingRegistry` 与 `GridSystem._occupants` 双写、各自独立）"
+            + " ⇒ 本批**未改**该面（`03` §6.5 ④「已知限制」照旧登记·不计 FAIL）" + (occ != null ? "" : " ⚠️ 共享格为空"));
 
         // 已知限制的可读化实证：真删门的占格释放路径（FreeFootprint）无条件清空共享格
         grid.FreeFootprint(o, 2, 2);                      // 模拟「拆 A」的占格释放（无条件）
@@ -359,7 +311,6 @@ public static class HH310F15Probe
 
         reg.Unregister(a2); reg.Unregister(b2);
         Kill(a2); Kill(b2);
-        BuildingRegistry.LegacyUnconditionalRemove = false;
     }
 
     // ========================================================================
@@ -429,12 +380,6 @@ public static class HH310F15Probe
     {
         for (int i = 0; i < cells.Length; i++) if (reg.GetAt(cells[i]) != null) return false;
         return true;
-    }
-    private static int CountEqual(BuildingRegistry reg, GridCoord[] cells, Building b)
-    {
-        int n = 0;
-        for (int i = 0; i < cells.Length; i++) if (ReferenceEquals(reg.GetAt(cells[i]), b)) n++;
-        return n;
     }
 
     private static GridCoord FindFreeBlock(int w, int h)
@@ -528,7 +473,6 @@ public static class HH310F15Probe
     // ========================================================================
     private static void Finish()
     {
-        BuildingRegistry.LegacyUnconditionalRemove = false;   // 复原默认（防跨跑次残留）
         Time.timeScale = 0f;
         bool saved = SaveManager.Instance != null && SaveManager.Instance.Save(PROBE_SLOT);
         TestHarnessApi.ExitTestRun();
