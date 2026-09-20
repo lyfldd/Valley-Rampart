@@ -15,7 +15,7 @@
 | 判据 1~6 | **逐条实测读数**见 §三（禁形容词，全部为数字/文本读数） |
 | 资产迁移三步法 | 走完；**逐项核对表 88 行、数值不一致 0**；旧字段与 `ResourcePack` **已退役** |
 | 旧结构引用清零 | `*.cs` 内 **0 命中**（原文见 §四）；49 个资产内**孤儿 YAML 键亦已由 Unity 序列化器清除** |
-| ⚠️ 待策划端确认 | **1 处追加迁移**（`warehousePaths` —— 裁决未列但"不动行为"必需）§五-1 |
+| ✅ 追加迁移已裁 | **1 处追加迁移**（`warehousePaths` —— 裁决未列但"不动行为"必需）§五-1 ⇒ **`D790` 判-1 裁 A（认可）**；同处两问归 **勘-2／勘-4／判-2** |
 | ⚠️ 需知晓 | **2 处结构强制的行为变化**（非主动改行为）§五-2 |
 | 未完成项 | 显式列出 §六（含归属子片） |
 | 红线 | `GridTypes.cs` ⛔未碰／地图四门 ⛔未碰／存档迁移脚本 ⛔未写／双轨开关 ⛔未写／训练仓 ⛔未碰 |
@@ -253,11 +253,13 @@ SpecialFood/res_food.special  Meat/res_food.meat  StoneAmmo/res_ammo.stone  Fire
 | 补-4 交付物增列「资产迁移前后逐项核对表」 | ✅ §二-3（88 行 · `M1A_资产迁移核对表.txt`） |
 | 补-5 `WorkerInventory` 过渡态显式标注 | ✅ 类注释已标；单资源语义假设点清单见 §五-3 |
 
-### Q2 硬约束核对（`TaskScheduler` 七处一行不动）
+### Q2 硬约束核对（`TaskScheduler` 纯读取点一行不动）
+
+> ⚠️ **补正（`D790` 勘-1 · 2026-09-20）**：原文写「七处 `:733/:734/:737/:744/:749/:800/:806`」——**行号全偏移**（漂移因上文插注释）。磁盘实读 `inv.carriedType` 共 **8 处**：`:734/:736/:739/:742/:746/:751/:802/:808`；其中 **`:742` `best.Add(inv.carriedType, amount)` 改前为无参单资源版 `Add(amount)` ⇒ 属存储侧调用点、必然改签名**，不属 Q2 点名的「纯读取七处」。⇒ **采信实质不变：纯读取七处一行未动 ✔**（本条入台账作「引述行号须复读」实例）。
 
 - `WorkerInventory` **保留** `carriedType`／`carriedAmount` 及自有 API（`UnloadAll`／`IsEmpty`／`IsFull`／`GetCarryCapacity`／`TryStore`）；
 - **只改** `Query()` ⇒ `List<ResourceAmount>`（至多 1 条非空）＋ `Deposit` 返回值 `void ⇒ int`（= `TryStore` 返回值）；
-- 策划端点名的七处 `inv.carriedType`（`TaskScheduler.cs` `:733/:734/:737/:744/:749/:800/:806`）**一行未动** ✔；
+- 策划端点名的七处**纯读取** `inv.carriedType`（`TaskScheduler.cs` · **勘正后行号 `:734/:736/:739/:746/:751/:802/:808`**）**一行未动** ✔；第 8 处 `:742` 属存储侧（见上注）；
 - ⚠️ **另需说明**：`TaskScheduler` 内**非** `inv.carriedType` 的存储侧调用点（原 `:707/:709/:712/:771/:778/:782/:819/:891/:892`）因 `StorageComponent` 换签名**必须**改，已按最小面改写（详见 §五-3 的过渡读口注释）。这类点不在 Q2 点名的七处之列，未触发「停下报」条款。
 
 ---
@@ -266,12 +268,17 @@ SpecialFood/res_food.special  Meat/res_food.meat  StoneAmmo/res_ammo.stone  Fire
 
 ### 5-1 ⚠️ **追加迁移（裁决未列 · 「不动行为」必需）** —— `BuildingDef.warehousePaths`
 
+> ✅ **补正（`D790` 判-1／勘-2／勘-4 · 2026-09-20）**：本处两问已裁 —— **判-1 裁 A（认可追加迁移）**；`Well` 归 **勘-2**（死仓 ⇒ 7 栋改述为「6 必需 ＋ 1 无害」）；`Well.outputResource=Gold` 归 **勘-4**（既有占位约定，**非**内容缺陷）；`Warehouse.outputResource=Wood` 归 **判-2**（**判为真内容缺陷**，归内容批改那一行数据）。
+
 - **事实**：改前 `StorageComponent.Init` 由 `def.outputResource` 决定容器类型（例如 `quarry→Stone-only`、`Granary→Food-only`、`Warehouse→Wood-only`、`Well→Gold`）；改后由 `def.warehousePaths` 决定。新字段**旧值无同名载体**（`outputResource` 不是被改名，而是**语义被新字段接管**）。
 - **风险**：若留空 ⇒ 全库建筑变通用仓 `res`（**行为漂移**：石仓也收弹药/肉等；`WarehouseRegistry` 就近卸货落点全变）。
-- **本端处置**：在同一个一次性工具里按旧判据（**逐字复刻** `BuildingFactory.AttachComponents` 的挂仓条件）**读旧填新**：`warehousePaths = [PrimaryPathOf(def.outputResource)]` ⇒ **行为逐字不变**。实填 **7 栋**：`Warehouse→res_material.wood`、`Granary→res_food.grain`、`AdvancedStorage→res_material.wood`、`Blacksmith→res_material.metal`、`farm→res_food.grain`、`quarry→res_material.stone`、`Well→res_currency.gold`（余下 33 栋按旧判据本就不挂 `StorageComponent`：`mine/ore_vein/farmland/tree` 是 `isResourceNode`、`SiegeWorkshop` 走专属弹药子仓，其余 `rate=0 且非 Economy 仓`）。
-- **❗请裁决**：(A) 认可「先按旧单资源语义落，内容批再放宽为分类仓」；或 (B) 本片直接把 `Warehouse→res_material`、`Granary→res_food` 等**内容级合理标签**一次给全（＝本片引入内容设计决策）。
-  本端**按 (A) 执行**（保「只改结构」红线），(B) 需策划端口径。
-- ⚠️ **顺带发现（旧数据怪点 · 本端原样保留未改）**：`Warehouse.asset` 的 `outputResource = Wood(2)`、`Well.asset` 的 `outputResource = Gold(0)` ⇒ 旧口径下「通用仓库只收木」「水井的仓只收金」。本片按"不动行为"原样迁成 `res_material.wood`／`res_currency.gold`；**是否属内容缺陷待策划端判定**（若判缺陷 ⇒ 归内容批改那一行数据即可，不牵动代码 —— 正是判据 1 的收益）。
+- **本端处置**：在同一个一次性工具里按旧判据（**逐字复刻** `BuildingFactory.AttachComponents` 的挂仓条件）**读旧填新**：`warehousePaths = [PrimaryPathOf(def.outputResource)]` ⇒ **行为逐字不变**。实填 **7 栋**（**勘-2 勘正后口径 ＝ 6 栋行为必需 ＋ 1 栋无害死仓**）：`Warehouse→res_material.wood`、`Granary→res_food.grain`、`AdvancedStorage→res_material.wood`、`Blacksmith→res_material.metal`、`farm→res_food.grain`、`quarry→res_material.stone`（**以上 6 栋：不定行为即漂移**）、`Well→res_currency.gold`（**无害死仓**，见下勘-2 补注）（余下 33 栋按旧判据本就不挂 `StorageComponent`：`mine/ore_vein/farmland/tree` 是 `isResourceNode`、`SiegeWorkshop` 走专属弹药子仓，其余 `rate=0 且非 Economy 仓`）。
+- ⚠️ **勘-2 补注（`Well` 是死仓 · 实读 `ProducerComponent.cs:68-75`）**：`_isWell`（`:39` ＝ `def.id == "Well"`）时 **`Tick()` 早返回 `TickWaterToNetwork`**（`:73-74`），**永不进入 `_storage.Add`**（`:96`）；且 `:44-47` 的 `outputResource==Gold` 产金分支已退役（`_rate = 0f`）。⇒ `Well` 仓**改前改后皆无写入**：填 `res_currency.gold` **无害**，但把它与另外 6 栋并列为「不定行为就会漂移」**定性偏高** ⇒ 已按 **6 必需 ＋ 1 无害死仓** 改述。
+- **❗请裁决** → **✅ 判-1 裁 A（认可）**：(A) 认可「先按旧单资源语义落，内容批再放宽为分类仓」；或 (B) 本片直接把 `Warehouse→res_material`、`Granary→res_food` 等**内容级合理标签**一次给全（＝本片引入内容设计决策）。
+  本端**按 (A) 执行**（保「只改结构」红线）；策划端独立复算**逐栋相符**，且 33 栋空声明按旧条件本就不挂仓 ⇒ **无行为漂移**。
+- ⚠️ **顺带发现（旧数据怪点 · 本端原样保留未改）**：`Warehouse.asset` 的 `outputResource = Wood(2)`、`Well.asset` 的 `outputResource = Gold(0)` ⇒ 旧口径下「通用仓库只收木」「水井的仓只收金」。本片按"不动行为"原样迁成 `res_material.wood`／`res_currency.gold`。
+  - **✅ 勘-4（`Well` 一问 · 已由既有注释解答）**：`ProducerComponent.cs:15`／`:38` 明载「well.asset outputResource=Gold 占位，实际产水入网」（QQQ.2 T15）⇒ **不是内容缺陷，是既有占位约定**；占位值清理挂**内容批**（`10` 能力表 `store` 能力落地时）。
+  - **✅ 判-2（`Warehouse` 一问）**：**判为真内容缺陷** —— `Warehouse` 定位＝通用仓库，`outputResource=Wood` 使它变成「只收木」（`09` §5.3 目标态应为 `res_material`／`res`）⇒ 归**内容批**改那一行数据（**不牵动代码** —— 正是判据 1 的收益兑现）。
 
 ### 5-2 ⚠️ **结构强制的行为变化**（非主动改行为 · 依纪律上报）
 
@@ -292,7 +299,7 @@ SpecialFood/res_food.special  Meat/res_food.meat  StoneAmmo/res_ammo.stone  Fire
 | 4 | `WarhousePanel.RebuildStorageList` | 逐「可装资源」汇总（单资源仓恰 1 行） | `M1-B` 账本读口后重评 |
 | 5 | `Building.TryAdvertiseTask` ②③ | 满判 `IsFullFor(producer.OutputResource)`；取量 `PrimaryStoredType()` | `M1-G` |
 | 6 | `WorkerInventory`（`carriedType`/`carriedAmount`） | 单资源背包（`Query()` 至多 1 条） | **`M1-F`** |
-| 7 | `TaskScheduler` 七处 `inv.carriedType` | 单资源卸货路由 | **`M1-F`** |
+| 7 | `TaskScheduler` **8 处** `inv.carriedType`（勘-1 勘正：7 纯读取 ＋ 1 存储侧） | 单资源卸货路由 | **`M1-F`** |
 | 8 | `UnitController` v5 存档代理（两标量） | 单资源存档 | **`M1-F`** |
 | 9 | `MineByproductComponent` 三子仓 / `SiegeWorkshopBuilding` 弹药子仓 | 各以**专属单资源声明**表达"只收这一种"（合法写法，非缺陷） | 保持 |
 | 10 | `TreasureVault.SpillToChest` | 单条目落箱 | `M1-D` |
@@ -316,7 +323,7 @@ SpecialFood/res_food.special  Meat/res_food.meat  StoneAmmo/res_ammo.stone  Fire
 | 10 | 升级/修复/拆除未全走仓 | `M1-C` | `09#64` ＋ `#53~#56` |
 | 11 | `WorkerInventory` 多资源化 ＋ 卸货路由 ＋ v5 存档代理 | `M1-F` | `D789` Q2 明确划出 |
 | 12 | 水按资源处理（普通仓＋整数化） | `M1-F` | `09#44` |
-| 13 | **未跑 in-game 长局/冒烟** | — | 本片只改结构 ⇒ 判据 1~4/6 用 Edit Mode 单元级读数；未进 `GameScene`、未走 `TestHarnessApi`。若需「进局跑一次确认无回归」，请指派（须走 `HH.92` 测试环境正门） |
+| 13 | **未跑 in-game 长局/冒烟** | — | 本片只改结构 ⇒ 判据 1~4/6 用 Edit Mode 单元级读数；未进 `GameScene`、未走 `TestHarnessApi`。**⇒ `D790` §五 已裁：本片不另派冒烟，合并到 `M1-B` 跑一次同局冒烟**（那时才有账本读口可验） |
 | 14 | `Assets/Unity.VisualScripting.Generated/…/UnitOptions.db` 因 `ResourcePack` 重载退役而陈旧 ⇒ 已执行 `UnitBase.Rebuild()` 重建（105s），Console 已清 | 收尾 | 非代码问题 |
 
 ---
