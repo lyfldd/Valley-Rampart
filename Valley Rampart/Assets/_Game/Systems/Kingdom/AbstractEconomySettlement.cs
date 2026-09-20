@@ -149,8 +149,8 @@ public static class AbstractEconomySettlement
                 Occupation.HeavyWarrior, Occupation.ShieldGuard, Occupation.Archmage,
                 Occupation.Bishop, Occupation.General),
             Buildings = QueryKingdomBuildings(kid),
-            Food = k.resources.food, Gold = k.resources.gold,
-            Stone = k.resources.stone, Wood = k.resources.wood, Metal = k.resources.metal,
+            Food = k.GetResourceValue(ResourceType.Food), Gold = k.GetResourceValue(ResourceType.Gold),
+            Stone = k.GetResourceValue(ResourceType.Stone), Wood = k.GetResourceValue(ResourceType.Wood), Metal = k.GetResourceValue(ResourceType.Metal),
             AvgSatiety = SatietySystem.Instance != null ? SatietySystem.Instance.GetAverageSatietyCached(kid) : 50f
         };
     }
@@ -227,9 +227,11 @@ public static class AbstractEconomySettlement
     private static void ApplyDelta(KingdomState k, SettlementDelta d)
     {
         if (d.Food == 0 && d.Gold == 0 && d.Stone == 0 && d.Wood == 0 && d.Metal == 0) return;
-        k.AddResources(new ResourcePack
-        {
-            food = d.Food, gold = d.Gold, stone = d.Stone, wood = d.Wood, metal = d.Metal
-        });
+        k.AddResources(ResourceList.Empty
+            .Add(ResourceType.Food, d.Food)
+            .Add(ResourceType.Gold, d.Gold)
+            .Add(ResourceType.Stone, d.Stone)
+            .Add(ResourceType.Wood, d.Wood)
+            .Add(ResourceType.Metal, d.Metal));
     }
 }

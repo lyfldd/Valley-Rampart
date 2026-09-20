@@ -100,8 +100,8 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
         else
         {
             var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
-            if (k == null || k.resources.gold < d.youngCost) { Debug.Log($"[RanchSystem] 王国[{kingdomId}] 金不足，无法购买 {type} 幼崽"); return false; }
-            k.Spend(new ResourcePack { gold = d.youngCost });   // D632 A′：走台账 API 收口直写（金扣计入经济诊断窗口）
+            if (k == null || k.GetResourceValue(ResourceType.Gold) < d.youngCost) { Debug.Log($"[RanchSystem] 王国[{kingdomId}] 金不足，无法购买 {type} 幼崽"); return false; }
+            k.Spend(ResourceList.Of(new ResourceAmount(ResourceType.Gold, d.youngCost)));   // D632 A′：走台账 API 收口直写（金扣计入经济诊断窗口）
         }
 
         list.Add(new AnimalEntry { type = type, daysGrown = 0, isAdult = d.growDays <= 0 });
@@ -177,8 +177,8 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
             return true;
         }
         var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
-        if (k == null || k.resources.food < amount) return false;
-        k.Spend(new ResourcePack { food = amount });   // D632 A′：走台账 API 收口直写（粮扣计入经济诊断窗口）
+        if (k == null || k.GetResourceValue(ResourceType.Food) < amount) return false;
+        k.Spend(ResourceList.Of(new ResourceAmount(ResourceType.Food, amount)));   // D632 A′：走台账 API 收口直写（粮扣计入经济诊断窗口）
         return true;
     }
 
@@ -206,7 +206,7 @@ public class RanchSystem : Singleton<RanchSystem>, ISaveable
         {
             var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
             if (k == null) return false;
-            k.AddResources(new ResourcePack { food = meat });   // 占位：AI 肉产出真实落账归 AbstractEconomySettler（D632 A′：走台账 API 收口直写）
+            k.AddResources(ResourceList.Of(new ResourceAmount(ResourceType.Food, meat)));   // 占位：AI 肉产出真实落账归 AbstractEconomySettler（D632 A′：走台账 API 收口直写）
         }
         Debug.Log($"[RanchSystem] 宰杀 {entry.type} → 得肉 {meat}（kingdomId={kingdomId}），牧场剩 {list.Count}");
         return true;

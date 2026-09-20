@@ -401,7 +401,7 @@ public static class HH294Slice6PickProbe
             }
         if (spot == null) { Log("§D 宝箱：❌ 找不到 Plain 空地"); yield break; }
 
-        var pack = new ResourcePack { wood = 10 };
+        var pack = ResourceList.Of(new ResourceAmount(ResourceType.Wood, 10));   // ⭐ M1-A 适配
         var chest = chestMgr.SpawnChest(spot.Value, pack, Faction.PlayerCamp);
         yield return null;
         if (chest == null) { Log("§D 宝箱：❌ SpawnChest 返回 null"); yield break; }
@@ -461,7 +461,7 @@ public static class HH294Slice6PickProbe
         {
             if (d == null || d.raceId > 0 || d.uniquePerKingdom) continue;
             if (d.id == "bridge" || d.id == "gate" || d.id == "rift" || d.id == "portal") continue;   // 桥/门有特殊落点校验，非普通放置
-            if (cheap == null || d.cost.gold < cheap.cost.gold) cheap = d;
+            if (cheap == null || d.cost.Get(ResourceType.Gold) < cheap.cost.Get(ResourceType.Gold)) cheap = d;   // ⭐ M1-A 适配
         }
         var grid = GridSystem.Instance;
         var map = WorldManager.Instance != null ? WorldManager.Instance.ActiveMap : null;

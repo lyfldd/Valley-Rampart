@@ -67,23 +67,13 @@ public class MonsterController : UnitController
         ChestManager.Instance.SpawnChest(cellOpt.Value, pack, Faction.Monster);
     }
 
-    /// <summary>把 CarryResource 装进 ResourcePack（按 MonsterDef.lootResource 映射，未映射槽回退 Food）。</summary>
-    private ResourcePack BuildLootPack()
+    /// <summary>掉落内容（⭐ `M1-A`：改「资源量列表」，**直接承载实际资源类型** ——
+    /// 旧 `ResourcePack` 8 桶结构下 Ore/Crystal/火油/特食/肉「无承载槽 ⇒ 回退粮」的**有损映射结构性消失**）。
+    /// ⚠️ 上报为结构强制的行为变化（弹药仍可承载）。</summary>
+    private ResourceList BuildLootPack()
     {
-        var p = new ResourcePack();
         ResourceType t = def != null ? def.lootResource : ResourceType.Food;
-        switch (t)
-        {
-            case ResourceType.Gold: p.gold = CarryResource; break;
-            case ResourceType.Stone: p.stone = CarryResource; break;
-            case ResourceType.Wood: p.wood = CarryResource; break;
-            case ResourceType.Metal: p.metal = CarryResource; break;
-            case ResourceType.StoneAmmo: p.stoneAmmo = CarryResource; break;
-            case ResourceType.FireballAmmo: p.fireballAmmo = CarryResource; break;
-            case ResourceType.MagicAmmo: p.magicAmmo = CarryResource; break;
-            default: p.food = CarryResource; break;   // Food 及未映射槽（Ore/Crystal/... 无承载槽）
-        }
-        return p;
+        return ResourceList.Of(new ResourceAmount(t, CarryResource));
     }
 
     /// <summary>攻击配置（从 MonsterDef 构造；Slinger 远程射程圆=6 格 D258，近战肉搏）。</summary>

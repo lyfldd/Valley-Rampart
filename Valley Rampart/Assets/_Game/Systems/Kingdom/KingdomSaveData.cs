@@ -17,18 +17,7 @@ public class KingdomSaveData
     public int[] researchLevels;            // 各研究方向等级（科技模块，P1 占位）
     public int waveProgress;                // 夜间波次进度（P2 占位）
 
-    // 2_12 步骤8.4（HH.16 裁决 B）：国库（主城 TreasureVault）非金资源真源持久化。
-    // 金=货币直通 Ruler 单独存；其余 6 种（石/木/粮/特食/肉/铁）存此。
-    public int treasuryStone;
-    public int treasuryWood;
-    public int treasuryFood;
-    public int treasurySpecialFood;
-    public int treasuryMeat;
-    public int treasuryMetal;
-    // DZ-072a（D562 / HH.107）：副产两资源入档（TreasureVault.Managed 扩面配套）。
-    // 尾插+旧档缺字段 → JsonUtility 默认 0 向前兼容，零 bump（M10）。
-    public int treasuryCrystal;
-    public int treasuryFireOil;
-    // T1.8（D609/D617）：矿石国库槽入档（TreasureVault.Managed 再扩面配套；尾插零 bump，旧档缺→0）
-    public int treasuryOre;
+    // ⭐ M1-A：原「国库非金资源持久化」（treasuryStone/Wood/Food/SpecialFood/Meat/Metal/Crystal/FireOil/Ore）
+    // 整段退役 —— `09#38`：国库真源＝`TreasureVault` 的**单多资源容器**，随**建筑存档**存取
+    // （`BuildingSaveData.treasuryContents`）；`KingdomManager.Treasury*` 读档缓存桥同步退役（判据 5）。
 }

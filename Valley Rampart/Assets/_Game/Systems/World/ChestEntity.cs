@@ -13,8 +13,8 @@ public class ChestEntity : MonoBehaviour, IInteractable
     /// <summary>挂格坐标（楼层=l0 微格）。</summary>
     public GridCoord cell;
 
-    /// <summary>箱子内容物（四资源包）。D145 容量同工人携带量，由生成方填。</summary>
-    public ResourcePack contents;
+    /// <summary>箱子内容物（⭐ `M1-A`：`09#50` 改「资源量列表」· 任意资源均可承载）。D145 容量同工人携带量，由生成方填。</summary>
+    public ResourceList contents;
 
     /// <summary>生成的绝对天数，过期 = 生成天 + ChestConfig.expireDays（D148）。</summary>
     public float bornDay;
@@ -29,7 +29,7 @@ public class ChestEntity : MonoBehaviour, IInteractable
     private bool _initialized;
 
     /// <summary>初始化（幂等，仅首次生效）。cell/contents/bornDay 由 ChestManager.SpawnChest 预先填。</summary>
-    public void Init(GridCoord c, ResourcePack pack, float day)
+    public void Init(GridCoord c, ResourceList pack, float day)
     {
         if (_initialized) return;
         cell = c;

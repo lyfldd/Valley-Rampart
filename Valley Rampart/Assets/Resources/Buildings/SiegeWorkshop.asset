@@ -13,19 +13,18 @@ MonoBehaviour:
   m_Name: SiegeWorkshop
   m_EditorClassIdentifier: 
   id: SiegeWorkshop
-  displayName: "战争机器工坊"
-  description: "生产各族专属战争机器与配套弹药"
+  displayName: "\u6218\u4E89\u673A\u5668\u5DE5\u574A"
+  description: "\u751F\u4EA7\u5404\u65CF\u4E13\u5C5E\u6218\u4E89\u673A\u5668\u4E0E\u914D\u5957\u5F39\u836F"
   faction: 1
   role: 1
   cost:
-    gold: 10
-    stone: 20
-    wood: 16
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 10
+    - type: 1
+      amount: 20
+    - type: 2
+      amount: 16
   footprint: {x: 2, y: 2}
   allowedTerrain: 
   heightLayer: 0
@@ -34,6 +33,7 @@ MonoBehaviour:
   isGate: 0
   rotatable: 0
   moduleType: 3
+  warehousePaths: []
   isObstacle: 0
   producer:
     kind: 0
@@ -45,6 +45,7 @@ MonoBehaviour:
     maxHp: 0
     range: 0
     damageType: 0
+    attackCooldown: 0
   levels: []
   crewRequired: 0
   crewRadiusCells: 0
@@ -67,3 +68,8 @@ MonoBehaviour:
   - 1
   - 1.5
   prefab: {fileID: 0}
+  monsterTargetValue: 1
+  monsterIsHighValue: 0
+  raceId: -1
+  uniquePerKingdom: 0
+  isMineByproduct: 0

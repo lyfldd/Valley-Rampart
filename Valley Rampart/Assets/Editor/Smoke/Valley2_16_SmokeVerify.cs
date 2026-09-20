@@ -111,7 +111,7 @@ public static class Valley2_16SmokeVerify
             tierOk = (difficulty == 1 && k.workerCount == 4 && k.warriorCount == 0)
                   || (difficulty == 2 && k.workerCount == 6 && k.warriorCount == 2)
                   || (difficulty == 3 && k.workerCount == 8 && k.warriorCount == 4);
-            sb.Append($"tier(kid{k.id},{k.workerCount}w/{k.warriorCount}war,wood{k.resources.wood})=(difficulty{difficulty}->{(tierOk ? "ok" : "BAD")}) ");
+            sb.Append($"tier(kid{k.id},{k.workerCount}w/{k.warriorCount}war,wood{k.GetResourceValue(ResourceType.Wood)})=(difficulty{difficulty}->{(tierOk ? "ok" : "BAD")}) ");
         }
         else sb.Append("tier=NO-KINGDOM ");
         foreach (var kk in reg.GetAll()) if (kk.id < 1) { kidOk = false; break; }
@@ -164,8 +164,8 @@ public static class Valley2_16SmokeVerify
                   .Append(':').Append(k.name)
                   .Append('|').Append(Arr(k.personality))
                   .Append('|').Append(k.workerCount).Append('/').Append(k.warriorCount)
-                  .Append('|').Append(k.resources.wood).Append('/').Append(k.resources.stone)
-                  .Append('/').Append(k.resources.gold);
+                  .Append('|').Append(k.GetResourceValue(ResourceType.Wood)).Append('/').Append(k.GetResourceValue(ResourceType.Stone))
+                  .Append('/').Append(k.GetResourceValue(ResourceType.Gold));
             }
         return sb.ToString();
     }

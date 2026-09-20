@@ -18,14 +18,9 @@ MonoBehaviour:
   faction: 1
   role: 3
   cost:
-    gold: 0
-    stone: 10
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 1
+      amount: 10
   footprint: {x: 1, y: 1}
   allowedTerrain: 00000000
   heightLayer: 0
@@ -34,6 +29,7 @@ MonoBehaviour:
   isGate: 0
   rotatable: 0
   moduleType: 0
+  warehousePaths: []
   isObstacle: 1
   producer:
     kind: 0
@@ -48,25 +44,23 @@ MonoBehaviour:
     attackCooldown: 0
   levels:
   - upgradeCost:
-      gold: 0
-      stone: 10
-      wood: 12
-      food: 0
-      metal: 10
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 10
+      - type: 2
+        amount: 12
+      - type: 9
+        amount: 10
     statScale: 2
     prerequisites: []
   - upgradeCost:
-      gold: 0
-      stone: 24
-      wood: 30
-      food: 0
-      metal: 10
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 24
+      - type: 2
+        amount: 30
+      - type: 9
+        amount: 10
     statScale: 2
     prerequisites: []
   crewRequired: 0

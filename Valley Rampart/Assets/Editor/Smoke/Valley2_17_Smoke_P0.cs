@@ -360,15 +360,13 @@ public static class Valley2_17_Smoke_P0
          {
              var k = all[i];
              if (k == null || k.IsPlayer) continue;
-             var gain = new ResourcePack
-             {
-                 food = k.workerCount * workerRate,
-                 wood = k.workerCount * workerRate,
-                 stone = k.workerCount * workerRate,
-                 gold = k.workerCount * workerRate + CountBuildings(k.id) * taxPerBuilding
-             };
+             var gain = ResourceList.Of(
+                 new ResourceAmount(ResourceType.Food, k.workerCount * workerRate),
+                 new ResourceAmount(ResourceType.Wood, k.workerCount * workerRate),
+                 new ResourceAmount(ResourceType.Stone, k.workerCount * workerRate),
+                 new ResourceAmount(ResourceType.Gold, k.workerCount * workerRate + CountBuildings(k.id) * taxPerBuilding));
              k.AddResources(gain);
-             s_farmAbstractOut += gain.food;   // 裁决1 B2：农场抽象产出>0 间接证据（预演口径）
+             s_farmAbstractOut += gain.Get(ResourceType.Food);   // 裁决1 B2：农场抽象产出>0 间接证据（预演口径）
          }
      }
 

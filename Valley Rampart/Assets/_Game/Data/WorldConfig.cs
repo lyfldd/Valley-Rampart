@@ -75,17 +75,15 @@ public struct DifficultyConfig
         return presets[index];
     }
 
-    /// <summary>按档位值算初始资源（基础 ÷ 系数）。</summary>
-    public ResourcePack GetInitialResources(int difficultyValue)
+    /// <summary>按档位值算初始资源（基础 ÷ 系数）。⭐ `M1-A`：返回「资源量列表」（`09#50`）。</summary>
+    public ResourceList GetInitialResources(int difficultyValue)
     {
         int divisor = Mathf.Max(1, difficultyValue);
-        return new ResourcePack
-        {
-            gold = Mathf.FloorToInt(baseGold / (float)divisor),
-            stone = Mathf.FloorToInt(baseStone / (float)divisor),
-            wood = Mathf.FloorToInt(baseWood / (float)divisor),
-            food = Mathf.FloorToInt(baseFood / (float)divisor)
-        };
+        return ResourceList.Of(
+            new ResourceAmount(ResourceType.Gold, Mathf.FloorToInt(baseGold / (float)divisor)),
+            new ResourceAmount(ResourceType.Stone, Mathf.FloorToInt(baseStone / (float)divisor)),
+            new ResourceAmount(ResourceType.Wood, Mathf.FloorToInt(baseWood / (float)divisor)),
+            new ResourceAmount(ResourceType.Food, Mathf.FloorToInt(baseFood / (float)divisor)));
     }
 }
 
@@ -128,45 +126,4 @@ public struct SaveConfig
 {
     [Tooltip("自动存档间隔（游戏内天数）")]
     public int autoSaveIntervalDays;  // 默认 3
-}
-
-/// <summary>资源包（金/石/木/粮/铁/弹药统一结构）。metal 为 2_12 步骤8 消费方（D131/D132）新增，默认 0 向后兼容。
-/// 弹药（stoneAmmo/fireballAmmo/magicAmmo）为 2_12 步骤9（HH.19 A×4）新增，供箱子(D142)/搬运/凑单内容物保持统一容器语义；
-/// 弹药不参与建造/升级造价（CanAfford/Spend/Refund 不走弹药），故 op+ / op× / IsZero 纳入防静默丢失。</summary>
-[Serializable]
-public struct ResourcePack
-{
-    public int gold;
-    public int stone;
-    public int wood;
-    public int food;
-    public int metal;   // 2_12 步骤8：铁（工事升级 D131 消耗；0=无铁消耗，旧资产/旧档兼容）
-    public int stoneAmmo;      // 2_12 步骤9：石头弹（HH.19 A×4；箱子/搬运内容物，不入造价）
-    public int fireballAmmo;   // 火弹
-    public int magicAmmo;      // 魔弹
-
-    public bool IsZero => gold == 0 && stone == 0 && wood == 0 && food == 0 && metal == 0
-        && stoneAmmo == 0 && fireballAmmo == 0 && magicAmmo == 0;
-    public static ResourcePack Zero => new ResourcePack();
-
-    public static ResourcePack operator +(ResourcePack a, ResourcePack b) => new ResourcePack
-    {
-        gold = a.gold + b.gold, stone = a.stone + b.stone,
-        wood = a.wood + b.wood, food = a.food + b.food,
-        metal = a.metal + b.metal,
-        stoneAmmo = a.stoneAmmo + b.stoneAmmo,
-        fireballAmmo = a.fireballAmmo + b.fireballAmmo,
-        magicAmmo = a.magicAmmo + b.magicAmmo
-    };
-
-    /// <summary>按比例缩放（拆除退款 ratio=0.5 等）。metal 随同比缩放，保拆除/修复不静默丢铁；弹药同随比（装箱取出/拆分用）。</summary>
-    public static ResourcePack operator *(ResourcePack a, float scale) => new ResourcePack
-    {
-        gold = Mathf.RoundToInt(a.gold * scale), stone = Mathf.RoundToInt(a.stone * scale),
-        wood = Mathf.RoundToInt(a.wood * scale), food = Mathf.RoundToInt(a.food * scale),
-        metal = Mathf.RoundToInt(a.metal * scale),
-        stoneAmmo = Mathf.RoundToInt(a.stoneAmmo * scale),
-        fireballAmmo = Mathf.RoundToInt(a.fireballAmmo * scale),
-        magicAmmo = Mathf.RoundToInt(a.magicAmmo * scale)
-    };
 }

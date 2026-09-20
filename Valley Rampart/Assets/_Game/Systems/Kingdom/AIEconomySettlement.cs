@@ -46,21 +46,24 @@ public static class AIEconomySettlement
         {
             var b = buildings[i];
             var storage = b.GetComponent<StorageComponent>();
-            if (storage == null || storage.storedAmount <= 0) continue;
+            if (storage == null || storage.TotalCount <= 0) continue;
 
-            var pack = new ResourcePack();   // 五经济资源入账；非经济跳过
-            if (!MapToPack(storage.resourceType, storage.storedAmount, ref pack)) continue;
-            if (pack.IsZero) continue;
+            // 五经济资源入账；非经济资源（Ore/Crystal/FireOil/特殊食物/肉/弹药）跳过，保留本地存储。
+            var gain = CollectEconomyResources(storage);
+            if (gain.IsZero) continue;
 
-            kingdom.AddResources(pack);
+            kingdom.AddResources(gain);
 
             // 清零本地仓储（日结搬运语义；与 Harvest 不同，出货入 AI 国库而非玩家 Ruler）。
-            // 走 storage.Take(本类型, 全量) → 内部 TakeOut 扣减并触发 OnStorageChanged（event 不可在外部 Invoke，
+            // 逐条目走 storage.Take(本类型, 全量) → 内部 TakeOut 扣减并触发 OnStorageChanged（event 不可在外部 Invoke，
             // 用 IWarehouse.Take 接口保证 UI/仓库刷新与扣减原子一致）。
-            int drained = storage.storedAmount;
-            storage.Take(storage.resourceType, drained);
-            if (drained > 0)
-                Debug.Log($"[AIEconomySettlement] k{kingdom.id} {b.def?.id} @{b.coord.x},{b.coord.y} 日结入账 {storage.resourceType}×{drained} → 国库");
+            // ⚠️ 只清已入账的经济资源，非经济资源留在本地存储（与旧「单资源仓：非经济则整仓跳过」等价）。
+            foreach (var e in gain.items)
+            {
+                int drained = storage.Take(e.type, e.amount);
+                if (drained > 0)
+                    Debug.Log($"[AIEconomySettlement] k{kingdom.id} {b.def?.id} @{b.coord.x},{b.coord.y} 日结入账 {e.type}×{drained} → 国库");
+            }
         }
     }
 
@@ -100,17 +103,23 @@ public static class AIEconomySettlement
         return list;
     }
 
-    /// <summary>把存储类型按五经济资源映射进 ResourcePack；非经济资源返回 false（跳过，保留本地存储）。</summary>
-    private static bool MapToPack(ResourceType type, int amount, ref ResourcePack pack)
+    /// <summary>取本仓**五经济资源**存量（金/石/木/粮/铁）；非经济资源不入本列表（跳过，保留本地存储）。</summary>
+    private static ResourceList CollectEconomyResources(StorageComponent storage)
     {
-        switch (type)
+        var list = ResourceList.Empty;
+        for (int t = 0; t < EconomyResourceCount; t++)
         {
-            case ResourceType.Gold: pack.gold += amount; return true;
-            case ResourceType.Stone: pack.stone += amount; return true;
-            case ResourceType.Wood: pack.wood += amount; return true;
-            case ResourceType.Food: pack.food += amount; return true;
-            case ResourceType.Metal: pack.metal += amount; return true;
-            default: return false;   // Ore/Crystal/FireOil/特殊食物/肉/弹药：非经济资源不入 AI 国库
+            var type = EconomyResources[t];
+            int amount = storage.GetAmount(type);
+            if (amount > 0) list = list.Set(type, amount);
         }
+        return list;
     }
+
+    /// <summary>五经济资源表（Order 确定性；与旧 `MapToPack` 的 switch 白名单逐一对应）。</summary>
+    private static readonly ResourceType[] EconomyResources =
+    {
+        ResourceType.Gold, ResourceType.Stone, ResourceType.Wood, ResourceType.Food, ResourceType.Metal
+    };
+    private const int EconomyResourceCount = 5;
 }

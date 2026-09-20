@@ -19,7 +19,11 @@ public class BuildingDef : ScriptableObject
     public BuildingRole role;          // 玩法功能标签（P2 方案A）
 
     [Header("造价与占位")]
-    public ResourcePack cost;          // 金/石/木/粮（走 RulerController.CanAfford/Spend）
+    // ⭐ `M1-A`／`09#50`／`09#51`：造价 ＝ **「资源量列表」`ResourceList`**（与配方表同形 · §7.3）。
+    // ✅ **资产迁移三步法已完成**（`D789` Q1=A）：①旧字段保留一版反序列化 ②一次性 Editor 工具读旧填新
+    //    ③逐项核对表 88 行全一致 ⇒ **旧字段与 `ResourcePack` 类型已退役**（核对表：工程根 `M1A_资产迁移核对表.txt`）。
+    [Tooltip("造价（资源量列表：资源＋量 · 09#50/09#51）。⛔ 非固定桶 ⇒ 资源表加项即自动可表达")]
+    public ResourceList cost;
     public Vector2Int footprint;       // 占用小区块尺寸 (w,h)，2D 全用
     [Tooltip("允许建造的**地表物**（FeatureType；空=不校验）。HH.294 片2-A：原 TerrainType 整层删 ⇒ 改读地表物。"
              + "例：mine.asset=[Mine]（矿山锚点）——「矿洞只能建在矿山上」红线（D737）")]
@@ -40,6 +44,13 @@ public class BuildingDef : ScriptableObject
     [Header("模块归属（3.5 §2.2 归属原则）")]
     [Tooltip("所属王国模块。Civil=土木/Production=生产/Livelihood=民生/Military=军事/Commerce=商业/Science=科技。用于模块级解锁判定")]
     public ModuleType moduleType;       // 3.5：建筑归属模块（模块级解锁门槛依据）
+
+    [Header("仓库（`09` §五 · ⭐ `M1-A` 新增）")]
+    [Tooltip("**收什么**（仓库声明路径前缀 · `09` §三）：可多条；空 ⇒ 通用仓 `res`（全部资源）。\n" +
+             "例：res＝全部／res_material＝全部材料／res_material_ore＝只收矿石。\n" +
+             "⭐ 加一个仓／改它收什么 ＝ **只改这一行数据**（`09` §十一 判据 1）⇒ ⛔ 不改 StorageComponent/ProductionSystem。\n" +
+             "⚠️ 本栏是「仓库标签」的**过渡数据源**；`10` 建筑能力表的 `store` 能力（`M6-F`）落地后迁入能力声明。")]
+    public string[] warehousePaths;
 
     [Header("行为标记")]
     public bool isObstacle;            // 是否阻挡移动/寻路（城墙=是；资源点=否）
@@ -146,7 +157,8 @@ public struct CombatConfig
 [Serializable]
 public struct BuildingLevel
 {
-    public ResourcePack upgradeCost;
+    [Tooltip("升级造价（资源量列表：资源＋量 · 09#50/09#51）")]
+    public ResourceList upgradeCost;
     public float statScale;       // 升级后属性乘数
     public string[] prerequisites;// 前置（科技/时代，接未来科技系统）
 }

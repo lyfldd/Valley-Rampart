@@ -276,7 +276,7 @@ public static class Smoke_2_23RP0
         k1.focus = (int)UtilityAction.BoostHarvest;
         // 集成可行性整备（探针世界构造，不动生产逻辑）：AI 国库注资补 farm 造价（gold=50）+ 选址半径扩大以扫到农田资源点
         // 生产行为验证：农场必须建在农田资源点上（ResourceNodeMapping/PlacementValidator），且国库须付得起造价。
-        k1.AddResources(new ResourcePack { gold = 100, stone = 60, wood = 60 });
+        k1.AddResources(ResourceList.Of(new ResourceAmount(ResourceType.Gold, 100), new ResourceAmount(ResourceType.Stone, 60), new ResourceAmount(ResourceType.Wood, 60)));
         int radius0 = bcfg.aiBuildRadius;
         bcfg.aiBuildRadius = 48;
         {

@@ -82,7 +82,8 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         if (_resourceType == ResourceType.Food && !TryConsumeFarmWater()) return;
 
         // 主产（QQQ.3 B8-7 / LC-B9：用累计器，低速率也产出）
-        if (_storage != null && !_storage.IsFull)
+        // ⭐ M1-A：本地仓已改多资源容器 ⇒ 按「本建筑产出资源」判满/入仓（体积口径 · 09 §5.2）
+        if (_storage != null && !_storage.IsFullFor(_resourceType))
         {
             // 2_20 M5/D420：种族生产乘数（Production 侧主产累加；资源→mul 映射 D506③，
             // 与 TaskScheduler Gather 入库侧同源 KingdomRace.GetGatherMul 防漂移）
@@ -92,7 +93,7 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
             if (produce > 0)
             {
                 _mainAccumulator -= produce;
-                _storage.storedAmount = Mathf.Min(_storage.capacity, _storage.storedAmount + produce);
+                _storage.Add(_resourceType, produce);   // 放到满为止（部分成功 · 09 §7.1）
             }
         }
     }

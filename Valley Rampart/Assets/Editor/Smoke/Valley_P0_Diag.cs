@@ -165,11 +165,11 @@ public static class Valley_P0_Diag
                     }
                     if (id == "goldx" && kKeep != null)
                     {
-                        if (kKeep.resources.gold < 500) kKeep.resources.gold = 500;   // 消歧：永不缺金
+                        if (kKeep.GetResourceValue(ResourceType.Gold) < 500) kKeep.resources = kKeep.resources.Set(ResourceType.Gold, 500);   // 消歧：永不缺金
                     }
                     // D556/d2 food 保底标准件：粮警解除（grainAlarm 线=grainReserveDaysFloor×pop≈28，保底 200 留余量）
-                    if ((id == "ffbase" || id == "ffatk") && kKeep != null && kKeep.resources.food < 200)
-                        kKeep.resources.food = 200;
+                    if ((id == "ffbase" || id == "ffatk") && kKeep != null && kKeep.GetResourceValue(ResourceType.Food) < 200)
+                        kKeep.resources = kKeep.resources.Set(ResourceType.Food, 200);
                     if (id == "happy5") AddHappiness(kidA, 5f);   // 每日维持（日结重算后补注）
                 }
 
@@ -190,7 +190,7 @@ public static class Valley_P0_Diag
                     float n7 = def7 != null ? UtilityScorer.NeedScore(k, def7.Value) : -1f;
                     if (k.focus == (int)UtilityAction.Defense && kid == kidA) focus14Days++;
                     Debug.Log($"[P0D][CSV] var={id},day={day},k={kid},focus={k.focus},workers={k.workerCount},warriors={k.warriorCount}," +
-                              $"gold={k.resources.gold:0},food={k.resources.food:0},stage={k.scriptPhase},{(kid == kidA ? $"n7={n7:F2}" : $"atkAll={_atkCount}")}");
+                              $"gold={k.GetResourceValue(ResourceType.Gold):0},food={k.GetResourceValue(ResourceType.Food):0},stage={k.scriptPhase},{(kid == kidA ? $"n7={n7:F2}" : $"atkAll={_atkCount}")}");
                 }
                 if (id == "attack3" || id == "ffatk")
                     Debug.Log($"[P0D][ATK] var={id} day={day} 全局实收={_atkCount} kidA实收={_atkCountA}");
@@ -202,7 +202,7 @@ public static class Valley_P0_Diag
         int obsDays = tm.CurrentDay - startDay;
         var endA = KingdomRegistry.Instance.Get(kidA);
         var endB = KingdomRegistry.Instance.Get(kidB);
-        summary.Add($"{label}({id})：观察{obsDays}日 focus14占={focus14Days}日｜甲 终态stage={endA?.scriptPhase} 兵={endA?.warriorCount} 工={endA?.workerCount} gold={endA?.resources.gold:0}｜乙 兵={endB?.warriorCount}｜寻路不可达总数={_pathFails.Count}｜{(gameoverSeen ? "⚠GameOver" : "态Playing")}");
+        summary.Add($"{label}({id})：观察{obsDays}日 focus14占={focus14Days}日｜甲 终态stage={endA?.scriptPhase} 兵={endA?.warriorCount} 工={endA?.workerCount} gold={endA?.GetResourceValue(ResourceType.Gold):0}｜乙 兵={endB?.warriorCount}｜寻路不可达总数={_pathFails.Count}｜{(gameoverSeen ? "⚠GameOver" : "态Playing")}");
 
         TestHarnessApi.ExitTestRun();
         SmokeApi.ResetWorldForNext();

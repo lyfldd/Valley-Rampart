@@ -211,7 +211,7 @@ public static class Valley_HH144_Probe
         // ===== P2：件2 F1 归一口径 =====
         // r4 实锤（诊断行 Resource=132）：ValidatePlacement 尾部=CanAfford 国库门（day10 k1 穷→全拒）
         // ——镜像 HH140 P6b 资源注入（选址面只验空间守卫，资源门是独立维）。
-        k1.resources.gold += 2000; k1.resources.stone += 600; k1.resources.wood += 600;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 2000); k1.resources = k1.resources.Add(ResourceType.Stone, 600); k1.resources = k1.resources.Add(ResourceType.Wood, 600);   // ⭐ M1-A 适配
         var bdefB = BuildingFactory.FindDefById(BuildingIds.Barracks);
         var ownCastle = KingdomBrain.FindCastleCell(1);
         var threatCastle = KingdomBrain.FindCastleCell(2);

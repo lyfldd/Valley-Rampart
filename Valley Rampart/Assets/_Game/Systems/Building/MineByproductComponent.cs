@@ -6,8 +6,10 @@ using UnityEngine;
 /// GuardDeploymentSystem/Building 拆除守卫/BuildingPanel 全消费此 flag——M1 红线），另挂本组件产水晶/火油/矿石（**在岗才产**，D704 A 批）。
 ///
 /// 结构（仿 SiegeWorkshopBuilding 厂级弹药仓）：
-///   - 挂 **3** 个单资源子 StorageComponent（Crystal/FireOil/**Ore**；T1.4/D609 加矿石伴生），容量取
-///     KingdomConfig.byproductCrystalCapacity/byproductFireOilCapacity/byproductOreCapacity。
+///   - 挂 **3** 个**专属仓**子 StorageComponent（Crystal/FireOil/**Ore**；T1.4/D609 加矿石伴生）——
+///     ⭐ `M1-A` 起 StorageComponent 是多资源容器 ⇒ 三个子仓各用**专属仓声明**（`SetDeclaredPaths` 该资源的完整路径
+///     ＝ `09` §3.2「专属仓」写法）表达"只收这一种"，⛔ 不再靠 `resourceType` 单资源字段。
+///     容量取 KingdomConfig.byproductCrystalCapacity/byproductFireOilCapacity/byproductOreCapacity。
 ///     不注册 WarehouseRegistry（子仓=待运出缓冲非可存仓，见 CreateSubStore 注）。
 ///   - 产率：KingdomConfig.byproductCrystalRate/byproductFireOilRate/byproductOreRate（0.05/s=慢产保稀缺；
 ///     副产无等级门槛，原 ProducerComponent Lv2/Lv3 门槛随 mine levels=[] 不适用——已裁决策）。
@@ -54,7 +56,7 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         CreateSubStores();
     }
 
-    /// <summary>创建 3 个单资源副产子仓（仿 SiegeWorkshopBuilding.CreateSubStores/TreasureVault 子物体聚合）。
+    /// <summary>创建 3 个**专属仓**副产子仓（仿 SiegeWorkshopBuilding.CreateSubStores/TreasureVault 子物体聚合）。
     /// T1.4（D609）：第三仓=矿石（矿场伴生，Ore→Metal 链供给端）。</summary>
     void CreateSubStores()
     {
@@ -72,9 +74,10 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         var go = new GameObject(SubStorePrefix + type);
         go.transform.SetParent(_building.transform, false);
         var sc = go.AddComponent<StorageComponent>();
-        sc.resourceType = type;
+        // ⭐ 专属仓声明＝该资源的完整路径（09 §3.2 第三种写法）⇒ 只收这一种，其余前缀不匹配被拒。
+        sc.SetDeclaredPaths(new[] { ResourceCatalog.PrimaryPathOf(type) });
         sc.capacity = Mathf.Max(1, capacity);
-        // 不调 StorageComponent.Init（避免 def.outputResource=Stone 覆盖类型）。
+        // 不调 StorageComponent.Init（否则会被 def.warehousePaths 覆盖本专属仓声明）。
         // 不注册 WarehouseRegistry（DZ-072a 语义：副产子仓=待运出缓冲，非可存仓——若注册，
         // AI 卸货 FindNearestAvailable 会就近卸回本仓死循环，AI 台账永不得水晶；不注册则
         // AI 走 AddGatherOverflow 台账兜底、玩家直卸国库 Vault_Crystal，P2/P5 落库链稳定通）。
@@ -89,20 +92,20 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         // D704 §三-3-⑤：在岗门与广告序同源——无在岗 ⇒ 不发 Production ⇒ 三槽停产（累积前 return）。
         if (!HasWorkerOnDuty) return;
         var config = KingdomManager.Instance != null ? KingdomManager.Instance.Config : null;
-        TickStore(_crystalStore, config != null ? config.byproductCrystalRate : 0.05f, ref _crystalAccumulator, ref _crystalFullLogged);
-        TickStore(_fireOilStore, config != null ? config.byproductFireOilRate : 0.05f, ref _fireOilAccumulator, ref _fireOilFullLogged);
-        TickStore(_oreStore, config != null ? config.byproductOreRate : 0.05f, ref _oreAccumulator, ref _oreFullLogged);   // T1.4：矿石伴生
+        TickStore(_crystalStore, ResourceType.Crystal, config != null ? config.byproductCrystalRate : 0.05f, ref _crystalAccumulator, ref _crystalFullLogged);
+        TickStore(_fireOilStore, ResourceType.FireOil, config != null ? config.byproductFireOilRate : 0.05f, ref _fireOilAccumulator, ref _fireOilFullLogged);
+        TickStore(_oreStore, ResourceType.Ore, config != null ? config.byproductOreRate : 0.05f, ref _oreAccumulator, ref _oreFullLogged);   // T1.4：矿石伴生
     }
 
-    void TickStore(StorageComponent store, float rate, ref float accumulator, ref bool fullLogged)
+    void TickStore(StorageComponent store, ResourceType type, float rate, ref float accumulator, ref bool fullLogged)
     {
         if (store == null || rate <= 0f) return;
-        if (store.IsFull)
+        if (store.IsFullFor(type))
         {
             if (!fullLogged)   // 分频：满仓停产只记一次，防逐秒刷屏（对齐任务书口径）
             {
                 fullLogged = true;
-                Debug.Log($"[MineByproduct] {store.resourceType} 副产仓满（{store.storedAmount}/{store.capacity}）停产，等待搬运");
+                Debug.Log($"[MineByproduct] {type} 副产仓满（{store.GetAmount(type)}/{store.capacity}）停产，等待搬运");
             }
             return;
         }
@@ -110,11 +113,11 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         accumulator += rate;
         int amount = Mathf.FloorToInt(accumulator);
         if (amount <= 0) return;   // 低速率：未攒够整数不产（对齐 SiegeWorkshopBuilding 累计器口径）
-        int added = store.Add(amount);
+        int added = store.Add(type, amount);
         if (added > 0)
         {
             accumulator -= added;   // 实际入仓扣累计器（仓满中途截断时余量保留待下轮）
-            Debug.Log($"[MineByproduct] 产 {store.resourceType} ×{added}（存量 {store.storedAmount}/{store.capacity}）");
+            Debug.Log($"[MineByproduct] 产 {type} ×{added}（存量 {store.GetAmount(type)}/{store.capacity}）");
         }
     }
 
@@ -131,28 +134,28 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
 
     /// <summary>保存副产子仓存量（水晶量, 火油量, 矿石量）。T1.4（D609）：第三元=矿石。</summary>
     public (int crystal, int fireOil, int ore) SaveByproductState()
-        => (_crystalStore != null ? _crystalStore.storedAmount : 0,
-            _fireOilStore != null ? _fireOilStore.storedAmount : 0,
-            _oreStore != null ? _oreStore.storedAmount : 0);
+        => (_crystalStore != null ? _crystalStore.GetAmount(ResourceType.Crystal) : 0,
+            _fireOilStore != null ? _fireOilStore.GetAmount(ResourceType.FireOil) : 0,
+            _oreStore != null ? _oreStore.GetAmount(ResourceType.Ore) : 0);
 
     /// <summary>读档恢复副产子仓存量（超容量 clamp 不静默丢——对齐 SiegeWorkshopBuilding.RestoreLegacyAmmo 口径）。T1.4：第三参=矿石（旧档缺→0）。</summary>
     public void RestoreByproductState(int crystal, int fireOil, int ore)
     {
         if (crystal > 0 && _crystalStore != null)
         {
-            int added = _crystalStore.Add(crystal);
+            int added = _crystalStore.Add(ResourceType.Crystal, crystal);
             if (added < crystal)
                 Debug.LogWarning($"[MineByproduct] 读档水晶超容量 clamp {crystal}→{added}");
         }
         if (fireOil > 0 && _fireOilStore != null)
         {
-            int added = _fireOilStore.Add(fireOil);
+            int added = _fireOilStore.Add(ResourceType.FireOil, fireOil);
             if (added < fireOil)
                 Debug.LogWarning($"[MineByproduct] 读档火油超容量 clamp {fireOil}→{added}");
         }
         if (ore > 0 && _oreStore != null)
         {
-            int added = _oreStore.Add(ore);
+            int added = _oreStore.Add(ResourceType.Ore, ore);
             if (added < ore)
                 Debug.LogWarning($"[MineByproduct] 读档矿石超容量 clamp {ore}→{added}");
         }
@@ -183,20 +186,22 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
 
         float threshold = _building.transportThreshold;
         // 三仓分别判达标（存量≥capacity×threshold），一次只发先达标的一个（同 source 串行，互挤限制见类注释）
-        if (TryAdvertiseStore(_crystalStore, threshold, out task)) return true;
-        if (TryAdvertiseStore(_fireOilStore, threshold, out task)) return true;
-        if (TryAdvertiseStore(_oreStore, threshold, out task)) return true;   // T1.4（D609）：矿石伴生搬运
+        if (TryAdvertiseStore(_crystalStore, ResourceType.Crystal, threshold, out task)) return true;
+        if (TryAdvertiseStore(_fireOilStore, ResourceType.FireOil, threshold, out task)) return true;
+        if (TryAdvertiseStore(_oreStore, ResourceType.Ore, threshold, out task)) return true;   // T1.4（D609）：矿石伴生搬运
         return false;
     }
 
     /// <summary>在岗判定（D704 §三-3-②/⑤）：本组件为任务源 ⇒ 读 `HasWorkerAssigned(本组件)`（任意任务类型 Working 均算在场）。</summary>
     bool HasWorkerOnDuty => TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(this);
 
-    bool TryAdvertiseStore(StorageComponent store, float threshold, out KingdomTask task)
+    bool TryAdvertiseStore(StorageComponent store, ResourceType type, float threshold, out KingdomTask task)
     {
         task = null;
-        if (store == null || store.storedAmount <= 0) return false;
-        if (store.capacity <= 0 || store.storedAmount < store.capacity * threshold) return false;
+        if (store == null) return false;
+        int stored = store.GetAmount(type);
+        if (stored <= 0) return false;
+        if (store.capacity <= 0 || stored < store.capacity * threshold) return false;
         task = new KingdomTask(KingdomTaskType.Transport, this);
         // destPos=归属国主城门口可走格（SpecificBuilding 类型派发侧不覆盖 destPos）。禁用 NearestWarehouse：
         // 其解析落 Vault 子仓物理中心=主城占格中心（isObstacle，AI 城另有围墙环）→工人永不可达=搬运死循环（HH.107 十轮实证）。
@@ -205,8 +210,8 @@ public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSo
         task.destPos = TreasuryGatePos();
         task.args = new ScaleTaskArgs
         {
-            resourceType = store.resourceType,
-            totalResourceDemand = store.storedAmount
+            resourceType = type,
+            totalResourceDemand = stored
         };
         return true;
     }

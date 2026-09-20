@@ -10,7 +10,8 @@ using UnityEngine;
 public class KingdomConfig : ScriptableObject
 {
     [Header("主城升级消耗（索引 0=Lv1 修复，1=Lv2 ... 5=Lv6；§2.1 ÷5）")]
-    public ResourcePack[] castleUpgradeCosts;
+    // ⭐ `M1-A`／`09#50`：造价 ＝ 「资源量列表」（旧固定桶版已随资产迁移核对通过退役）
+    public ResourceList[] castleUpgradeCosts;
 
     [Header("人口系统（数据层先行，§13.5）")]
     public int initialPopulation = 9;       // 开局人口目标（HH.17 决策3 去君主：4 工人 + 5 居民 = 9，§3.3）
@@ -173,11 +174,11 @@ public class KingdomConfig : ScriptableObject
         }
     }
 
-    /// <summary>获取主城第 castleLevel 级升级消耗（1..6；越界返回 Zero）。</summary>
-    public ResourcePack GetCastleUpgradeCost(int castleLevel)
+    /// <summary>获取主城第 castleLevel 级升级消耗（1..6；越界返回空列表）。</summary>
+    public ResourceList GetCastleUpgradeCost(int castleLevel)
     {
-        if (castleLevel < 1 || castleLevel > 6) return ResourcePack.Zero;
-        if (castleUpgradeCosts == null || castleLevel - 1 >= castleUpgradeCosts.Length) return ResourcePack.Zero;
+        if (castleLevel < 1 || castleLevel > 6) return ResourceList.Empty;
+        if (castleUpgradeCosts == null || castleLevel - 1 >= castleUpgradeCosts.Length) return ResourceList.Empty;
         return castleUpgradeCosts[castleLevel - 1];
     }
 }

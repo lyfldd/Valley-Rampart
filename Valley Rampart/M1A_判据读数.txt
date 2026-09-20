@@ -1,0 +1,37 @@
+M1-A 判据 1~4 / 6 实测读数（HH.313 · Edit Mode · StorageComponent 单元级）
+═══ 判据 1：一栋建筑只改一行 ═══
+声明行 A = res_material  ⇒ Accepts(Stone)=True Accepts(Wood)=True Accepts(Food)=False Accepts(Gold)=False
+声明行 B = res_food      ⇒ Accepts(Stone)=False Accepts(Food)=True Accepts(SpecialFood)=True Accepts(Meat)=True
+实投验证：A.Add(Stone,7)=7；A.Add(Food,7)=0（标签不匹配 ⇒ 拒收 0）
+          B.Add(Stone,7)=0；B.Add(Food,7)=7
+⇒ 收什么完全由**一行声明数据**决定；StorageComponent 代码零分支（无 outputResource 参与）。
+═══ 判据 2：一仓装多资源、共占一条容量线 ═══
+仓：声明 res_material、capacity=20
+投入 Stone5/Wood4/Ore3 ⇒ 实际入仓 5/4/3
+三种并存读数：GetAmount(Stone)=5 GetAmount(Wood)=4 GetAmount(Ore)=3
+一条容量线：TotalCount=12 UsedSpace=12 FreeSpace=8 capacity=20（⇒ 共占同一条容量线，⛔ 非每资源一条）
+Query() 条目数=3 ⇒ Stone×5, Wood×4, Ore×3
+═══ 判据 3：容量按体积算 ═══
+容量 10 ＋ 石材体积=1 ⇒ Add(Stone,10)=10；再加 Add(Stone,1)=0（已满拒绝）；CanAccept(Stone)=0；UsedSpace=10
+体积 0 资源（金币=体积 0）⇒ 满仓仍可入 Add(Gold,999)=999；UsedSpace 仍=10（不占容量）
+⭐ 口径确认：CanAccept = floor(剩余容量 ÷ 体积)（[StorageComponent.cs] CanAccept）；体积 0 ⇒ int.MaxValue
+⚠️ 局限（如实记）：资源表体积初值**全 1、仅金 0**（`09` §4.2 已定 · 数值批可调）⇒ **无体积=3 的资源样本**，
+   「容量 10 ÷ 体积 3 = 3 个」这一步无法用现网资源实测；上式已由 体积=1（10÷1=10）与 体积=0 两侧端点读数夹住。
+═══ 判据 4：前缀可读 ═══
+仓内：Stone5/Wood4/Ore3/Food6
+查子树 res_material ⇒ SumByPrefix("res_material")=12（＝石5＋木4＋矿3＝12，一次拿到合计）
+查子树 res           ⇒ SumByPrefix("res")=18（＝全部 18）
+查子树 res_food      ⇒ SumByPrefix("res_food")=6（＝粮 6）
+查单项               ⇒ GetAmount(Stone)=5 GetAmount(Ore)=3
+段边界反例           ⇒ SumByPrefix("res_mat")=0（段未对齐 ⇒ 0，`09` §3.2）
+═══ 判据 6：新档能存能读（ResourceList 存档往返） ═══
+存档前 storageContents = 石材×7, 木材×3, 矿石×2, 石头弹×1
+序列化 json = {"defId":"Warehouse","coordX":12,"coordY":34,"footprintW":0,"footprintH":0,"level":2,"hp":90,"maxHp":100,"faction":0,"state":0,"sourceType":0,"storageContents":{"items":[{"type":1,"amount":7},{"type":2,"amount":3},{"type":4,"amount":2},{"type":10,"amount":1}]},"treasuryContents":{"items":[{"type":0,"amount":123},{"type":9,"amount":9},{"type":5,"amount":4}]},"byproductCrystalAmount":0,"byproductFireOilAmount":0,"byproductOreAmount":0,"grade":0,"totalInvested":0,"kingdomId":0,"anchorCoordX":0,"anchorCoordY":0,"anchorFeature":0}
+读回 storageContents  = 石材×7, 木材×3, 矿石×2, 石头弹×1
+读回 treasuryContents = 金币×123, 金属×9, 水晶×4
+逐项一致：storage=True treasury=True 容量线回灌：条数=4 TotalCount=13 UsedSpace=13/50 文本=石材×7, 木材×3, 矿石×2, 石头弹×1
+空仓往返（全 0 ⇒ 空列表、⛔ 非 null）：items==null？False；条数=0
+═══ 附：资源表落码行数 ═══
+ResourceCatalog 落码行数 = 13（与 ResourceType 枚举现值 1:1；⭐ 第 14 项 medkit 归 M6 未落 ⇒ 无孤儿资源告警，`D789` Q3=A）
+Gold/res_currency.gold  Stone/res_material.stone  Wood/res_material.wood  Ore/res_material.ore  Metal/res_material.metal  Crystal/res_material.crystal  FireOil/res_material.fireoil  Food/res_food.grain  SpecialFood/res_food.special  Meat/res_food.meat  StoneAmmo/res_ammo.stone  FireballAmmo/res_ammo.fireball  MagicAmmo/res_ammo.magic  
+ResourceType 枚举项数 = 13（表内 13 项，未落码 0 项）

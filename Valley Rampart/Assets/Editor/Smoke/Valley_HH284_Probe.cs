@@ -16,21 +16,26 @@ using UnityEngine;
 //        ★ 迁入说明：㉔/㉕ 实读原曾以 +27 行尾插形式落在共享诊断文件 Valley_DiagMilitary.cs（违 D728 裁 1，D732 打回）
 //        ⇒ 已回退（该文件逐字还原）并**迁入本独立容器**（`DumpMachineReadout`）。
 //  档位（HH.284 停手待裁②·建议值放行）：SEED=73621（HH.230 七考正跑档同 seed·与 D684/HH.203 对照）
-//        / 新槽 hh284_probe（禁覆盖 p1_run9/p1_run8/HH.214 槽）/ 120 日熔断（HH.203 同档）。
+//        / 新槽 hh284_probe（禁覆盖 p1_run9/p1_run8/HH.214 槽/hh285_obs1）/ **150 日熔断（D733 放行档·A 案治本后复跑：
+//        D684 军事期首达 k4@D78/k1@D94 ⇒ 120 日窗不足）**。
+//  R5（D733 补）：逐日读 `SiegeProductionSystem.WorkshopLevel()`（各国厂级·全局口径实况）＋与 `GetMachineLimit()`
+//        对照 ⇒ 供 `DZ-157`「上限口径跨主体泄漏」定性（现 level 是否恒 1）。
 //  只读纪律：本容器不写任何业务状态（相机平移=纯表现层，仅供截图佐证）；证据=Logs/hh284_probe.log
 //        （逐行镜像·console 大缓冲教训）+ Logs/hh284_status.log（终局状态）+ Editor.log。
 //  命中即停（L-34·HH.284 §3.2 R1 判据）：
 //        ① R1 门达标＝top=ProduceMachine 首达 且 该国机器实体 >0（门达标即停）
 //        ② R1 空转＝top 首达后实体恒 0 ≥30 日（空转即停·窗口值定案并在报告披露）
 //        ③ ANOMALY＝[SiegeProduction]「生成返回 null」退款（HH.282 兜底被触发=prefab 回归·当场判定）
-//        ④ D120 熔断。
+//        ④ D150 熔断。
+//  验收两层（D733·不得混判）：层1 评分面＝㉔ 进 top（topBswCount>0 或 topPmCount>0＝HH.285 治本直接效果）；
+//        层2 执行面＝feasible/实体可能仍 0（DZ-159 木链未修）⇒ 不得因层2 未过而判层1 未达；零触发亦为证据（分列）。
 //  红线：零玩家干预（只观测不建造不训练不输资源）；AI.Core 零触。
 // ============================================================================
 public static class Valley_HH284_Probe
 {
     const int Seed = 73621;
     const string Slot = "hh284_probe";
-    const int CircuitBreakDay = 120;
+    const int CircuitBreakDay = 150;
     const int StallStopDays = 30;          // R1 空转窗口：top=ProduceMachine 首达后实体恒 0 ≥N 日
     const int R2SnapshotEvery = 10;        // R2 定期快照间隔（日）
 
@@ -41,6 +46,7 @@ public static class Valley_HH284_Probe
         public int stallDays;                                       // top 首达后实体恒 0 连续日
         public int prodOk, prodFail, limitBlock, landed, intercept; // 派发面计数（[SiegeProduction]/[KingdomBrain] 日志）
         public int machines = -1, fac = -1, limit = -1;             // 存量面（每日 tick 只读实读）
+        public int wsLevel = -1;                                    // R5（D733）：WorkshopLevel() 实况（全局口径·供 DZ-157 定性）
         public string stage = "?"; public int warrior = -1;         // R3（军事期复证 D684）
     }
 
@@ -152,7 +158,8 @@ public static class Valley_HH284_Probe
             o.machines = sps != null ? sps.GetPlacedMachineCountByKingdom(k.id) : -1;
             o.limit = sps != null ? sps.GetMachineLimit() : -1;
             o.fac = CountSiegeWorkshops(k.id);
-            Log($"D{day} k{k.id} stage={o.stage} warrior={o.warrior} fac={o.fac} machines={o.machines}/{o.limit} " +
+            o.wsLevel = sps != null ? sps.WorkshopLevel() : -1;   // R5（D733·DZ-157 对照：全局口径 level vs per-kingdom limit）
+            Log($"D{day} k{k.id} stage={o.stage} warrior={o.warrior} fac={o.fac} wsLv={o.wsLevel} machines={o.machines}/{o.limit} " +
                 $"top㉕={o.topPmCount}(首达D{o.topPmFirstDay}) top㉔={o.topBswCount}(首达D{o.topBswFirstDay}) " +
                 $"派发 成/败/限={o.prodOk}/{o.prodFail}/{o.limitBlock} 落地={o.landed} 拦截={o.intercept} stall={o.stallDays}");
             // ㉔/㉕ 三面实读（HH.284 读数面·D732 自 DiagMilitary 尾插迁入本独立容器）

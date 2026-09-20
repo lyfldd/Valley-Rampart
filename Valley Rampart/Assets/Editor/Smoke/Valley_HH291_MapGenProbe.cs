@@ -394,7 +394,7 @@ public static class Valley_HH291_MapGenProbe
         var probeB = aiKid >= 0 ? BuildAt(mineDef, center, 6, aiKid) : null;
         yield return null;
         var stComp = probeB != null ? probeB.GetComponent<StorageComponent>() : null;
-        int kStone0 = (aiKid >= 0 && reg.Get(aiKid) != null) ? reg.Get(aiKid).resources.stone : -1;
+        int kStone0 = (aiKid >= 0 && reg.Get(aiKid) != null) ? reg.Get(aiKid).GetResourceValue(ResourceType.Stone) : -1;   // ⭐ M1-A 适配
         int kCrystal0 = (aiKid >= 0 && reg.Get(aiKid) != null) ? reg.Get(aiKid).crystal : -1;
         int kStoneMax = kStone0, kCrystalMax = kCrystal0;
         // A6③ 全局读数：全图 mine 副产子仓合计（对派遣落点鲁棒）＋ 台账
@@ -407,7 +407,7 @@ public static class Valley_HH291_MapGenProbe
                 var c = b.GetComponent<MineByproductComponent>();
                 if (c == null) continue;
                 var st = c.GetStore(rt);
-                if (st != null) sum += st.storedAmount;
+                if (st != null) sum += st.TotalCount;   // ⭐ M1-A 适配
             }
             return sum;
         }
@@ -444,7 +444,7 @@ public static class Valley_HH291_MapGenProbe
             if (cg > cMax) cMax = cg; if (fg > fMax) fMax = fg; if (og > oMax) oMax = og;
             if (aiKid >= 0 && reg.Get(aiKid) != null)
             {
-                if (reg.Get(aiKid).resources.stone > kStoneMax) kStoneMax = reg.Get(aiKid).resources.stone;
+                if (reg.Get(aiKid).GetResourceValue(ResourceType.Stone) > kStoneMax) kStoneMax = reg.Get(aiKid).GetResourceValue(ResourceType.Stone);   // ⭐ M1-A 适配
                 if (reg.Get(aiKid).crystal > kCrystalMax) kCrystalMax = reg.Get(aiKid).crystal;
             }
             if (cMax > c0g || fMax > f0g || oMax > o0g) break;   // L-34 命中即停
@@ -452,7 +452,7 @@ public static class Valley_HH291_MapGenProbe
         bool a6c = (cMax > c0g) || (fMax > f0g) || (oMax > o0g);
         _log.AppendLine($"  **A6③ 入库读数**（全图 mine 副产子仓合计·补员={sp}·在岗 mine 峰值={dutyMines}/{mineInst}·60s 窗）：" +
                         $"水晶 {c0g}→**{cMax}** ｜ 火油 {f0g}→{fMax} ｜ 矿石 {o0g}→{oMax} ⇒ {(a6c ? "✅ 有读数" : "❌ 无读数")}");
-        _log.AppendLine($"    **石（石入库）专列**：定点 mine 本地仓 `StorageComponent` = {(stComp == null ? "**不存在**（`isResourceNode` 排除分支 ⇒ mine 本体无仓）" : stComp.storedAmount.ToString())}" +
+        _log.AppendLine($"    **石（石入库）专列**：定点 mine 本地仓 `StorageComponent` = {(stComp == null ? "**不存在**（`isResourceNode` 排除分支 ⇒ mine 本体无仓）" : stComp.TotalCount.ToString())}" +   // ⭐ M1-A 适配
                         $" · 台账 stone {kStone0} → {kStoneMax}（增量 {kStoneMax - kStone0}）· 台账 crystal {kCrystal0} → {kCrystalMax}（副产搬运链落点）");
         _log.AppendLine($"    🔴 缺口声明（口径）：`mine` 走 `isResourceNode=1` 采集点通道 ⇒ `Building.TryAdvertiseTask:960` 的 Gather 分支要求 `isConsumable`（mine＝持续·不满足）／" +
                         $"`:975` 的 Production 分支要求 `ProducerComponent`（结构性不挂）⇒ **mine 实体无「产石」通道**（石来源＝`StonePile` 一次性采集 ＋ `quarry` 采石场）；" +
@@ -487,7 +487,7 @@ public static class Valley_HH291_MapGenProbe
                 var sched = TaskScheduler.Instance;
                 var tk2 = new KingdomTask(KingdomTaskType.Production, byprodProbe) { destType = KingdomDestType.None };
                 sched.DispatchExternal(pcb, tk2);
-                int pc0 = byprodProbe.GetStore(ResourceType.Crystal).storedAmount;
+                int pc0 = byprodProbe.GetStore(ResourceType.Crystal).TotalCount;   // ⭐ M1-A 适配
                 int pcMax = pc0, pcDuty = 0, pcState = -1; float pcDist = -1f; float pt = Time.realtimeSinceStartup;
                 while (Time.realtimeSinceStartup - pt < 20f)
                 {
@@ -495,7 +495,7 @@ public static class Valley_HH291_MapGenProbe
                     if (sched.HasWorkerAssigned(byprodProbe)) pcDuty = 1;
                     pcState = (int)sched.GetWorkerState(pcc.npcId);
                     pcDist = Vector2.Distance(pcw.transform.position, byprodProbe.SourcePos);
-                    int v = byprodProbe.GetStore(ResourceType.Crystal).storedAmount;
+                    int v = byprodProbe.GetStore(ResourceType.Crystal).TotalCount;   // ⭐ M1-A 适配
                     if (v > pcMax) pcMax = v;
                     if (pcMax > pc0) break;   // L-34 命中即停
                 }

@@ -192,13 +192,13 @@ public static class Valley_HH140_Probe
             mobOn && patrollingAfter == 0 && garrisons > 0 && garrisonShells == 0);
 
         // ===== P6：B8 搭车（D594 整改令：缺失族不评零扣费/在场族不受影响）=====
-        k1.resources.gold += 800;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 800);   // ⭐ M1-A 适配
         var defM = new UtilityActionDef { id = UtilityAction.ProduceMachine, name = "probeM", need = NeedKind.MachineDemand, needA = 2 };
         var miFeas = typeof(UtilityScorer).GetMethod("Feasible", BindingFlags.NonPublic | BindingFlags.Static);
         bool feasNoFactory = miFeas != null && !(bool)miFeas.Invoke(null, new object[] { k1, defM });
         Log("P6a B8 厂前置镜像：k1 无投掷机厂→ProduceMachine 不评=" + feasNoFactory, feasNoFactory);
 
-        k1.resources.gold += 2000; k1.resources.stone += 600; k1.resources.wood += 600;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 2000); k1.resources = k1.resources.Add(ResourceType.Stone, 600); k1.resources = k1.resources.Add(ResourceType.Wood, 600);   // ⭐ M1-A 适配
         var bc = BuildController.Instance;
         var bdefW = BuildingFactory.FindDefById(BuildingIds.SiegeWorkshop);
         var miSpot = brain1.GetType().GetMethod("FindAIBuildSpot", BindingFlags.NonPublic | BindingFlags.Static);
@@ -208,7 +208,7 @@ public static class Valley_HH140_Probe
         bool workshop = FindB(1, BuildingIds.SiegeWorkshop) != null;
         Log("P6pre k1 建厂提交=" + builtW + " 施工 Active=" + workshop, workshop);
 
-        int gold0 = k1.resources.gold;
+        int gold0 = k1.GetResourceValue(ResourceType.Gold);   // ⭐ M1-A 适配
         var mcfgM = KingdomBrain.LoadConfig();
         var stageM = ScriptStage.Military;
         var utilCfg = UtilityActionConfig.LoadConfig();
@@ -216,7 +216,7 @@ public static class Valley_HH140_Probe
         bool noPick = topNoPrefab != UtilityAction.ProduceMachine;
         // 逐项 Feasible 直调（prefab 缺失=精灵 VineCatapult 图纸面缺席）
         bool feasNoPrefab = miFeas != null && !(bool)miFeas.Invoke(null, new object[] { k1, defM });
-        bool zeroSpend = k1.resources.gold == gold0;   // 评分+门控全程零扣费（ScoreTop/Feasible 纯读）
+        bool zeroSpend = k1.GetResourceValue(ResourceType.Gold) == gold0;   // 评分+门控全程零扣费（ScoreTop/Feasible 纯读）· ⭐ M1-A 适配
         Log("P6b D594 缺失族不评：精灵(race1) VineCatapult prefab 缺→不评=" + feasNoPrefab + " ScoreTop=" + topNoPrefab + " 零扣费=" + zeroSpend,
             feasNoPrefab && noPick && zeroSpend);
 
@@ -226,7 +226,7 @@ public static class Valley_HH140_Probe
         bool posOk = false; string posWhy = "k2 缺失";
         if (k2r != null && KingdomRace.GetKingdomRace(2) == 2)
         {
-            k2r.resources.gold += 3000; k2r.resources.stone += 800; k2r.resources.wood += 800;
+            k2r.resources = k2r.resources.Add(ResourceType.Gold, 3000); k2r.resources = k2r.resources.Add(ResourceType.Stone, 800); k2r.resources = k2r.resources.Add(ResourceType.Wood, 800);   // ⭐ M1-A 适配
             var sW2 = miSpot != null ? miSpot.Invoke(null, new object[] { 2, bdefW, 20 }) as GridCoord? : null;
             bool built2 = sW2.HasValue && bc != null && bc.TryBuild(bdefW, sW2.Value, GateOrientation.Horizontal, 2);
             yield return WaitDays(4);

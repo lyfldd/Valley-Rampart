@@ -76,7 +76,7 @@ public class KingdomIntelPanel : MonoBehaviour, IUIPanel
         Set(_pop, state != null && PopulationSystem.Instance != null ? state.workerCount.ToString() : "—");
         Set(_military, state != null && PopulationSystem.Instance != null ? state.warriorCount.ToString() : "—");
         Set(_resources, state != null
-            ? $"金{state.resources.gold} 木{state.resources.wood} 石{state.resources.stone} 粮{state.resources.food} 铁{state.resources.metal}"
+            ? $"金{state.GetResourceValue(ResourceType.Gold)} 木{state.GetResourceValue(ResourceType.Wood)} 石{state.GetResourceValue(ResourceType.Stone)} 粮{state.GetResourceValue(ResourceType.Food)} 铁{state.GetResourceValue(ResourceType.Metal)}"
             : "—");
         // 幸福：per-kingdom 真值（DZ-082③；读公开口 GetKingdomHappiness=GetOverallHappiness(kid)，D520 不掏私有字段）
         Set(_happiness, state != null && hs != null ? $"{hs.GetKingdomHappiness(state.id):F0}" : "—");

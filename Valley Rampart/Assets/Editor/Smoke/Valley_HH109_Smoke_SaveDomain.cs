@@ -127,8 +127,8 @@ public static class Valley_HH109_Smoke_SaveDomain
         Vector2Int cellB = MapGenRules.NearestWalkable(WorldManager.Instance.ActiveMap, center.x + 3, center.y + 2);
 
         // ===== P1 Chest 入档：两箱→存→破坏态→读→逐项一致 =====
-        var packA = new ResourcePack { gold = 7, stone = 3 };
-        var packB = new ResourcePack { wood = 5, food = 2 };
+        var packA = ResourceList.Of(new ResourceAmount(ResourceType.Gold, 7), new ResourceAmount(ResourceType.Stone, 3));   // ⭐ M1-A 适配
+        var packB = ResourceList.Of(new ResourceAmount(ResourceType.Wood, 5), new ResourceAmount(ResourceType.Food, 2));   // ⭐ M1-A 适配
         var boxA = chestMgr.SpawnChest(new GridCoord(cellA.x, cellA.y), packA, Faction.PlayerCamp);
         var boxB = chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), packB, Faction.None);
         Debug.Log(TAG + " [P1前置] Spawn后立即 Count=" + chestMgr.Count + "（A/B 非 null=" + (boxA != null) + "/" + (boxB != null) + "）");
@@ -151,7 +151,7 @@ public static class Valley_HH109_Smoke_SaveDomain
 
             // 破坏态：移走箱A+箱B 同格再放一箱（读档后应被存档态覆盖=幂等直证）
             chestMgr.Remove(boxA);   // 破坏态用 Remove（Pickup 的 Interactor 参数为值类型不收 null；Remove=拾取/过期同款移除语义）
-            chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), new ResourcePack { gold = 99 }, Faction.Monster);
+            chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), ResourceList.Of(new ResourceAmount(ResourceType.Gold, 99)), Faction.Monster);   // ⭐ M1-A 适配
             yield return null;
             int countDirty = chestMgr.Count;
 
@@ -469,10 +469,10 @@ public static class Valley_HH109_Smoke_SaveDomain
                 cx = c.cell.x, cy = c.cell.y,
                 bornDay = c.bornDay,
                 faction = (int)c.ownerFaction,
-                gold = c.contents.gold, stone = c.contents.stone,
-                wood = c.contents.wood, food = c.contents.food,
-                metal = c.contents.metal,
-                stoneAmmo = c.contents.stoneAmmo, fireballAmmo = c.contents.fireballAmmo, magicAmmo = c.contents.magicAmmo
+                gold = c.contents.Get(ResourceType.Gold), stone = c.contents.Get(ResourceType.Stone),   // ⭐ M1-A 适配
+                wood = c.contents.Get(ResourceType.Wood), food = c.contents.Get(ResourceType.Food),   // ⭐ M1-A 适配
+                metal = c.contents.Get(ResourceType.Metal),   // ⭐ M1-A 适配
+                stoneAmmo = c.contents.Get(ResourceType.StoneAmmo), fireballAmmo = c.contents.Get(ResourceType.FireballAmmo), magicAmmo = c.contents.Get(ResourceType.MagicAmmo)   // ⭐ M1-A 适配
             };
         }
 
@@ -490,14 +490,14 @@ public static class Valley_HH109_Smoke_SaveDomain
     private static ChestSnap MatchByGold(ChestEntity[] boxes, int gold)
     {
         for (int i = 0; i < boxes.Length; i++)
-            if (boxes[i] != null && boxes[i].contents.gold == gold) return ChestSnap.Of(boxes[i]);
+            if (boxes[i] != null && boxes[i].contents.Get(ResourceType.Gold) == gold) return ChestSnap.Of(boxes[i]);   // ⭐ M1-A 适配
         return null;
     }
 
     private static ChestSnap MatchByWood(ChestEntity[] boxes, int wood)
     {
         for (int i = 0; i < boxes.Length; i++)
-            if (boxes[i] != null && boxes[i].contents.wood == wood) return ChestSnap.Of(boxes[i]);
+            if (boxes[i] != null && boxes[i].contents.Get(ResourceType.Wood) == wood) return ChestSnap.Of(boxes[i]);   // ⭐ M1-A 适配
         return null;
     }
 

@@ -18,14 +18,9 @@ MonoBehaviour:
   faction: 1
   role: 2
   cost:
-    gold: 0
-    stone: 0
-    wood: 4
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 2
+      amount: 4
   footprint: {x: 2, y: 1}
   allowedTerrain: 
   heightLayer: 0
@@ -34,6 +29,8 @@ MonoBehaviour:
   isGate: 0
   rotatable: 0
   moduleType: 2
+  warehousePaths:
+  - res_food.grain
   isObstacle: 0
   producer:
     kind: 0
@@ -48,25 +45,19 @@ MonoBehaviour:
     attackCooldown: 0
   levels:
   - upgradeCost:
-      gold: 0
-      stone: 6
-      wood: 10
-      food: 0
-      metal: 0
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 6
+      - type: 2
+        amount: 10
     statScale: 2
     prerequisites: []
   - upgradeCost:
-      gold: 0
-      stone: 16
-      wood: 24
-      food: 0
-      metal: 0
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 16
+      - type: 2
+        amount: 24
     statScale: 2
     prerequisites: []
   crewRequired: 0
@@ -92,3 +83,6 @@ MonoBehaviour:
   prefab: {fileID: 0}
   monsterTargetValue: 40
   monsterIsHighValue: 0
+  raceId: -1
+  uniquePerKingdom: 0
+  isMineByproduct: 0

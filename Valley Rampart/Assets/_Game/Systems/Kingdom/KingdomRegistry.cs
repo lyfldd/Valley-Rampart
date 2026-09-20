@@ -230,7 +230,7 @@ public struct KingdomEntryData
     public float[] personality;          // 五轴（0好战/1经济/2防守/3扩张/4外交），读档缺省兜底中性
     public int templateSourceId;          // -1=无来源（玩家/占位）
     public int raceId;                    // 2_20 M2/D467：国族（附加字段；旧档缺省解析=0=Human 兜底，零迁移器改动）
-    public ResourcePack resources;        // 起始过渡账本
+    public ResourceList resources;        // 起始过渡账本（⭐ M1-A：09#50 资源量列表）
     public int workerCount;
     public int warriorCount;
 }

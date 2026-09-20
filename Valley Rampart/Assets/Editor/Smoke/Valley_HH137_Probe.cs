@@ -121,7 +121,7 @@ public static class Valley_HH137_Probe
         // ===== P4：行为级（建训练建筑→直调执行方法→队列→毕业成军）=====
         // 探针环境前置：AI 3 日资源积累不足（r1 实锤 k1 石13<兵营20 → PlacementValidator 资源门拒）
         // → 内存注资源（不入档），确保选址/TryBuild 过资源门，验证目标=执行链非经济
-        k1.resources.gold += 500; k1.resources.stone += 300; k1.resources.wood += 300;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 500).Add(ResourceType.Stone, 300).Add(ResourceType.Wood, 300);
         int qi0 = TrainingSystem.Instance != null ? TrainingSystem.Instance.GetKingdomQueueCount(1) : -1;
         var brain = KingdomBrainRegistry.Instance != null ? KingdomBrainRegistry.Instance.Get(1) : null;
         var miTrain = brain != null ? brain.GetType().GetMethod("ExecuteTrainGeneral", BindingFlags.NonPublic | BindingFlags.Instance) : null;
@@ -143,7 +143,7 @@ public static class Valley_HH137_Probe
         Log("P4a 直建提交 k1 兵营=" + builtB + " 训练营=" + builtC, builtB && builtC);
 
         // k3 兵营同批提交（P4d 族门禁前置）——r2 修：k3 也注资源+真建兵营（缺席早退≠门禁判定）
-        k3.resources.gold += 500; k3.resources.stone += 300; k3.resources.wood += 300;
+        k3.resources = k3.resources.Add(ResourceType.Gold, 500).Add(ResourceType.Stone, 300).Add(ResourceType.Wood, 300);
         var b3 = BuildingFactory.FindDefById(BuildingIds.Barracks);
         var s3 = miSpot.Invoke(null, new object[] { 3, b3, 20 }) as GridCoord?;
         bool built3 = s3.HasValue && bc.TryBuild(b3, s3.Value, GateOrientation.Horizontal, 3);
@@ -191,7 +191,7 @@ public static class Valley_HH137_Probe
         Log("P4e B7 将军毕业 k1 将军数=" + gens + " 编队成员=" + formationMembers, gens > 0 && formationMembers > 0);
 
         // ===== P5：B8 机器（族门禁负+正+上限负）=====
-        k1.resources.gold += 2000; k1.resources.stone += 500; k1.resources.wood += 500;   // 机器成本高，注资源保执行链验证
+        k1.resources = k1.resources.Add(ResourceType.Gold, 2000).Add(ResourceType.Stone, 500).Add(ResourceType.Wood, 500);   // 机器成本高，注资源保执行链验证
         var sps = SiegeProductionSystem.Instance;
         // 厂前置：GetMachineLimit 依赖投掷机厂在场（无厂=上限 0 → 先建厂+等施工，镜像 r2 教训）
         var sW = miSpot.Invoke(null, new object[] { 1, bdefW, 25 }) as GridCoord?;

@@ -183,7 +183,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
     public bool TryUpgradeCastle()
     {
         if (CastleLevel < 1 || CastleLevel >= 6) return false;
-        var cost = _config != null ? _config.GetCastleUpgradeCost(CastleLevel + 1) : ResourcePack.Zero;
+        var cost = _config != null ? _config.GetCastleUpgradeCost(CastleLevel + 1) : ResourceList.Empty;
         if (RulerController.Instance == null || !RulerController.Instance.CanAfford(cost)) return false;
 
         RulerController.Instance.Spend(cost);
@@ -191,10 +191,10 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         return true;
     }
 
-    /// <summary>当前主城下一级升级消耗（UI 显示用）。</summary>
-    public ResourcePack NextCastleUpgradeCost()
+    /// <summary>当前主城下一级升级消耗（UI 显示用）。⭐ `M1-A`：返回类型 `ResourcePack` ⇒ `ResourceList`。</summary>
+    public ResourceList NextCastleUpgradeCost()
     {
-        return _config != null ? _config.GetCastleUpgradeCost(CastleLevel + 1) : ResourcePack.Zero;
+        return _config != null ? _config.GetCastleUpgradeCost(CastleLevel + 1) : ResourceList.Empty;
     }
 
     // ===== 模块等级 =====
@@ -326,8 +326,9 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
 
     public SavePayload SaveState()
     {
-        // 2_12 步骤8.4：国库非金真源持久化（金走 Ruler 直通不在此列）
-        var tv = TreasureVault.Instance;
+        // ⭐ M1-A：国库真源＝`TreasureVault` 的多资源容器，随**建筑存档**存取
+        //（`BuildingSaveData.treasuryContents`）⇒ 原「`KingdomManager.Treasury*` 读档缓存桥」整段退役
+        //（`09#38`／判据 5；留着会构成同一份国库的**第二真源**）。
         var data = new KingdomSaveData
         {
             saveDataVersion = 1,
@@ -338,16 +339,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
             tradeQuotaRemaining = (int[])TradeQuotaRemaining.Clone(),
             tradeCooldownDays = (int[])TradeCooldownDays.Clone(),
             researchLevels = null,   // D461 研究系统退役：字段保留（schema 零变更）但恒不写
-            waveProgress = 0,
-            treasuryStone = tv != null ? tv.GetAmount(ResourceType.Stone) : 0,
-            treasuryWood = tv != null ? tv.GetAmount(ResourceType.Wood) : 0,
-            treasuryFood = tv != null ? tv.GetAmount(ResourceType.Food) : 0,
-            treasurySpecialFood = tv != null ? tv.GetAmount(ResourceType.SpecialFood) : 0,
-            treasuryMeat = tv != null ? tv.GetAmount(ResourceType.Meat) : 0,
-            treasuryMetal = tv != null ? tv.GetAmount(ResourceType.Metal) : 0,
-            // DZ-072a：副产两资源入档（TreasureVault.Managed 扩面配套）
-            treasuryCrystal = tv != null ? tv.GetAmount(ResourceType.Crystal) : 0,
-            treasuryFireOil = tv != null ? tv.GetAmount(ResourceType.FireOil) : 0
+            waveProgress = 0
         };
         return new SavePayload
         {
@@ -377,18 +369,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         if (data.tradeCooldownDays != null && data.tradeCooldownDays.Length >= 7)
             TradeCooldownDays = ResizeQuotaArray(data.tradeCooldownDays);
 
-        // 2_12 步骤8.4：读到国库字段缓存（国库=主城学堂后建，vault 就绪后由 TreasureVault 读出恢复）
-        TreasuryStone = data.treasuryStone;
-        TreasuryWood = data.treasuryWood;
-        TreasuryFood = data.treasuryFood;
-        TreasurySpecialFood = data.treasurySpecialFood;
-        TreasuryMeat = data.treasuryMeat;
-        TreasuryMetal = data.treasuryMetal;
-        // DZ-072a：副产两资源读档缓存（旧档缺字段=0）
-        TreasuryCrystal = data.treasuryCrystal;
-        TreasuryFireOil = data.treasuryFireOil;
-        // T1.8（D609/D617）：矿石国库槽读档缓存（旧档缺字段=0，零 bump）
-        TreasuryOre = data.treasuryOre;
+        // ⭐ M1-A：国库读档改由建筑存档负责（`BuildingSaveData.treasuryContents`）
+        // ⇒ 原「Global 先落字段、主城 vault 就绪后据此恢复」的缓存桥整段退役。
 
         // 2_17 步骤11 批2：读档后把玩家解锁态镜像到 KingdomState[0]（若 Registry 已就绪；未就绪则 Registry 创建玩家态时回拉）
         MirrorPlayerUnlockToRegistry();
@@ -396,18 +378,8 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         Debug.Log($"[KingdomManager] 读档恢复：主城 Lv.{CastleLevel}，模块=[{string.Join(",", ModuleLevels)}]");
     }
 
-    // ===== 2_12 步骤8.4 国库读档缓存（读档 Global 先落字段，主城 TreasureVault 就绪后据此恢复）=====
-    public int TreasuryStone { get; private set; }
-    public int TreasuryWood { get; private set; }
-    public int TreasuryFood { get; private set; }
-    public int TreasurySpecialFood { get; private set; }
-    public int TreasuryMeat { get; private set; }
-    public int TreasuryMetal { get; private set; }
-    // DZ-072a：副产两资源读档缓存（TreasureVault 就绪后恢复）
-    public int TreasuryCrystal { get; private set; }
-    public int TreasuryFireOil { get; private set; }
-    /// <summary>T1.8（D609/D617）：矿石国库槽读档缓存（TreasureVault 就绪后回填）。</summary>
-    public int TreasuryOre { get; private set; }
+    // ⭐ M1-A：`Treasury*` 读档缓存（9 个属性）已随「国库真源＝容器 ＋ 随建筑存档」整段退役
+    //（判据 5：旧结构引用清零；留任一条都会构成同一份国库的第二真源）。
 
     /// <summary>把旧存档（7/9 档）额度数组扩展到当前 13 档（v1 兼容：缺档补初始额度）。</summary>
     private int[] ResizeQuotaArray(int[] old)
@@ -432,10 +404,7 @@ public class KingdomManager : Singleton<KingdomManager>, ISaveable
         TradeCooldownDays = new int[13];
         _castleBuilding = null;
         InitTradeQuotas();   // 新建游戏重新初始化贸易额度
-        // 2_12 步骤8.4：清国库读档缓存（防新建局读到上局残留）
-        TreasuryStone = TreasuryWood = TreasuryFood = TreasurySpecialFood = TreasuryMeat = TreasuryMetal = 0;
-        TreasuryCrystal = TreasuryFireOil = 0;   // DZ-072a：副产缓存同清
-        TreasuryOre = 0;                         // T1.8（D609/D617）：矿石缓存同清
+        // ⭐ M1-A：原「清国库读档缓存」随 `Treasury*` 字段退役（国库随建筑存档，无独立缓存）
         // 2_17 步骤11 批2：复位同步玩家解锁态镜像到 KingdomState[0]（随 Registry 重置后回拉一致）
         MirrorPlayerUnlockToRegistry();
     }

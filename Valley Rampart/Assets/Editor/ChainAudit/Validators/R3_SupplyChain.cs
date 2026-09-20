@@ -177,16 +177,17 @@ public static class R3_SupplyChain
         }
     }
 
-    private static void AddPack(SortedDictionary<string, List<string>> map, ResourcePack pack, string anchor)
+    private static void AddPack(SortedDictionary<string, List<string>> map, ResourceList pack, string anchor)
     {
-        Add(map, ResourceType.Gold, pack.gold > 0 ? anchor + ".gold" : null);
-        Add(map, ResourceType.Stone, pack.stone > 0 ? anchor + ".stone" : null);
-        Add(map, ResourceType.Wood, pack.wood > 0 ? anchor + ".wood" : null);
-        Add(map, ResourceType.Food, pack.food > 0 ? anchor + ".food" : null);
-        Add(map, ResourceType.Metal, pack.metal > 0 ? anchor + ".metal" : null);
-        Add(map, ResourceType.StoneAmmo, pack.stoneAmmo > 0 ? anchor + ".stoneAmmo" : null);
-        Add(map, ResourceType.FireballAmmo, pack.fireballAmmo > 0 ? anchor + ".fireballAmmo" : null);
-        Add(map, ResourceType.MagicAmmo, pack.magicAmmo > 0 ? anchor + ".magicAmmo" : null);
+        // ⭐ M1-A 适配：ResourcePack 八桶读数 → ResourceList.Get(type)
+        Add(map, ResourceType.Gold, pack.Get(ResourceType.Gold) > 0 ? anchor + ".gold" : null);
+        Add(map, ResourceType.Stone, pack.Get(ResourceType.Stone) > 0 ? anchor + ".stone" : null);
+        Add(map, ResourceType.Wood, pack.Get(ResourceType.Wood) > 0 ? anchor + ".wood" : null);
+        Add(map, ResourceType.Food, pack.Get(ResourceType.Food) > 0 ? anchor + ".food" : null);
+        Add(map, ResourceType.Metal, pack.Get(ResourceType.Metal) > 0 ? anchor + ".metal" : null);
+        Add(map, ResourceType.StoneAmmo, pack.Get(ResourceType.StoneAmmo) > 0 ? anchor + ".stoneAmmo" : null);
+        Add(map, ResourceType.FireballAmmo, pack.Get(ResourceType.FireballAmmo) > 0 ? anchor + ".fireballAmmo" : null);
+        Add(map, ResourceType.MagicAmmo, pack.Get(ResourceType.MagicAmmo) > 0 ? anchor + ".magicAmmo" : null);
     }
 
     // ========================================================================

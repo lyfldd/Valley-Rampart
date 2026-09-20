@@ -32,6 +32,7 @@ public class ChestSaveEntry
     /// <summary>来源阵营（int 平铺；任意阵营可拾 D146，记录来源供 2_14 掠夺）。</summary>
     public int ownerFaction;
 
-    /// <summary>内容物四资源+三弹药包（全 int struct，JsonUtility 直接序列化）。</summary>
-    public ResourcePack contents;
+    /// <summary>内容物（⭐ `M1-A`／`09#50`：资源量列表 `ResourceList`，任意资源均可承载；`JsonUtility` 直接序列化）。
+    /// ⚠️ 旧档（`ResourcePack` 版）**作废**（`D788` §4：游戏未发布 ⇒ 不写存档迁移脚本）。</summary>
+    public ResourceList contents;
 }

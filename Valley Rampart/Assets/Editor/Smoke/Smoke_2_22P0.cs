@@ -108,7 +108,7 @@ public static class Smoke_2_22P0
         if (brain1 == null) { Log("brain1 缺失", false); Finish(); yield break; }
 
         // ===== P1 将军可训练（⑯→入队→毕业→成军）+ L-21 计数面翻转+失败终止 =====
-        k1.resources.gold += 800; k1.resources.stone += 300; k1.resources.wood += 300;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 800); k1.resources = k1.resources.Add(ResourceType.Stone, 300); k1.resources = k1.resources.Add(ResourceType.Wood, 300);   // ⭐ M1-A 适配
         var miTrain = brain1.GetType().GetMethod("ExecuteTrainGeneral", BindingFlags.NonPublic | BindingFlags.Instance);
         var miSpot = typeof(KingdomBrain).GetMethod("FindAIBuildSpot", BindingFlags.NonPublic | BindingFlags.Static);
         var bc = BuildController.Instance;
@@ -209,7 +209,7 @@ public static class Smoke_2_22P0
         // 门控前提（HH.146 run1/2 实证）：ExecuteRecruitArmy 首闸=warriorCount >= MilitaryTarget(D348) 即返——
         // k1 成军+P2c 已达 D348 目标（软帽 2+workerCount 约束）→ 永不选招。探针注入 Military 阶段抬 stageFactor
         // +TopUpWorkerPool 抬软帽 → 目标缺口恢复（未达目标=选招执行前提；P9a scriptPhase 注入同法，用毕复原）。
-        k1.resources.gold += 1000;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 1000);   // ⭐ M1-A 适配
         var miArmy = brain1.GetType().GetMethod("ExecuteRecruitArmy", BindingFlags.NonPublic | BindingFlags.Instance);
         var savedPhase3 = k1.scriptPhase;
         k1.scriptPhase = ScriptStage.Military;
@@ -246,10 +246,10 @@ public static class Smoke_2_22P0
         Log("P3b 安全栏 clamp（权重∈[" + BattleLearnedWeights.WeightFloor + "," + BattleLearnedWeights.WeightCap + "]）=" + p3bar, p3bar);
         // L-21 失败路径③：无可负担候选 → 不空转（队列不涨）
         int q3a = TrainingSystem.Instance != null ? TrainingSystem.Instance.GetKingdomQueueCount(1) : -1;
-        int goldSave = k1.resources.gold;
-        k1.resources.gold = 0;   // 穷国不可负担
+        int goldSave = k1.GetResourceValue(ResourceType.Gold);   // ⭐ M1-A 适配
+        k1.resources = k1.resources.Set(ResourceType.Gold, 0);   // 穷国不可负担 · ⭐ M1-A 适配
         if (miArmy != null) miArmy.Invoke(brain1, new object[] { k1, bcfg });
-        k1.resources.gold = goldSave;
+        k1.resources = k1.resources.Set(ResourceType.Gold, goldSave);   // ⭐ M1-A 适配
         int q3b = TrainingSystem.Instance != null ? TrainingSystem.Instance.GetKingdomQueueCount(1) : -1;
         bool p3fail = q3b == q3a;
         Log("P3c 失败路径③ 穷国不空转（队列 " + q3a + "→" + q3b + "）", p3fail);
@@ -485,7 +485,7 @@ public static class Smoke_2_22P0
 
         // ===== P9 机器双行动（B8：族门禁负+上限负+态势触发正）=====
         k1b = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(1) : null;
-        if (k1b != null) { k1b.resources.gold += 3000; k1b.resources.stone += 800; k1b.resources.wood += 800; }
+        if (k1b != null) { k1b.resources = k1b.resources.Add(ResourceType.Gold, 3000); k1b.resources = k1b.resources.Add(ResourceType.Stone, 800); k1b.resources = k1b.resources.Add(ResourceType.Wood, 800); }   // ⭐ M1-A 适配
         var sps = SiegeProductionSystem.Instance;
         var bdefW = BuildingFactory.FindDefById(BuildingIds.SiegeWorkshop);
         if (sps == null || bdefW == null || k1b == null) { Log("P9 前置缺失 sps/bdefW/k1", false); Finish(); yield break; }

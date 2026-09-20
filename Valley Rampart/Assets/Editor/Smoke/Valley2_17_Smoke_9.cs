@@ -52,12 +52,12 @@ public static class Valley2_17_Smoke_9
         //  （D592 归因三重证据=非产品缺陷）→ 分型：占位轮断⑥ / 让位轮断 LastTop≠None / 非 popAlarm 维持原断言。
         //  相位强制法：popAlarm 门槛入参=bcfg 阈值（KingdomState.workerCount 为只读派生不可直写）——
         //  内存改/还原，不落盘（HH.115 内存载值先例；退 Play 自动还原）。
-        int origFood = (int)ai.resources.food;
-        ai.resources.food = 99999;   // 粮裕免触发粮底线（测评分层焦点）
-        ai.resources.gold = 100;
+        int origFood = ai.GetResourceValue(ResourceType.Food);
+        ai.resources = ai.resources.Set(ResourceType.Food, 99999);   // 粮裕免触发粮底线（测评分层焦点）
+        ai.resources = ai.resources.Set(ResourceType.Gold, 100);
         int origPopFloor = bcfg.popFloor;
         int origDevMin = bcfg.developToExpand_workersMin;
-        bool recruitOpen = ai.workerCount < 10 && ai.resources.gold > 0;   // ⑥ 可招（D345 防卡死关键路径）
+        bool recruitOpen = ai.workerCount < 10 && ai.GetResourceValue(ResourceType.Gold) > 0;   // ⑥ 可招（D345 防卡死关键路径）
 
         // (a) 非 popAlarm 态：门槛置 0（workerCount<0 恒假）→ 维持原断言（焦点非空 + 评分非空）
         bcfg.popFloor = 0; bcfg.developToExpand_workersMin = 0;
@@ -79,11 +79,11 @@ public static class Valley2_17_Smoke_9
 
         // ---- #4 常设底线覆盖评分（D322 优先级最高、不评分、即时、跳过防抖）----
         ai.focus = (int)UtilityAction.RecruitWorker;   // 人为评分态焦点⑥
-        ai.resources.food = 0;                          // 触发粮底线
+        ai.resources = ai.resources.Set(ResourceType.Food, 0);                          // 触发粮底线
         var f4 = new FocusController(ai.id);
         f4.Update(ai, bcfg, ucfg, 2);
         bool bottomCovers = ai.focus == FocusController.FocusGranary;   // 被强制翻到 屯粮⑤
-        ai.resources.food = origFood;
+        ai.resources = ai.resources.Set(ResourceType.Food, origFood);
 
         // ---- #3 性格分化：同王国同局面，好战 vs 经济 → 评分 top 不同（D311 五轴线性乘入）----
         var origPers = ai.personality != null ? (float[])ai.personality.Clone() : null;

@@ -98,29 +98,29 @@ public static class Valley2_17_Smoke_2b
             // 跨轮残留或随生成长度的初始产出，kStone=国库绝对值两轮不同 → 逐字节 FAIL（实测 kStone=50）。
             // 把国库 Stone 归一为已知基线 100，再验日结 +25；使 checks 只反映 AI 段转账的确定性，
             // 玩家/水井探针仍走真实行为断言 —— 归一化测试输入是确定性测试的标准做法，非作弊。
-            ai.resources.stone = 100;
-            int beforeStone = ai.resources.stone;
-            pSt.storedAmount = 25;                       // 模拟 AI 仓库潜半月产出
+            ai.resources = ai.resources.Set(ResourceType.Stone, 100);
+            int beforeStone = ai.GetResourceValue(ResourceType.Stone);
+            pSt.RestoreContents(ResourceList.Of(new ResourceAmount(ResourceType.Stone, 25)));   // 模拟 AI 仓库潜半月产出
             AIEconomySettlement.Tick();
-            bool added = ai.resources.stone == beforeStone + 25;
-            bool cleared = pSt.storedAmount == 0;
+            bool added = ai.GetResourceValue(ResourceType.Stone) == beforeStone + 25;
+            bool cleared = pSt.TotalCount == 0;
             settleOk = added && cleared;
         }
         checks.Add($"AI日结入账清零={(settleOk ? "OK" : "FAIL")}");
 
         // 确定性记录键：AI 国库 Stone 绝对值（两轮同 seed 应一致）
-        checks.Add($"kStone={ai.resources.stone}");
+        checks.Add($"kStone={ai.GetResourceValue(ResourceType.Stone)}");
 
         // ===== ② playerZero：玩家建筑不被 AI 段碰、玩家国库不变 =====
         bool playerZero = true;
         if (puSt != null && playerState != null)
         {
-            int puBefore = puSt.storedAmount;
-            int pKBeforeStone = playerState.resources.stone;
-            puSt.storedAmount = 10;
+            int puBefore = puSt.TotalCount;
+            int pKBeforeStone = playerState.GetResourceValue(ResourceType.Stone);
+            puSt.RestoreContents(ResourceList.Of(new ResourceAmount(ResourceType.Stone, 10)));
             AIEconomySettlement.Tick();
-            if (puSt.storedAmount != 10) playerZero = false;                          // 玩家建筑 Storage 不得被清零
-            if (playerState.resources.stone != pKBeforeStone) playerZero = false;    // 玩家国库不得被 AI 段写入
+            if (puSt.TotalCount != 10) playerZero = false;                          // 玩家建筑 Storage 不得被清零
+            if (playerState.GetResourceValue(ResourceType.Stone) != pKBeforeStone) playerZero = false;    // 玩家国库不得被 AI 段写入
             _ = puBefore;
         }
         checks.Add($"玩家零回归={(playerZero ? "OK" : "FAIL")}");

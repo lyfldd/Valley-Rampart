@@ -40,11 +40,10 @@ MonoBehaviour:
   baseWorkers: 6
   baseWarriors: 2
   baseStockpile:
-    gold: 0
-    stone: 25
-    wood: 40
-    food: 40
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 1
+      amount: 25
+    - type: 2
+      amount: 40
+    - type: 3
+      amount: 40

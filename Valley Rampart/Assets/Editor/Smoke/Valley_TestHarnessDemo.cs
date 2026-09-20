@@ -99,7 +99,7 @@ public static class Valley_TestHarnessDemo
                         if (k == null) continue;
                         var s3 = TestFixtureApi.ReadThreeSources(kid);
                         Debug.Log($"[THD][CSV] spd={spd:0.##},day={tm.CurrentDay},k={kid},workers={k.workerCount},warriors={k.warriorCount}," +
-                                  $"food={k.resources.food},gold={k.resources.gold},water={s3.water:0}");
+                                  $"food={k.GetResourceValue(ResourceType.Food)},gold={k.GetResourceValue(ResourceType.Gold)},water={s3.water:0}");
                     }
                 }
                 if (Time.realtimeSinceStartup - t0 > 1500f) break;   // 25 分钟硬顶（防卡死勿硬等）

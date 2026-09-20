@@ -295,10 +295,10 @@ public class BuildingMenuPanel : MonoBehaviour, IUIPanel
         // 造价行
         var costRow = new VisualElement { name = "cost" };
         costRow.AddToClassList("building-card__cost-row");
-        AddCostItem(costRow, "金", def.cost.gold, ResourceType.Gold, ruler);
-        AddCostItem(costRow, "石", def.cost.stone, ResourceType.Stone, ruler);
-        AddCostItem(costRow, "木", def.cost.wood, ResourceType.Wood, ruler);
-        AddCostItem(costRow, "粮", def.cost.food, ResourceType.Food, ruler);
+        AddCostItem(costRow, "金", def.cost.Get(ResourceType.Gold), ResourceType.Gold, ruler);
+        AddCostItem(costRow, "石", def.cost.Get(ResourceType.Stone), ResourceType.Stone, ruler);
+        AddCostItem(costRow, "木", def.cost.Get(ResourceType.Wood), ResourceType.Wood, ruler);
+        AddCostItem(costRow, "粮", def.cost.Get(ResourceType.Food), ResourceType.Food, ruler);
         card.Add(costRow);
 
         _buildingList.contentContainer.Add(card);

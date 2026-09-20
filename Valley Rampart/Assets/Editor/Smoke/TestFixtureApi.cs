@@ -152,10 +152,16 @@ public static class TestFixtureApi
         var k = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
         int wh = 0;
         var list = WarehouseRegistry.GatherActive(kingdomId);
-        for (int i = 0; i < list.Count; i++) wh += list[i].Query().amount;
+        // ⭐ M1-A 适配：`IWarehouse.Query()` 由单资源量 ⇒ 全部存量条目 ⇒ 逐条目累加件数
+        // （旧口径 `Query().amount` 单资源量 ＝ 本仓件数；多资源仓下"占位仓总件数"＝各条目之和）。
+        for (int i = 0; i < list.Count; i++)
+        {
+            var q = list[i].Query();
+            for (int j = 0; j < q.Count; j++) wh += q[j].amount;
+        }
         float water = WaterNetwork.Instance != null ? WaterNetwork.Instance.GetStored(kingdomId) : 0f;
         if (k == null) return (0, 0, 0, 0, 0, wh, water);
-        return (k.resources.gold, k.resources.stone, k.resources.wood, k.resources.food, k.resources.metal, wh, water);
+        return (k.GetResourceValue(ResourceType.Gold), k.GetResourceValue(ResourceType.Stone), k.GetResourceValue(ResourceType.Wood), k.GetResourceValue(ResourceType.Food), k.GetResourceValue(ResourceType.Metal), wh, water);   // ⭐ M1-A 适配
     }
 
     // ===== T9：生育/招工条件读数（同 PopulationSystem.OnNewDayPerKingdom 口径的公开读数复刻）=====
@@ -219,7 +225,7 @@ public static class TestFixtureApi
             if (b == null || b.def == null || b.kingdomId != kingdomId || b.def.id != "Warehouse") continue;
             var sc = b.GetComponent<StorageComponent>();
             if (sc == null) continue;
-            return sc.Add(amount);
+            return sc.Add(ResourceType.Wood, amount);   // ⭐ M1-A 适配（类型取 Warehouse.def.outputResource=Wood）
         }
         Debug.LogWarning($"[TestFixture] k{kingdomId} 无本国 Warehouse（清单含 Warehouse 才有），占位仓跳过。");
         return 0;

@@ -222,7 +222,7 @@ public static class P1Observer
             int terr = k.Territory != null ? k.Territory.Count : -1;
             var stage = k.scriptPhase.HasValue ? k.scriptPhase.Value.ToString() : "无";
             sb.AppendLine(string.Format("  k{0} [{1}] race={2} 工={3} 战={4} 领土mid={5} 金={6} 粮={7} 阶段={8} 成立=D{9}",
-                k.id, k.name, k.raceId, k.workerCount, k.warriorCount, terr, k.resources.gold, k.resources.food, stage, k.foundedDay));
+                k.id, k.name, k.raceId, k.workerCount, k.warriorCount, terr, k.GetResourceValue(ResourceType.Gold), k.GetResourceValue(ResourceType.Food), stage, k.foundedDay));
         }
         return sb.ToString();
     }
@@ -239,7 +239,7 @@ public static class P1Observer
             var stage = k.scriptPhase.HasValue ? k.scriptPhase.Value.ToString() : "无";
             _csvWriter.WriteLine(string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}",
                 _sessionTag, day, k.id, Csv(k.name), k.raceId, k.workerCount, k.warriorCount, terr,
-                k.resources.gold, k.resources.food, stage, k.foundedDay));
+                k.GetResourceValue(ResourceType.Gold), k.GetResourceValue(ResourceType.Food), stage, k.foundedDay));
         }
         _csvWriter.WriteLine(string.Format("{0},{1},-1,全局,-,{2},-,-,-,-,-,-", _sessionTag, day, all.Count));
     }

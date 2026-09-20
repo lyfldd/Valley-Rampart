@@ -3,13 +3,14 @@ using UnityEngine;
 /// <summary>
 /// 建筑存档数据（3.3.4 批次10 接口预留）。
 /// 字段定义就位，序列化/反序列化逻辑后续阶段实现。
-/// Building 实现 ISaveable 时用此结构（含组件存档：StorageComponent.storedAmount）。
+/// Building 实现 ISaveable 时用此结构（含组件存档：StorageComponent 存量条目 / TreasureVault 存量条目）。
 ///
 /// 存档范围（见 3.3.4 §10.5）：
 /// - Building 核心：type/coord/level/hp/faction/state/footprint/rotation
-/// - StorageComponent：storedAmount
+/// - StorageComponent：`storageContents`（多资源 · M1-A）
+/// - TreasureVault（国库容器）：`treasuryContents`（M1-A）
 /// - ProducerComponent：无需存档（每秒重算）
-/// - BuildingFactory 重建：根据 defId 重新挂组件 + 恢复 storedAmount
+/// - BuildingFactory 重建：根据 defId 重新挂组件 + 恢复仓内容
 /// </summary>
 [System.Serializable]
 public struct BuildingSaveData
@@ -25,7 +26,14 @@ public struct BuildingSaveData
     public int faction;         // (int)Faction
     public int state;           // (int)BuildingState
     public int sourceType;      // (int)BuildingType
-    public int storedAmount;    // StorageComponent.storedAmount（无则 0）
+    /// <summary>
+    /// 本地仓内容（⭐ `M1-A`：`storedAmount`(int) ⇒ **资源量列表**（多资源容器 · `09#36`）；
+    /// 旧档（单 int 版）**作废** —— `D788` §4：游戏未发布 ⇒ 不写存档迁移脚本）。
+    /// </summary>
+    public ResourceList storageContents;
+    /// <summary>国库内容（⭐ `M1-A`：`TreasureVault` 的**单多资源容器**；非主城建筑恒为空列表）。
+    /// 原「`KingdomManager.Treasury*` 读档缓存桥」退役后，国库改由本字段随建筑存档存取。</summary>
+    public ResourceList treasuryContents;
     // DZ-072a（D562 / HH.107 件1）：矿洞副产组件（MineByproductComponent）双仓存量（无则 0）。
     // 旧档缺字段 → 默认 0 向前兼容，零 bump（M10）。
     public int byproductCrystalAmount; // 水晶副产子仓存量

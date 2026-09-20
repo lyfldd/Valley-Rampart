@@ -23,7 +23,7 @@ public class MonsterDef : ScriptableObject
     [Header("行为（§3.3/§4.3）")]
     public float retreatHpRatio = 0.2f;          // 撤退血量阈值（HP<20% 尝试退回传送门）
     public int carryResource = 5;                // 掠夺资源量（每怪）
-    [Tooltip("击杀掉落/掠夺的资源类型（须在 ResourcePack 8 承载槽内；未映射槽自动回退 Food）")]
+    [Tooltip("击杀掉落/掠夺的资源类型（⭐ M1-A：内容物为「资源量列表」⇒ 任意资源表内类型皆可承载；旧 8 桶「未映射槽回退 Food」限制已随 ResourcePack 退役消失）")]
     public ResourceType lootResource = ResourceType.Food;
     [Tooltip("价值×距离评分的距离权重（CombatRules.TargetScore distWeight；守卫战斗力权重守卫权重亦 SO 化于此）")]
     public float targetDistWeight = 1f;

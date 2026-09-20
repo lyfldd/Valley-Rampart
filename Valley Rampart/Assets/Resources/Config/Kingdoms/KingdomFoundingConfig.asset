@@ -36,14 +36,13 @@ MonoBehaviour:
     buildingCount: 5
     hasWallRing: 0
     stockpile:
-      gold: 0
-      stone: 15
-      wood: 24
-      food: 24
-      metal: 0
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 15
+      - type: 2
+        amount: 24
+      - type: 3
+        amount: 24
   - tierName: "\u6751\u843D"
     scale: 1
     workerCount: 6
@@ -51,14 +50,13 @@ MonoBehaviour:
     buildingCount: 6
     hasWallRing: 0
     stockpile:
-      gold: 0
-      stone: 25
-      wood: 40
-      food: 40
-      metal: 0
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 25
+      - type: 2
+        amount: 40
+      - type: 3
+        amount: 40
   - tierName: "\u8981\u585E"
     scale: 1.6
     workerCount: 8
@@ -66,14 +64,13 @@ MonoBehaviour:
     buildingCount: 7
     hasWallRing: 1
     stockpile:
-      gold: 0
-      stone: 40
-      wood: 64
-      food: 64
-      metal: 0
-      stoneAmmo: 0
-      fireballAmmo: 0
-      magicAmmo: 0
+      items:
+      - type: 1
+        amount: 40
+      - type: 2
+        amount: 64
+      - type: 3
+        amount: 64
   gatherScoreWeights: {x: 1, y: 1, z: 1}
   gatherCandidateRefreshSeconds: 15
   gatherInfluenceRadiusCells: 8

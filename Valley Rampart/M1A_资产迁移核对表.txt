@@ -1,0 +1,96 @@
+M1-A 资产迁移前后逐项核对表（HH.313 · D789 Q1=A 三步法第 2 步）
+口径：缺省=0 ⇒ 不产出条目；全 0 ⇒ 空列表（非 null）；⛔ 不解析 YAML，读 Unity 已反序列化的旧字段。
+字段文本口径：仅列非 0 项，顺序＝金/石/木/粮/铁/石弹/火弹/魔弹。
+
+资产                                          字段                  迁移前（旧字段）                  迁移后（新字段）                  一致?
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Resources/Buildings/Warehouse.asset           BuildingDef.cost      金4/石4                           金4/石4                           OK
+Resources/Buildings/Warehouse.asset           levels[0].upgradeCost 石10/木10                         石10/木10                         OK
+Resources/Buildings/Warehouse.asset           levels[1].upgradeCost 石20/木24                         石20/木24                         OK
+Resources/Buildings/Warehouse.asset           BuildingDef.warehousePaths（已有值，跳过） outputResource=Wood               [res_material.wood]               OK（形态转换·已填）
+Resources/Buildings/Granary.asset             BuildingDef.cost      木4                               木4                               OK
+Resources/Buildings/Granary.asset             levels[0].upgradeCost 石6/木10                          石6/木10                          OK
+Resources/Buildings/Granary.asset             levels[1].upgradeCost 石16/木24                         石16/木24                         OK
+Resources/Buildings/Granary.asset             BuildingDef.warehousePaths（已有值，跳过） outputResource=Food               [res_food.grain]                  OK（形态转换·已填）
+Resources/Buildings/TrainingCamp.asset        BuildingDef.cost      木8                               木8                               OK
+Resources/Buildings/TrainingCamp.asset        levels[0].upgradeCost 石16/木20                         石16/木20                         OK
+Resources/Buildings/TrainingCamp.asset        levels[1].upgradeCost 石40/木50                         石40/木50                         OK
+Resources/Buildings/ArcheryRange.asset        BuildingDef.cost      金15/木30                         金15/木30                         OK
+Resources/Buildings/LeyForge.asset            BuildingDef.cost      金25/石30                         金25/石30                         OK
+Resources/Buildings/arrow_tower.asset         BuildingDef.cost      金20/石10                         金20/石10                         OK
+Resources/Buildings/arrow_tower.asset         levels[0].upgradeCost 石12/木16/铁10                    石12/木16/铁10                    OK
+Resources/Buildings/arrow_tower.asset         levels[1].upgradeCost 石30/木36/铁10                    石30/木36/铁10                    OK
+Resources/Buildings/ore_vein.asset            BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/rift.asset                BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/House.asset               BuildingDef.cost      木4                               木4                               OK
+Resources/Buildings/House.asset               levels[0].upgradeCost 石6/木10                          石6/木10                          OK
+Resources/Buildings/House.asset               levels[1].upgradeCost 石16/木24                         石16/木24                         OK
+Resources/Buildings/bridge.asset              BuildingDef.cost      木10                              木10                              OK
+Resources/Buildings/Barracks.asset            BuildingDef.cost      金16/石20                         金16/石20                         OK
+Resources/Buildings/stone_pile.asset          BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/treasure_box.asset        BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/Blacksmith.asset          BuildingDef.cost      金50/石60                         金50/石60                         OK
+Resources/Buildings/Blacksmith.asset          levels[0].upgradeCost 金75/石90                         金75/石90                         OK
+Resources/Buildings/Blacksmith.asset          BuildingDef.warehousePaths（已有值，跳过） outputResource=Metal              [res_material.metal]              OK（形态转换·已填）
+Resources/Buildings/portal.asset              BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/wood_pile.asset           BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/Well.asset                BuildingDef.cost      石6                               石6                               OK
+Resources/Buildings/Well.asset                BuildingDef.warehousePaths（已有值，跳过） outputResource=Gold               [res_currency.gold]               OK（形态转换·已填）
+Resources/Buildings/ruins.asset               BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/Church.asset              BuildingDef.cost      金8/石10/木8                      金8/石10/木8                      OK
+Resources/Buildings/SiegeWorkshop.asset       BuildingDef.cost      金10/石20/木16                    金10/石20/木16                    OK
+Resources/Buildings/VagrantCamp.asset         BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/farm.asset                BuildingDef.cost      金50                              金50                              OK
+Resources/Buildings/farm.asset                levels[0].upgradeCost 木8/粮4                           木8/粮4                           OK
+Resources/Buildings/farm.asset                levels[1].upgradeCost 木20/粮10                         木20/粮10                         OK
+Resources/Buildings/farm.asset                BuildingDef.warehousePaths（已有值，跳过） outputResource=Food               [res_food.grain]                  OK（形态转换·已填）
+Resources/Buildings/FoodWorkshop.asset        BuildingDef.cost      木6                               木6                               OK
+Resources/Buildings/catapult.asset            BuildingDef.cost      金100/石50                        金100/石50                        OK
+Resources/Buildings/Ranch.asset               BuildingDef.cost      木8                               木8                               OK
+Resources/Buildings/CrossbowTower.asset       BuildingDef.cost      金6/石16/木12                     金6/石16/木12                     OK
+Resources/Buildings/TrainingGround.asset      BuildingDef.cost      木3                               木3                               OK
+Resources/Buildings/TrainingGround.asset      levels[0].upgradeCost 石6/木8                           石6/木8                           OK
+Resources/Buildings/wall.asset                BuildingDef.cost      石10                              石10                              OK
+Resources/Buildings/wall.asset                levels[0].upgradeCost 石10/木12/铁10                    石10/木12/铁10                    OK
+Resources/Buildings/wall.asset                levels[1].upgradeCost 石24/木30/铁10                    石24/木30/铁10                    OK
+Resources/Buildings/WarCamp.asset             BuildingDef.cost      金10/木25                         金10/木25                         OK
+Resources/Buildings/mine.asset                BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/WarAcademy.asset          BuildingDef.cost      金30/石20                         金30/石20                         OK
+Resources/Buildings/castle.asset              BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/quarry.asset              BuildingDef.cost      金50                              金50                              OK
+Resources/Buildings/quarry.asset              levels[0].upgradeCost 石10/木12                         石10/木12                         OK
+Resources/Buildings/quarry.asset              levels[1].upgradeCost 石24/木30                         石24/木30                         OK
+Resources/Buildings/quarry.asset              BuildingDef.warehousePaths（已有值，跳过） outputResource=Stone              [res_material.stone]              OK（形态转换·已填）
+Resources/Buildings/magic_tower.asset         BuildingDef.cost      金10/石20                         金10/石20                         OK
+Resources/Buildings/tree.asset                BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/AdvancedStorage.asset     BuildingDef.cost      金6/石12                          金6/石12                          OK
+Resources/Buildings/AdvancedStorage.asset     BuildingDef.warehousePaths（已有值，跳过） outputResource=Wood               [res_material.wood]               OK（形态转换·已填）
+Resources/Buildings/gate.asset                BuildingDef.cost      金80/木50                         金80/木50                         OK
+Resources/Buildings/gate.asset                levels[0].upgradeCost 石12/木16/铁10                    石12/木16/铁10                    OK
+Resources/Buildings/farmland.asset            BuildingDef.cost      (全 0)                            (空列表)                          OK
+Resources/Buildings/market.asset              BuildingDef.cost      金80                              金80                              OK
+Resources/Buildings/market.asset              levels[0].upgradeCost 石10/木20                         石10/木20                         OK
+Resources/Buildings/market.asset              levels[1].upgradeCost 石30/木50                         石30/木50                         OK
+Resources/Buildings/Hospital.asset            BuildingDef.cost      金6/石8/木10                      金6/石8/木10                      OK
+Resources/Config/KingdomConfig.asset          castleUpgradeCosts[0] 金2/石6/木10/粮6                  金2/石6/木10/粮6                  OK
+Resources/Config/KingdomConfig.asset          castleUpgradeCosts[1] 金10/石20/木30/粮20               金10/石20/木30/粮20               OK
+Resources/Config/KingdomConfig.asset          castleUpgradeCosts[2] 金20/石36/木50/粮36               金20/石36/木50/粮36               OK
+Resources/Config/KingdomConfig.asset          castleUpgradeCosts[3] 金40/石60/木80/粮60               金40/石60/木80/粮60               OK
+Resources/Config/KingdomConfig.asset          castleUpgradeCosts[4] 金70/石90/木120/粮90              金70/石90/木120/粮90              OK
+Resources/Config/KingdomConfig.asset          castleUpgradeCosts[5] 金120/石140/木180/粮140           金120/石140/木180/粮140           OK
+Resources/Config/SiegeProductionConfig.asset  catapultCost          金5/石10                          金5/石10                          OK
+Resources/Config/SiegeProductionConfig.asset  ballistaCost          金8/石15                          金8/石15                          OK
+Resources/Config/SiegeProductionConfig.asset  mortarCost            金15/石25                         金15/石25                         OK
+Resources/Config/SiegeProductionConfig.asset  vineCatapultCost      金10/石15                         金10/石15                         OK
+Resources/Config/SiegeProductionConfig.asset  ramCost               金5/石10                          金5/石10                          OK
+Resources/Config/Kingdoms/Kingdom_GoldenWheat.asset baseStockpile         石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/Kingdom_IronHoof.asset baseStockpile         石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/Kingdom_RiverBay.asset baseStockpile         石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/Kingdom_SnowRock.asset baseStockpile         石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/Kingdom_Bedrock.asset baseStockpile         石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/Kingdom_DenseForest.asset baseStockpile         石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/KingdomFoundingConfig.asset staggerTiers[0].stockpile 石15/木24/粮24                    石15/木24/粮24                    OK
+Resources/Config/Kingdoms/KingdomFoundingConfig.asset staggerTiers[1].stockpile 石25/木40/粮40                    石25/木40/粮40                    OK
+Resources/Config/Kingdoms/KingdomFoundingConfig.asset staggerTiers[2].stockpile 石40/木64/粮64                    石40/木64/粮64                    OK
+------------------------------------------------------------------------------------------------------------------------------------------------------
+明细行数=88；数值不一致=0；仓库声明未填=0；改动资产数=0

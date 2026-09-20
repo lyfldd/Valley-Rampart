@@ -210,14 +210,14 @@ public class SatietySystem : Singleton<SatietySystem>
         // 1. 进食（数据层）：饱食不满阈值 且 国库粮足 → 消耗粮恢复饱食
         bool hasFood = kingdomId <= 0
             ? (RulerController.Instance != null && RulerController.Instance.GetResource(ResourceType.Food) >= dailyFoodCost)
-            : (kingdom != null && kingdom.resources.food >= dailyFoodCost);
+            : (kingdom != null && kingdom.GetResourceValue(ResourceType.Food) >= dailyFoodCost);
         bool fed = false;
         if (unit.Satiety < cfg.feedSatietyThreshold && hasFood)
         {
             if (kingdomId <= 0)
                 RulerController.Instance.ModifyResource(ResourceType.Food, false, dailyFoodCost);
             else
-                kingdom.Spend(new ResourcePack { food = dailyFoodCost });   // AI 扣本国国库（D453；D632 A′：走台账 API 收口直写）
+                kingdom.Spend(ResourceList.Of(new ResourceAmount(ResourceType.Food, dailyFoodCost)));   // AI 扣本国国库（D453；D632 A′：走台账 API 收口直写）
             unit.Satiety = Mathf.Clamp(unit.Satiety + cfg.foodRestoreGrain, 0, 100);
             fed = true;
         }

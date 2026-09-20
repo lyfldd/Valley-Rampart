@@ -131,8 +131,8 @@ public static class Valley_OB12_InGate_Probe
         var fs = mC.GetStore(ResourceType.FireOil);
         var os = mC.GetStore(ResourceType.Ore);
         var bStore = bVirt.GetComponent<StorageComponent>();
-        int c0 = cs.storedAmount, f0 = fs.storedAmount, o0 = os.storedAmount;
-        int bm0 = bStore != null ? bStore.storedAmount : -1;
+        int c0 = cs.TotalCount, f0 = fs.TotalCount, o0 = os.TotalCount;   // ⭐ M1-A 适配
+        int bm0 = bStore != null ? bStore.TotalCount : -1;   // ⭐ M1-A 适配
         int wa0 = wC.GetAmmo(ResourceType.StoneAmmo) + wC.GetAmmo(ResourceType.FireballAmmo) + wC.GetAmmo(ResourceType.MagicAmmo);
         bool everDuty = false;
         float p1t = Time.realtimeSinceStartup;
@@ -142,8 +142,8 @@ public static class Valley_OB12_InGate_Probe
                 || TaskScheduler.Instance.HasWorkerAssigned(bC) || TaskScheduler.Instance.HasWorkerAssigned(wC))) everDuty = true;
             yield return new WaitForSeconds(0.25f);
         }
-        int c1 = cs.storedAmount, f1 = fs.storedAmount, o1 = os.storedAmount;
-        int bm1 = bStore != null ? bStore.storedAmount : -1;
+        int c1 = cs.TotalCount, f1 = fs.TotalCount, o1 = os.TotalCount;   // ⭐ M1-A 适配
+        int bm1 = bStore != null ? bStore.TotalCount : -1;   // ⭐ M1-A 适配
         int wa1 = wC.GetAmmo(ResourceType.StoneAmmo) + wC.GetAmmo(ResourceType.FireballAmmo) + wC.GetAmmo(ResourceType.MagicAmmo);
         bool p1 = !everDuty && c1 == c0 && f1 == f0 && o1 == o0 && bm1 == bm0 && wa1 == wa0;
         Rec("P1", p1, $"无在岗窗8s：水晶{c0}→{c1} 火油{f0}→{f1} 矿石{o0}→{o1} 黑匠Metal{bm0}→{bm1} 厂弹{wa0}→{wa1}；HasWorkerAssigned 全程={everDuty}(须false)");
@@ -165,7 +165,7 @@ public static class Valley_OB12_InGate_Probe
             ruler.ModifyResource(ResourceType.Ore, true, 400);                       // 黑匠原料（Transform 走 RulerController）
             if (ruler.GetResource(ResourceType.Stone) < 200) ruler.ModifyResource(ResourceType.Stone, true, 200);   // 厂原料
             int orePre = ruler.GetResource(ResourceType.Ore);
-            int kMetal0 = reg.Get(aiKid) != null ? reg.Get(aiKid).resources.metal : 0;
+            int kMetal0 = reg.Get(aiKid) != null ? reg.Get(aiKid).GetResourceValue(ResourceType.Metal) : 0;   // ⭐ M1-A 适配
             int sp = 0;
             sp += SpawnWorkers(mC2.transform.position, aiKid, 4);
             sp += SpawnWorkers(bC2.transform.position, aiKid, 4);
@@ -173,20 +173,20 @@ public static class Valley_OB12_InGate_Probe
             yield return null;
             var cS = mC2.GetStore(ResourceType.Crystal); var fS = mC2.GetStore(ResourceType.FireOil); var oS = mC2.GetStore(ResourceType.Ore);
             var bS = bA2.GetComponent<StorageComponent>();
-            int c2a = 0, f2a = 0, o2a = 0, bm2a = bS != null ? bS.storedAmount : -1;
+            int c2a = 0, f2a = 0, o2a = 0, bm2a = bS != null ? bS.TotalCount : -1;   // ⭐ M1-A 适配
             int wammo2a = wC2.GetAmmo(ResourceType.StoneAmmo) + wC2.GetAmmo(ResourceType.FireballAmmo) + wC2.GetAmmo(ResourceType.MagicAmmo);
             bool grew = false;
             float p2t = Time.realtimeSinceStartup;
             while (Time.realtimeSinceStartup - p2t < 60f)
             {
                 yield return new WaitForSeconds(2f);
-                c2a = cS.storedAmount; f2a = fS.storedAmount; o2a = oS.storedAmount;
-                bm2a = bS != null ? bS.storedAmount : -1;
+                c2a = cS.TotalCount; f2a = fS.TotalCount; o2a = oS.TotalCount;   // ⭐ M1-A 适配
+                bm2a = bS != null ? bS.TotalCount : -1;   // ⭐ M1-A 适配
                 int wa = wC2.GetAmmo(ResourceType.StoneAmmo) + wC2.GetAmmo(ResourceType.FireballAmmo) + wC2.GetAmmo(ResourceType.MagicAmmo);
                 bool mOk = c2a > 0 || f2a > 0 || o2a > 0;   // 矿洞副产（子仓可能已被搬运，故用"曾增长"近似）
                 // 黑匠 Metal 被 AIEconomySettlement 日结清空本地仓 ⇒ 不目视本地仓；改判「本国 Metal 增长」或「Ore 被 Transform 消耗」
-                bool bOk = (bS != null && bS.storedAmount > 0)
-                           || (reg.Get(aiKid) != null && reg.Get(aiKid).resources.metal > kMetal0)
+                bool bOk = (bS != null && bS.TotalCount > 0)   // ⭐ M1-A 适配
+                           || (reg.Get(aiKid) != null && reg.Get(aiKid).GetResourceValue(ResourceType.Metal) > kMetal0)   // ⭐ M1-A 适配
                            || ruler.GetResource(ResourceType.Ore) < orePre;
                 bool wOk = wa > wammo2a;
                 if (mOk && bOk && wOk) { grew = true; break; }   // L-34 命中即停
@@ -204,7 +204,7 @@ public static class Valley_OB12_InGate_Probe
             var nC = natMine.GetComponent<MineByproductComponent>();
             var st = reg.Get(aiKid);
             int crystalBase = st != null ? st.crystal : 0;
-            int stoneBase = st != null ? st.resources.stone : 0;
+            int stoneBase = st != null ? st.GetResourceValue(ResourceType.Stone) : 0;   // ⭐ M1-A 适配
             int dispatches = 0, idleMin = int.MaxValue;
             bool wasDuty = false;
             float lastDuty = Time.realtimeSinceStartup;
@@ -223,7 +223,7 @@ public static class Valley_OB12_InGate_Probe
                 yield return new WaitForSeconds(1f);
             }
             int crystalNow = st != null ? st.crystal : 0;
-            int stoneNow = st != null ? st.resources.stone : 0;
+            int stoneNow = st != null ? st.GetResourceValue(ResourceType.Stone) : 0;   // ⭐ M1-A 适配
             bool prodOk = dispatches >= 1;
             bool crystalOk = crystalNow > crystalBase;
             bool stoneOk = stoneNow > stoneBase;

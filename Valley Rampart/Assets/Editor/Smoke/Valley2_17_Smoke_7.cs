@@ -89,31 +89,31 @@ public static class Valley2_17_Smoke_7
         GridCoord subA = freeA.Value, subB = freeB.Value, subC = freeC.Value, subP = freeP.Value;
 
         // ===== ① aiBuild：AI 经门面正向建造，归属+扣费（House wood4：10→6）=====
-        ai.resources.wood = 10;
+        ai.resources = ai.resources.Set(ResourceType.Wood, 10);
         bool aiBuilt = bc.TryBuild(house, subA, GateOrientation.Horizontal, ai.id);
-        int aiWoodAfter = ai.resources.wood;
+        int aiWoodAfter = ai.GetResourceValue(ResourceType.Wood);
         bool aiOwned = KingdomHasHouseAt(grid, ai.id, subA);
         bool aiBuildOk = aiBuilt && aiOwned && aiWoodAfter == 6;
         checks.Add($"AI建造归属+扣费={(aiBuildOk ? "OK" : "FAIL")}");
         checks.Add($"aiWood={aiWoodAfter}");
 
         // ===== ② 同校验·占用拒绝：B 格先成功占，再建同格 → Blocked，AI 国库不再扣 =====
-        ai.resources.wood = 6;
+        ai.resources = ai.resources.Set(ResourceType.Wood, 6);
         bool bBuilt = bc.TryBuild(house, subB, GateOrientation.Horizontal, ai.id);
-        int woodAfterB = ai.resources.wood;
+        int woodAfterB = ai.GetResourceValue(ResourceType.Wood);
         bool blockedOk = false;
         if (bBuilt)
         {
             bool again = bc.TryBuild(house, subB, GateOrientation.Horizontal, ai.id);  // 同格再建 → 拒
-            blockedOk = !again && ai.resources.wood == woodAfterB;                     // 拒绝且未二次扣费
+            blockedOk = !again && ai.GetResourceValue(ResourceType.Wood) == woodAfterB;   // 拒绝且未二次扣费
         }
         checks.Add($"同校验·占用拒绝={(blockedOk ? "OK" : "FAIL")}");
 
         // ===== ③ 同校验·资源不足拒绝：AI 国库清零 → 建造 → Resource 拒，C 格无落成 =====
-        ai.resources.wood = 0;
+        ai.resources = ai.resources.Set(ResourceType.Wood, 0);
         bool poorBuilt = bc.TryBuild(house, subC, GateOrientation.Horizontal, ai.id);
         bool noCb = !KingdomHasHouseAt(grid, ai.id, subC);
-        checks.Add($"同校验·资源不足拒绝={(poorBuilt == false && noCb && ai.resources.wood == 0 ? "OK" : "FAIL")}");
+        checks.Add($"同校验·资源不足拒绝={(poorBuilt == false && noCb && ai.GetResourceValue(ResourceType.Wood) == 0 ? "OK" : "FAIL")}");
 
         // ===== ④ playerZero：玩家(0) 经同门面 → 建筑 kingdomId 恒 0（同入口不改玩家归属）=====
         // 玩家凑单走 WarehouseHelper；若可负担则落成并仍属 0，否则按同规则拒绝。结果确定性记录，不预设。

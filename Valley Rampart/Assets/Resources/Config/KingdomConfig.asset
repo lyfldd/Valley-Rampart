@@ -13,65 +13,71 @@ MonoBehaviour:
   m_Name: KingdomConfig
   m_EditorClassIdentifier: 
   castleUpgradeCosts:
-  - gold: 2
-    stone: 6
-    wood: 10
-    food: 6
-  - gold: 10
-    stone: 20
-    wood: 30
-    food: 20
-  - gold: 20
-    stone: 36
-    wood: 50
-    food: 36
-  - gold: 40
-    stone: 60
-    wood: 80
-    food: 60
-  - gold: 70
-    stone: 90
-    wood: 120
-    food: 90
-  - gold: 120
-    stone: 140
-    wood: 180
-    food: 140
-  merchantQuotas:
-  - resourceLevel: 1
-    amountPerCycle: 20
-    refreshDays: 3
-  - resourceLevel: 2
-    amountPerCycle: 12
-    refreshDays: 3
-  - resourceLevel: 3
-    amountPerCycle: 10
-    refreshDays: 4
-  - resourceLevel: 4
-    amountPerCycle: 4
-    refreshDays: 5
-  - resourceLevel: 5
-    amountPerCycle: 4
-    refreshDays: 6
-  - resourceLevel: 6
-    amountPerCycle: 2
-    refreshDays: 6
-  - resourceLevel: 7
-    amountPerCycle: 2
-    refreshDays: 7
-  - resourceLevel: 8
-    amountPerCycle: 6
-    refreshDays: 4
-  - resourceLevel: 9
-    amountPerCycle: 4
-    refreshDays: 4
+  - items:
+    - type: 0
+      amount: 2
+    - type: 1
+      amount: 6
+    - type: 2
+      amount: 10
+    - type: 3
+      amount: 6
+  - items:
+    - type: 0
+      amount: 10
+    - type: 1
+      amount: 20
+    - type: 2
+      amount: 30
+    - type: 3
+      amount: 20
+  - items:
+    - type: 0
+      amount: 20
+    - type: 1
+      amount: 36
+    - type: 2
+      amount: 50
+    - type: 3
+      amount: 36
+  - items:
+    - type: 0
+      amount: 40
+    - type: 1
+      amount: 60
+    - type: 2
+      amount: 80
+    - type: 3
+      amount: 60
+  - items:
+    - type: 0
+      amount: 70
+    - type: 1
+      amount: 90
+    - type: 2
+      amount: 120
+    - type: 3
+      amount: 90
+  - items:
+    - type: 0
+      amount: 120
+    - type: 1
+      amount: 140
+    - type: 2
+      amount: 180
+    - type: 3
+      amount: 140
   initialPopulation: 10
+  initialWorkerCount: 4
+  initialResidentCount: 5
+  initialSpawnGapCells: 1
   birthHappinessThreshold: 60
   birthSatietyThreshold: 50
   birthCouplesDivisor: 2
   birthIntervalDays: 5
   birthCooldownDefault: 5
   birthPairCooldownDays: 10
+  childGrowthDayEvents: 2
   deathHappinessK: 0.5
   unemployedDailyFood: 1
   soldierDailyFood: 2
@@ -97,11 +103,6 @@ MonoBehaviour:
   buildingTaxRate: 0.1
   commercialTaxPerLevel: 1
   lowHappinessTaxFloor: 0.5
-  foodToGoldIn: 4
-  goldToFoodOut: 3
-  tradeSellUnitsPerGold: 040000000300000002000000020000000100000001000000010000000200000002000000
-  tradeBuyUnitsPerGold: 030000000200000001000000010000000100000001000000010000000100000001000000
-  marketMaxTradeLevel: 040000000600000009000000
   happinessSatietyWeight: 0.4
   happinessHouseWeight: 0.2
   happinessChurchWeight: 0.15
@@ -121,15 +122,23 @@ MonoBehaviour:
   byproductFireOilRate: 0.05
   byproductOreRate: 0.05
   byproductOreCapacity: 20
-  houseCapacityByLevel:
-  - 12
-  - 20
-  - 32
+  houseCapacityByLevel: 0c0000001400000020000000
   ranchCapacity: 10
   ranchFeedPerAnimal: 1
   ranchMeatHappiness: 3
-  goldMineGoldPerDay: 2
   kingdomSecondsPerDay: 180
   generalLimit: 2
   warAcademyTrainingSpeedMul: 0.75
+  vagrantCampMin: 2
+  vagrantCampMax: 3
+  vagrantCampFootprint: 4
+  campMaxVagrants: 3
+  campInitialVagrants: 2
+  campDailyRefill: 1
+  campVagrantRadiusCells: 4
+  recruitFoodCost: 1
+  recruitArriveRadiusCells: 3
+  aiBirthIntervalDays: 10
+  vagrantRespawnIntervalDays: 5
+  respawnGroupSize: 2
   hospitalRecoveryBonus: 5

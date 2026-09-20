@@ -418,7 +418,7 @@ public class KingdomBrain
 
         // 内源势能三输入（D590 增补节②；现算轻量口径=R-A1 前占位，R-A1 真值块落地后接替——
         // 口径如实注记：经济=gold/100、人口=(worker+warrior)/20、仓储=food/50，全 clamp01）
-        snap.DriveEconomic = Mathf.Clamp01(k.resources.gold / 100f);
+        snap.DriveEconomic = Mathf.Clamp01(k.GetResourceValue(ResourceType.Gold) / 100f);
         snap.DrivePopPressure = Mathf.Clamp01((k.workerCount + k.warriorCount) / 20f);
         snap.DriveStorage = Mathf.Clamp01(k.GetResourceValue(ResourceType.Food) / 50f);
 
@@ -474,7 +474,7 @@ public class KingdomBrain
             var storage = b.GetComponent<StorageComponent>();
             if (storage != null)
             {
-                storageUsed += storage.storedAmount;
+                storageUsed += storage.UsedSpace;
                 storageCap += storage.capacity;
             }
 
@@ -496,11 +496,11 @@ public class KingdomBrain
         {
             KingdomId = k.id,
             Day = day,
-            StockGold = k.resources.gold,
-            StockStone = k.resources.stone,
-            StockWood = k.resources.wood,
-            StockFood = k.resources.food,
-            StockMetal = k.resources.metal,
+            StockGold = k.GetResourceValue(ResourceType.Gold),
+            StockStone = k.GetResourceValue(ResourceType.Stone),
+            StockWood = k.GetResourceValue(ResourceType.Wood),
+            StockFood = k.GetResourceValue(ResourceType.Food),
+            StockMetal = k.GetResourceValue(ResourceType.Metal),
             Flow = EconomyDiagnosis.TakeFlow(k.id),   // 读后清零（纯函数化关键，D630 A+）
             WorkerCount = k.workerCount,
             WarriorCount = k.warriorCount,
@@ -880,7 +880,7 @@ public class KingdomBrain
             return;
         }
 
-        kingdom.Spend(new ResourcePack { food = cost });   // AI 台账扣费（镜像玩家 recruitFoodCost 语义）
+        kingdom.Spend(ResourceList.Of(new ResourceAmount(ResourceType.Food, cost)));   // AI 台账扣费（镜像玩家 recruitFoodCost 语义）
         int converted = KingdomFoundry.ConvertVagrantsToWorkers(
             new List<int> { vagrant.npcId }, kingdomId);
         bool ok = converted > 0;
@@ -964,9 +964,9 @@ public class KingdomBrain
             float learned = BattleLearnedWeights.Get(kingdomId, (int)t.toOccupation); // B5 局内环
             // 经济可负担（effective 成本近似=base×trainCostMul ceil，与 TryTrain 同口径）
             float costMul = raceDef.trainCostMul;
-            bool affordable = kingdom.resources.gold >= Mathf.CeilToInt(t.costGold * costMul)
+            bool affordable = kingdom.GetResourceValue(ResourceType.Gold) >= Mathf.CeilToInt(t.costGold * costMul)
                            && (t.costCrystal <= 0 || kingdom.crystal >= Mathf.CeilToInt(t.costCrystal * costMul))
-                           && (t.costMetal <= 0 || kingdom.resources.metal >= Mathf.CeilToInt(t.costMetal * costMul));
+                           && (t.costMetal <= 0 || kingdom.GetResourceValue(ResourceType.Metal) >= Mathf.CeilToInt(t.costMetal * costMul));
             if (!affordable) continue;                                             // 经济不可负担→本轮不选
             float score = prior * personalityMod * learned;
             candidates[i] = (t, candidates[i].b, score);
@@ -1117,7 +1117,7 @@ public class KingdomBrain
             return;
         }
 
-        kingdom.Spend(new ResourcePack { gold = cost });
+        kingdom.Spend(ResourceList.Of(new ResourceAmount(ResourceType.Gold, cost)));
         kingdom.moduleLevels[idx]++;
         Bump(kingdomId, train: false, ok: true);
         ReportActionOk(kingdom);   // HH.224/D670：⑧成功落地 ⇒ 退避清零

@@ -19,14 +19,11 @@ MonoBehaviour:
   faction: 1
   role: 2
   cost:
-    gold: 25
-    stone: 30
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 25
+    - type: 1
+      amount: 30
   footprint: {x: 2, y: 2}
   allowedTerrain: 
   heightLayer: 0
@@ -35,6 +32,7 @@ MonoBehaviour:
   isGate: 0
   rotatable: 0
   moduleType: 1
+  warehousePaths: []
   isObstacle: 1
   producer:
     kind: 0
@@ -73,3 +71,4 @@ MonoBehaviour:
   monsterIsHighValue: 0
   raceId: 2
   uniquePerKingdom: 1
+  isMineByproduct: 0

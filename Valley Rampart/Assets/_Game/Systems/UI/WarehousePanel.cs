@@ -122,10 +122,16 @@ public class WarehousePanel : MonoBehaviour, IUIPanel
                 if (b == null) continue;
                 var storage = b.GetComponent<StorageComponent>();
                 if (storage == null || storage.capacity <= 0) continue;
-                if (totals.TryGetValue(storage.resourceType, out var t))
-                    totals[storage.resourceType] = (t.stored + storage.storedAmount, t.cap + storage.capacity);
-                else
-                    totals[storage.resourceType] = (storage.storedAmount, storage.capacity);
+                // ⭐ M1-A（09#36）：多资源仓 ⇒ 逐「本仓能装的资源」汇总（旧=单一 resourceType 一行）。
+                // 单资源仓（迁移后绝大多数建筑）仍恰好一行，与旧面板读数逐一相同。
+                foreach (var type in ResourceCatalog.AllTypes)
+                {
+                    if (!storage.Accepts(type)) continue;
+                    if (totals.TryGetValue(type, out var t))
+                        totals[type] = (t.stored + storage.GetAmount(type), t.cap + storage.capacity);
+                    else
+                        totals[type] = (storage.GetAmount(type), storage.capacity);
+                }
             }
         }
 

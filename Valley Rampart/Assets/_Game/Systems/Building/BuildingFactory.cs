@@ -328,17 +328,20 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         b.grade = (ResourceGrade)data.grade;
         b.ApplyDef();
 
-        // 恢复核心状态（level/hp/maxHp/storedAmount）
+        // 恢复核心状态（level/hp/maxHp/仓内容）
         b.level = Mathf.Max(1, data.level);
         b.maxHp = Mathf.Max(1, data.maxHp);
         b.hp = Mathf.Clamp(data.hp, 0, b.maxHp);
         var storage = b.GetComponent<StorageComponent>();
-        if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
+        if (storage != null) storage.RestoreContents(data.storageContents);
+        // ⭐ M1-A：国库容器内容（仅主城有；非主城 ≡ 空列表）
+        var vault = b.GetComponent<TreasureVault>();
+        if (vault != null) vault.RestoreContents(data.treasuryContents);
 
         // 2_12 步骤7 / D155：累计投入恢复（D155 修复成本基数 / D162 拆除返还基数）。旧档缺字段 → 兜底按 def.cost。
         b.totalInvested = data.totalInvested > 0
             ? data.totalInvested
-            : (b.def != null ? b.def.cost.gold + b.def.cost.stone + b.def.cost.wood + b.def.cost.food : 0);
+            : (b.def != null ? Building.SumCostOf(b.def.cost, includeMetal: false) : 0);
     }
 
     /// <summary>读档王国归属：自然建筑（OreVein/WoodPile/StonePile 一次性资源点）一律强制 -1（哨兵配套，

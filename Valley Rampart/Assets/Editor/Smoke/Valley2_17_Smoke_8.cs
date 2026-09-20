@@ -96,11 +96,11 @@ public static class Valley2_17_Smoke_8
         // ---- ③ 常设底线（粮）：真实 AI 王国（工人实体派生 pop>0）粮储清零 → 强制屯粮焦点 ----
         // 独立构造 FocusController（不依赖已注册脑的订阅；直接判底线）。
         var fc = new FocusController(ai.id);
-        int savedFood = ai.resources.food;
-        ai.resources.food = 0;
+        int savedFood = ai.GetResourceValue(ResourceType.Food);
+        ai.resources = ai.resources.Set(ResourceType.Food, 0);
         fc.Update(ai, KingdomBrain.LoadConfig(), 1);
         bool grainBaseOk = ai.focus == FocusController.FocusGranary;
-        ai.resources.food = savedFood;
+        ai.resources = ai.resources.Set(ResourceType.Food, savedFood);
         checks.Add($"粮底线屯粮={(grainBaseOk ? "OK" : "FAIL")}");
 
         // ---- ⑥ 王国脑日 tick 确定性采收：注入粮维持生存→推进，逐日扫描 scriptPhase/focus ----
@@ -111,7 +111,7 @@ public static class Valley2_17_Smoke_8
         var cfgProbe = KingdomBrain.LoadConfig();
         for (int day = 1; day <= 15; day++)
         {
-            ai.resources.food = 99999;            // 粮裕保单确定性主线推进（与脑日 tick 无关的确定性台账）
+            ai.resources = ai.resources.Set(ResourceType.Food, 99999);   // 粮裕保单确定性主线推进（与脑日 tick 无关的确定性台账）
             probe.Tick(day);
             scan.Append(ScriptStageMachine.Name(probe.Stage)).Append(ai.focus).Append(';');
         }

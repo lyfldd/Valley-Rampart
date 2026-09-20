@@ -327,8 +327,9 @@ public class BuildController : Singleton<BuildController>
         return true;
     }
 
-    /// <summary>建造国库抽象（2_17 步骤7）：玩家(0)→WarehouseHelper.CanAfford；AI→KingdomState.CanAfford 五经济资源。</summary>
-    private static bool CanPayBuild(int kingdomId, ResourcePack cost)
+    /// <summary>建造国库抽象（2_17 步骤7）：玩家(0)→WarehouseHelper.CanAfford；AI→KingdomState.CanAfford 五经济资源。
+    /// ⭐ `M1-A`：成本类型 `ResourcePack` ⇒ 「资源量列表」。</summary>
+    private static bool CanPayBuild(int kingdomId, ResourceList cost)
     {
         if (kingdomId <= 0) return WarehouseHelper.CanAfford(cost);
         var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;
@@ -336,7 +337,7 @@ public class BuildController : Singleton<BuildController>
     }
 
     /// <summary>建造扣费（2_17 步骤7）：玩家(0)→WarehouseHelper.TrySettle；AI→KingdomState.Spend（台账制，无事件）。</summary>
-    private static bool PayBuild(int kingdomId, ResourcePack cost)
+    private static bool PayBuild(int kingdomId, ResourceList cost)
     {
         if (kingdomId <= 0) return WarehouseHelper.TrySettle(cost);
         var ks = KingdomRegistry.Instance != null ? KingdomRegistry.Instance.Get(kingdomId) : null;

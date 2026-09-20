@@ -159,7 +159,7 @@ public class TaxSystem : Singleton<TaxSystem>
             int aiTotal = Mathf.RoundToInt((aiHead + aiBuilding) * aiCoeff);
 
             if (aiTotal > 0)
-                kingdom.AddResources(new ResourcePack { gold = aiTotal });
+                kingdom.AddResources(ResourceList.Of(new ResourceAmount(ResourceType.Gold, aiTotal)));
 
             Debug.Log($"[TaxSystem] AI 税收结算：王国[{kId}]{kingdom.name} 人头税{aiHead} + 建筑税{aiBuilding}，幸福系数{aiCoeff:F2} → 入账 {aiTotal} 金（工人{kingdom.workerCount}）");
         }

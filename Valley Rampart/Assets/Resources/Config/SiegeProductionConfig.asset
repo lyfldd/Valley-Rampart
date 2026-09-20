@@ -15,50 +15,35 @@ MonoBehaviour:
   siegeMachineLimitBase: 2
   siegeMachineLimitPerLevel: 2
   catapultCost:
-    gold: 5
-    stone: 10
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 5
+    - type: 1
+      amount: 10
   ballistaCost:
-    gold: 8
-    stone: 15
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 8
+    - type: 1
+      amount: 15
   mortarCost:
-    gold: 15
-    stone: 25
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 15
+    - type: 1
+      amount: 25
   vineCatapultCost:
-    gold: 10
-    stone: 15
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 10
+    - type: 1
+      amount: 15
   ramCost:
-    gold: 5
-    stone: 10
-    wood: 0
-    food: 0
-    metal: 0
-    stoneAmmo: 0
-    fireballAmmo: 0
-    magicAmmo: 0
+    items:
+    - type: 0
+      amount: 5
+    - type: 1
+      amount: 10
   stoneAmmoCost: 1
   fireballAmmoCost: 1
   magicAmmoCost: 1

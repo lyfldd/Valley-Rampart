@@ -121,7 +121,7 @@ public static class Valley_HH73_Smoke_Water
             foreach (var kvp in farmKid)
             {
                 var st = kvp.Value != null ? kvp.Value.GetComponent<StorageComponent>() : null;
-                if (st != null) farmMax = Mathf.Max(farmMax, st.storedAmount);
+                if (st != null) farmMax = Mathf.Max(farmMax, st.TotalCount);
             }
             // 玩家桶负跳变检测（零泄漏）
             float pv = wn.GetStored(0);

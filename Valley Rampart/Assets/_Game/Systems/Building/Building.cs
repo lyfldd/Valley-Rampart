@@ -359,7 +359,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
         // 2_12 步骤7 / D155：玩家建造记录首付为累计投入（修复/拆除返还基数）。地图预置建筑 totalInvested=0。
         totalInvested = isPlayerBuilt && def != null
-            ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food
+            ? SumCostOf(def.cost, includeMetal: false)
             : 0;
 
         ApplyDef();
@@ -512,7 +512,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             if (storage != null)
             {
                 storage.RefreshCapacity();
-                storage.storedAmount = Mathf.Min(storage.storedAmount, storage.capacity);
+                storage.TrimToCapacity();   // ⭐ M1-A：多资源仓的「压回容量线」（原单资源 min 的等价语义）
             }
             EventBus.Publish(new BuildingUpgradedEvent(this, level - 1, level));
         }
@@ -633,7 +633,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         constructProgress = 0f;
         // 2_12 步骤7 / D155：升级投入累加进累计投入（玩家已在外层扣款，此处记账更新 totalInvested）
         var uc = def.levels[level - 1].upgradeCost;
-        totalInvested += uc.gold + uc.stone + uc.wood + uc.food + uc.metal;   // 2_12 步骤8 D131：含铁
+        totalInvested += SumCostOf(uc, includeMetal: true);   // 2_12 步骤8 D131：含铁
         UpdateVisual();
         return true;
     }
@@ -647,24 +647,51 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// </summary>
     public bool CanDemolish => isPlayerBuilt && def != null && def.isDestructible && !def.isResourceNode;
 
-    /// <summary>拆除建筑（由 BuildingPanel 调）。按累计投入×HP 比例返还（2_12 步骤7 / D162）。</summary>
+    /// <summary>拆除建筑（由 BuildingPanel 调）。按累计投入×HP 比例返还（2_12 步骤7 / D162）。
+    /// ⭐ `M1-A`：返还结构改「资源量列表」，**摊回口径保持旧行为**（仍只摊 金/石/木/粮 四源 ——
+    /// `09#48`「按 `def.cost` 全部资源摊」归 `M1-C`；`09#54`「改全退」同归 `M1-C`）。</summary>
     public void Demolish()
     {
         if (!CanDemolish) return;
         float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
-        // D162：返还 = 累计投入 × (当前HP/满HP)。累计投入按 def.cost 四资源占比摊回 pack。
-        int invested = totalInvested > 0 ? totalInvested
-            : (def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food);
-        int baseSum = Mathf.Max(1, def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food);
-        var refundPack = new ResourcePack
+        // D162：返还 = 累计投入 × (当前HP/满HP)。累计投入按 def.cost 四资源占比摊回。
+        int costSum = SumCostOf(def != null ? def.cost : ResourceList.Empty, includeMetal: false);
+        int invested = totalInvested > 0 ? totalInvested : costSum;
+        int baseSum = Mathf.Max(1, costSum);
+        var refundPack = ResourceList.Empty;
+        if (def != null && def.cost.items != null)
         {
-            gold = Mathf.FloorToInt((float)invested * def.cost.gold / baseSum),
-            stone = Mathf.FloorToInt((float)invested * def.cost.stone / baseSum),
-            wood = Mathf.FloorToInt((float)invested * def.cost.wood / baseSum),
-            food = Mathf.FloorToInt((float)invested * def.cost.food / baseSum)
-        };
+            for (int i = 0; i < def.cost.items.Length; i++)
+            {
+                var e = def.cost.items[i];
+                if (!IsRefundResource(e.type)) continue;   // 旧口径：只摊 金/石/木/粮
+                int amount = Mathf.FloorToInt((float)invested * e.amount / baseSum);
+                if (amount > 0) refundPack = refundPack.Set(e.type, amount);
+            }
+        }
         RulerController.Instance?.Refund(refundPack, ratio);
         Die(DeathCause.Demolished);
+    }
+
+    /// <summary>返还口径资源（金/石/木/粮 · 旧行为；`M1-C` 起应改全部 `def.cost` 资源）。</summary>
+    static bool IsRefundResource(ResourceType t)
+        => t == ResourceType.Gold || t == ResourceType.Stone || t == ResourceType.Wood || t == ResourceType.Food;
+
+    /// <summary>造价合计（`includeMetal=false` ⇒ 旧「四资源」口径；`true` ⇒ 旧「五资源」口径）。
+    /// ⚠️ 旧 `ResourcePack` 的 `gold+stone+wood+food(+metal)` 逐字等价（弹药不计）。
+    /// ⭐ 供 `BuildingFactory` 读档兜底共用（单源，⛔ 不各写一遍）。</summary>
+    public static int SumCostOf(ResourceList cost, bool includeMetal)
+    {
+        int sum = 0;
+        if (cost.items == null) return 0;
+        for (int i = 0; i < cost.items.Length; i++)
+        {
+            var t = cost.items[i].type;
+            if (t == ResourceType.Gold || t == ResourceType.Stone || t == ResourceType.Wood || t == ResourceType.Food
+                || (includeMetal && t == ResourceType.Metal))
+                sum += cost.items[i].amount;
+        }
+        return sum;
     }
 
     // ===== ISaveable 实现（3.5 实施计划 P0 步骤3）=====
@@ -672,6 +699,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public SavePayload SaveState()
     {
         var storage = GetComponent<StorageComponent>();
+        // ⭐ M1-A：国库（子物体容器）随建筑存档显式存取（判据 6：仓内容与容量线逐项一致）
+        var vault = GetComponent<TreasureVault>();
         // DZ-072a：矿洞副产组件双仓存量（无组件=零值元组）；T1.4（D609）：第三元=矿石
         var mineByprod = GetComponent<MineByproductComponent>();
         var mineByprodSaved = mineByprod != null ? mineByprod.SaveByproductState() : (crystal: 0, fireOil: 0, ore: 0);
@@ -688,7 +717,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             faction = (int)faction,
             state = (int)state,
             sourceType = (int)sourceType,
-            storedAmount = storage != null ? storage.storedAmount : 0,
+            storageContents = storage != null ? storage.Contents : ResourceList.Empty,
+            treasuryContents = vault != null ? vault.Contents : ResourceList.Empty,
             // DZ-072a：矿洞副产组件双仓存量入档（旧档缺字段→默认 0 零 bump）
             byproductCrystalAmount = mineByprodSaved.crystal,
             byproductFireOilAmount = mineByprodSaved.fireOil,
@@ -742,7 +772,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         // 2_12 步骤7 / D155：累计投入恢复。旧档缺字段(data.totalInvested=0，且玩家建筑无默认) → 兜底按 def.cost 计
         totalInvested = data.totalInvested > 0
             ? data.totalInvested
-            : (isPlayerBuilt && def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food : 0);
+            : (isPlayerBuilt && def != null ? SumCostOf(def.cost, includeMetal: false) : 0);
 
         // 【HH.294 片4·4-E】锚点消费记录恢复（旧档缺字段默认 0 ⇒ 与坐标 0 混淆，故按「有锚点类型」判有效）
         anchorCoordX = data.anchorFeature >= 0 ? data.anchorCoordX : -1;
@@ -750,7 +780,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         anchorFeature = data.anchorFeature >= 0 ? data.anchorFeature : -1;
 
         var storage = GetComponent<StorageComponent>();
-        if (storage != null) storage.storedAmount = Mathf.Max(0, data.storedAmount);
+        if (storage != null) storage.RestoreContents(data.storageContents);
+
+        // ⭐ M1-A：国库内容恢复（旧档 `treasuryContents` 为空 ⇒ 由 KingdomManager 旧桥兜底已退役 ⇒ 空仓）
+        var vault = GetComponent<TreasureVault>();
+        if (vault != null) vault.RestoreContents(data.treasuryContents);
 
         // DZ-072a：矿洞副产组件双仓存量恢复（旧档缺字段=0，零恢复=新产链起点）；T1.4（D609）：第三参=矿石
         var mineByprod = GetComponent<MineByproductComponent>();
@@ -768,29 +802,34 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 2_12 步骤7 / D155：修复/废墟重建成本（库存储入时点调用，勿入每帧路径）。
-    /// = 累计投入 × RepairConfig.repairCostRatio，按 def.cost 的 金/石/木/粮/铁 比例分摊回 ResourcePack。
+    /// = 累计投入 × RepairConfig.repairCostRatio，按 def.cost 的 金/石/木/粮/铁 比例分摊回「资源量列表」。
     /// 累计投入用 totalInvested（建造+升级累加）；旧档/地图预置无累计投入 → 回退 def.cost。
     /// 2_12 步骤8 D131：def.cost/分摊含铁，修复摊回不静默丢铁。
+    /// ⭐ `M1-A`：返回类型 `ResourcePack` ⇒ `ResourceList`（**口径与数值逐字不变**，弹药仍不计入）。
     /// </summary>
-    public ResourcePack GetRepairCost()
+    public ResourceList GetRepairCost()
     {
-        int invested = totalInvested > 0 ? totalInvested
-            : (def != null ? def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food + def.cost.metal : 0);
-        if (invested <= 0 || def == null) return ResourcePack.Zero;
+        int costSum = def != null ? SumCostOf(def.cost, includeMetal: true) : 0;
+        int invested = totalInvested > 0 ? totalInvested : costSum;
+        if (invested <= 0 || def == null) return ResourceList.Empty;
 
         float ratio = RepairConfig.Instance != null ? Mathf.Clamp01(RepairConfig.Instance.repairCostRatio) : 0.5f;
         int total = Mathf.Max(1, Mathf.RoundToInt(invested * ratio));
 
         // 按 def.cost 五资源占比分摊（避免纯按总额使单一资源爆表）
-        int baseSum = Mathf.Max(1, def.cost.gold + def.cost.stone + def.cost.wood + def.cost.food + def.cost.metal);
-        return new ResourcePack
+        int baseSum = Mathf.Max(1, costSum);
+        var cost = ResourceList.Empty;
+        if (def.cost.items != null)
         {
-            gold = Mathf.RoundToInt((float)total * def.cost.gold / baseSum),
-            stone = Mathf.RoundToInt((float)total * def.cost.stone / baseSum),
-            wood = Mathf.RoundToInt((float)total * def.cost.wood / baseSum),
-            food = Mathf.RoundToInt((float)total * def.cost.food / baseSum),
-            metal = Mathf.RoundToInt((float)total * def.cost.metal / baseSum)
-        };
+            for (int i = 0; i < def.cost.items.Length; i++)
+            {
+                var e = def.cost.items[i];
+                if (!IsRefundResource(e.type) && e.type != ResourceType.Metal) continue;   // 旧口径：金/石/木/粮/铁
+                int amount = Mathf.RoundToInt((float)total * e.amount / baseSum);
+                if (amount > 0) cost = cost.Set(e.type, amount);
+            }
+        }
+        return cost;
     }
 
     // ===== 战斗（3.4 实现 IDamageable）=====
@@ -992,7 +1031,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         // ② 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：自动产水入网，不派生产任务）
         if (producer != null
             && !producer.IsWell
-            && (storage == null || !storage.IsFull)
+            && (storage == null || !storage.IsFullFor(producer.OutputResource))
             && (sched == null || !sched.HasWorkerAssigned(this)))
         {
             task = new KingdomTask(KingdomTaskType.Production, this);
@@ -1001,17 +1040,22 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         }
 
         // ③ 搬运：存储达标且存量>0 → 搬运任务（2_8 步骤3 / D95：把资源总需求附带进 task.args，调度器据此规模派工）
-        if (storage != null && storage.capacity > 0 && storage.storedAmount > 0
-            && storage.storedAmount >= storage.capacity * transportThreshold)
+        // ⭐ M1-A：多资源仓 ⇒ 按「首个非空资源」（资源表序·确定性）判达标并附其类型/量（对齐 StorageComponent 过渡读口）
+        if (storage != null && storage.capacity > 0 && storage.TotalCount > 0)
         {
-            task = new KingdomTask(KingdomTaskType.Transport, this);
-            task.destType = KingdomDestType.NearestWarehouse;
-            task.args = new ScaleTaskArgs
+            var t = storage.PrimaryStoredType();
+            int stored = storage.GetAmount(t);
+            if (stored > 0 && stored >= storage.capacity * transportThreshold)
             {
-                resourceType = storage.resourceType,
-                totalResourceDemand = storage.storedAmount
-            };
-            return true;
+                task = new KingdomTask(KingdomTaskType.Transport, this);
+                task.destType = KingdomDestType.NearestWarehouse;
+                task.args = new ScaleTaskArgs
+                {
+                    resourceType = t,
+                    totalResourceDemand = stored
+                };
+                return true;
+            }
         }
 
         // ④ 挑水：仅农场（产粮耗水）在本国水网缺水时发挑水任务（采石/矿洞不耗水，不派）

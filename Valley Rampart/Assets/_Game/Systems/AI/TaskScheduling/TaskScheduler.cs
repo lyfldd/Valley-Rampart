@@ -658,22 +658,23 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             Debug.Log($"[TaskScheduler] 采集溢出丢弃：国 {uc.kingdomId} 已注销，{type}×{amount} 不入玩家库（资敌防线）");
             return;
         }
-        var pack = new ResourcePack();
+        // ⭐ M1-A：五经济资源改走「资源量列表」入账；副产三台账桶（原有独立 int 桶）保持原样
         switch (type)
         {
-            case ResourceType.Gold: pack.gold = amount; break;
-            case ResourceType.Stone: pack.stone = amount; break;
-            case ResourceType.Wood: pack.wood = amount; break;
-            case ResourceType.Food: pack.food = amount; break;
-            case ResourceType.Metal: pack.metal = amount; break;
             case ResourceType.Crystal: k.crystal += amount; return;   // DZ-072a：副产台账桶（HH.107 件2）
             case ResourceType.FireOil: k.fireOil += amount; return;   // DZ-072a：副产台账桶
-            case ResourceType.Ore: k.ore += amount; return;           // T1.8（D609/D617）：矿石 AI 独立桶（照副产先例，不进五经济 ResourcePack）
+            case ResourceType.Ore: k.ore += amount; return;           // T1.8（D609/D617）：矿石 AI 独立桶（照副产先例）
+            case ResourceType.Gold:
+            case ResourceType.Stone:
+            case ResourceType.Wood:
+            case ResourceType.Food:
+            case ResourceType.Metal:
+                k.AddResources(ResourceList.Of(new ResourceAmount(type, amount)));
+                return;
             default:
                 Debug.Log($"[TaskScheduler] 采集溢出丢弃：{type} 非国库五资源/副产桶（AI 台账无此桶），×{amount}");
                 return;
         }
-        k.AddResources(pack);
     }
 
     /// <summary>获取工人背包（prefab 未挂组件则经 UnitController.GetOrAddInventory 补挂，QQQ.4 T8）。</summary>
@@ -698,17 +699,20 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         var st = comp.GetComponent<StorageComponent>();
         // 副产子仓取货（DZ-072a）：本体仓缺失或类型与 args 不符（Building ③ 广告任务 args 恒等于本体仓类型，不受影响），
         // 且 source 挂有副产组件时 → 按 args.resourceType 取对应副产子仓。
-        if (task.args is ScaleTaskArgs sa && (st == null || st.resourceType != sa.resourceType))
+        // ⭐ M1-A：单资源 `resourceType` ⇒ 标签判 `Accepts`（多资源仓下「符不符」＝收不收这个资源）。
+        if (task.args is ScaleTaskArgs sa && (st == null || !st.Accepts(sa.resourceType)))
         {
             var byprod = comp.GetComponent<MineByproductComponent>();
             st = byprod != null ? byprod.GetStore(sa.resourceType) : null;
         }
-        if (st == null || st.storedAmount <= 0) return false;
-        int max = Mathf.Max(1, st.GetCarryAmount());
-        int amount = Mathf.Min(st.storedAmount, max);
-        int stored = inv.TryStore(st.resourceType, amount);
+        // ⏭️ 单资源语义假设点（M1-G 收口）：仓内首资源 ＝ 旧单一 `resourceType`（迁移后仓恒单型，读数逐一相同）。
+        if (st == null || st.TotalCount <= 0) return false;
+        var carried = st.PrimaryStoredType();
+        int max = Mathf.Max(1, st.GetCarryAmount(carried));
+        int amount = Mathf.Min(st.GetAmount(carried), max);
+        int stored = inv.TryStore(carried, amount);
         if (stored <= 0) return false;
-        st.TakeOut(stored);   // 扣减存量 + 触发 OnStorageChanged（QQQ.4 T11）
+        st.TakeOut(carried, stored);   // 扣减存量 + 触发 OnStorageChanged（QQQ.4 T11）
         return true;
     }
 
@@ -735,7 +739,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position, wkingdom);
         if (best != null)
         {
-            int added = best.Add(amount);
+            int added = best.Add(inv.carriedType, amount);
             int overflow = amount - added;
             // DZ-073（HH.107 件2）：溢出兜底改归属国分流——旧硬编码 RulerController=AI 溢出资玩家库；=0 玩家逐位零回归。
             if (overflow > 0)
@@ -767,18 +771,18 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         for (int i = 0; i < storages.Length; i++)
         {
             var s = storages[i];
-            if (s == null || s.resourceType != ra.ammoType || s.storedAmount <= 0) continue;
+            if (s == null || s.GetAmount(ra.ammoType) <= 0) continue;
             float d = GridMath.DistCells(s.transform.position, brain.transform.position);
             if (d < bestDist) { bestDist = d; best = s; }
         }
         if (best == null) return false;
 
         int max = Mathf.Max(1, WorkerTask.GetCarryAmount(ra.ammoType));
-        int amount = Mathf.Min(best.storedAmount, max, ra.amount);   // 适配缺口/装载量/携带量
+        int amount = Mathf.Min(best.GetAmount(ra.ammoType), max, ra.amount);   // 适配缺口/装载量/携带量
         if (amount <= 0) return false;
         int stored = inv.TryStore(ra.ammoType, amount);
         if (stored <= 0) return false;
-        best.TakeOut(stored);   // 扣弹药仓存量（真源扣一次，防双写）
+        best.TakeOut(ra.ammoType, stored);   // 扣弹药仓存量（真源扣一次，防双写）
         return true;
     }
 
@@ -815,11 +819,11 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         for (int i = 0; i < storages.Length; i++)
         {
             var s = storages[i];
-            if (s == null || s.resourceType != type || s.capacity <= s.storedAmount) continue;
+            if (s == null || !s.Accepts(type) || s.CanAccept(type) <= 0) continue;
             float d = GridMath.DistCells(s.transform.position, nearPos);
             if (d < bestDist) { bestDist = d; best = s; }
         }
-        if (best != null) { best.Add(amount); return; }
+        if (best != null) { best.Add(type, amount); return; }
         // 无同类仓 → 归属国分流兜底（DZ-073，HH.107 件2：旧硬编码 RulerController 玩家国库=AI 退弹资玩家库；
         // 此处无 brain/uc 上下文，改签名带 uc 由调用方传入——=0 玩家原路径逐位，>0 入 AI 台账）。
         AddGatherOverflow(owner, type, amount);
@@ -883,12 +887,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         StorageComponent best = null;
         float bestDist = float.MaxValue;
         int kingdom = SourceKingdom(task);
-        int want = task != null && task.args is ScaleTaskArgs sa ? (int)sa.resourceType : -1;
+        ResourceType? want = task != null && task.args is ScaleTaskArgs sa ? sa.resourceType : (ResourceType?)null;
         for (int i = 0; i < storages.Length; i++)
         {
             var s = storages[i];
-            if (s == null || s.capacity <= s.storedAmount) continue;   // 已满不收
-            if (want >= 0 && (int)s.resourceType != want) continue;    // DZ-072a：同型（异型卸入会被 IWarehouse 拒）
+            if (s == null || s.IsFull) continue;                       // 已满不收
+            if (want.HasValue && !s.Accepts(want.Value)) continue;     // DZ-072a：同型（异型卸入会被 IWarehouse 拒）
             var pb = s.GetComponentInParent<Building>();
             if (pb != null ? pb.kingdomId != kingdom : kingdom != 0) continue;   // DZ-073：同国（防跨国远目的地；无主仓不收）
             float d = GridMath.DistCells(s.transform.position, task.SourcePos);

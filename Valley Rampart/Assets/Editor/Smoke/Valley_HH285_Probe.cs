@@ -176,7 +176,7 @@ public static class Valley_HH285_Probe
             var savedPhaseB = kd.scriptPhase;
             var savedSitB = SituationHub.TryGet(dwarfId, out var origSitB) ? origSitB : null;
             var savedPostB = PostureHub.Get(dwarfId);
-            kd.resources.gold += 3000; kd.resources.stone += 800; kd.resources.wood += 800;   // 先例 P9 同款（冒烟槽不入盘）
+            kd.resources = kd.resources.Add(ResourceType.Gold, 3000); kd.resources = kd.resources.Add(ResourceType.Stone, 800); kd.resources = kd.resources.Add(ResourceType.Wood, 800);   // 先例 P9 同款（冒烟槽不入盘）
             SituationHub.Put(dwarfId, new SituationSnapshot { KingdomId = dwarfId, Threats = new List<ThreatEntry>(), GeneralCount = 0, FormationCount = 0, Day = 801 });
             float leyGap = UtilityScorer.NeedScore(kd, defLey.Value);
             bool leyFeas = InvokeFeasible(kd, defLey.Value);
@@ -185,7 +185,7 @@ public static class Valley_HH285_Probe
             if (nonDwarfId > 0)
             {
                 var kn = reg.Get(nonDwarfId);
-                kn.resources.gold += 3000; kn.resources.stone += 800; kn.resources.wood += 800;
+                kn.resources = kn.resources.Add(ResourceType.Gold, 3000); kn.resources = kn.resources.Add(ResourceType.Stone, 800); kn.resources = kn.resources.Add(ResourceType.Wood, 800);
                 gateBlocked = !InvokeFeasible(kn, defLey.Value);   // :574 raceId 拦截
             }
             // 复原
@@ -199,7 +199,7 @@ public static class Valley_HH285_Probe
         }
 
         // ===== ⓒ-1 互斥链·无厂（Feasible 直调·k1）=====
-        k1.resources.gold += 3000; k1.resources.stone += 800; k1.resources.wood += 800;
+        k1.resources = k1.resources.Add(ResourceType.Gold, 3000); k1.resources = k1.resources.Add(ResourceType.Stone, 800); k1.resources = k1.resources.Add(ResourceType.Wood, 800);
         var bdefW = BuildingFactory.FindDefById(BuildingIds.SiegeWorkshop);
         bool c1FeasBsw = bdefW != null && InvokeFeasible(k1, defBsw.Value);
         bool c1FeasPm = InvokeFeasible(k1, defPm.Value);

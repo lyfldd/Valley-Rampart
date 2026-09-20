@@ -74,8 +74,9 @@ public class KingdomDef : ScriptableObject
     public int baseWorkers = 6;
     [Tooltip("基准战士数（步骤5 按错峰档 scale 缩放）")]
     public int baseWarriors = 2;
-    [Tooltip("基准起始国库（baseStockpile 过渡账本，D300；错峰档再缩放，2_17 步骤2 WarehouseRegistry 迁移吸收）")]
-    public ResourcePack baseStockpile;
+    [Tooltip("基准起始国库（baseStockpile 过渡账本，D300；错峰档再缩放，2_17 步骤2 WarehouseRegistry 迁移吸收）" +
+             "· ⭐ M1-A：改「资源量列表」（09#50）")]
+    public ResourceList baseStockpile;
 
     /// <summary>读取五轴性格（→ KingdomState.personality[5]，D311 独立不归一化）。</summary>
     public float[] GetPersonalityArray()

@@ -4,15 +4,14 @@ using UnityEngine;
 /// <summary>
 /// 王国仓库注册表（2_12 步骤8.4，落 WarehouseHelper.FindObjectsOfType 的 TODO）。
 /// 维护参与"王国仓库凑单"的 IWarehouse 提供者集合，替换 WarehouseHelper 内全场景扫描：
-///   - StorageComponent（产能建筑本地库，存量>0 才参与）；
+///   - StorageComponent（多资源仓：存量>0 才参与）；
 ///   - 未来：国库仓库（随主城升级，随 8.4 国库真源切换后纳入同一集合）。
 ///
 /// 采用"结算时点 Gather + 过滤存量>0"，与旧实现行为等价（重启后仍只取存量>0 的库），
 /// 但定位从 FindObjectsOfType（全场景扫描）改为常驻注册表（O(注册数)）。
 /// ⚠️ 调用频率红线沿袭 WarehouseHelper：只许结算时点用，禁入 Update/每帧路径。
 ///
-/// 注册纪律（8.4）：StorageComponent 在 Init/OnDestroy 时 Add/Remove；
-/// 真源切换完成前，本注册表与 RulerController 国库字段**并存**但只读不双写（禁双写红线）。
+/// 注册纪律（8.4）：StorageComponent 在 Init/OnDestroy 时 Add/Remove。
 /// </summary>
 public static class WarehouseRegistry
 {
@@ -32,10 +31,10 @@ public static class WarehouseRegistry
     }
 
     /// <summary>
-    /// 收集当前"参与凑单"的王国仓库（存量>0 的 StorageComponent），仅同国仓储计入。
+    /// 收集当前"参与凑单"的王国仓库（**有存量**的 StorageComponent），仅同国仓储计入。
     /// 与旧 GatherWarehouses 行为等价（仅定位方式不同）；结算时点调用。
-    /// 2_17 修复卡γ：过滤改"同王国匹配"——玩家(0)结算只凑玩家仓，AI 王国结算只凑 AI 仓，
-    /// 保"玩家资源绝不流入 AI 库"原始意图，同时 AI 凑单/物流可通（非补丁D的玩家专属硬过滤）。
+    /// 2_17 修复卡γ：过滤改"同王国匹配"——玩家(0)结算只凑玩家仓，AI 王国结算只凑 AI 仓。
+    /// ⭐ `M1-A`：判据由 `storedAmount > 0` ⇒ **`TotalCount > 0`**（多资源仓 · 件数合计）。
     /// </summary>
     public static List<IWarehouse> GatherActive(int kingdomId)
     {
@@ -44,16 +43,16 @@ public static class WarehouseRegistry
         {
             var s = _storages[i];
             if (s == null || KingdomOf(s) != kingdomId) continue;
-            if (s.storedAmount > 0) result.Add(s);
+            if (s.TotalCount > 0) result.Add(s);
         }
         return result;
     }
 
     /// <summary>
-    /// 找距 worldPos 最近的"同王国、同 resourceType 且还有余量"的 StorageComponent（搬运第二段卸货落点）。
+    /// 找距 worldPos 最近的"同王国、**能收该资源且还有余量**"的 StorageComponent（搬运第二段卸货落点）。
     /// 步骤11 切替 TaskScheduler.UnloadInventory 的 FindObjectsOfType 全场景扫描（D51 就近卸货）。
-    /// 2_17 修复卡γ：过滤改"同王国匹配"（第 3 参 kingdomId=工人归属国）——玩家工人只卸玩家库（绝不流入
-    /// AI 库的原始意图保住），AI 工人也能卸回自己的 AI 仓库（修复缺陷γ AI 物流链断）。
+    /// ⭐ `M1-A`／`D789 补-2`：判据由"单资源同型"⇒ **`Accepts`（标签前缀匹配）＋ `CanAccept`（容量按体积）**，
+    /// ⛔ 不再是 `resourceType == type` 的单资源假设；**签名不变**（调用面零改）。
     /// 返回 null=无可用仓库（调用方兜底国库）。
     /// </summary>
     public static StorageComponent FindNearestAvailable(ResourceType type, UnityEngine.Vector3 worldPos, int kingdomId)
@@ -64,7 +63,7 @@ public static class WarehouseRegistry
         {
             var s = _storages[i];
             if (s == null || KingdomOf(s) != kingdomId) continue;
-            if (s.resourceType != type || s.capacity <= s.storedAmount) continue;
+            if (!s.Accepts(type) || s.CanAccept(type) <= 0) continue;
             float d = (s.transform.position - worldPos).sqrMagnitude;
             if (d < bestDist) { bestDist = d; best = s; }
         }

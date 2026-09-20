@@ -66,8 +66,8 @@ public class DifficultyManager : Singleton<DifficultyManager>, ISaveable
         Debug.Log($"[DifficultyManager] 初始化: 档位={CurrentDifficulty}, 系数={CurrentFactor}");
     }
 
-    /// <summary>按当前难度获取初始国家资源包。</summary>
-    public ResourcePack GetInitialResources()
+    /// <summary>按当前难度获取初始国家资源包（⭐ `M1-A`：改「资源量列表」）。</summary>
+    public ResourceList GetInitialResources()
     {
         return Config.GetInitialResources(CurrentDifficulty);
     }

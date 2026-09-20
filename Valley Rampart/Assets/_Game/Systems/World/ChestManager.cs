@@ -52,10 +52,10 @@ public class ChestManager : Singleton<ChestManager>, ISaveable
     /// 单格数量上限（D222）：超 chestMaxPerCell 时移除该格最早箱子。
     /// </summary>
     /// <param name="cell">落点格坐标（微格/楼层 0）。</param>
-    /// <param name="pack">内容物资源包（D145 容量同工人携带量）。</param>
+    /// <param name="pack">内容物（⭐ `M1-A`／`09#50`：资源量列表；D145 容量同工人携带量）。</param>
     /// <param name="faction">来源阵营（任意阵营可拾 D146；记录来源供 2_14 掠夺）。</param>
     /// <returns>创建成功的箱子；内容空/坐标非法返回 null。</returns>
-    public ChestEntity SpawnChest(GridCoord cell, ResourcePack pack, Faction faction)
+    public ChestEntity SpawnChest(GridCoord cell, ResourceList pack, Faction faction)
     {
         if (pack.IsZero) return null;
         float born = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 1;
@@ -127,9 +127,9 @@ public class ChestManager : Singleton<ChestManager>, ISaveable
     /// 拾取箱子（D246 任意阵营可拾 D146）。抽出内容物给发起者背包（背包落库链接由 8 调度/3.5 完成），
     /// 本步仅负责"取走内容 + 移除箱子实体"。返回值=拾取到的资源包（供调用方入背包），空则零值。
     /// </summary>
-    public ResourcePack Pickup(ChestEntity chest, Interactor ctx)
+    public ResourceList Pickup(ChestEntity chest, Interactor ctx)
     {
-        if (chest == null) return ResourcePack.Zero;
+        if (chest == null) return ResourceList.Empty;
         var got = chest.contents;
         Remove(chest);
         return got;

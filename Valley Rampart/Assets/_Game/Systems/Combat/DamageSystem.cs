@@ -630,7 +630,7 @@ public class DamageSystem : Singleton<DamageSystem>
 
         var cellOpt = GridSystem.Instance.WorldToCoord(evt.Position);
         if (!cellOpt.HasValue) return;
-        var chest = ChestManager.Instance.SpawnChest(cellOpt.Value, new ResourcePack { gold = gold }, Faction.None);
+        var chest = ChestManager.Instance.SpawnChest(cellOpt.Value, ResourceList.Of(new ResourceAmount(ResourceType.Gold, gold)), Faction.None);
         Debug.Log($"[OrcLoot] 兽人 {killer.npcId} 击杀 {evt.Unit} @ {evt.Position} → 战利品箱 金{gold}（战营{(value > 1.49f ? "×1.5" : "无")}）{(chest != null ? "落地" : "落箱失败")}");
     }
 

@@ -62,7 +62,7 @@ public static class Valley_HH80_Scout
                 for (int i = 0; i < all.Count; i++)
                 {
                     var k = all[i];
-                    sb.AppendLine($"k{k.id} [{k.name}] race={k.raceId} 工={k.workerCount} 战={k.warriorCount} 金={k.resources.gold} 粮={k.resources.food} 领土mid={(k.Territory != null ? k.Territory.Count : -1)} 阶段={k.scriptPhase}");
+                    sb.AppendLine($"k{k.id} [{k.name}] race={k.raceId} 工={k.workerCount} 战={k.warriorCount} 金={k.GetResourceValue(ResourceType.Gold)} 粮={k.GetResourceValue(ResourceType.Food)} 领土mid={(k.Territory != null ? k.Territory.Count : -1)} 阶段={k.scriptPhase}");
                 }
                 // 国锚点两两距离（出生口袋/邻国过近检查）——用各国单位平均位置近似
                 var us = Object.FindObjectsOfType<UnitController>();

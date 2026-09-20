@@ -142,8 +142,8 @@ public static class Valley_HH107_Smoke_Byproduct
 
         // ===== P1 产出：玩家 mine 副产水晶入子仓 =====
         yield return new WaitForSeconds(4f);   // 加速产率 2/s → 4s≈8 个
-        int c1 = crystalStore != null ? crystalStore.storedAmount : -1;
-        int f1 = fireOilStore != null ? fireOilStore.storedAmount : -1;
+        int c1 = crystalStore != null ? crystalStore.TotalCount : -1;   // ⭐ M1-A 适配
+        int f1 = fireOilStore != null ? fireOilStore.TotalCount : -1;   // ⭐ M1-A 适配
         Record("P1", c1 > 0 && f1 > 0, $"水晶子仓={c1} 火油子仓={f1}（双槽并行恒产，4s 加速窗）");
 
         // ===== P2 落库：子仓→Transport→工人搬运→国库 Vault_Crystal 增长 =====
@@ -173,7 +173,7 @@ public static class Valley_HH107_Smoke_Byproduct
             vaultAfterP2 = ruler.GetResource(ResourceType.Crystal);
             if (vaultAfterP2 > vaultBefore) { p2 = true; break; }   // 国库增长即过（提前退出）
         }
-        Record("P2", p2, $"国库水晶 {vaultBefore}→{vaultAfterP2}（100s 搬运窗；补员={spawnedWorkers}，idle 工人≈{playerIdle}，子仓={crystalStore.storedAmount}）");
+        Record("P2", p2, $"国库水晶 {vaultBefore}→{vaultAfterP2}（100s 搬运窗；补员={spawnedWorkers}，idle 工人≈{playerIdle}，子仓={crystalStore.TotalCount}）");   // ⭐ M1-A 适配
         if (!p2)
         {
             // 失败诊断：广告自检+_sources 注册+全场景 Vault 归属（TV.Instance 单例覆盖疑云取证）

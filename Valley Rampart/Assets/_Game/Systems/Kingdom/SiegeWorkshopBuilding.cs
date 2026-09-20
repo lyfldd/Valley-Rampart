@@ -48,7 +48,8 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
         SiegeProductionSystem.LegacyMagicAmmo = 0;
     }
 
-    /// <summary>创建 3 个单资源弹药子仓（仿 TreasureVault.Init 的子物体聚合，单仓不做多字典变体）。</summary>
+    /// <summary>创建 3 个**专属仓**弹药子仓（仿 TreasureVault 的子物体聚合）。
+    /// ⭐ `M1-A`：多资源容器下用 `SetDeclaredPaths`（该弹药的完整路径）表达"只收这一种"。</summary>
     void CreateSubStores(Building building)
     {
         if (building == null) return;
@@ -59,9 +60,9 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
             var go = new GameObject(SubStorePrefix + type);
             go.transform.SetParent(building.transform, false);
             var sc = go.AddComponent<StorageComponent>();
-            sc.resourceType = type;
+            sc.SetDeclaredPaths(new[] { ResourceCatalog.PrimaryPathOf(type) });
             sc.capacity = capacity;
-            // 不调 StorageComponent.Init（避免 def.outputResource 覆盖类型）；手动注册以并入凑单/搬运
+            // 不调 StorageComponent.Init（否则会被 def.warehousePaths 覆盖本专属仓声明）；手动注册以并入凑单/搬运
             WarehouseRegistry.Register(sc);
             _stores[type] = sc;
         }
@@ -135,17 +136,17 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
     {
         if (amt <= 0 || !_stores.ContainsKey(ammoType)) return 0;
         var store = _stores[ammoType];
-        if (store.IsFull) return 0;
+        if (store.IsFullFor(ammoType)) return 0;
 
         int cost = AmmoCostFor(ammoType);
         ResourceType raw = RawTypeFor(ammoType);
         if (cost <= 0) return 0;
         int maxByRaw = AmountAvailable(raw) / cost;
-        int produce = Mathf.Min(amt, maxByRaw, store.capacity - store.storedAmount);
+        int produce = Mathf.Min(amt, maxByRaw, store.CanAccept(ammoType));
         if (produce <= 0) return 0;
 
         SpendRaw(raw, produce * cost);
-        int added = store.Add(produce);
+        int added = store.Add(ammoType, produce);
         Debug.Log($"[SiegeWorkshop] 产 {ammoType} ×{added}（耗 {raw} {added * cost}）");
         return added;
     }
@@ -196,11 +197,11 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
 
     /// <summary>某类弹药存量（厂仓顶部，供装填任务取）。</summary>
     public int GetAmmo(ResourceType ammoType)
-        => _stores.TryGetValue(ammoType, out var s) ? s.storedAmount : 0;
+        => _stores.TryGetValue(ammoType, out var s) ? s.GetAmount(ammoType) : 0;
 
     /// <summary>某类弹药可取量（≤存量，装填）。</summary>
     public int TakeAmmo(ResourceType ammoType, int amt)
-        => _stores.TryGetValue(ammoType, out var s) ? s.TakeOut(amt) : 0;
+        => _stores.TryGetValue(ammoType, out var s) ? s.TakeOut(ammoType, amt) : 0;
 
     /// <summary>某类弹药的 IWarehouse（装卸/凑单用）。</summary>
     public StorageComponent GetStore(ResourceType ammoType)
@@ -208,7 +209,7 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
 
     public void ResetAll()
     {
-        foreach (var kv in _stores) kv.Value.storedAmount = 0;
+        foreach (var kv in _stores) kv.Value.Clear();
         _accumulator = 0f;
     }
 
@@ -227,7 +228,7 @@ public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSou
     void DepositDirect(ResourceType ammoType, int amt)
     {
         if (amt <= 0 || !_stores.TryGetValue(ammoType, out var s)) return;
-        int added = s.Add(amt);
+        int added = s.Add(ammoType, amt);
         // 旧档存量可能超新容量，接受 clamp（不静默丢弃之外的上限提示）
         if (added < amt)
             Debug.LogWarning($"[SiegeWorkshop] 旧档弹药 {ammoType} 超容量 clamp {amt}→{added}");

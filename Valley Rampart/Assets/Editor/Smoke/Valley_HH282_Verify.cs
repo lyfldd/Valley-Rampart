@@ -169,7 +169,7 @@ public static class Valley_HH282_Verify
         var sys = SiegeProductionSystem.Instance;
         Occupation pMachine = MachineForRace(pRace);
         var pData = UnitDataManager.Instance.GetData(Faction.PlayerCamp, pMachine);
-        var pCost = sys != null ? sys.PeekMachineCost(pMachine) : ResourcePack.Zero;
+        var pCost = sys != null ? sys.PeekMachineCost(pMachine) : ResourceList.Empty;
         if (sys != null && pData != null && pData.prefab != null && RulerController.Instance != null
             && RulerController.Instance.CanAfford(pCost))
         {
@@ -200,14 +200,13 @@ public static class Valley_HH282_Verify
             Occupation aiMachine = MachineForRace(aiRace);
             var aiData = UnitDataManager.Instance.GetData(Faction.PlayerCamp, aiMachine);
             var aiCost = sys.PeekMachineCost(aiMachine);
-            aiKingdom.AddResources(new ResourcePack
-            {
-                gold = Mathf.Max(0, aiCost.gold * 10 - aiKingdom.GetResourceValue(ResourceType.Gold)),
-                stone = Mathf.Max(0, aiCost.stone * 10 - aiKingdom.GetResourceValue(ResourceType.Stone)),
-                wood = Mathf.Max(0, aiCost.wood * 10 - aiKingdom.GetResourceValue(ResourceType.Wood)),
-                food = Mathf.Max(0, aiCost.food * 10 - aiKingdom.GetResourceValue(ResourceType.Food)),
-                metal = Mathf.Max(0, aiCost.metal * 10 - aiKingdom.GetResourceValue(ResourceType.Metal)),
-            });
+            aiKingdom.AddResources(ResourceList.Of(   // ⭐ M1-A 适配：ResourcePack→ResourceList（字段名转 ResourceType）
+                new ResourceAmount(ResourceType.Gold, Mathf.Max(0, aiCost.Get(ResourceType.Gold) * 10 - aiKingdom.GetResourceValue(ResourceType.Gold))),
+                new ResourceAmount(ResourceType.Stone, Mathf.Max(0, aiCost.Get(ResourceType.Stone) * 10 - aiKingdom.GetResourceValue(ResourceType.Stone))),
+                new ResourceAmount(ResourceType.Wood, Mathf.Max(0, aiCost.Get(ResourceType.Wood) * 10 - aiKingdom.GetResourceValue(ResourceType.Wood))),
+                new ResourceAmount(ResourceType.Food, Mathf.Max(0, aiCost.Get(ResourceType.Food) * 10 - aiKingdom.GetResourceValue(ResourceType.Food))),
+                new ResourceAmount(ResourceType.Metal, Mathf.Max(0, aiCost.Get(ResourceType.Metal) * 10 - aiKingdom.GetResourceValue(ResourceType.Metal)))
+            ));
             int g0 = aiKingdom.GetResourceValue(ResourceType.Gold);
             int s0 = aiKingdom.GetResourceValue(ResourceType.Stone);
             int w0 = aiKingdom.GetResourceValue(ResourceType.Wood);

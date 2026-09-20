@@ -213,7 +213,7 @@ public static class UtilityScorer
                 return Mathf.Clamp01((pop - houseCap) / Mathf.Max(1f, pop));
             }
             case NeedKind.WarehouseGap:  // 储量越接近容量基线越需加仓
-                float maxRes = Mathf.Max(Mathf.Max(food, k.resources.gold), Mathf.Max(k.resources.stone, Mathf.Max(k.resources.wood, 0f)));
+                float maxRes = Mathf.Max(Mathf.Max(food, k.GetResourceValue(ResourceType.Gold)), Mathf.Max(k.GetResourceValue(ResourceType.Stone), Mathf.Max(k.GetResourceValue(ResourceType.Wood), 0f)));
                 return Mathf.Clamp01(maxRes / Mathf.Max(1f, d.needA));
             case NeedKind.CapacityGap:   // 产能建筑不足（2_23 资源 P0 批C/R-C2：③评分输入改读快照产能缺口=A4 承接）
             {
@@ -598,7 +598,7 @@ public static class UtilityScorer
                     var t = tcfgG.trainings[i];
                     if (t.toOccupation != Occupation.General) continue;
                     if (t.raceId != -1 && t.raceId != myRaceG) continue;   // D419 族门禁
-                    return k.resources.gold >= Mathf.CeilToInt(t.costGold * raceDefG.trainCostMul);
+                    return k.GetResourceValue(ResourceType.Gold) >= Mathf.CeilToInt(t.costGold * raceDefG.trainCostMul);
                 }
                 return false;   // 无可训 General 条目（域配置缺失）
             }
@@ -629,7 +629,7 @@ public static class UtilityScorer
                 if (!foundK) return false;                                    // 本族无可造机器
                 if (!anyPrefabReady) return false;                            // ③prefab 全缺失→不评（D594 硬条款）
                 var costK = sps.PeekMachineCost(pickK);
-                return k.resources.gold >= costK.gold;   // ④金成本镜像（石木按 2_20.1 §8.1 机器造价域=金主导，执行面全量校验兜底）
+                return k.GetResourceValue(ResourceType.Gold) >= costK.Get(ResourceType.Gold);   // ④金成本镜像（石木按 2_20.1 §8.1 机器造价域=金主导，执行面全量校验兜底）
             }
             case UtilityAction.Rebuild:
             case UtilityAction.Defense:

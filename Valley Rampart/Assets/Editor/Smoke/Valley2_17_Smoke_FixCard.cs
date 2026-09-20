@@ -161,7 +161,7 @@ public static class Valley2_17_Smoke_FixCard
         var pStorage = P != null ? P.GetComponent<StorageComponent>() : null;
         int wBefore = W != null ? WStored(W) : -1;
         if (pStorage != null)
-            pStorage.storedAmount = pStorage.capacity;   // 满仓 → 发布 Transport（卸往同国 W）
+            pStorage.RestoreContents(ResourceList.Of(new ResourceAmount(ResourceType.Stone, pStorage.capacity)));   // 满仓 → 发布 Transport（卸往同国 W）· ⭐ M1-A 适配（类型取 quarry.def.outputResource=Stone）
         yield return WaitFrames(90);                     // 装载→搬运→卸货落库
         bool gammaTransported = pStorage != null && WStored(W) > wBefore;
         checks.Add($"γAI物流卸回AI仓={(gammaTransported ? "OK" : "FAIL")}");
@@ -229,8 +229,8 @@ public static class Valley2_17_Smoke_FixCard
         var oDef = O != null ? O.def : null;
         Debug.Log($"[FixCard diag·{tag}] " +
             $"GS={(gsm!=null?gsm.CurrentState:-1)} ts={Time.timeScale:F2} 玩家存活工人={(thr!=null?thr.AliveWorkerCount():-1)} | " +
-            $"P={P!=null}:st={PStored(P)} adv=[{Advert(P)}] rtype={(pst!=null?pst.resourceType:-1)} | " +
-            $"W={W!=null}:st={WStored(W)} rtype={(wst!=null?wst.resourceType:-1)} | " +
+            $"P={P!=null}:st={PStored(P)} adv=[{Advert(P)}] rtype={(pst!=null?(int)pst.PrimaryStoredType():-1)} | " +   // ⭐ M1-A 适配
+            $"W={W!=null}:st={WStored(W)} rtype={(wst!=null?(int)wst.PrimaryStoredType():-1)} | " +   // ⭐ M1-A 适配
             $"O={O!=null}:IsValid={(O!=null?(O as ITaskSource)?.IsValid:false)} isCon={(O!=null?oDef?.isConsumable:false)} adv=[{Advert(O)}] | " +
             $"wp1(k{(wp1.unit!=null?wp1.unit.kingdomId:-1)} alive={IsAlive(wp1.unit)} idle={(wp1.unit!=null?wp1.unit.GetComponent<NPCBrain>()?.IsIdleForTask:false)} st={sched.GetWorkerState(wp1.unitId)}) | " +
             $"Wa1(k{(Wa1.unit!=null?Wa1.unit.kingdomId:-1)} alive={IsAlive(Wa1.unit)} idle={(Wa1.unit!=null?Wa1.unit.GetComponent<NPCBrain>()?.IsIdleForTask:false)} st={sched.GetWorkerState(Wa1.unitId)} dP={(P!=null&&Wa1.unit!=null?Vector2.Distance((Vector2)Wa1.unit.transform.position,(Vector2)P.transform.position):-1):F1}) | " +
@@ -303,12 +303,12 @@ public static class Valley2_17_Smoke_FixCard
     private static int PStored(Building b)
     {
         var st = b != null ? b.GetComponent<StorageComponent>() : null;
-        return st != null ? st.storedAmount : -1;
+        return st != null ? st.TotalCount : -1;   // ⭐ M1-A 适配
     }
     private static int WStored(Building b)
     {
         var st = b != null ? b.GetComponent<StorageComponent>() : null;
-        return st != null ? st.storedAmount : -1;
+        return st != null ? st.TotalCount : -1;   // ⭐ M1-A 适配
     }
 
     /// <summary>菜单触发的协程宿主。</summary>

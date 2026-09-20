@@ -65,7 +65,7 @@ public static class Valley2_17_Smoke_14
         var orig = (List<KingdomState>)regF.GetValue(reg);
 
         // ===== 实时会话快照（防探针污染真实王国/玩家；finally 还原）=====
-        var treasurySnapshot = new Dictionary<int, ResourcePack>();
+        var treasurySnapshot = new Dictionary<int, ResourceList>();
         var simModeSnapshot = new Dictionary<int, SimMode>();
         var wakeSnapshot = new Dictionary<int, float>();
         var avgSatietySnapshot = CaptureAvgSatietyBucket();
@@ -76,9 +76,12 @@ public static class Valley2_17_Smoke_14
         {
             foreach (var k in orig)
             {
-                treasurySnapshot[k.id] = new ResourcePack
-                { gold = k.resources.gold, stone = k.resources.stone, wood = k.resources.wood,
-                  food = k.resources.food, metal = k.resources.metal };
+                treasurySnapshot[k.id] = ResourceList.Of(
+                    new ResourceAmount(ResourceType.Gold, k.GetResourceValue(ResourceType.Gold)),
+                    new ResourceAmount(ResourceType.Stone, k.GetResourceValue(ResourceType.Stone)),
+                    new ResourceAmount(ResourceType.Wood, k.GetResourceValue(ResourceType.Wood)),
+                    new ResourceAmount(ResourceType.Food, k.GetResourceValue(ResourceType.Food)),
+                    new ResourceAmount(ResourceType.Metal, k.GetResourceValue(ResourceType.Metal)));
                 simModeSnapshot[k.id] = k.simMode;
                 wakeSnapshot[k.id] = k.lastAbstractAvgSatiety;
             }
@@ -184,19 +187,22 @@ public static class Valley2_17_Smoke_14
         var player = reg.Get(0);
         if (player == null) return false;
         // 负探针：置显著值 → 在场 Abstract 王国日结 → 玩家国库逐字段不变
-        var pre = new ResourcePack { gold = player.resources.gold, stone = player.resources.stone,
-            wood = player.resources.wood, food = player.resources.food, metal = player.resources.metal };
-        player.resources.gold = 45; player.resources.stone = 6; player.resources.wood = 7;
-        player.resources.food = 123; player.resources.metal = 8;
+        var pre = ResourceList.Of(
+            new ResourceAmount(ResourceType.Gold, player.GetResourceValue(ResourceType.Gold)),
+            new ResourceAmount(ResourceType.Stone, player.GetResourceValue(ResourceType.Stone)),
+            new ResourceAmount(ResourceType.Wood, player.GetResourceValue(ResourceType.Wood)),
+            new ResourceAmount(ResourceType.Food, player.GetResourceValue(ResourceType.Food)),
+            new ResourceAmount(ResourceType.Metal, player.GetResourceValue(ResourceType.Metal)));
+        player.resources = player.resources.Set(ResourceType.Gold, 45).Set(ResourceType.Stone, 6).Set(ResourceType.Wood, 7);
+        player.resources = player.resources.Set(ResourceType.Food, 123).Set(ResourceType.Metal, 8);
 
         // 造一个 Abstract 王国在场（独立 id=K_P2）
         var k = NewKingdom(K_P2, SimMode.Abstract, 100, 10, 0, 0, 0);
         AbstractEconomySettlement.Tick();
 
-        bool unchanged = player.resources.gold == 45 && player.resources.stone == 6
-            && player.resources.wood == 7 && player.resources.food == 123 && player.resources.metal == 8;
-        player.resources.gold = pre.gold; player.resources.stone = pre.stone;
-        player.resources.wood = pre.wood; player.resources.food = pre.food; player.resources.metal = pre.metal;
+        bool unchanged = player.GetResourceValue(ResourceType.Gold) == 45 && player.GetResourceValue(ResourceType.Stone) == 6
+            && player.GetResourceValue(ResourceType.Wood) == 7 && player.GetResourceValue(ResourceType.Food) == 123 && player.GetResourceValue(ResourceType.Metal) == 8;
+        RestoreRes(ref player.resources, pre);
         return unchanged;
     }
 
@@ -276,13 +282,13 @@ public static class Valley2_17_Smoke_14
         var uf = MakeUnit(K5A, Occupation.Worker, 30, Faction.AiKingdom);
         int cost = cfg.GetDailyFoodByOccupation(Occupation.Worker);
         SatietySystem.Instance.OnNewDay();
-        fine = uf.Satiety > 30 && kf.resources.food == 100 - cost;
+        fine = uf.Satiety > 30 && kf.GetResourceValue(ResourceType.Food) == 100 - cost;
 
         // 5b Abstract 王国实体跳过（饱食不变、国库不被实体进食）但公式耗粮（独立 K5B）
         var ka = NewKingdom(K5B, SimMode.Abstract, 100, 0, 0, 0, 0);
         var ua = MakeUnit(K5B, Occupation.Worker, 30, Faction.AiKingdom);
         SatietySystem.Instance.OnNewDay();
-        bool entFrozen = ua.Satiety == 30 && ka.resources.food == 100;   // 实体未进食
+        bool entFrozen = ua.Satiety == 30 && ka.GetResourceValue(ResourceType.Food) == 100;   // 实体未进食
         // 公式侧：无农场纯耗粮快照（工人0/居民1）→ 净负（公式计数进食）
         var snap = BuildEngineSnapshot(0, 1, 0, 0, 100, 0, 0, 0, 0, 50f, 0);
         var dd = AbstractEconomySettler.SettleDaily(snap, LoadParams(), EcoModifiers.Default);
@@ -333,7 +339,7 @@ public static class Valley2_17_Smoke_14
         MakeBuilding(K9, "farm", new GridCoord(101, 100, 0), 2);
         var start = CopyRes(k.resources);
 
-        ResourcePack Round()
+        ResourceList Round()
         {
             RestoreRes(ref k.resources, start);
             AbstractEconomySettlement.OnMapGenerated();
@@ -368,11 +374,11 @@ public static class Valley2_17_Smoke_14
         MakeBuilding(K12, "quarry", new GridCoord(102, 100, 0), 1);
         var start = CopyRes(k.resources);
 
-        List<ResourcePack> Round()
+        List<ResourceList> Round()
         {
             RestoreRes(ref k.resources, start);
             AbstractEconomySettlement.OnMapGenerated();
-            var seq = new List<ResourcePack>();
+            var seq = new List<ResourceList>();
             for (int day = 0; day < 3; day++)
             {
                 AIEconomySettlement.Tick();       // 步骤14 日结链：AI段（Fine，D459 分叉跳过 Abstract）
@@ -425,7 +431,10 @@ public static class Valley2_17_Smoke_14
     {
         var k = new KingdomState { id = id, simMode = mode };
         k.moduleLevels = new int[6];
-        k.resources = new ResourcePack { food = food, gold = gold, stone = stone, wood = wood, metal = metal };
+        k.resources = ResourceList.Of(
+            new ResourceAmount(ResourceType.Food, food), new ResourceAmount(ResourceType.Gold, gold),
+            new ResourceAmount(ResourceType.Stone, stone), new ResourceAmount(ResourceType.Wood, wood),
+            new ResourceAmount(ResourceType.Metal, metal));
         InjectKingdom(k);
         return k;
     }
@@ -472,22 +481,31 @@ public static class Valley2_17_Smoke_14
         return b;
     }
 
-    private static ResourcePack CopyRes(ResourcePack r) => new ResourcePack
-    { gold = r.gold, stone = r.stone, wood = r.wood, food = r.food, metal = r.metal };
+    private static ResourceList CopyRes(ResourceList r) => ResourceList.Of(
+        new ResourceAmount(ResourceType.Gold, r.Get(ResourceType.Gold)),
+        new ResourceAmount(ResourceType.Stone, r.Get(ResourceType.Stone)),
+        new ResourceAmount(ResourceType.Wood, r.Get(ResourceType.Wood)),
+        new ResourceAmount(ResourceType.Food, r.Get(ResourceType.Food)),
+        new ResourceAmount(ResourceType.Metal, r.Get(ResourceType.Metal)));
 
-    /// <summary>复位目标国库为起点（ResourcePack 为 struct → 必须 ref 传参才能真正写回，否则按值传=空操作）。
+    /// <summary>复位目标国库为起点（ResourceList 为 struct ＋ copy-on-write → 必须 ref 传参才能真正写回，否则按值传=空操作）。
     /// 冒烟自修复（2026-08-31 首跑 P3/#9/#12 失败根因）：此前按值传导致"同起点复位"失效、两轮国库持续累计→假性非确定。</summary>
-    private static void RestoreRes(ref ResourcePack target, ResourcePack src)
+    private static void RestoreRes(ref ResourceList target, ResourceList src)
     {
-        target.gold = src.gold; target.stone = src.stone; target.wood = src.wood;
-        target.food = src.food; target.metal = src.metal;
+        target = target.Set(ResourceType.Gold, src.Get(ResourceType.Gold))
+                       .Set(ResourceType.Stone, src.Get(ResourceType.Stone))
+                       .Set(ResourceType.Wood, src.Get(ResourceType.Wood))
+                       .Set(ResourceType.Food, src.Get(ResourceType.Food))
+                       .Set(ResourceType.Metal, src.Get(ResourceType.Metal));
     }
 
-    private static bool SamePack(ResourcePack a, ResourcePack b)
-        => a.gold == b.gold && a.stone == b.stone && a.wood == b.wood && a.food == b.food && a.metal == b.metal;
+    private static bool SamePack(ResourceList a, ResourceList b)
+        => a.Get(ResourceType.Gold) == b.Get(ResourceType.Gold) && a.Get(ResourceType.Stone) == b.Get(ResourceType.Stone)
+        && a.Get(ResourceType.Wood) == b.Get(ResourceType.Wood) && a.Get(ResourceType.Food) == b.Get(ResourceType.Food)
+        && a.Get(ResourceType.Metal) == b.Get(ResourceType.Metal);
 
-    private static string PackStr(ResourcePack r)
-        => $"粮{r.food}金{r.gold}石{r.stone}木{r.wood}铁{r.metal}";
+    private static string PackStr(ResourceList r)
+        => $"粮{r.Get(ResourceType.Food)}金{r.Get(ResourceType.Gold)}石{r.Get(ResourceType.Stone)}木{r.Get(ResourceType.Wood)}铁{r.Get(ResourceType.Metal)}";
 
     private static bool SameDelta(SettlementDelta a, SettlementDelta b)
         => a.Food == b.Food && a.Gold == b.Gold && a.Stone == b.Stone && a.Wood == b.Wood
@@ -592,7 +610,7 @@ public static class Valley2_17_Smoke_14
         return true;
     }
 
-    private static void RestoreAll(Dictionary<int, ResourcePack> tres,
+    private static void RestoreAll(Dictionary<int, ResourceList> tres,
         Dictionary<int, SimMode> modes, Dictionary<int, float> wake,
         Dictionary<int, float> avgBucket, int rulerFood)
     {

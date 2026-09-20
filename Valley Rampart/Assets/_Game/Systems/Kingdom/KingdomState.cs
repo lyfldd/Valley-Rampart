@@ -42,8 +42,9 @@ public class KingdomState
     /// <summary>是否为玩家王国（id=0，D303）。</summary>
     public bool IsPlayer => id == 0;
 
-    /// <summary>起始国库过渡账本（baseStockpile D300；由 Foundry 步骤5 写入。2_17 步骤2 WarehouseRegistry per-kingdom 迁移吸收前，AI 无脑不消费，零风险）。</summary>
-    public ResourcePack resources;
+    /// <summary>起始国库过渡账本（baseStockpile D300；由 Foundry 步骤5 写入）。
+    /// ⭐ `M1-A`／`09#50`：改「资源量列表」（五经济资源台账：金/石/木/粮/铁）。</summary>
+    public ResourceList resources;
 
     // ===== 矿洞副产台账（DZ-072a，D562 / HH.107 件2）=====
     // 水晶/火油为副产稀缺资源，单列两桶不进 ResourcePack 五经济资源（AddWater/WaterNetwork 专用桶先例语义；
@@ -117,70 +118,104 @@ public class KingdomState
     // TreasureVault（玩家物流专用）。语义镜像 PlayerRuler.CanAfford/Spend/Refund（弹药不参与造价，仅五经济资源）。
     // 2_17 前 AI 无脑不消费，本 API 由王国脑（步骤 8+）消费；确定性、无事件发布（台账制）。
 
-    /// <summary>是否负担得起该资源包（五经济资源全部满足，原子校验）。弹药不参与。AI/动态王国国库查询。</summary>
-    public bool CanAfford(ResourcePack cost)
+    /// <summary>是否负担得起该资源包（原子校验；弹药不参与造价）。
+    /// ⭐ `M1-A`：逐条目判（旧「五经济资源四连 &&」⇒ 通用列表），条目不在台账内者按 0 判（与旧口径一致：
+    /// 旧 `ResourcePack` 表达不了的资源在旧实现里同样不被校验）。</summary>
+    public bool CanAfford(ResourceList cost)
     {
-        return resources.gold >= cost.gold
-            && resources.stone >= cost.stone
-            && resources.wood >= cost.wood
-            && resources.food >= cost.food
-            && resources.metal >= cost.metal;
+        if (cost.items == null) return true;
+        for (int i = 0; i < cost.items.Length; i++)
+        {
+            var e = cost.items[i];
+            if (e.amount > 0 && GetResourceValue(e.type) < e.amount) return false;
+        }
+        return true;
     }
 
-    /// <summary>按类型读取国库某资源（军工/需求强度缺口函数消费）。DZ-072a：副产两桶并入（AI 可感知水晶/火油缺口）。</summary>
+    /// <summary>按类型读取国库某资源（军工/需求强度缺口函数消费）。DZ-072a：副产两桶并入（AI 可感知水晶/火油缺口）。
+    /// ⭐ `M1-A`：五经济资源改读「资源量列表」`resources.Get(type)`（数值不变）；副产三桶原样。</summary>
     public int GetResourceValue(ResourceType type)
     {
         switch (type)
         {
-            case ResourceType.Gold: return resources.gold;
-            case ResourceType.Stone: return resources.stone;
-            case ResourceType.Wood: return resources.wood;
-            case ResourceType.Food: return resources.food;
-            case ResourceType.Metal: return resources.metal;
             case ResourceType.Crystal: return crystal;    // DZ-072a 副产台账
             case ResourceType.FireOil: return fireOil;    // DZ-072a 副产台账
             case ResourceType.Ore: return ore;            // T1.8（D609）矿石台账桶
-            default: return 0;
+            default: return resources.Get(type);          // 金/石/木/粮/铁（及未来新增资源）
         }
     }
 
     /// <summary>扣除资源包（调用前需先 CanAfford；台账制直接减字段，不进玩家事件链）。
-    /// 2_23 资源 P0 批A/R-A1（D630 收支口径 A+）：支出登记进经济诊断当日窗口（负数=出）。</summary>
-    public void Spend(ResourcePack cost)
+    /// 2_23 资源 P0 批A/R-A1（D630 收支口径 A+）：支出登记进经济诊断当日窗口（负数=出）。
+    /// ⭐ `M1-A`：逐条目扣（五经济资源走 `resources` ＋ 副产三台账桶走各自字段）。</summary>
+    public void Spend(ResourceList cost)
     {
-        resources.gold -= cost.gold;
-        resources.stone -= cost.stone;
-        resources.wood -= cost.wood;
-        resources.food -= cost.food;
-        resources.metal -= cost.metal;
-        EconomyDiagnosis.RegisterFlow(id, -cost.gold, -cost.stone, -cost.wood, -cost.food, -cost.metal);
+        int g = 0, s = 0, w = 0, f = 0, m = 0;
+        if (cost.items != null)
+        {
+            for (int i = 0; i < cost.items.Length; i++)
+            {
+                var e = cost.items[i];
+                if (e.amount <= 0) continue;
+                AddToLedger(e.type, -e.amount);
+                AccumulateFlow(e.type, e.amount, ref g, ref s, ref w, ref f, ref m);
+            }
+        }
+        EconomyDiagnosis.RegisterFlow(id, -g, -s, -w, -f, -m);
     }
 
     /// <summary>按比例退还资源包（拆除退款 ratio=0.5 等；metal 随比退还，不静默丢铁）。
     /// 2_23 资源 P0 批A/R-A1（D632 A′）：改走 AddResources 收口台账直写——本次退款计入经济诊断
     /// 入账窗口（一致性；本点为潜伏点：AI 生产调用点=0，玩家走 RulerController.Refund 独立通道）。</summary>
-    public void Refund(ResourcePack cost, float ratio = 1.0f)
+    public void Refund(ResourceList cost, float ratio = 1.0f)
     {
-        AddResources(new ResourcePack
-        {
-            gold = Mathf.RoundToInt(cost.gold * ratio),
-            stone = Mathf.RoundToInt(cost.stone * ratio),
-            wood = Mathf.RoundToInt(cost.wood * ratio),
-            food = Mathf.RoundToInt(cost.food * ratio),
-            metal = Mathf.RoundToInt(cost.metal * ratio)
-        });
+        AddResources(cost * ratio);   // ⭐ M1-A：逐条目按比例（Mathf.RoundToInt，与旧逐字段同口径）
     }
 
     /// <summary>国库入账（产出/采集入台账；加总）。
     /// 2_23 资源 P0 批A/R-A1（D630 收支口径 A+）：入账登记进经济诊断当日窗口
-    /// （负值=出账，AbstractEconomySettlement.ApplyDelta 带符号增量走本口）。</summary>
-    public void AddResources(ResourcePack gain)
+    /// （负值=出账，AbstractEconomySettlement.ApplyDelta 带符号增量走本口）。
+    /// ⭐ `M1-A`：逐条目入账（五经济资源走 `resources` ＋ 副产三台账桶走各自字段）。</summary>
+    public void AddResources(ResourceList gain)
     {
-        resources.gold += gain.gold;
-        resources.stone += gain.stone;
-        resources.wood += gain.wood;
-        resources.food += gain.food;
-        resources.metal += gain.metal;
-        EconomyDiagnosis.RegisterFlow(id, gain.gold, gain.stone, gain.wood, gain.food, gain.metal);
+        int g = 0, s = 0, w = 0, f = 0, m = 0;
+        if (gain.items != null)
+        {
+            for (int i = 0; i < gain.items.Length; i++)
+            {
+                var e = gain.items[i];
+                if (e.amount == 0) continue;
+                AddToLedger(e.type, e.amount);
+                AccumulateFlow(e.type, e.amount, ref g, ref s, ref w, ref f, ref m);
+            }
+        }
+        EconomyDiagnosis.RegisterFlow(id, g, s, w, f, m);
+    }
+
+    /// <summary>台账增减（⭐ M1-A 单源）：五经济资源走 `resources`（资源量列表）；
+    /// 副产/矿石三台账桶（DZ-072a／T1.8 既有独立桶）走各自 int 字段 —— 行为逐位不变。</summary>
+    private void AddToLedger(ResourceType type, int delta)
+    {
+        if (delta == 0) return;
+        switch (type)
+        {
+            case ResourceType.Crystal: crystal += delta; break;
+            case ResourceType.FireOil: fireOil += delta; break;
+            case ResourceType.Ore: ore += delta; break;
+            default: resources = resources.Add(type, delta); break;
+        }
+    }
+
+    /// <summary>汇总五经济资源的本笔增量（供经济诊断窗口登记；非五资源不计）。</summary>
+    private static void AccumulateFlow(ResourceType type, int amount, ref int g, ref int s, ref int w, ref int f, ref int m)
+    {
+        switch (type)
+        {
+            case ResourceType.Gold: g += amount; break;
+            case ResourceType.Stone: s += amount; break;
+            case ResourceType.Wood: w += amount; break;
+            case ResourceType.Food: f += amount; break;
+            case ResourceType.Metal: m += amount; break;
+        }
     }
 }

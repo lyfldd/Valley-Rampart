@@ -282,16 +282,31 @@ public class MachinePanel : Singleton<MachinePanel>, IUIPanel
         }
     }
 
-    /// <summary>造价文案（非零项拼接，与 BuildingPanel 升级按钮口径一致）。</summary>
-    private static string CostText(ResourcePack c)
+    /// <summary>造价文案（非零项拼接，与 BuildingPanel 升级按钮口径一致）。⭐ `M1-A`：改「资源量列表」逐条目拼。</summary>
+    private static string CostText(ResourceList c)
     {
+        if (c.items == null || c.items.Length == 0) return "免费";
         var parts = new System.Collections.Generic.List<string>();
-        if (c.gold > 0) parts.Add($"金{c.gold}");
-        if (c.stone > 0) parts.Add($"石{c.stone}");
-        if (c.wood > 0) parts.Add($"木{c.wood}");
-        if (c.food > 0) parts.Add($"粮{c.food}");
-        if (c.metal > 0) parts.Add($"铁{c.metal}");
+        for (int i = 0; i < c.items.Length; i++)
+        {
+            var e = c.items[i];
+            if (e.amount > 0) parts.Add($"{ShortName(e.type)}{e.amount}");
+        }
         return parts.Count > 0 ? string.Join(" ", parts) : "免费";
+    }
+
+    /// <summary>资源短名（面板紧凑文案用；表外资源回落显示名）。</summary>
+    private static string ShortName(ResourceType t)
+    {
+        switch (t)
+        {
+            case ResourceType.Gold: return "金";
+            case ResourceType.Stone: return "石";
+            case ResourceType.Wood: return "木";
+            case ResourceType.Food: return "粮";
+            case ResourceType.Metal: return "铁";
+            default: return ResourceCatalog.DisplayNameOf(t);
+        }
     }
 
     // ===== 数据/判定单源（HH.111 探针 P2/P5 与面板共用同一函数=行为级锚不漂移）=====

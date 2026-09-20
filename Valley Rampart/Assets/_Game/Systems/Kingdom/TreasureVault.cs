@@ -2,84 +2,75 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 国库仓库（2_12 步骤8.4 / HH.16 裁决 B：多仓库聚合，勿改 IWarehouse 单资源契约）。
-/// 主城每纳管资源挂一个子物体 StorageComponent（禁单组件多字典变体），容量 = BaseCapacity × LevelScale() 随主城等级；
-/// 超容 clamp（满则拒收），不做溢出箱子（D221~D223 归步骤11）。
+/// 国库仓库（2_12 步骤8.4；⭐ `M1-A`／`09#38` 重塑）。
 ///
-/// 非金资源真源 = 这些子仓库；金(Gold)=货币直通保留 RulerController（HH.8）。
-/// 落地后 RulerController 的非金写路径即时转发本国库（禁双写红线 HH.8 的物理落点）。
-/// 子仓库在创建时 WarehouseRegistry.Register（复用阶段①注册表），凑单路径自动并入。
+/// ⭐ **本片变化**：
+///   ① **9 个子仓 ⇒ 1 个多资源容器**（`09` §5.3 表：`TreasureVault`「挂 9 个子仓」⇒「**塌成 1 个容器**」）；
+///      容器**收什么**由**标签**表达 ＝ `res_material` ＋ `res_food`（＝原 `Managed` 9 项：石/木/矿/金属/水晶/火油 ＋ 粮/特食/肉），
+///      ⛔ 不再是"每资源一个仓"（`09` §5.2 硬规则 3：不做单一资源仓）；
+///   ② **`Instance` 改按国查**（`09` §4.3 A 组：原「最后创建者胜」多国互相覆盖）⇒ `Get(kingdomId)`；
+///      `Instance` 保留为**玩家国（id=0）国库**的兼容读口（现有调用方全在玩家侧）。
+///
+/// ⚠️ **容器仍挂子物体**（不挂主城本体）：主城本体若带 `StorageComponent` 会被 `Building.TryAdvertiseTask` ③
+/// 当作**搬运源**（国库内容被工人搬去普通仓）⇒ 保持"主城本体无仓"的结构不变。
+/// ⇒ 国库内容**随建筑存档显式存取**（`BuildingSaveData.treasuryContents` · 判据 6）。
+///
+/// ⚠️ **本片不做（后续子片）**：金（`09#47`／`M1-E`）仍走 `RulerController` 直通 ⇒ 本容器**不收金**
+/// （故声明只写材料族＋粮族，⛔ 不含 `res_currency`/`res_ammo`）。
 /// </summary>
 public class TreasureVault : MonoBehaviour, IBuildingComponent
 {
-    /// <summary>国库纳管的非金实体资源（金直通不纳入）。DZ-072a（HH.107）：扩 Crystal/FireOil（副产消费端解锁——
-    /// 旧只认六资源=玩家侧水晶 ModifyResource/GetAmount 恒 0，P3 转职消费链断）。</summary>
-    static readonly ResourceType[] Managed =
-    {
-        ResourceType.Stone, ResourceType.Wood, ResourceType.Food,
-        ResourceType.SpecialFood, ResourceType.Meat, ResourceType.Metal,
-        ResourceType.Crystal, ResourceType.FireOil,
-        ResourceType.Ore   // D609/T1.8（D617）：矿石国库槽——Ore→Metal 链原料真源（原缺=Deposit(Ore) 静默丢，HH.164 实盘证伪）
-    };
+    /// <summary>国库声明（**收什么** · `09` §三）：材料族 ＋ 粮族 ⇒ 与原 `Managed` 9 项逐项等价
+    /// （Stone/Wood/Ore/Metal/Crystal/FireOil ＋ Food/SpecialFood/Meat）；⛔ 不含金（M1-E）与弹药（HH.19 口径 2）。</summary>
+    static readonly string[] VaultPaths = { "res_material", "res_food" };
 
-    /// <summary>全局访问（主城装配后可用；仅一处）。</summary>
-    public static TreasureVault Instance { get; private set; }
+    /// <summary>按国查（⭐ `09` §4.3 A：多国不再互相覆盖）。</summary>
+    static readonly Dictionary<int, TreasureVault> _byKingdom = new Dictionary<int, TreasureVault>();
+
+    /// <summary>玩家国（`kingdomId=0`）国库 —— 兼容旧单例读口（⛔ 不再"最后创建者胜"）。</summary>
+    public static TreasureVault Instance => Get(0);
+
+    /// <summary>某国国库（未就绪 ⇒ null）。</summary>
+    public static TreasureVault Get(int kingdomId)
+        => _byKingdom.TryGetValue(kingdomId, out var v) ? v : null;
 
     public Building Castle { get; private set; }
 
-    /// <summary>每资源对应的子仓库（缓存引用，节后再按需）。</summary>
-    readonly Dictionary<ResourceType, StorageComponent> _vaults =
-        new Dictionary<ResourceType, StorageComponent>();
+    /// <summary>所属王国 id（0=玩家 / &gt;0=AI）。</summary>
+    public int KingdomId { get; private set; }
 
     /// <summary>基础容量（主城 def.producer.capacity；0 则回退 250）。</summary>
     public int BaseCapacity { get; private set; } = 250;
+
+    /// <summary>国库的唯一容器（多资源）。</summary>
+    private StorageComponent _container;
 
     public void Init(Building building)
     {
         if (building == null) return;
         Castle = building;
-        Instance = this;
+        KingdomId = building.kingdomId;
+        _byKingdom[KingdomId] = this;   // ⭐ 按国查（同国重建覆盖为最新，跨国不再互踩）
 
         var def = building.def;
         if (def != null && def.producer.capacity > 0) BaseCapacity = def.producer.capacity;
 
-        for (int i = 0; i < Managed.Length; i++)
-        {
-            var type = Managed[i];
-            var go = new GameObject("Vault_" + type);
-            go.transform.SetParent(building.transform, false);
-            var sc = go.AddComponent<StorageComponent>();
-            sc.resourceType = type;
-            sc.capacity = Capacity();
-            // 不调 StorageComponent.Init（否则 def.outputResource 覆盖类型）；手动注册以并入凑单
-            WarehouseRegistry.Register(sc);
-            _vaults[type] = sc;
-        }
-        Debug.Log($"[TreasureVault] 国库就绪：主城创建 {_vaults.Count} 个单资源仓库，BaseCapacity={BaseCapacity}");
+        // 1 个容器（替换原 9 个子仓）：挂子物体，主城本体保持"无仓"（见类注释警告）。
+        var go = new GameObject("Vault");
+        go.transform.SetParent(building.transform, false);
+        _container = go.AddComponent<StorageComponent>();
+        _container.SetDeclaredPaths(VaultPaths);   // 收什么＝标签（09 §三）
+        _container.capacity = Capacity();
+        // 不调 StorageComponent.Init（否则会被 def.warehousePaths 覆盖本声明）；手动注册以并入凑单
+        WarehouseRegistry.Register(_container);
 
-        // 读档时序：国库晚于 RulerController/KingdomManager(Global) 初始化 →
-        // ① 从 KingdomManager 读档缓存恢复国库真源（含铁，修正2）；② 冲刷 Ruler 旧档非金迁移缓存（防回退）。
-        var km = KingdomManager.Instance;
-        if (km != null)
-        {
-            Deposit(ResourceType.Stone, km.TreasuryStone);
-            Deposit(ResourceType.Wood, km.TreasuryWood);
-            Deposit(ResourceType.Food, km.TreasuryFood);
-            Deposit(ResourceType.SpecialFood, km.TreasurySpecialFood);
-            Deposit(ResourceType.Meat, km.TreasuryMeat);
-            Deposit(ResourceType.Metal, km.TreasuryMetal);
-            Deposit(ResourceType.Crystal, km.TreasuryCrystal);   // DZ-072a：副产两桶读档恢复
-            Deposit(ResourceType.FireOil, km.TreasuryFireOil);
-            Deposit(ResourceType.Ore, km.TreasuryOre);           // T1.8（D609/D617）：矿石桶读档恢复
-        }
-        if (RulerController.Instance != null) RulerController.Instance.EnsureTreasuryMigration();
+        Debug.Log($"[TreasureVault] 国库就绪：k{KingdomId} 单容器（收 res_material + res_food），BaseCapacity={BaseCapacity}");
     }
 
-    /// <summary>主城等级/容量刷新时重设各子仓库容量（对齐"国库随主城升级"）。</summary>
+    /// <summary>主城等级/容量刷新时重设容器容量（对齐"国库随主城升级"）。</summary>
     public void RefreshCapacity()
     {
-        int cap = Capacity();
-        foreach (var kv in _vaults) kv.Value.capacity = cap;
+        if (_container != null) _container.capacity = Capacity();
     }
 
     int Capacity()
@@ -88,72 +79,66 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
         return Mathf.Max(1, Mathf.RoundToInt(BaseCapacity * scale));
     }
 
+    // ===== 存档（随建筑存档显式存取 · 判据 6）=====
+
+    /// <summary>国库内容快照（存档用）。</summary>
+    public ResourceList Contents => _container != null ? _container.Contents : ResourceList.Empty;
+
+    /// <summary>读档恢复国库内容。</summary>
+    public void RestoreContents(ResourceList contents)
+    {
+        if (_container != null) _container.RestoreContents(contents);
+    }
+
     // ===== 供 RulerController 中转的非金资源读写（金走 Ruler 直通不调用本类）=====
 
-    /// <summary>某资源存量（国库纳管则读子仓库；未纳管返回 0）。</summary>
+    /// <summary>某资源存量（未声明/无容器 ⇒ 0）。</summary>
     public int GetAmount(ResourceType type)
-        => _vaults.TryGetValue(type, out var s) ? s.storedAmount : 0;
+        => _container != null ? _container.GetAmount(type) : 0;
 
     /// <summary>
     /// 入国库（步骤11 堵溢出黑洞，D222/D223"溢出装箱"）。先装库内容量，超容部分**装箱落主城格**（杜绝静默丢资源）。
     /// 返回实际入库量；装箱超额部分不走返回值（已落箱，不丢）。
+    /// ⭐ `M1-A`：装箱改用「资源量列表」单条目承载 —— 原 8 桶结构下的**折损/无桶丢弃**（特食/肉按粮折算、
+    /// 水晶/火油不入箱）**结构性消失**（`ResourcePack` 无桶所致，随类型退役 ⇒ 上报为结构强制的行为变化）。
     /// </summary>
     public int Deposit(ResourceType type, int amt)
     {
-        if (!_vaults.TryGetValue(type, out var s)) return 0;
-        int added = s.Add(amt);
+        if (_container == null) return 0;
+        int added = _container.Add(type, amt);
         int overflow = amt - added;
         if (overflow > 0) SpillToChest(type, overflow);   // 国库满 → 溢出装箱（D222/D223）
         return added;
     }
 
-    /// <summary>国库满溢（或未纳管资源）→ 超额装箱落主城格，防资源静默丢失（步骤11 堵 ModifyResource 黑洞）。</summary>
+    /// <summary>国库满溢 → 超额装箱落主城格，防资源静默丢失（步骤11 堵 ModifyResource 黑洞）。</summary>
     private void SpillToChest(ResourceType type, int amount)
     {
         if (amount <= 0 || ChestManager.HasInstance == false) return;
-        var pack = new ResourcePack();
-        switch (type)
-        {
-            case ResourceType.Stone: pack.stone = amount; break;
-            case ResourceType.Wood: pack.wood = amount; break;
-            case ResourceType.Food: pack.food = amount; break;
-            // DZ-063① 注记（待数值批裁）：特食/肉溢出装箱只能按「粮」面值折算（ResourcePack 无特食/肉桶），
-            // 故溢出处存在品质折损（特食饱食+8 / 肉+20 → 折为粮+5）；折损口径待数值批裁，本批不扩 ResourcePack 语义。
-            case ResourceType.SpecialFood: pack.food = amount; break;
-            case ResourceType.Meat: pack.food = amount; break;
-            case ResourceType.Metal: pack.metal = amount; break;
-            case ResourceType.Crystal:
-            case ResourceType.FireOil:
-                // DZ-072a（HH.107 列报）：副产两资源溢出不装箱（ResourcePack 无桶，本批不扩装箱语义）。
-                // 实际不可达：byproductRate=0.05/s → 攒满 250 容量需小时级；若未来调产量到国库满级别，需扩 ResourcePack 装箱。
-                // 本笔不入账（返回值=实际入库量，溢出量由调用方 GetAmount 差额可见），显式日志非静默丢。
-                Debug.LogWarning($"[TreasureVault] 国库满 {type} 溢出 {amount}：副产无装箱语义（DZ-072a 列报），不入箱");
-                return;
-            default: return; // 弹药不走国库（HH.19 口径2），其余类型无装箱语义
-        }
         var cell = Castle != null && GridSystem.Instance != null
             ? GridSystem.Instance.WorldToCoord(Castle.transform.position).GetValueOrDefault()
             : new GridCoord(0, 0);
+        var pack = ResourceList.Of(new ResourceAmount(type, amount));
         ChestManager.Instance.SpawnChest(cell, pack, Faction.PlayerCamp);
         Debug.Log($"[TreasureVault] 国库满 {type} 溢出 {amount} → 装箱落主城格 ({cell.x},{cell.y})（D223 不丢资源）");
     }
 
     /// <summary>出国库（≤存量），返回实际取走量。</summary>
     public int Take(ResourceType type, int amt)
-        => _vaults.TryGetValue(type, out var s) ? s.TakeOut(amt) : 0;
+        => _container != null ? _container.TakeOut(type, amt) : 0;
 
     public void ResetAll()
     {
-        foreach (var kv in _vaults) kv.Value.storedAmount = 0;
+        _container?.Clear();
     }
 
     void OnDestroy()
     {
-        if (Instance == this) Instance = null;
-        foreach (var kv in _vaults)
+        if (KingdomId >= 0)
         {
-            if (kv.Value != null) WarehouseRegistry.Unregister(kv.Value);
+            if (_byKingdom.TryGetValue(KingdomId, out var v) && v == this) _byKingdom.Remove(KingdomId);
         }
-        _vaults.Clear();
+        if (_container != null) WarehouseRegistry.Unregister(_container);
+        _container = null;
     }
 }

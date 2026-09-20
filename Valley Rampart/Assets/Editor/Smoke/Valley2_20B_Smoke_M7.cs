@@ -175,8 +175,8 @@ public static class Valley2_20B_Smoke_M7
         // ===== P4 机器成本 =====
         var sp = Resources.Load<SiegeProductionConfig>("Config/SiegeProductionConfig");
         Check(sp != null && !sp.mortarCost.IsZero && !sp.vineCatapultCost.IsZero && !sp.ramCost.IsZero,
-            "P4 机器成本", "臼炮" + sp.mortarCost.gold + "g" + sp.mortarCost.stone + "s/藤蔓" + sp.vineCatapultCost.gold + "g/槌" + sp.ramCost.gold + "g（臼炮最贵梯度）");
-        Check(sp.mortarCost.gold > sp.ballistaCost.gold, "P4 臼炮最贵", "梯度矮＞人＞精＞兽（mortar>" + sp.ballistaCost.gold + "g）");
+            "P4 机器成本", "臼炮" + sp.mortarCost.Get(ResourceType.Gold) + "g" + sp.mortarCost.Get(ResourceType.Stone) + "s/藤蔓" + sp.vineCatapultCost.Get(ResourceType.Gold) + "g/槌" + sp.ramCost.Get(ResourceType.Gold) + "g（臼炮最贵梯度）");   // ⭐ M1-A 适配
+        Check(sp.mortarCost.Get(ResourceType.Gold) > sp.ballistaCost.Get(ResourceType.Gold), "P4 臼炮最贵", "梯度矮＞人＞精＞兽（mortar>" + sp.ballistaCost.Get(ResourceType.Gold) + "g）");   // ⭐ M1-A 适配
 
         // ===== P5 熔炉正负 =====
         float baseMine = KingdomRace.GetGatherMul(0, ResourceType.Ore);

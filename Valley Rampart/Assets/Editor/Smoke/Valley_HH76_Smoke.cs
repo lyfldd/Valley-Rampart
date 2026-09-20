@@ -90,14 +90,14 @@ public static class Valley_HH76_Smoke
             yield return null;
             if (snowKid > 0)
             {
-                snowFoodMax = Mathf.Max(snowFoodMax, reg.Get(snowKid) != null ? reg.Get(snowKid).resources.food : 0);
+                snowFoodMax = Mathf.Max(snowFoodMax, reg.Get(snowKid) != null ? reg.Get(snowKid).GetResourceValue(ResourceType.Food) : 0);
                 var farms = Object.FindObjectsOfType<Building>();
                 for (int i = 0; i < farms.Length; i++)
                 {
                     var b = farms[i];
                     if (b == null || b.def == null || b.def.id != "farm" || b.kingdomId != snowKid) continue;
                     var st = b.GetComponent<StorageComponent>();
-                    if (st != null) farmMax = Mathf.Max(farmMax, st.storedAmount);
+                    if (st != null) farmMax = Mathf.Max(farmMax, st.TotalCount);
                 }
             }
         }

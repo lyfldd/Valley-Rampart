@@ -19,13 +19,16 @@ MonoBehaviour:
   faction: 0
   role: 4
   cost:
-    gold: 0
-    stone: 0
-    wood: 0
-    food: 0
+    items: []
   footprint: {x: 2, y: 2}
   allowedTerrain: 
+  heightLayer: 0
+  canPlaceOnWater: 0
+  isBridge: 0
+  isGate: 0
+  rotatable: 0
   moduleType: 2
+  warehousePaths: []
   isObstacle: 0
   producer:
     kind: 0
@@ -37,21 +40,31 @@ MonoBehaviour:
     maxHp: 0
     range: 0
     damageType: 0
+    attackCooldown: 0
   levels: []
   crewRequired: 0
   crewRadiusCells: 0
   outputResource: 0
   isResourceNode: 0
+  isBlacksmith: 0
+  isSiegeWorkshop: 0
   concurrentWorkers: 0
   trainingSlots: 0
   unlockLevel: 1
   interactableType: 0
   isPlayerBuilt: 0
   isDestructible: 1
+  maxHp: 100
   sourceType: 12
   isConsumable: 0
+  gatherSeconds: 2
   gradeScale:
   - 0.7
   - 1
   - 1.5
   prefab: {fileID: 0}
+  monsterTargetValue: 1
+  monsterIsHighValue: 0
+  raceId: -1
+  uniquePerKingdom: 0
+  isMineByproduct: 0

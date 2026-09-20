@@ -255,7 +255,7 @@ public static class Valley2_17_Smoke_13
         var reg = KingdomRegistry.Instance;
         var regF = typeof(KingdomRegistry).GetField("_kingdoms", BindingFlags.Instance | BindingFlags.NonPublic);
         var orig = (List<KingdomState>)regF.GetValue(reg);
-        var k2 = new KingdomState { id = K2, resources = new ResourcePack { gold = 200, stone = 200, wood = 200, food = 200, metal = 0 } };
+        var k2 = new KingdomState { id = K2, resources = ResourceList.Of(new ResourceAmount(ResourceType.Gold, 200), new ResourceAmount(ResourceType.Stone, 200), new ResourceAmount(ResourceType.Wood, 200), new ResourceAmount(ResourceType.Food, 200), new ResourceAmount(ResourceType.Metal, 0)) };
         var temp = new List<KingdomState>(orig) { k2 };
         regF.SetValue(reg, temp);
         var siege = SiegeProductionSystem.Instance;
@@ -267,7 +267,7 @@ public static class Valley2_17_Smoke_13
             bool ok2 = siege.ProduceMachine(Occupation.Ballista, pos + new Vector2(3, 0), K2);    // 第2台 → 成功
             int count2 = CountMachineOfKingdom(K2);
             bool ok3 = siege.ProduceMachine(Occupation.SiegeMachine, pos + new Vector2(6, 0), K2); // 第3台 → 超上限拒
-            k2.resources = default;                                                                 // 花光国库
+            k2.resources = ResourceList.Empty;                                                       // 花光国库
             bool ok4 = !siege.ProduceMachine(Occupation.Ballista, pos + new Vector2(9, 0), K2);     // 国库不足 → 拒
             return ok1 && spawned1 && ok2 && count2 >= MACHINE_LIMIT && !ok3 && ok4;
         }

@@ -23,8 +23,9 @@ public class StaggerTier
     public int buildingCount;
     /// <summary>该档是否含围墙环（困难档最小矩形环+1 城门缺口 D304；遇阻挡格跳段时间自然缺口）。</summary>
     public bool hasWallRing;
-    /// <summary>该档起始国库（baseStockpile 过渡账本 D300；2_17 步骤2 WarehouseRegistry 迁移吸收）。</summary>
-    public ResourcePack stockpile;
+    /// <summary>该档起始国库（baseStockpile 过渡账本 D300；2_17 步骤2 WarehouseRegistry 迁移吸收）。
+    /// ⭐ `M1-A`：改「资源量列表」（`09#50`）。</summary>
+    public ResourceList stockpile;
 }
 
 /// <summary>

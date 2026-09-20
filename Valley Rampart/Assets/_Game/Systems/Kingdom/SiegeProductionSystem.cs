@@ -103,18 +103,19 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
         }
     }
 
-    /// <summary>机器造价查表（2_20 M7：臼炮最贵梯度，其余沿用弩炮/投掷机量级占位，2_20.1 §8.1）。</summary>
-    private ResourcePack GetMachineCost(Occupation type)
+    /// <summary>机器造价查表（2_20 M7：臼炮最贵梯度，其余沿用弩炮/投掷机量级占位，2_20.1 §8.1）。
+    /// ⭐ `M1-A`：返回「资源量列表」。</summary>
+    private ResourceList GetMachineCost(Occupation type)
     {
         var cfg = Cfg();
-        if (cfg == null) return ResourcePack.Zero;
+        if (cfg == null) return ResourceList.Empty;
         switch (type)
         {
             case Occupation.Ballista:     return cfg.ballistaCost;
             case Occupation.Mortar:       return cfg.mortarCost;
             case Occupation.VineCatapult: return cfg.vineCatapultCost;
             case Occupation.Ram:          return cfg.ramCost;
-            default: return ResourcePack.Zero;
+            default: return ResourceList.Empty;
         }
     }
 
@@ -124,7 +125,7 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
     public static bool IsMachineAllowed(int race, Occupation type) => IsRaceAllowedMachine(race, type);
 
     /// <summary>机器造价只读查询（生产面板 UI 显示/置灰用；真源=GetMachineCost 单源）。</summary>
-    public ResourcePack PeekMachineCost(Occupation type) => GetMachineCost(type);
+    public ResourceList PeekMachineCost(Occupation type) => GetMachineCost(type);
 
     /// <summary>
     /// 2_17 步骤11 批1·按王国归属统计已放置战争机器数（AI/动态王国口径）。
@@ -174,10 +175,10 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
             if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos) == null)
             {
                 RulerController.Instance.Refund(cost);
-                Debug.LogError($"[SiegeProduction] 生产失败：{type} 生成返回 null（UnitData.prefab 缺失或未挂接），已退款 金{cost.gold} 石{cost.stone} 木{cost.wood}");
+                Debug.LogError($"[SiegeProduction] 生产失败：{type} 生成返回 null（UnitData.prefab 缺失或未挂接），已退款 金{cost.Get(ResourceType.Gold)} 石{cost.Get(ResourceType.Stone)} 木{cost.Get(ResourceType.Wood)}");
                 return false;
             }
-            Debug.Log($"[SiegeProduction] 生产 {type}（造价 金{cost.gold} 石{cost.stone} 木{cost.wood}）");
+            Debug.Log($"[SiegeProduction] 生产 {type}（造价 金{cost.Get(ResourceType.Gold)} 石{cost.Get(ResourceType.Stone)} 木{cost.Get(ResourceType.Wood)}）");
             return true;
         }
         return false;
@@ -223,10 +224,10 @@ public class SiegeProductionSystem : Singleton<SiegeProductionSystem>, ISaveable
             if (UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, type, spawnPos, kingdomId) == null)
             {
                 kingdom.Refund(cost);
-                Debug.LogError($"[SiegeProduction] k{kingdomId} 生产失败：{type} 生成返回 null（UnitData.prefab 缺失或未挂接），已退款 金{cost.gold} 石{cost.stone} 木{cost.wood}");
+                Debug.LogError($"[SiegeProduction] k{kingdomId} 生产失败：{type} 生成返回 null（UnitData.prefab 缺失或未挂接），已退款 金{cost.Get(ResourceType.Gold)} 石{cost.Get(ResourceType.Stone)} 木{cost.Get(ResourceType.Wood)}");
                 return false;
             }
-            Debug.Log($"[SiegeProduction] k{kingdomId} 生产 {type}（造价 金{cost.gold} 石{cost.stone} 木{cost.wood}）");
+            Debug.Log($"[SiegeProduction] k{kingdomId} 生产 {type}（造价 金{cost.Get(ResourceType.Gold)} 石{cost.Get(ResourceType.Stone)} 木{cost.Get(ResourceType.Wood)}）");
             return true;
         }
         return false;

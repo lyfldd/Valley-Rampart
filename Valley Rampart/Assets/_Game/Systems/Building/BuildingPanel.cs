@@ -73,7 +73,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             {
                 _upgradeButton.style.display = DisplayStyle.Flex;
                 var rc = _target.GetRepairCost();
-                _upgradeButton.text = $"重建废墟 (金{rc.gold} 石{rc.stone} 木{rc.wood} 粮{rc.food})";
+                _upgradeButton.text = $"重建废墟 (金{rc.Get(ResourceType.Gold)} 石{rc.Get(ResourceType.Stone)} 木{rc.Get(ResourceType.Wood)} 粮{rc.Get(ResourceType.Food)})";
                 _upgradeButton.SetEnabled(WarehouseHelper.CanAfford(rc));
             }
             if (_demolishButton != null) _demolishButton.style.display = DisplayStyle.None;
@@ -88,7 +88,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             {
                 _upgradeButton.style.display = DisplayStyle.Flex;
                 var repairCost = GetRepairCost();
-                _upgradeButton.text = $"修复 (金{repairCost.gold} 石{repairCost.stone} 木{repairCost.wood} 粮{repairCost.food})";
+                _upgradeButton.text = $"修复 (金{repairCost.Get(ResourceType.Gold)} 石{repairCost.Get(ResourceType.Stone)} 木{repairCost.Get(ResourceType.Wood)} 粮{repairCost.Get(ResourceType.Food)})";
                 _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(repairCost));
             }
             if (_demolishButton != null) _demolishButton.style.display = DisplayStyle.None;
@@ -144,7 +144,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                 if (isCastle)
                 {
                     var castleCost = KingdomManager.Instance.NextCastleUpgradeCost();
-                    _upgradeButton.text = $"升级主城 (金{castleCost.gold} 石{castleCost.stone} 木{castleCost.wood} 粮{castleCost.food})";
+                    _upgradeButton.text = $"升级主城 (金{castleCost.Get(ResourceType.Gold)} 石{castleCost.Get(ResourceType.Stone)} 木{castleCost.Get(ResourceType.Wood)} 粮{castleCost.Get(ResourceType.Food)})";
                     _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(castleCost));
                 }
                 else
@@ -158,7 +158,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                     }
                     else
                     {
-                        _upgradeButton.text = $"升级 (金{lvCost.gold} 石{lvCost.stone} 木{lvCost.wood} 粮{lvCost.food}{(lvCost.metal > 0 ? $" 铁{lvCost.metal}" : "")})";   // 2_12 步骤8 D131：工事升级含铁
+                        _upgradeButton.text = $"升级 (金{lvCost.Get(ResourceType.Gold)} 石{lvCost.Get(ResourceType.Stone)} 木{lvCost.Get(ResourceType.Wood)} 粮{lvCost.Get(ResourceType.Food)}{(lvCost.Get(ResourceType.Metal) > 0 ? $" 铁{lvCost.Get(ResourceType.Metal)}" : "")})";   // 2_12 步骤8 D131：工事升级含铁
                         _upgradeButton.SetEnabled(RulerController.Instance != null && RulerController.Instance.CanAfford(lvCost));
                     }
                 }
@@ -182,8 +182,8 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             {
                 bool transporting = FindObjectOfType<ScheduleCenterStub>()?.IsTransporting(storage) ?? false;
                 _harvestButton.text = transporting
-                    ? $"搬运中 {storage.storedAmount}/{storage.capacity}"
-                    : $"收取 {storage.storedAmount}/{storage.capacity}";
+                    ? $"搬运中 {storage.UsedSpace}/{storage.capacity}"
+                    : $"收取 {storage.UsedSpace}/{storage.capacity}";
                 _harvestButton.SetEnabled(storage.IsReadyToHarvest());
             }
         }
@@ -423,7 +423,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         var storage = _target.GetComponent<StorageComponent>();
         if (storage != null)
         {
-            AddFunctionRow("存储", $"{ResName(storage.resourceType)} {storage.storedAmount}/{storage.capacity}");
+            AddFunctionRow("存储", $"{storage.Contents} {storage.UsedSpace}/{storage.capacity}");
             any = true;
         }
 
@@ -492,24 +492,6 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (heat < 0.3f) return "低";
         if (heat < 0.6f) return "中";
         return "高";
-    }
-
-    /// <summary>资源类型中文名（仓库存储行显示用，与 WarehousePanel 保持一致）。</summary>
-    private static string ResName(ResourceType t)
-    {
-        switch (t)
-        {
-            case ResourceType.Gold: return "金币";
-            case ResourceType.Stone: return "石材";
-            case ResourceType.Wood: return "木材";
-            case ResourceType.Food: return "食物";
-            case ResourceType.Ore: return "矿石";
-            case ResourceType.Crystal: return "水晶";
-            case ResourceType.FireOil: return "火油";
-            case ResourceType.SpecialFood: return "特殊食物";
-            case ResourceType.Meat: return "肉";
-            default: return t.ToString();
-        }
     }
 
     /// <summary>功能区加一行「标签：值」统计（复用 info-row/info-cell 样式）。</summary>
@@ -592,14 +574,14 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     /// 主城修复消耗（3.5 步骤2）。优先 KingdomConfig Lv1 修复档（§2.1 木10/石6/粮6/金2），
     /// 兼容旧城堡 def.cost 回退（KingdomConfig 未加载/未配置时）。
     /// </summary>
-    private ResourcePack GetRepairCost()
+    private ResourceList GetRepairCost()
     {
         if (KingdomManager.Instance != null && KingdomManager.Instance.Config != null)
         {
             var c = KingdomManager.Instance.Config.GetCastleUpgradeCost(1);
             if (!c.IsZero) return c;
         }
-        return _target != null && _target.def != null ? _target.def.cost : ResourcePack.Zero;
+        return _target != null && _target.def != null ? _target.def.cost : ResourceList.Empty;
     }
 
     private void SetVisible(bool visible)

@@ -116,7 +116,7 @@ public class ScheduleCenterStub : MonoBehaviour
         {
             if (storage == null) continue;
             if (!storage.IsReadyToHarvest()) continue;      // 无产出不搬
-            if (storage.storedAmount <= 0) continue;
+            if (storage.TotalCount <= 0) continue;
 
             if (!_transporting.TryGetValue(storage, out var assigned))
             {
@@ -127,8 +127,9 @@ public class ScheduleCenterStub : MonoBehaviour
             assigned.RemoveWhere(w => w == null || !w.IsAlive);
 
             // 分批：需要搬运批次数 = ceil(存量 / 携带量)；已派数不足则补派
+            // ⏭️ 单资源语义假设点（M1-G 收口）：件数用 TotalCount、携带量/日志用首个非空资源。
             int carry = storage.GetCarryAmount();
-            int batches = Mathf.Max(1, Mathf.CeilToInt(storage.storedAmount / (float)carry));
+            int batches = Mathf.Max(1, Mathf.CeilToInt(storage.TotalCount / (float)carry));
             int need = batches - assigned.Count;
             if (need <= 0) continue;
 
@@ -146,7 +147,7 @@ public class ScheduleCenterStub : MonoBehaviour
                 need--;
             }
             if (assigned.Count > 0)
-                Debug.Log($"[调度中心] 派发搬运任务 → {assigned.Count} 工人 @ {pos}（{storage.resourceType} 存量 {storage.storedAmount}，分批{batches}）");
+                Debug.Log($"[调度中心] 派发搬运任务 → {assigned.Count} 工人 @ {pos}（{storage.PrimaryStoredType()} 存量 {storage.TotalCount}，分批{batches}）");
         }
     }
 

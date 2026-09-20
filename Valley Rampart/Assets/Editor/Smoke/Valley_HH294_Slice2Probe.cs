@@ -98,7 +98,7 @@ public static class Valley_HH294_Slice2Probe
         // ---------- ② allowedTerrain 语义（矿山红线） ----------
         var mineDef = Resources.Load<BuildingDef>("Buildings/mine");
         Line("② 前置：mine.asset 载入=" + (mineDef != null) + " allowedTerrain=" + Desc(mineDef) + " footprint=" + (mineDef != null ? mineDef.footprint.ToString() : "-")
-             + " cost(金/石/木/粮)=" + (mineDef != null ? (mineDef.cost.gold + "/" + mineDef.cost.stone + "/" + mineDef.cost.wood + "/" + mineDef.cost.food) : "-"),
+             + " cost(金/石/木/粮)=" + (mineDef != null ? (mineDef.cost.Get(ResourceType.Gold) + "/" + mineDef.cost.Get(ResourceType.Stone) + "/" + mineDef.cost.Get(ResourceType.Wood) + "/" + mineDef.cost.Get(ResourceType.Food)) : "-"),   // ⭐ M1-A 适配
              mineDef != null && mineDef.allowedTerrain != null && mineDef.allowedTerrain.Length == 1 && mineDef.allowedTerrain[0] == FeatureType.Mine);
 
         // 找 **2×2 全 Mine 簇**（未被占/无障碍）
