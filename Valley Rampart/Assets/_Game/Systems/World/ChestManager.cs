@@ -9,6 +9,14 @@ using UnityEngine;
 /// 存档（DZ-074 / HH.109 件1）：ISaveable Scene 阶段——箱子=场景动态对象（参照 Building/单位先例）；
 /// LoadState 先 ClearAll 后重建（幂等，M2：兼防 DontDestroyOnLoad 跨局残留；读档链不重跑地图生成
 /// 故无「地图生成宝箱双份」风险——SpawnChest 全工程仅 DamageSystem/TreasureVault/MonsterController 三运行时调用方）。
+///
+/// ⭐ `HH.316` · `U-2`（`D798`）：
+///   · **件3 注册/注销挂钩**：落箱即注册为 `TaskScheduler` 任务源（箱实体自身实现 `ITaskSource` ·
+///     一箱一源）／`Remove`/`ClearAll` 显式注销 —— ⛔ 关键清算**不放** `OnUnregister`（`Tick`①
+///     清无效源不回调 · R5），形制照 `Building.RegisterSiteStore/UnregisterSiteStore`。
+///   · **件1 内容物真源 ＝ 箱容器**（`ChestEntity.Store`）⇒ 本类 `contents` 读点全走箱转发读口（禁双写）。
+///   · ⛔ **`Pickup` 已退役**（`D798` 裁 ①「链 B 并回链 A」）：`09` §9.8「掉落箱自身**不提供『捡』的能力**,
+///     它就是个仓」⇒ 玩家手点 ＝ 立案搬运任务（`ChestEntity.Interact`），⛔ 无「取走内容 + 移除实体」接口。
 /// </summary>
 public class ChestManager : Singleton<ChestManager>, ISaveable
 {
@@ -66,10 +74,26 @@ public class ChestManager : Singleton<ChestManager>, ISaveable
         var go = new GameObject("Chest");
         go.transform.position = WorldPosOf(cell);
         var chest = go.AddComponent<ChestEntity>();
-        chest.Init(cell, pack, born);
+        chest.Init(cell, pack, born);   // ⭐ 件1：内容物装载进**箱容器**（唯一真源）
         chest.ownerFaction = faction;
         _chests.Add(chest);
+        RegisterSource(chest);          // ⭐ 件3：落箱即注册（每 tick 广告搬运任务 · 任何王国先到先得）
         return chest;
+    }
+
+    /// <summary>⭐ `HH.316` 件3：注册为任务源（落箱/读档重建处调 · ⛔ 形制照 `Building.RegisterSiteStore`）。</summary>
+    private static void RegisterSource(ChestEntity chest)
+    {
+        if (chest == null || !TaskScheduler.HasInstance) return;
+        TaskScheduler.Instance.Register(chest);
+    }
+
+    /// <summary>⭐ `HH.316` 件3：显式注销（`Remove`／`ClearAll` 调）—— 箱销毁即释放指向它的在派任务
+    /// （`Unregister` 内 `OnBuildingDied` 兜住；工人背包不丢）。⛔ 不依赖 `OnUnregister` 清算（R5）。</summary>
+    private static void UnregisterSource(ChestEntity chest)
+    {
+        if (chest == null || !TaskScheduler.HasInstance) return;
+        TaskScheduler.Instance.Unregister(chest);
     }
 
     /// <summary>该格箱子数（供 spawn 前判定上限/调试）。</summary>
@@ -123,43 +147,39 @@ public class ChestManager : Singleton<ChestManager>, ISaveable
         return new Vector3(cell.x, cell.y, 0f);
     }
 
-    /// <summary>
-    /// 拾取箱子（D246 任意阵营可拾 D146）。抽出内容物给发起者背包（背包落库链接由 8 调度/3.5 完成），
-    /// 本步仅负责"取走内容 + 移除箱子实体"。返回值=拾取到的资源包（供调用方入背包），空则零值。
-    /// </summary>
-    public ResourceList Pickup(ChestEntity chest, Interactor ctx)
-    {
-        if (chest == null) return ResourceList.Empty;
-        var got = chest.contents;
-        Remove(chest);
-        return got;
-    }
+    // ===== `Pickup`（D246 旧口径）已退役（⭐ `HH.316` · `D798` 裁 ①）=====
+    //   原实现「取走内容 + 移除实体 + 返回资源包供调用方入背包」＝ `09` §9.8 :389 明拒的
+    //   「在箱子上加『拾取』接口」⇒ 随链 B 并回链 A 删除；内容物出口只剩**工人搬运**（链 A 卸货段）。
 
     /// <summary>命中重置（D247：HP=1 一击碎，内容物原地重新落箱可再拾）。由 ChestEntity.Strike 调用。</summary>
     public void ResetDrop(ChestEntity chest)
     {
         if (chest == null) return;
-        var pack = chest.contents;
+        var pack = chest.contents;           // ⭐ 转发箱容器（唯一真源）
         var cell = chest.cell;
         var faction = chest.ownerFaction;
-        Remove(chest);                       // 移除原实体
+        Remove(chest);                       // 移除原实体（含任务源注销 · 件3）
         SpawnChest(cell, pack, faction);     // 原地重落（内容保留）
     }
 
-    /// <summary>移除箱子（拾取/过期/上限）。</summary>
+    /// <summary>移除箱子（过期/上限/破碎重置）。⭐ 件3：先注销任务源（在派任务随之释放），再销毁实体。</summary>
     public void Remove(ChestEntity chest)
     {
         if (chest == null) return;
         _chests.Remove(chest);
+        UnregisterSource(chest);
         if (chest.gameObject != null) Destroy(chest.gameObject);
     }
 
-    /// <summary>清空全部（开局/读档重建用）。</summary>
+    /// <summary>清空全部（开局/读档重建用）。⭐ 件3：逐箱注销任务源（⛔ 防跨局悬挂引用）。</summary>
     public void ClearAll()
     {
         for (int i = 0; i < _chests.Count; i++)
+        {
+            UnregisterSource(_chests[i]);
             if (_chests[i] != null && _chests[i].gameObject != null)
                 Destroy(_chests[i].gameObject);
+        }
         _chests.Clear();
     }
 
@@ -210,9 +230,10 @@ public class ChestManager : Singleton<ChestManager>, ISaveable
             var go = new GameObject("Chest");
             go.transform.position = WorldPosOf(cell);
             var chest = go.AddComponent<ChestEntity>();
-            chest.Init(cell, pack, e.bornDay);
+            chest.Init(cell, pack, e.bornDay);   // ⭐ 件1：内容物装载进箱容器（存档形状不改 ⇒ 逐值往返）
             chest.ownerFaction = (Faction)e.ownerFaction;
             _chests.Add(chest);
+            RegisterSource(chest);               // ⭐ 件3：读档重建同样入册（与落箱同形）
         }
         Debug.Log($"[ChestManager] 读档重建：{data.chests.Count} 个箱子（先清后建幂等）");
     }

@@ -314,6 +314,20 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         Dispatch(brain, task);
     }
 
+    /// <summary>
+    /// ⭐ `HH.316` 件6（`D798` 裁 ①「链 B 并回链 A」· `09` §9.8 :390「玩家手点 ＝ **调用搬运任务的一种形式**」）：
+    /// 给某任务源**立案一个搬运任务**并**立即**调度一次（源已在册 ⇒ 直接广告；工人在场即来搬；
+    /// 无空闲工人则照常每 tick 广告、来日再来）。
+    /// ⛔ **无独立入账口** —— 到账只经链 A 卸货段（`UnloadInventory` → `AddGatherOverflow` 分流）。
+    /// 幂等：在派工人由「源＋类型去重/规模派工」拦下（⛔ 不重复派工）。
+    /// </summary>
+    public void RequestHaulNow(ITaskSource source)
+    {
+        if (source == null) return;
+        if (!_sources.Contains(source)) Register(source);
+        Tick();   // 立即派发一次（常规 tick 由 Update 照旧驱动，⛔ 不改变其节律）
+    }
+
     /// <summary>派发任务到指定 NPC：记录 + 注入刺激。</summary>
     private void Dispatch(NPCBrain brain, KingdomTask task)
     {
@@ -385,13 +399,19 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 stale.Add(id);   // 死亡（OnUnitDied 应已清，此处双保险）
                 continue;
             }
+            TaskState st = _npcStateMap.TryGetValue(id, out var cur) ? cur : TaskState.Assigned;
             if (task.source == null || !task.source.IsValid)
             {
-                stale.Add(id);   // 源失效，放弃
-                continue;
+                // ⭐ HH.316 件2 例外：**箱源**「已装载在途」（MovingToDest）**不因源失效放弃** ——
+                //   箱＝仓 ⇒ 工人搬走**最后一批**后容器即空（IsValid false），若照旧放弃 ⇒ 该批滞留背包、
+                //   到账断链（判据1）。装载前各态（Assigned/MovingToSource/Working）照旧放弃。
+                if (!(task.source is ChestEntity && st == TaskState.MovingToDest))
+                {
+                    stale.Add(id);   // 源失效，放弃
+                    continue;
+                }
             }
 
-            TaskState st = _npcStateMap.TryGetValue(id, out var cur) ? cur : TaskState.Assigned;
             switch (st)
             {
                 case TaskState.Assigned:
@@ -442,6 +462,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             // QQQ.4 T11：搬运段——建筑存量入工人背包 → 转 MovingToDest（去仓库/国库卸货）
                             if (LoadInventoryFromSource(brain, task))
                             {
+                                ResolveChestDest(brain, task);   // ⭐ HH.316 件4：箱源第二段落点（装载后即时解析）
                                 _npcStateMap[id] = TaskState.MovingToDest;
                                 InjectCarryStimulus(brain, task);
                             }
@@ -711,9 +732,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (brain == null) return false;
         var inv = GetInventory(brain);
         if (inv == null) return false;
+        // ⭐ HH.316 件2（箱源混装防护 · 照 M1-C `LoadSiteMaterials` 先例）：箱内容物**任意资源**，工人可能
+        //   带着上一趟其它资源（背包单资源不可混装 ⇒ `TryStore` 恒拒 ⇒ 装载恒失败 ⇒ Complete ⇒ 重派）。
+        //   ⇒ 箱源先就地卸空（走 `UnloadInventory` · 就近同国仓/归属国分流兜底 · 资源不丢），再取货。
+        if (task.source is ChestEntity && !inv.IsEmpty) UnloadInventory(brain, task);
         var comp = task.source as Component;
         if (comp == null) return false;
-        var st = comp.GetComponent<StorageComponent>();
+        var st = comp.GetComponent<StorageComponent>();   // ⭐ 箱＝仓：箱容器挂本体 ⇒ 此处直接命中（件1 附益）
         // 副产子仓取货（DZ-072a）：本体仓缺失或类型与 args 不符（Building ③ 广告任务 args 恒等于本体仓类型，不受影响），
         // 且 source 挂有副产组件时 → 按 args.resourceType 取对应副产子仓。
         // ⭐ M1-A：单资源 `resourceType` ⇒ 标签判 `Accepts`（多资源仓下「符不符」＝收不收这个资源）。
@@ -745,12 +770,18 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // 2_17 修复卡γ：第 3 参带工人归属国——玩家工人卸玩家库(0)、AI 工人卸 AI 库，跨王国绝不互卸。
         var uc = brain.GetComponent<UnitController>();
         var wkingdom = uc != null ? uc.kingdomId : 0;
+        // ⭐ HH.316 件5（D798 §五）：**金直通** —— 金 ⛔ 不走 `FindNearestAvailable`（全库唯一声明收金的是
+        //   `Well.asset` **误配仓** · 挂 U-7）⇒ 金走归属国分流：玩家(0) → `RulerController.ModifyResource`
+        //   ⇒ `Gold` 字段；AI(>0) → `KingdomState` 台账桶。⏭️ 待 `M1-E`（金进国库仓）落地后再切仓路径。
         // DZ-072a（HH.107 件2）：副产两资源按归属国路由——玩家(0)卸国库 Vault（TreasureVault.Managed 扩面）；
         // AI(>0) 直走台账 AddGatherOverflow（AI 经济=台账制 2_17 §追记②；AI 主城 Vault 系 CastleCore 无守卫
         // 误挂的玩家国库结构=消费黑洞，AI 消费面读台账不读 Vault，卸进去即黑洞——照 AddWater 桶路由先例语义）。
-        if (wkingdom > 0 && (inv.carriedType == ResourceType.Crystal || inv.carriedType == ResourceType.FireOil))
+        if (inv.carriedType == ResourceType.Gold
+            || (wkingdom > 0 && (inv.carriedType == ResourceType.Crystal || inv.carriedType == ResourceType.FireOil)))
         {
-            AddGatherOverflow(uc, inv.carriedType, inv.UnloadAll());
+            // ⚠️ 连带修复（`HH.316`）：原此处复调 `inv.UnloadAll()`（顶部已清空 ⇒ 恒返 0 ⇒ 该批**静默丢**）
+            //   —— 箱内容物含副产（任意资源）时 AI 工人搬走即丢 ⇒ 与 U-2「内容物到账」硬冲突 ⇒ 改用已取出的 `amount`。
+            AddGatherOverflow(uc, inv.carriedType, amount);
             return;
         }
         StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position, wkingdom);
@@ -767,6 +798,29 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             // DZ-073：无仓兜底同病同修（旧硬编码玩家国库→归属国分流）。
             AddGatherOverflow(uc, inv.carriedType, amount);
         }
+    }
+
+    /// <summary>
+    /// ⭐ `HH.316` 件4：**箱源**搬运的第二段落点 —— **装载成功后**按**搬运者国 ＋ 实载资源**即时解析。
+    /// 为什么不能照建筑在广告时解析：箱**无主**（`SourceKingdom → -1`）⇒ `ResolveWarehouse` 对 `-1` 全跳过
+    /// （回退国库锚点）⇒ 故箱源 `destType=None`，落点在此定（`InjectCarryStimulus` 前）。
+    /// 规则：**金 ⇒ 国库锚点**（⛔ 不找仓 · 见件5 金直通）；其余 ⇒ 最近「**同国 ＋ 收该资源 ＋ 有余量**」仓
+    /// （`WarehouseRegistry.FindNearestAvailable`）⇒ 无仓回退国库锚点。到账由 `UnloadInventory` 统一收口
+    /// （就近仓 ＋ `AddGatherOverflow` 兜底 · 资源不丢）。
+    /// </summary>
+    private void ResolveChestDest(NPCBrain brain, KingdomTask task)
+    {
+        if (task == null || !(task.source is ChestEntity)) return;
+        var inv = GetInventory(brain);
+        var uc = brain != null ? brain.GetComponent<UnitController>() : null;
+        int kingdom = uc != null ? uc.kingdomId : 0;                       // 谁搬回 ⇒ 归谁国（09 §9.8）
+        var type = inv != null ? inv.carriedType : ResourceType.Gold;
+        if (type != ResourceType.Gold && brain != null)
+        {
+            var best = WarehouseRegistry.FindNearestAvailable(type, brain.transform.position, kingdom);
+            if (best != null) { task.destPos = best.transform.position; return; }
+        }
+        task.destPos = ResolveTreasury(task);   // 金 ／ 无可用仓 ⇒ 国库锚点（卸货段分流兜底）
     }
 
     // ===== ⭐ M1-C 件1：搬料两段式（取料仓 → 工人背包 → 工地仓）=====
@@ -857,6 +911,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             var s = storages[i];
             if (s == null || s.GetAmount(ra.ammoType) <= 0) continue;
+            if (IsChestStore(s)) continue;   // ⭐ HH.316：箱容器⛔ 不作弹药来源（见 IsChestStore 注）
             float d = GridMath.DistCells(s.transform.position, brain.transform.position);
             if (d < bestDist) { bestDist = d; best = s; }
         }
@@ -905,6 +960,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             var s = storages[i];
             if (s == null || !s.Accepts(type) || s.CanAccept(type) <= 0) continue;
+            if (IsChestStore(s)) continue;   // ⭐ HH.316：箱容器⛔ 不作退弹落点（见 IsChestStore 注）
             float d = GridMath.DistCells(s.transform.position, nearPos);
             if (d < bestDist) { bestDist = d; best = s; }
         }
@@ -977,6 +1033,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         {
             var s = storages[i];
             if (s == null || s.IsFull) continue;                       // 已满不收
+            if (IsChestStore(s)) continue;                             // ⭐ HH.316：箱容器⛔ 不作落点（见 IsChestStore 注）
             if (want.HasValue && !s.Accepts(want.Value)) continue;     // DZ-072a：同型（异型卸入会被 IWarehouse 拒）
             var pb = s.GetComponentInParent<Building>();
             if (pb != null ? pb.kingdomId != kingdom : kingdom != 0) continue;   // DZ-073：同国（防跨国远目的地；无主仓不收）
@@ -1005,6 +1062,17 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     }
 
     // ===== 辅助 =====
+
+    /// <summary>
+    /// ⭐ `HH.316`：**箱容器**（`ChestEntity` 本体的 `StorageComponent` · 件1「箱＝真仓」）＝
+    /// **可搬出但⛔ 不作卸货落点／⛔ 不作通用取货源** —— 与「⛔ 不 `WarehouseRegistry.Register`」同精神
+    /// （防成为他人卸货落点 · `D798` 裁 A-1 红线②）。
+    /// 用途：三处**遗留全扫**（`ResolveWarehouse`／`LoadAmmoToBackpack`／`DepositAmmoBack` · R1 同族）
+    /// 在箱容器入场后会把它当普通仓 ⇒ 会扰动 U-2 **范围外**链路（建筑搬运目的地／装填取货／退弹）
+    /// ⇒ 按本判据过滤，保「箱只进搬运链、不进通用仓库面」。
+    /// </summary>
+    private static bool IsChestStore(StorageComponent s)
+        => s != null && s.GetComponent<ChestEntity>() != null;
 
     /// <summary>该源当前是否已有同类型任务在派（QQQ.4 T1：按源+任务类型去重，允许同一源并发不同类型任务）。</summary>
     private bool HasAssignedTaskForSourceType(ITaskSource source, KingdomTaskType type)
@@ -1182,10 +1250,14 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     /// AI 领土内 mine 副产任务入 AI 池（旧逻辑非 Building 恒归 0=错入玩家池）。
     /// HH.221/D685 A①：世界资源点采集源（`WorldGatherSource`，非 Component）按**per-命令绑定王国**路由——
     /// 否则非 Building 源恒落 0=玩家池 ⇒ AI 工人永不匹配（通道名义落地实则僵死）。
-    /// 非破坏性增支：只多认一个新类型，既有分支与 return 语义逐位不动（玩家侧零影响）。</summary>
+    /// ⭐ HH.316 件4（D798 裁 ③）：**箱源**（`ChestEntity`）⇒ **-1 无主池**（`09` §9.8 :391「任何王国的
+    /// 工人都能搬（无主 ⇒ **先到先得**）」· 玩法后果＝AI 会来抢你的战利品）—— 卸货侧维持现码
+    /// （`UnloadInventory` 按 `uc.kingdomId` ⇒ **谁搬回归谁国**）⇒ 与 §9.8 自洽。
+    /// 非破坏性增支：只多认新类型，既有分支与 return 语义逐位不动（玩家侧零影响）。</summary>
     private int SourceKingdom(KingdomTask task)
     {
         if (task == null) return 0;
+        if (task.source is ChestEntity) return -1;   // ⭐ HH.316 件4：箱＝无主源（先到先得池 · 派工循环对 -1 已支持）
         if (task.source is Building b) return b.kingdomId;
         if (task.source is WorldGatherSource wg) return wg.KingdomId;   // HH.221 A①：世界资源点采集源
         if (task.source is Component c)
