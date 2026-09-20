@@ -11,6 +11,8 @@
 **验收成立 · 销号 `HH.313`。** 8 项差异全落地、判据 1~6 独立复现、资产迁移零丢失、旧结构清零、红线未越。
 另出 **4 处勘正 ＋ 2 条判定 ＋ 1 条潜伏缺陷 ＋ 1 项冒烟裁决**（见下）。
 
+> ⚠️ **后续自纠（2026-09-20 09:3x · 本端）**：**勘-3 原判 `AdvancedStorage` 双挂 `StorageComponent` 不成立** —— 在答 `M1-B` 三问、取证 `BuildingFactory.AttachComponents` 时逐栋代入验算 ⇒ 两分支互斥于 `rate`、**全库双挂 0 栋** ⇒ 已当场自纠（见 §二 勘-3）。本题材属 `L-40` 家族（**未回原处实算**），本端自犯两次（条件未代入 ＋ 值写反），记 **`L-43`**。验收结论本身不变（**勘-3 不涉及本片是否合格**）。
+
 ---
 
 ## 一、独立复算读数（与报告逐一对照）
@@ -44,12 +46,28 @@
 - ⇒ `Well` 仓是**死仓**（改前改后皆无写入）。执行端填 `res_currency.gold` **无害**，但把它与另外 6 栋并列为「不定行为就会漂移」，**定性偏高**。
 - **修正口径**：实为 **6 栋必需（`Warehouse`/`Granary`/`Blacksmith`/`farm`/`quarry`/`AdvancedStorage`）＋ 1 栋无害死仓（`Well`）**。
 
-### 勘-3 ⚠️ `AdvancedStorage` 的双身份（报告未标注）
+### 勘-3 ✅【**本端自纠**】`AdvancedStorage` 双挂说法**不成立** —— 全库**无任何建筑双挂**
 
-- `AdvancedStorage.asset`：`role=2(Economy)` ＋ `rate=1>0` ⇒ **同时满足旧条件的两条分支**（`econStorageOnly` 与 `prod`）。
-- 旧实现两条分支**各挂一次 `StorageComponent`**（`:295` 无 `GetComponent` 去重守卫）⇒ 实际挂 **2 个** `StorageComponent`（**既有重复挂载缺陷**，非本片引入）。
-- 本片改后**同样挂 2 个** ⇒ 行为等价；但两个仓各自读 `def.warehousePaths`（同为 `res_material.wood`）⇒ 结构上仍重复。
-- **处置**：不改（不在本片范围）⇒ 登记 **DZ 观察项**，归 `M1-B` 或建造链治本批。
+> ⚠️ **本勘正系本端在 `D790` 后续（答 `M1-B` 三问·取证 `AttachComponents`）时**发现**原裁决有误**，当场自纠。原文见本节末「原裁决（已作废）」。
+
+- **实读条件**（`BuildingFactory.cs:207-238`）：两条分支是 **两个并列 `if`**（非 `if/else`）：
+  - 分支① `econStorageOnly = rate<=0 && cap>0 && role==Economy && outputResource != Gold`
+  - 分支② `rate>0 && kind==Resource && !isResourceNode`
+- ⭐ **两分支互斥于 `rate`**（①要 `rate<=0`、②要 `rate>0`）⇒ **结构上不可能同时命中** ⇒ **不存在双挂**。
+- **全库机械复算**（41 asset 逐栋判两分支）：**BOTH ＝ 0 栋** ✔
+  - 分支① **2 栋**：`Granary`／`Warehouse`
+  - 分支② **6 栋**：`AdvancedStorage`／`Blacksmith`／`SiegeWorkshop`／`Well`／`farm`／`quarry`
+  - ⇒ **合计 8 栋**挂 `StorageComponent`（`AdvancedStorage` 挂 **1 个**）
+- ⭐ **原裁决错因（`L-40` 家族 · 本端自犯）**：原文写「同时满足两条分支 ⇒ 各挂一次」——**只读了两分支的条件文字，未代入 `AdvancedStorage` 实值代入验算**，也**未扫全库**。⚠️ 且本端**首次复算脚本还把 `Gold=0`／`Wood=2` 的值写反**（把 `outputResource==2` 当成 Gold）⇒ 二次错。**两次都是"没回原处/没真算"**。
+- ⚠️ **附带带出真事实**（原勘正本应有的产出）：`Warehouse` **确实命中分支①**（`role=2`／`rate=0`／`cap=40`／`outRes=Wood≠Gold`）⇒ **它挂仓**；而它的 `outputResource=Wood` 使它成为**只收木**的仓（正是 **判-2 的内容缺陷**）⇒ 两处勘正/判定因此**互相印证**。
+
+<details><summary>原裁决（已作废 · 保留供复盘）</summary>
+
+- ~~`AdvancedStorage.asset`：`role=2(Economy)` ＋ `rate=1>0` ⇒ **同时满足旧条件的两条分支**~~
+- ~~旧实现两条分支**各挂一次 `StorageComponent`** ⇒ 实际挂 **2 个**~~
+- ~~本片改后**同样挂 2 个** ⇒ 行为等价 ⇒ 登记 DZ 观察项~~
+
+**作废理由**：`rate<=0` 与 `rate>0` 互斥 ⇒ 上述「同时满足」不成立（`rate=1` 只命中分支②）。</details>
 
 ### 勘-4 ⚠️ 报告 §五-1 的"旧数据怪点"两问，一问已由既有注释解答
 
@@ -100,8 +118,8 @@ foreach (var type in ResourceCatalog.AllTypes) {
 
 - 旧代码以 `ResourceType` 为键 ⇒ 每仓天然 1 行 ⇒ **无此问题**；本片改为「按可接受资源展开」⇒ 通用仓 `res` 会把**同一整仓容量累加 13 次** ⇒ 容量列虚增。
 - **当前不可达**（三条证据）：
-  1. 挂仓的 7 栋**全为专属/分类声明**（非 `res`）；
-  2. 33 栋空声明者**按旧条件不挂仓** ⇒ 无 `StorageComponent` 进面板；
+  1. 挂仓的 **8 栋**（`Granary`／`Warehouse`／`AdvancedStorage`／`Blacksmith`／`SiegeWorkshop`／`Well`／`farm`／`quarry`）**全为专属/分类声明**（非空且非裸 `res`）⇒ 每仓只展开 1 行 ⇒ 不触发累加；
+  2. 33 栋空声明者**按旧条件不挂仓** ⇒ 无 `StorageComponent` 进面板（⚠️ `market` 亦不挂 —— `outRes=Gold` 被 DZ-078 排除）；
   3. `TreasureVault` 容器挂**主城子物体** ⇒ `b.GetComponent<StorageComponent>()`（只查自身）**取不到**。
 - **处置**：**不阻塞本片**。登记 **DZ 缺陷**，归 **`M1-B`**（账本读口重评时一并修 —— 该片本就要碰面板读口）。
 
