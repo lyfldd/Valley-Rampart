@@ -188,7 +188,8 @@
 | ⑤ | `多Agent交接/执行端/HH.316_U2箱仓搬运链_交付报告.md` | 新建（本报告） |
 | ⑥ | `Valley Rampart/Logs/hh316_u2/…`（探针落盘） | ⛔ 不入库（日志） |
 
-- commit：见文末（具名 `git add`，⛔ 不 push）；⛔ 未触碰 `_编号登记.md`／`_任务队列.md` 等策划端账本。
+- **commit**：`cc2be8dc`（具名 `git add` 六文件 · 1360 insertions／38 deletions；⛔ **未 push**）；⛔ 未触碰 `_编号登记.md`／`_任务队列.md` 等策划端账本。
+- **探针落盘**（不在库）：`Valley Rampart/Logs/hh316_u2/hh316_u2_smoke.txt`（末跑 v7）＋ 7 份**逐跑次时间戳副本**（`_20260920_222942`…`_232410`，供逐跑次复读）。
 
 ---
 
