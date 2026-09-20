@@ -310,15 +310,18 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_target.state == BuildingState.Ruined)
         {
             var rc = _target.GetRepairCost();
-            if (WarehouseHelper.TrySettle(rc))   // 原子凑单：不足整笔回滚；成功已扣
-            {
-                _target.StartRebuildFromRuins();
-                UIManager.Instance?.Pop();
-            }
-            else
+            if (!WarehouseHelper.CanAfford(rc))
             {
                 Debug.Log("[BuildingPanel] 仓库资源不足，无法重建废墟");
+                return;
             }
+            // ⭐ `M1-C` 件1（`09` §16.3-2 修复与建造**同构**）：下单**只扣金**（裁决 2 金-A），
+            //   非金改「投料 ⇒ 等时间」⇒ 料齐才推进度（⛔ 不再「扣费即开工」）。
+            var rcGold = Building.GoldOnlyOf(rc);
+            if (!rcGold.IsZero && !WarehouseHelper.TrySettle(rcGold)) return;
+            _target.AddInvested(rcGold.TotalCount);
+            _target.StartRebuildFromRuins(rc);
+            UIManager.Instance?.Pop();
             return;
         }
 
@@ -331,8 +334,11 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                 Debug.Log("[BuildingPanel] 资源不足，无法修复");
                 return;
             }
-            RulerController.Instance.Spend(repairCost);
-            _target.StartConstructing();
+            // ⭐ `M1-C` 件1：下单**只扣金**（裁决 2 金-A），非金改「投料 ⇒ 等时间」（`09` §16.3-2）
+            var repairGold = Building.GoldOnlyOf(repairCost);
+            RulerController.Instance.Spend(repairGold);
+            _target.AddInvested(repairGold.TotalCount);
+            _target.StartConstructing(repairCost);
             // 修复主城即时解锁 Lv1（不等建造动画完成），使重建后立即可升级/建造
             if (_target.sourceType == BuildingType.CastleCore && KingdomManager.Instance != null)
                 KingdomManager.Instance.SetCastleLevel(1);
@@ -369,10 +375,14 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             return;
         }
 
-        RulerController.Instance.Spend(lvCost);
+        // ⭐ `M1-C` 件1（`09` §16.3-1 升级与建造**同构**）：下单**只扣金**（裁决 2 金-A），
+        //   非金改「投料 ⇒ 等时间」⇒ 料齐才提级（⛔ 不再「扣费即升」）。
+        var lvGold = Building.GoldOnlyOf(lvCost);
+        RulerController.Instance.Spend(lvGold);
+        _target.AddInvested(lvGold.TotalCount);
         if (_target.TryUpgrade())
         {
-            // 升级走 Constructing 进度，关闭面板（3.3.4 批次3）
+            // 升级走 Constructing 进度（3.3.4 批次3）
             UIManager.Instance?.Pop();
         }
     }
@@ -382,7 +392,8 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         if (_target == null) return;
         if (!_target.CanDemolish) return;   // 【HH.294 片4·4-H】判据归数据栏（同源，禁 UI 复算）
 
-        // Demolish 内部按 HP 比例返还 + Die（3.3.4 批次3）
+        // ⭐ `M1-C` 件4（`09` §16.3-3）：`Demolish` 只**进入拆除态**（有耗时 ＋ 需工人到场推进）；
+        //   旧行为「按 HP 比例返还 ＋ 瞬时 `Die`」已退役（件2／件3）。
         _target.Demolish();
         UIManager.Instance?.Pop();  // 出栈关闭面板
     }

@@ -17,3 +17,4 @@ MonoBehaviour:
   bridgeMaxSegments: 8
   constructionBaseSeconds: 5
   cooperativeBuildK: 0.25
+  demolishBaseSeconds: 6

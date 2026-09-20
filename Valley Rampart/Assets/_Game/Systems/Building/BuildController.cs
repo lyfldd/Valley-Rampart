@@ -245,8 +245,15 @@ public class BuildController : Singleton<BuildController>
         GridCoord coord = check.snappedOrigin;
 
         // 扣资源（门面：玩家→王国仓库凑单；AI→KingdomState.Spend 台账制，无事件）
+        // ⭐ `M1-C` 件1（裁决 2 **金-A**）：**金仍走「下单即扣」**（`M1-E` 前金不在任何仓里
+        //   ⇒ 工人无处搬 ⇒ 若金也投料则 19/40 栋建筑永久卡死）；**非金资源改「投料 ⇒ 等时间」**
+        //   ⇒ 本行**只扣金**，料由工人搬进工地仓（`09` §16.1 ①）。
+        // ⭐ `M1-C` 件1（裁决 3 **AI-A**）：**AI 保持台账全额直扣 ＋ 立即开工**
+        //   —— `09#52`「AI 国是第二本独立账 ⇒ 统一走仓」**已知第二账**，⛔ 不在本片 6 项。
+        // 下单时点**校验**（⛔ 不扣非金）：玩家→仓库凑单能力；AI→台账全额
         if (!CanPayBuild(kingdomId, def.cost)) return false;
-        if (!PayBuild(kingdomId, def.cost)) return false;
+        var goldOnly = Building.GoldOnlyOf(def.cost);
+        if (!PayOrderCost(kingdomId, def.cost)) return false;
 
         // 【HH.294 片4·4-B】⛔ **禁「顺手抹树」** —— 原此处无条件调
         //   `WorldManager.TryConsumeResourceNode(coord)`：只要 `ResourceNodeMapping.RequiresResourceNode(def.id)`
@@ -278,7 +285,14 @@ public class BuildController : Singleton<BuildController>
         b.kingdomId = kingdomId;   // 2_17 步骤7：建造门面——AI 建造归属该国（玩家 0）
         // HH.86/DZ-040 件2a：faction 按 kingdomId 派生（b.Init→ApplyDef 时归属未写入=仍 def.faction，此处补覆写）
         b.faction = kingdomId > 0 ? Faction.AiKingdom : def.faction;
-        b.StartConstructing();     // 建造走 Constructing 进度（玩家手工与 AI 同一条链）
+        // ⭐ `M1-C` 件1：**投料 ⇒ 等时间**（内部按 def.cost 去金生成搬料需求；料齐才推进度）。
+        // ⭐ 裁决 3 **AI-A**：AI 走台账**全额直扣**（上方 `PayOrderCost` 已扣）⇒ **立即开工**
+        //   （⛔ 不走投料 ⇒ 传 `Empty`）；`09#52`「AI 国是第二本独立账 ⇒ 统一走仓」＝**已知第二账**，
+        //   ⛔ **不在本片 6 项**（`09#48/#53/#54/#55/#56/#64`），归后续专项。
+        b.StartConstructing(kingdomId <= 0 ? def.cost : ResourceList.Empty);
+        // ⭐ `M1-C` 件1（裁决自陈-3）：累计投入记账 —— 玩家＝下单时扣的金（料在入工地仓时逐笔累加）；
+        //   AI＝全额（AI 不走投料 · 裁决 3 AI-A）
+        b.AddInvested(kingdomId <= 0 ? goldOnly.TotalCount : def.cost.TotalCount);
 
         // 【HH.294 片4·4-B／4-E】锚点消费（`03` §6.4 门内第 2 步）：**走删门**把锚点格地表抹掉，
         //   并把「消费了哪个锚点（类型 ＋ 位置）」**记到建筑身上**（`03` §五「这属'属性自己装'」），
@@ -325,6 +339,19 @@ public class BuildController : Singleton<BuildController>
         Debug.Log($"[BuildController] 建造{(kingdomId > 0 ? $"AI国{kingdomId}" : "玩家")} {def.id} at cell ({coord.x},{coord.y}) fp {fp.x}x{fp.y}");
 
         return true;
+    }
+
+    /// <summary>
+    /// ⭐ `M1-C` 件1：**下单时点扣费**（`09` §16.1 ①「下单」）。
+    /// · 玩家(0)：**只扣金**（裁决 2 金-A —— 金走 `WarehouseHelper` 的金分支 ⇒ `RulerController.Spend`，
+    ///   `M1-E` 前行为不变）；**非金资源 ⛔ 不在此扣**，改由工人搬进工地仓（`09` §16.1 ②）。
+    /// · AI(&gt;0)：**保持台账全额直扣**（裁决 3 AI-A —— `09#52` 已知第二账，不在本片 6 项）。
+    /// </summary>
+    private static bool PayOrderCost(int kingdomId, ResourceList cost)
+    {
+        if (kingdomId <= 0) return WarehouseHelper.TrySettle(Building.GoldOnlyOf(cost));
+        if (!CanPayBuild(kingdomId, cost)) return false;
+        return PayBuild(kingdomId, cost);
     }
 
     /// <summary>建造国库抽象（2_17 步骤7）：玩家(0)→WarehouseHelper.CanAfford；AI→KingdomState.CanAfford 五经济资源。

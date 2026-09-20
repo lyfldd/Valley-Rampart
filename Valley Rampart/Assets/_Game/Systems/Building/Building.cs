@@ -204,6 +204,78 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     private bool _pendingUpgrade;   // 当前 Constructing 是升级而非首次建造
     private bool _pendingRepair;    // 2_12 步骤7 / D156：当前 Constructing 是从废墟重建（完成满血回原级，不升级）
     private bool _territoryClaimed; // 批次C：首次建成已纳土（升级/重建不再重复纳土）
+
+    // ===== ⭐ `M1-C` 件1／件4：投料态 ＋ 拆除态 =====
+
+    /// <summary>投料未齐（`09` §16.1 ①~③）：Constructing 态但**进度不推进**，等工人把料搬进工地仓。</summary>
+    private bool _awaitingMaterials;
+
+    /// <summary>本次投料需求（配方量；金已在下单时直扣 ⇒ ⛔ 不含金 · 裁决 2 金-A）。入档。</summary>
+    private ResourceList _siteNeed = ResourceList.Empty;
+
+    /// <summary>工地仓（裁决 1 案 A：独立子物体容器 · ⛔ 不复用 `StorageComponent`）。</summary>
+    private ConstructionSiteStore _siteStore;
+
+    /// <summary>工地仓是否已注册进 `TaskScheduler`（防重复 Register/Unregister 抖动）。</summary>
+    private bool _siteRegistered;
+
+    /// <summary>拆除中（`09` §16.3-3：拆除要耗时与工人 ⇒ 与建造对称）。</summary>
+    private bool _demolishing;
+
+    /// <summary>拆除进度 0→1（复用 `constructProgress` 的推进形态 · 裁决自陈-5）。</summary>
+    private float _demolishProgress;
+
+    /// <summary>是否处于「投料未齐」态（工地仓据此判 `IsValid`）。</summary>
+    public bool IsSiteAwaitingMaterials => _awaitingMaterials;
+
+    /// <summary>是否正在拆除（有进度 · 非瞬时）。</summary>
+    public bool IsDemolishing => _demolishing;
+
+    /// <summary>拆除进度（0→1；供探针读）。</summary>
+    public float DemolishProgress => _demolishProgress;
+
+    /// <summary>工地仓（未投料/已料齐 ⇒ null）。</summary>
+    public ConstructionSiteStore SiteStore => _siteStore;
+
+    /// <summary>本次投料需求（含已到料前的配方量；供探针/存档读）。</summary>
+    public ResourceList SiteNeed => _siteNeed;
+
+    /// <summary>累计投入累加口（⭐ 裁决自陈-3：金在下单时记 ＋ 料在入工地仓时记）。</summary>
+    public void AddInvested(int amount)
+    {
+        if (amount > 0) totalInvested += amount;
+    }
+
+    /// <summary>投料需求 ＝ 造价**去金**（裁决 2 金-A：金仍「下单即扣」⇒ ⛔ 不进工地仓）。
+    /// 纯金造价（`farm`／`quarry`／`market`）⇒ 空列表 ⇒ 无料可搬 ⇒ **即时开工**（裁决已认可）。
+    /// </summary>
+    public static ResourceList SiteNeedOf(ResourceList cost)
+    {
+        if (cost.items == null || cost.items.Length == 0) return ResourceList.Empty;
+        var r = ResourceList.Empty;
+        for (int i = 0; i < cost.items.Length; i++)
+        {
+            var e = cost.items[i];
+            if (e.type == ResourceType.Gold) continue;   // 金-A：金不入工地仓
+            if (e.amount > 0) r = r.Set(e.type, e.amount);
+        }
+        return r;
+    }
+
+    /// <summary>造价里的**金**部分（裁决 2 金-A：金仍「下单即扣」）。
+    /// 与 <see cref="SiteNeedOf"/> **互补**（去金／取金单源，⛔ 不各写一遍）。</summary>
+    public static ResourceList GoldOnlyOf(ResourceList cost)
+    {
+        if (cost.items == null || cost.items.Length == 0) return ResourceList.Empty;
+        var r = ResourceList.Empty;
+        for (int i = 0; i < cost.items.Length; i++)
+        {
+            var e = cost.items[i];
+            if (e.type != ResourceType.Gold) continue;
+            if (e.amount > 0) r = r.Set(ResourceType.Gold, e.amount);
+        }
+        return r;
+    }
     private SpriteRenderer _renderer;
     private BuildProgressBar _progressBar;   // 2_12 步骤7B / D117：头顶施工进度条（Constructing/Ruined/Upgrading 态显示，惰性创建）
 
@@ -357,10 +429,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         this.level = 1;
         this.footprint = footprintOverride.x > 0 && footprintOverride.y > 0 ? footprintOverride : Vector2Int.one;
 
-        // 2_12 步骤7 / D155：玩家建造记录首付为累计投入（修复/拆除返还基数）。地图预置建筑 totalInvested=0。
-        totalInvested = isPlayerBuilt && def != null
-            ? SumCostOf(def.cost, includeMetal: false)
-            : 0;
+        // 2_12 步骤7 / D155：累计投入（修复成本基数 / 拆除返还基数）。
+        // ⭐ `M1-C` 件1（裁决自陈-3）：投料口径下「投入」＝**实际投进去的量**
+        //   （金在下单时记 ＋ 料在入工地仓时记）⇒ 此处一律**从 0 起算**，
+        //   ⛔ 不再按下单时的 `def.cost` 预记（否则拆除全退会退「从未搬进去的料」）。
+        //   地图预置建筑（`isPlayerBuilt=false`）恒 0（既有语义不变）。
+        totalInvested = 0;
 
         ApplyDef();
         state = BuildingState.Active;
@@ -410,24 +484,96 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     // ===== 状态机 + 进度系统（3.3.4 批次3）=====
 
-    /// <summary>开始建造/修复（进入 Constructing 态，显示脚手架）。</summary>
-    public void StartConstructing()
+    /// <summary>开始建造/修复（进入 Constructing 态，显示脚手架）。⛔ 无投料（直建/探针路径）。</summary>
+    public void StartConstructing() => StartConstructing(ResourceList.Empty);
+
+    /// <summary>
+    /// ⭐ `M1-C` 件1（`09` §16.1 ①~③）：**投料 ⇒ 等时间**。
+    /// `need` 非空 ⇒ 进入 Constructing 态但**进度不推进**，等工人把料搬进工地仓；
+    /// 料齐 ⇒ `OnSiteMaterialsReady()` 清标志 ⇒ 进度才开始推进。
+    /// `need` 为空（或去金后为空 · 纯金造价）⇒ 无料可搬 ⇒ **即时开工**（裁决 2 已认可）。
+    /// </summary>
+    public void StartConstructing(ResourceList need)
     {
         _pendingUpgrade = false;
+        _pendingRepair = false;
         state = BuildingState.Constructing;
         constructProgress = 0f;
+        BeginMaterialPhase(need);
         UpdateVisual();
     }
 
     /// <summary>2_12 步骤7 / D156：从废墟开始重建（若在 Ruined 态）。同建造流程（仓库凑单→协作施工），完成时满血回原级。</summary>
-    public void StartRebuildFromRuins()
+    public void StartRebuildFromRuins() => StartRebuildFromRuins(ResourceList.Empty);
+
+    /// <summary>⭐ `M1-C` 件1（`09` §16.3-2：修复与建造**同构**）：废墟重建走「投料 ⇒ 等时间」。</summary>
+    public void StartRebuildFromRuins(ResourceList need)
     {
         if (state != BuildingState.Ruined) return;
         _pendingRepair = true;
         _pendingUpgrade = false;
         state = BuildingState.Constructing;
         constructProgress = 0f;
+        BeginMaterialPhase(need);
         UpdateVisual();
+    }
+
+    // ===== ⭐ `M1-C` 件1：投料态管理（工地仓 创建／注册／料齐收口）=====
+
+    /// <summary>进入投料阶段：去金 ⇒ 建/复用工地仓 ⇒ 料齐则即时开工，否则注册任务源等工人搬料。</summary>
+    private void BeginMaterialPhase(ResourceList need)
+    {
+        _siteNeed = SiteNeedOf(need);
+        if (_siteNeed.IsZero)
+        {
+            // 无料可搬（纯金造价 / 零造价 / 直建）⇒ 不建工地仓、不挂任务 ⇒ 进度立即推进
+            _awaitingMaterials = false;
+            UnregisterSiteStore();
+            return;
+        }
+        var store = EnsureSiteStore();
+        store.SetNeed(_siteNeed);
+        _awaitingMaterials = !store.IsSatisfied;
+        if (_awaitingMaterials) RegisterSiteStore();
+        else OnSiteMaterialsReady();
+    }
+
+    /// <summary>惰性创建工地仓（子物体容器 · 照 `TreasureVault` 先例；⛔ 不挂 `StorageComponent`）。</summary>
+    private ConstructionSiteStore EnsureSiteStore()
+    {
+        if (_siteStore != null) return _siteStore;
+        var go = new GameObject("SiteStore");
+        go.transform.SetParent(transform, false);
+        _siteStore = go.AddComponent<ConstructionSiteStore>();
+        _siteStore.Init(this, _siteNeed);
+        return _siteStore;
+    }
+
+    private void RegisterSiteStore()
+    {
+        if (_siteStore == null || _siteRegistered) return;
+        if (TaskScheduler.HasInstance) { TaskScheduler.Instance.Register(_siteStore); _siteRegistered = true; }
+    }
+
+    private void UnregisterSiteStore()
+    {
+        if (_siteStore == null || !_siteRegistered) return;
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(_siteStore);
+        _siteRegistered = false;
+    }
+
+    /// <summary>
+    /// ⭐ 料齐（`09` §16.1 ③）：注销搬料源 ＋ 材料**转成「建筑本体」**（`09` §16.1-3：
+    /// 不可搬出 · ⛔ 不占产出容量 · 只在生命周期结束时掉出）⇒ 工地仓清空，投入量已由
+    /// `ConstructionSiteStore.Deposit → AddInvested` 逐笔记账（自陈-3）。
+    /// </summary>
+    public void OnSiteMaterialsReady()
+    {
+        if (!_awaitingMaterials) return;
+        UnregisterSiteStore();
+        _siteStore?.Clear();
+        _awaitingMaterials = false;
+        Debug.Log($"[Building] {def?.id} 料齐 ⇒ 开工（投入={totalInvested}·进度开始推进）");
     }
 
     private void Start()
@@ -438,18 +584,57 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     private void Update()
     {
-        // 施工/废墟进度推进（仅 Constructing 态推进进度；暂停时 deltaTime=0 天然停）
-        if (state == BuildingState.Constructing)
+        // ⭐ `M1-C` 件4（`09` §16.3-3）：拆除**有耗时与工人**（与建造对称）——
+        //   仅在**有工人到场**时推进（`09` §16.3.1「工人侧按进度推进」）；到 1 ⇒ 真拆（掉箱 ＋ 生命周期结束）。
+        //   ⚠️ 拆除分支**先于**建造分支：拆除中的建筑可能仍处 `Constructing`（拆一个投料中的工地）。
+        if (_demolishing)
         {
-            constructProgress += Time.deltaTime / Mathf.Max(0.01f, EffectiveDuration());
-            if (constructProgress >= 1f)
+            if (HasAssignedWorker())
             {
-                constructProgress = 1f;
-                OnConstructionComplete();
-                return;   // 转 Active 后下方会隐藏进度条（state 已变）
+                _demolishProgress += Time.deltaTime / Mathf.Max(0.01f, DemolishDuration());
+                if (_demolishProgress >= 1f)
+                {
+                    _demolishProgress = 1f;
+                    FinishDemolish();
+                    return;
+                }
+            }
+        }
+        // 施工/废墟进度推进（仅 Constructing 态推进进度；暂停时 deltaTime=0 天然停）
+        else if (state == BuildingState.Constructing)
+        {
+            // ⭐ `M1-C` 件1：**投料未齐 ⇒ 进度不推进**（等工人把料搬进工地仓 · `09` §16.1 ②③）
+            if (!_awaitingMaterials)
+            {
+                constructProgress += Time.deltaTime / Mathf.Max(0.01f, EffectiveDuration());
+                if (constructProgress >= 1f)
+                {
+                    constructProgress = 1f;
+                    OnConstructionComplete();
+                    return;   // 转 Active 后下方会隐藏进度条（state 已变）
+                }
             }
         }
         UpdateProgressBar();
+    }
+
+    /// <summary>是否已有工人到场（拆除进度门控 · `09` §16.3.1）。</summary>
+    private bool HasAssignedWorker()
+        => TaskScheduler.HasInstance && TaskScheduler.Instance.CountAssignedWorkers(this) > 0;
+
+    /// <summary>
+    /// 拆除时长（`so-data-driven`：进 SO `BuildConfig.demolishBaseSeconds`；与建造对称用同一协作系数 k）。
+    /// ⛔ 不硬编码魔法数值。
+    /// </summary>
+    public float DemolishDuration()
+    {
+        if (_buildConfig == null)
+            _buildConfig = Resources.Load<BuildConfig>("Config/BuildConfig");
+        float baseSeconds = _buildConfig != null ? Mathf.Max(0.01f, _buildConfig.demolishBaseSeconds) : 6f;
+        if (_buildConfig == null || _buildConfig.cooperativeBuildK <= 0f) return baseSeconds;
+        int n = TaskScheduler.HasInstance ? TaskScheduler.Instance.CountAssignedWorkers(this) : 1;
+        if (n <= 1) return baseSeconds;
+        return Mathf.Max(0.01f, baseSeconds / (1f + (n - 1) * _buildConfig.cooperativeBuildK));
     }
 
     /// <summary>
@@ -461,8 +646,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         // Constructing/Upgrading（_pendingUpgrade 亦为 Constructing 态）显示 constructProgress；Ruined 显示空"待重建"条。
         bool constructingOrUpgrading = state == BuildingState.Constructing;   // Upgrading 复用 Constructing 态(_pendingUpgrade=true)
-        bool show = constructingOrUpgrading || state == BuildingState.Ruined;
-        float progress = constructingOrUpgrading ? constructProgress : 0f;
+        // ⭐ `M1-C` 件4：拆除中（仍 Active 态）也显示进度条（拆除＝有耗时 · 与建造对称）
+        bool show = constructingOrUpgrading || state == BuildingState.Ruined || _demolishing;
+        float progress = _demolishing ? _demolishProgress : (constructingOrUpgrading ? constructProgress : 0f);
 
         if (!show)
         {
@@ -629,16 +815,18 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (state != BuildingState.Active) return false;  // 只有 Active 可升级
 
         _pendingUpgrade = true;
+        _pendingRepair = false;
         state = BuildingState.Constructing;
         constructProgress = 0f;
-        // 2_12 步骤7 / D155：升级投入累加进累计投入（玩家已在外层扣款，此处记账更新 totalInvested）
+        // ⭐ `M1-C` 件1／`09` §16.3-1：升级与建造**同构**（投料 ⇒ 等时间）。
+        //   投入改在「入工地仓」时记账（裁决自陈-3）⇒ ⛔ 此处不再预记 totalInvested。
         var uc = def.levels[level - 1].upgradeCost;
-        totalInvested += SumCostOf(uc, includeMetal: true);   // 2_12 步骤8 D131：含铁
+        BeginMaterialPhase(uc);
         UpdateVisual();
         return true;
     }
 
-    // ===== 拆除（按 HP 比例返还资源）=====
+    // ===== 拆除（⭐ `M1-C` 件2／件3／件4：全退 ＋ 随本体掉箱 ＋ 有耗时与工人）=====
 
     /// <summary>
     /// ⭐【HH.294 片4·4-H】**「可否拆」＝数据栏判据**（`03` §7.5「本层不判'能不能删'⇒ 业务规则归**高级层／数据栏**」）。
@@ -647,52 +835,85 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// </summary>
     public bool CanDemolish => isPlayerBuilt && def != null && def.isDestructible && !def.isResourceNode;
 
-    /// <summary>拆除建筑（由 BuildingPanel 调）。按累计投入×HP 比例返还（2_12 步骤7 / D162）。
-    /// ⭐ `M1-A`：返还结构改「资源量列表」，**摊回口径保持旧行为**（仍只摊 金/石/木/粮 四源 ——
-    /// `09#48`「按 `def.cost` 全部资源摊」归 `M1-C`；`09#54`「改全退」同归 `M1-C`）。</summary>
+    /// <summary>
+    /// 拆除入口（由 `BuildingPanel` 调）。
+    /// ⭐ `M1-C` 件4（`09` §16.3-3「拆除要耗时与工人 ⇒ 与建造对称」）：本方法**只进入拆除态**；
+    /// 真正拆除在进度到 1（且**有工人到场**）时由 `FinishDemolish()` 执行。
+    /// ⛔ 退役旧行为：原「瞬时 `Die` ＋ 按 `hp/maxHp` 比例直接退国库」。
+    /// </summary>
     public void Demolish()
     {
         if (!CanDemolish) return;
-        float ratio = maxHp > 0 ? Mathf.Clamp01((float)hp / maxHp) : 0f;
-        // D162：返还 = 累计投入 × (当前HP/满HP)。累计投入按 def.cost 四资源占比摊回。
-        int costSum = SumCostOf(def != null ? def.cost : ResourceList.Empty, includeMetal: false);
-        int invested = totalInvested > 0 ? totalInvested : costSum;
-        int baseSum = Mathf.Max(1, costSum);
-        var refundPack = ResourceList.Empty;
-        if (def != null && def.cost.items != null)
+        if (_demolishing) return;                                    // 幂等
+        if (state == BuildingState.Dead || state == BuildingState.Placing) return;
+        _demolishing = true;
+        _demolishProgress = 0f;
+        UpdateVisual();
+        Debug.Log($"[Building] {def?.id} 开始拆除（时长≈{DemolishDuration():F1}s · 需工人到场推进 · `09` §16.3-3）");
+    }
+
+    /// <summary>
+    /// ⭐ `M1-C` 件4 收口：拆除进度到 1 ⇒ 真拆。
+    /// · 件2（`09` §16.2）：退还量 ＝ **全退**（⛔ 不随受损减少 —— `hp/maxHp` 比例机制**退役**）
+    ///   ＋ 按 **`def.cost` 全部资源**摊（⛔ 不再只摊 金/石/木/粮 · `09#48`）。
+    /// · 件3（`09` §16.1-4）：退还 **随「建筑本体」掉箱**（⛔ 退役 `RulerController.Refund` 直入国库路径
+    ///   ⇒ ⚠️ 行为变化：拆房后退的材料**落在箱子里，要工人搬回**）。
+    /// </summary>
+    private void FinishDemolish()
+    {
+        var refundPack = BuildRefundPack();
+        // ⭐ 件3：随本体掉箱（`Faction.None` ＝ 无主箱 · `09` §9.8；`09#57` 参数去留归 `M1-D` ⇒ ⛔ 不改签名）
+        if (!refundPack.IsZero && ChestManager.HasInstance)
         {
-            for (int i = 0; i < def.cost.items.Length; i++)
-            {
-                var e = def.cost.items[i];
-                if (!IsRefundResource(e.type)) continue;   // 旧口径：只摊 金/石/木/粮
-                int amount = Mathf.FloorToInt((float)invested * e.amount / baseSum);
-                if (amount > 0) refundPack = refundPack.Set(e.type, amount);
-            }
+            ChestManager.Instance.SpawnChest(coord, refundPack, Faction.None);
+            Debug.Log($"[Building] {def?.id} 拆除退还掉箱 @({coord.x},{coord.y})：{refundPack}"
+                      + "（⛔ 国库不即时增加 · 需工人搬回 · `09` §16.1-4）");
         }
-        RulerController.Instance?.Refund(refundPack, ratio);
+        DropSiteStoreToChest();   // 工地仓内容物掉箱（`09` §16.3-4）
         Die(DeathCause.Demolished);
     }
 
-    /// <summary>返还口径资源（金/石/木/粮 · 旧行为；`M1-C` 起应改全部 `def.cost` 资源）。</summary>
-    static bool IsRefundResource(ResourceType t)
-        => t == ResourceType.Gold || t == ResourceType.Stone || t == ResourceType.Wood || t == ResourceType.Food;
-
-    /// <summary>造价合计（`includeMetal=false` ⇒ 旧「四资源」口径；`true` ⇒ 旧「五资源」口径）。
-    /// ⚠️ 旧 `ResourcePack` 的 `gold+stone+wood+food(+metal)` 逐字等价（弹药不计）。
-    /// ⭐ 供 `BuildingFactory` 读档兜底共用（单源，⛔ 不各写一遍）。</summary>
-    public static int SumCostOf(ResourceList cost, bool includeMetal)
+    /// <summary>退还量 ＝ 累计投入（**全退** · 件2 · `09` §16.2），按 `def.cost` **全部资源**占比摊（`09#48`）。
+    /// ⚠️ `costSum` 改用 `def.cost.TotalCount`（**全部资源**），⛔ 不再用四/五资源口径的 `SumCostOf`。</summary>
+    private ResourceList BuildRefundPack()
     {
-        int sum = 0;
-        if (cost.items == null) return 0;
-        for (int i = 0; i < cost.items.Length; i++)
+        if (def == null || def.cost.items == null || def.cost.items.Length == 0) return ResourceList.Empty;
+        int costSum = def.cost.TotalCount;
+        int invested = totalInvested > 0 ? totalInvested : costSum;
+        int baseSum = Mathf.Max(1, costSum);
+        var pack = ResourceList.Empty;
+        for (int i = 0; i < def.cost.items.Length; i++)
         {
-            var t = cost.items[i].type;
-            if (t == ResourceType.Gold || t == ResourceType.Stone || t == ResourceType.Wood || t == ResourceType.Food
-                || (includeMetal && t == ResourceType.Metal))
-                sum += cost.items[i].amount;
+            var e = def.cost.items[i];
+            int amount = Mathf.FloorToInt((float)invested * e.amount / baseSum);   // ⛔ 无 hp/maxHp 比例（全退）
+            if (amount > 0) pack = pack.Set(e.type, amount);
         }
-        return sum;
+        return pack;
     }
+
+    /// <summary>
+    /// 工地仓内容物掉箱（`09` §16.3-4「建造中的建筑（工地）有 HP · 能被打 · 打毁 ⇒ 仓里材料掉箱」）。
+    /// 拆除投料中的工地同理（材料不凭空消失）。
+    /// </summary>
+    private void DropSiteStoreToChest()
+    {
+        if (_siteStore == null) return;
+        var contents = _siteStore.Contents;
+        if (contents.IsZero) return;
+        _siteStore.Clear();
+        if (ChestManager.HasInstance)
+        {
+            ChestManager.Instance.SpawnChest(coord, contents, Faction.None);
+            Debug.Log($"[Building] {def?.id} 工地仓材料掉箱 @({coord.x},{coord.y})：{contents}（`09` §16.3-4）");
+        }
+    }
+
+    // ===== `SumCostOf` —— ⭐ `M1-C` 件2 随「全资源口径」同源化**已删** =====
+    //   改前口径：`includeMetal=false` ⇒ 旧「四资源」（金/石/木/粮）；`true` ⇒ 旧「五资源」（＋铁）。
+    //   改后（裁决 4-a 同源化）：`BuildRefundPack`（拆除退还）／`GetRepairCost`（修复费）／
+    //     `LoadState` 兜底／`BuildingFactory.SpawnFromSave` 兜底**一律改用 `def.cost.TotalCount`**（全部资源）
+    //     ⇒ 本方法**零调用方**（全库 grep：仅本注释命中）⇒ 按裁决 4「零调用即删」同源处理删除。
+    //   ⚠️ 现有 40 栋 `cost` 只含 金/石/木/粮/铁 ⇒ 两种口径**读数逐值相同**（本删除零行为差异）。
 
     // ===== ISaveable 实现（3.5 实施计划 P0 步骤3）=====
 
@@ -730,7 +951,13 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             // 【HH.294 片4·4-E】锚点消费记录入档（`03` §7.8：拆除时须能还回原锚点）
             anchorCoordX = anchorCoordX,
             anchorCoordY = anchorCoordY,
-            anchorFeature = anchorFeature
+            anchorFeature = anchorFeature,
+            // ⭐ `M1-C` 件1／件4（判据 7：新档能存能读 —— 工地仓内容物／投料进度一并）·尾插零 bump
+            siteNeed = _siteNeed,
+            siteContents = _siteStore != null ? _siteStore.Contents : ResourceList.Empty,
+            awaitingMaterials = _awaitingMaterials,
+            demolishing = _demolishing,
+            demolishProgress = _demolishProgress
         };
         return new SavePayload
         {
@@ -770,9 +997,25 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         hp = Mathf.Clamp(data.hp, 0, maxHp);
 
         // 2_12 步骤7 / D155：累计投入恢复。旧档缺字段(data.totalInvested=0，且玩家建筑无默认) → 兜底按 def.cost 计
+        // ⭐ `M1-C` 件2（裁决 4-a 同源化）：兜底口径改 `def.cost.TotalCount`（**全部资源**），与
+        //   `BuildRefundPack` / `GetRepairCost` 的 `costSum` 同源，⛔ 不再用四资源口径的 `SumCostOf`。
         totalInvested = data.totalInvested > 0
             ? data.totalInvested
-            : (isPlayerBuilt && def != null ? SumCostOf(def.cost, includeMetal: false) : 0);
+            : (isPlayerBuilt && def != null ? def.cost.TotalCount : 0);
+
+        // ⭐ `M1-C` 件1／件4：投料态与拆除态恢复（判据 7：新档能存能读 —— 工地仓内容物／进度一并）
+        _demolishing = data.demolishing;
+        _demolishProgress = Mathf.Clamp01(data.demolishProgress);
+        _siteNeed = data.siteNeed;
+        _awaitingMaterials = false;
+        if (data.awaitingMaterials && !_siteNeed.IsZero)
+        {
+            var site = EnsureSiteStore();
+            site.SetNeed(_siteNeed);
+            site.RestoreContents(data.siteContents);
+            _awaitingMaterials = !site.IsSatisfied;
+            if (_awaitingMaterials) RegisterSiteStore();
+        }
 
         // 【HH.294 片4·4-E】锚点消费记录恢复（旧档缺字段默认 0 ⇒ 与坐标 0 混淆，故按「有锚点类型」判有效）
         anchorCoordX = data.anchorFeature >= 0 ? data.anchorCoordX : -1;
@@ -802,32 +1045,31 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 2_12 步骤7 / D155：修复/废墟重建成本（库存储入时点调用，勿入每帧路径）。
-    /// = 累计投入 × RepairConfig.repairCostRatio，按 def.cost 的 金/石/木/粮/铁 比例分摊回「资源量列表」。
-    /// 累计投入用 totalInvested（建造+升级累加）；旧档/地图预置无累计投入 → 回退 def.cost。
-    /// 2_12 步骤8 D131：def.cost/分摊含铁，修复摊回不静默丢铁。
-    /// ⭐ `M1-A`：返回类型 `ResourcePack` ⇒ `ResourceList`（**口径与数值逐字不变**，弹药仍不计入）。
+    /// = 累计投入 × RepairConfig.repairCostRatio，按 **`def.cost` 全部资源**占比分摊回「资源量列表」。
+    /// 累计投入用 totalInvested（投料累加）；旧档/地图预置无累计投入 → 回退 def.cost。
+    /// ⭐ `M1-A`：返回类型 `ResourcePack` ⇒ `ResourceList`。
+    /// ⭐ `M1-C` 件2（裁决 4-a）：与 `BuildRefundPack` **同源化** —— `costSum` 改用 `def.cost.TotalCount`
+    ///   （**全部资源**），⛔ 不再用四/五资源口径的 `SumCostOf`；`IsRefundResource` 过滤一并退役。
+    ///   ⚠️ 现有 40 栋 `cost` 只含 金/石/木/粮/铁 ⇒ 本次改动**读数逐值零差异**（未来造价加资源即自动正确）。
     /// </summary>
     public ResourceList GetRepairCost()
     {
-        int costSum = def != null ? SumCostOf(def.cost, includeMetal: true) : 0;
+        if (def == null || def.cost.items == null || def.cost.items.Length == 0) return ResourceList.Empty;
+        int costSum = def.cost.TotalCount;
         int invested = totalInvested > 0 ? totalInvested : costSum;
-        if (invested <= 0 || def == null) return ResourceList.Empty;
+        if (invested <= 0) return ResourceList.Empty;
 
         float ratio = RepairConfig.Instance != null ? Mathf.Clamp01(RepairConfig.Instance.repairCostRatio) : 0.5f;
         int total = Mathf.Max(1, Mathf.RoundToInt(invested * ratio));
 
-        // 按 def.cost 五资源占比分摊（避免纯按总额使单一资源爆表）
+        // 按 def.cost 全部资源占比分摊（避免纯按总额使单一资源爆表）
         int baseSum = Mathf.Max(1, costSum);
         var cost = ResourceList.Empty;
-        if (def.cost.items != null)
+        for (int i = 0; i < def.cost.items.Length; i++)
         {
-            for (int i = 0; i < def.cost.items.Length; i++)
-            {
-                var e = def.cost.items[i];
-                if (!IsRefundResource(e.type) && e.type != ResourceType.Metal) continue;   // 旧口径：金/石/木/粮/铁
-                int amount = Mathf.RoundToInt((float)total * e.amount / baseSum);
-                if (amount > 0) cost = cost.Set(e.type, amount);
-            }
+            var e = def.cost.items[i];
+            int amount = Mathf.RoundToInt((float)total * e.amount / baseSum);
+            if (amount > 0) cost = cost.Set(e.type, amount);
         }
         return cost;
     }
@@ -919,6 +1161,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         // 3.5 P1-15：在册工人逃出存活（先于 FreeFootprint/Destroy 执行，避免引用失效）
         EscapeWorkers();
 
+        // ⭐ `M1-C`：工地仓收口（`09` §16.3-4「工地被打毁 ⇒ 仓里材料掉箱」）。
+        //   ① 注销搬料源（在派搬料任务由调度器自动放弃）② 剩余材料掉箱（材料不凭空消失）。
+        //   ⚠️ 拆除路径 `FinishDemolish` 已先行掉箱并清空 ⇒ 此处幂等（`Contents` 空 ⇒ 不重复落箱）。
+        UnregisterSiteStore();
+        DropSiteStoreToChest();
+
         // 3.5 P1-10：训练建筑摧毁 → 训练队列中断回退（居民存活、资源不退）
         if (TrainingSystem.Instance != null)
             TrainingSystem.Instance.OnBuildingDestroyed(this);
@@ -1003,8 +1251,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// <summary>任务源世界坐标（建筑坐标）。</summary>
     public Vector2 SourcePos => transform.position;
 
-    /// <summary>任务源是否有效（未被销毁且已 Active）。</summary>
-    public bool IsValid => this != null && state == BuildingState.Active;
+    /// <summary>任务源是否有效（未被销毁且已 Active）。
+    /// ⭐ `M1-C`：**投料态工地**（`Constructing` ＋ 料未齐）与**拆除态**也是合法源
+    /// —— 前者广告「搬料任务」、后者广告「拆除任务」；两者 `TryAdvertiseTask` 内部按态分流，
+    /// ⛔ 不会漏出 Production/Transport/WaterHaul。</summary>
+    public bool IsValid => this != null
+        && (state == BuildingState.Active || _awaitingMaterials || _demolishing);
 
     /// <summary>
     /// 按建筑类型声明任务（QQQ.2 §10.3 / DR-16）：
@@ -1018,6 +1270,21 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public bool TryAdvertiseTask(out KingdomTask task)
     {
         task = null;
+
+        // ⭐ `M1-C` 件4（`09` §16.3-3）：**拆除中 ⇒ 只广告「拆除任务」**（工人到场推进拆除进度），
+        //   ⛔ 不再广告 Production/Transport/WaterHaul（拆除中的建筑不该继续生产／搬运）。
+        if (_demolishing)
+        {
+            task = new KingdomTask(KingdomTaskType.Build, this);
+            task.destType = KingdomDestType.None;   // 原地劳作：工人走到建筑本体（SourcePos）
+            task.args = new DemolishTaskArgs { target = this };
+            return true;
+        }
+
+        // ⭐ `M1-C` 件1：**投料态工地由 `ConstructionSiteStore` 广告搬料任务**（⛔ 本体不广告）
+        //   ⇒ 非 Active 态一律返回 false，防 Constructing 态漏出 Production/Transport/WaterHaul。
+        if (state != BuildingState.Active) return false;
+
         // 2_17 修复卡β：删除补丁D广告守卫(L900)。AI 王国建筑(kingdomId>0)照常发布任务；
         // 防"AI 任务流向玩家 worker"的补丁D意图已由 TaskScheduler.Tick 池隔离路由结构性达成——
         // 任务源归属国 tKingdom 只派给同国 idleKingdom 工人，广告侧守卫成永久双轨，此处清理收编。

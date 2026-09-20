@@ -346,7 +346,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         // 2_12 步骤7 / D155：累计投入恢复（D155 修复成本基数 / D162 拆除返还基数）。旧档缺字段 → 兜底按 def.cost。
         b.totalInvested = data.totalInvested > 0
             ? data.totalInvested
-            : (b.def != null ? Building.SumCostOf(b.def.cost, includeMetal: false) : 0);
+            : (b.def != null ? b.def.cost.TotalCount : 0);   // ⭐ M1-C 件2（裁决 4-a 同源化）：兜底改 def.cost.TotalCount（全部资源）
     }
 
     /// <summary>读档王国归属：自然建筑（OreVein/WoodPile/StonePile 一次性资源点）一律强制 -1（哨兵配套，

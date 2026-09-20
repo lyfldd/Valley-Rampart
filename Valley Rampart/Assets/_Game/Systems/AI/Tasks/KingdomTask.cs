@@ -68,3 +68,30 @@ public class ReloadAmmoArgs
     public ResourceType ammoType;   // 需要的弹种（StoneAmmo/FireballAmmo/MagicAmmo）
     public int amount;              // 需要数量（缺口量，≤单次搬运携带量由调度器 clamp）
 }
+
+/// <summary>
+/// ⭐ 搬料任务参数（`09` §16.1 ② · `M1-C` 件1）：**仓库 → 工地仓** 的投料任务。
+///
+/// 语义（⛔ 不新增 `KingdomTaskType` 枚举 —— 裁决收口 1「搬料任务须可区分语义」）：
+///   · 任务类型沿用 `KingdomTaskType.Build`（原死值 · 生产码零调用方），**靠本 args 类型区分语义**；
+///   · 任务源 ＝ `ConstructionSiteStore`（工地仓）⇒ `SourcePos` ＝ **取料仓位置**（第一段位移）；
+///   · `destPos` ＝ **工地位置**（第二段位移 ＝ 卸料点）；
+///   · `need` ＝ 本次搬运的**缺口量**（阈值上限 · `09` §16.1-2 阈值拦截）。
+/// </summary>
+public class HaulToSiteArgs
+{
+    public ConstructionSiteStore site;   // 卸料落点（工地仓 · 阈值拦截在此生效）
+    public ResourceType resourceType;    // 本次搬的资源
+    public StorageComponent pickup;      // 取料仓（解析后的最近同国仓；装载段读它）
+    public int need;                     // 缺口量（装载上限 · ⛔ 不多搬）
+}
+
+/// <summary>
+/// ⭐ 拆除任务参数（`09` §16.3-3 · `M1-C` 件4）：拆除**要耗时与工人**（与建造对称）。
+/// 任务源 ＝ 拆除中的 `Building` 本体；`destType = None`（原地劳作 · 第一段位移即工地）。
+/// 工人到场 Working 期间推进 `Building` 的拆除进度（`09` §16.3.1「工人侧按进度推进」）。
+/// </summary>
+public class DemolishTaskArgs
+{
+    public Building target;   // 被拆建筑
+}

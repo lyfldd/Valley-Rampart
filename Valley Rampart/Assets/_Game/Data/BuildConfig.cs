@@ -22,4 +22,10 @@ public class BuildConfig : ScriptableObject
     public float constructionBaseSeconds = 5f;
     [Tooltip("协作施工加成系数 k：实际施工时长 = base / (1 + (n-1)×k)，n=该建筑实际被派工人数。k=0 退化为纯计时")]
     [Range(0f, 1f)] public float cooperativeBuildK = 0.25f;
+
+    [Header("拆除耗时（⭐ `M1-C` 件4 / `09` §16.3-3）")]
+    [Tooltip("拆除基础时长（秒）。拆除＝**有耗时与工人**（与建造对称）⇒ 与建造同用协作施工系数 k："
+             + "实际拆除时长 = demolishBaseSeconds / (1 + (n-1)×k)，n=到场工人数。"
+             + "⛔ 不得为 0（否则拆除退化为瞬时，违 `09` §16.3-3）。")]
+    public float demolishBaseSeconds = 6f;
 }

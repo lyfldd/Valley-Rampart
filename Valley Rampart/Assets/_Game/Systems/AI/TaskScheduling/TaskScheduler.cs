@@ -466,6 +466,21 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                                 stale.Add(id);
                             }
                         }
+                        else if (task.type == KingdomTaskType.Build && task.args is HaulToSiteArgs)
+                        {
+                            // ⭐ M1-C 件1：搬料装载段（`09` §16.1 ②）——从取料仓取料入背包，
+                            //   上限＝**工地仓当前缺口量**（⭐ 阈值拦截：够阈值即停 ⇒ ⛔ 不多搬）。
+                            if (LoadSiteMaterials(brain, task))
+                            {
+                                _npcStateMap[id] = TaskState.MovingToDest;
+                                InjectCarryStimulus(brain, task);
+                            }
+                            else
+                            {
+                                Complete(id, task, brain);   // 取料仓已空 / 阈值已满足 → 完成（等下轮广告）
+                                stale.Add(id);
+                            }
+                        }
                         else
                         {
                             Complete(id, task, brain);
@@ -483,6 +498,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                         {
                             if (task.type == KingdomTaskType.AmmoReload)
                                 UnloadAmmoToMagazine(brain, task);   // 装填：背包弹药写入单位 A* 弹仓
+                            else if (task.type == KingdomTaskType.Build && task.args is HaulToSiteArgs)
+                                DepositToSite(brain, task);          // ⭐ M1-C 件1：卸料进「工地仓」（阈值拦截）
                             else
                                 UnloadInventory(brain, task);        // 搬运：背包资源入仓库/国库
                             Complete(id, task, brain);
@@ -750,6 +767,74 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             // DZ-073：无仓兜底同病同修（旧硬编码玩家国库→归属国分流）。
             AddGatherOverflow(uc, inv.carriedType, amount);
         }
+    }
+
+    // ===== ⭐ M1-C 件1：搬料两段式（取料仓 → 工人背包 → 工地仓）=====
+
+    /// <summary>
+    /// 搬料第一段（`09` §16.1 ②）：**取料仓 → 工人背包**。
+    /// ⭐ **阈值拦截**：装载上限 ＝ 工地仓**当前**缺口量（每次实时重读，⛔ 不用广告时的快照）
+    /// ⇒ 「够阈值即停 ⇒ 不多搬」（`09` §16.1-2）。返回是否搬入成功。
+    /// </summary>
+    private bool LoadSiteMaterials(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null || !(task.args is HaulToSiteArgs ha)) return false;
+        var inv = GetInventory(brain);
+        if (inv == null) return false;
+        var st = ha.pickup;
+        if (st == null) return false;
+        // ⚠️ 背包混装防护（M1-C 冒烟 §B 实测暴露）：工人可能带着上一趟的**其它**资源（采粮/搬运未卸），
+        //   此时 `TryStore` 因「单资源背包不可混装」恒返 0 ⇒ 装载恒失败 ⇒ `Complete` ⇒ 下 tick 重派 ⇒
+        //   **同一工人死循环**（Build 类型 `ExecuteCompletion` 无兜底）。照 `Transport` 的 `UnloadInventory`
+        //   兜底先例：先就地卸空，再继续本趟装载。
+        if (!inv.IsEmpty && inv.carriedType != ha.resourceType) UnloadInventory(brain, task);
+        int have = st.GetAmount(ha.resourceType);
+        if (have <= 0) return false;
+        // ⭐ 阈值上限：工地仓当前缺口（工地已销毁/已料齐 ⇒ 缺口 0 ⇒ 不搬）
+        int need = ha.site != null ? ha.site.Remaining(ha.resourceType) : ha.need;
+        if (need <= 0) return false;
+        int max = Mathf.Max(1, st.GetCarryAmount(ha.resourceType));
+        int amount = Mathf.Min(have, Mathf.Min(max, need));
+        if (amount <= 0) return false;
+        int stored = inv.TryStore(ha.resourceType, amount);
+        if (stored <= 0) return false;
+        st.TakeOut(ha.resourceType, stored);   // 扣减取料仓 + 触发 OnStorageChanged
+        return true;
+    }
+
+    /// <summary>
+    /// 搬料第二段（`09` §16.1 ②）：**工人背包 → 工地仓**。
+    /// `ConstructionSiteStore.Deposit` 内部再夹一次阈值（并发搬料下仍不多收）；
+    /// 被拒的余量**退回取料仓**（不丢资源）。工地已销毁 ⇒ 余量按国分流兜底。
+    /// </summary>
+    private void DepositToSite(NPCBrain brain, KingdomTask task)
+    {
+        if (brain == null || !(task.args is HaulToSiteArgs ha)) return;
+        var inv = GetInventory(brain);
+        if (inv == null || inv.IsEmpty) return;
+        var type = inv.carriedType;
+        int amount = inv.UnloadAll();
+        if (amount <= 0) return;
+
+        var site = ha.site;
+        if (site == null)
+        {
+            // 工地已销毁（拆了/打毁了）⇒ 不丢资源：退回取料仓，退不进再按国分流
+            ReturnOverflow(brain, type, amount, ha.pickup);
+            return;
+        }
+        int accepted = site.Deposit(type, amount);   // ⭐ 阈值拦截在此生效
+        int overflow = amount - accepted;
+        if (overflow > 0) ReturnOverflow(brain, type, overflow, ha.pickup);
+    }
+
+    /// <summary>搬料余量兜底（阈值拦截拒收 / 工地消失）：先退回取料仓，退不进再按归属国分流（不丢资源）。</summary>
+    private void ReturnOverflow(NPCBrain brain, ResourceType type, int amount, StorageComponent pickup)
+    {
+        if (amount <= 0) return;
+        int back = pickup != null ? pickup.Add(type, amount) : 0;
+        int lost = amount - back;
+        if (lost > 0) AddGatherOverflow(brain != null ? brain.GetComponent<UnitController>() : null, type, lost);
     }
 
     // ===== 2_12 步骤9 装填两段式（D207~D212，HH.19 A×4）：取弹（弹药仓库→背包）→ 卸入单位弹仓 =====

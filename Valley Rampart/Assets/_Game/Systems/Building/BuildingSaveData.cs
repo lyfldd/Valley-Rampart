@@ -50,4 +50,17 @@ public struct BuildingSaveData
     public int anchorCoordX;    // 消费掉的锚点格 x（-1 ＝ 无）
     public int anchorCoordY;    // 消费掉的锚点格 y（-1 ＝ 无）
     public int anchorFeature;   // (int)FeatureType（-1 ＝ 无）
+
+    // ===== ⭐ `M1-C` 件1／件4：投料态与拆除态（判据 7：新档能存能读 · 尾插零 bump）=====
+
+    /// <summary>本次投料需求（配方量；金已在下单时直扣 ⇒ ⛔ 不含金 · 裁决 2 金-A）。</summary>
+    public ResourceList siteNeed;
+    /// <summary>工地仓当前内容物（`ConstructionSiteStore.Contents`；非投料态恒空列表）。</summary>
+    public ResourceList siteContents;
+    /// <summary>是否处于「投料未齐」态（Constructing 但进度不推进）。</summary>
+    public bool awaitingMaterials;
+    /// <summary>是否正在拆除（`09` §16.3-3：拆除有耗时与工人 · 非瞬时）。</summary>
+    public bool demolishing;
+    /// <summary>拆除进度 0→1。</summary>
+    public float demolishProgress;
 }
