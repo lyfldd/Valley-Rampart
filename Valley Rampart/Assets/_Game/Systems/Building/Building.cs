@@ -874,17 +874,22 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             Debug.Log($"[Building] {def?.id} 拆除退还掉箱 @({coord.x},{coord.y})：{refundPack}"
                       + "（⛔ 国库不即时增加 · 需工人搬回 · `09` §16.1-4）");
         }
-        DropSiteStoreToChest();   // 工地仓内容物掉箱（`09` §16.3-4）
+        DropSiteStoreToChest();   // 工地仓内容物掉箱（`09` §16.3-4）——⭐ `U-4`：仓内容物的**唯一**掉箱口
         Die(DeathCause.Demolished);
     }
 
     /// <summary>
-    /// ⭐ `M1-C` · **U-1 修复（丙′）**：退还量 ＝ **已支付阶段造价（逐类型精确累加）** ＋ 在投阶段已到料。
+    /// ⭐ `M1-C` · **U-1 修复（丙′）**：退还量 ＝ **已支付阶段造价（逐类型精确累加）**。
     /// ⛔ 退役旧口径「累计投入 × 占比摊」（`invested × e.amount / baseSum`）—— 该口径**分母只用基础造价**
     /// 而分子含升级投入 ⇒ **升级投入被折进基础资源类型**（实测：House L1 应 {Wood:14,Stone:6} 实退 {Wood:20}；
     /// Warehouse L1 应 {Gold:4,Stone:14,Wood:10} 实退 {Gold:14,Stone:14} ＝ **资源张冠李戴**）。
     /// ⭐ 新口径：各阶段造价（`def.cost` ／ `levels[i].upgradeCost`）**本身就是逐类型精确量**
     /// ⇒ **直接逐阶段累加**，⛔ 不需要"按占比摊"（零舍入误差）；⛔ **不再读 `totalInvested`**（标量近似）。
+    /// ⭐ **`U-4` 修复 · 职责分离**：本方法**只退「已支付造价」**，⛔ **不含工地仓内容物** ——
+    ///   仓内容物由 <see cref="DropSiteStoreToChest"/> **唯一负责**掉箱（`FinishDemolish` 两者皆调
+    ///   ⇒ 旧版在此叠加 `_siteStore.Contents` 会与它**双计同一批料**：实测 House 升级投料中 Stone 3/16
+    ///   ⇒ 落箱合计 {Wood:4,Stone:6} ＝ Stone 多退 3）。
+    ///   ⚠️ `DropSiteStoreToChest` 必须保留：`Die` 路径（工地被打毁）靠它 ⇒ 材料不丢。
     /// ⛔ 不改签名；掉箱 `Faction.None` 不变。
     /// </summary>
     private ResourceList BuildRefundPack()
@@ -893,10 +898,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var pack = PaidStageCost();
         if (_awaitingMaterials)
         {
-            // 在投阶段：该阶段「金」（下单即扣 · 裁决 2 金-A）＋ 工地仓**已到料**
-            // ⚠️ 按**已到料**（⛔ 非需求全额）—— 否则与 `DropSiteStoreToChest()` 掉出的同一批料**双重退还**
+            // 在投阶段：该阶段**已支付**的「金」（下单即扣 · 裁决 2 金-A）。
+            // ⛔ 不含已到料 —— 仓内容物由 `DropSiteStoreToChest()` 唯一掉箱（`U-4`：此处叠加即双计）。
             pack = pack + GoldOnlyOf(CurrentStageCost());
-            if (_siteStore != null) pack = pack + _siteStore.Contents;
         }
         return pack;
     }
@@ -1061,6 +1065,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         };
     }
 
+    /// <summary>
+    /// ISaveable 读档（`SaveManager` 阶段 2 按 `saveId` 分发给**已注册实例**）。
+    /// ⚠️ **`N-3` 防御性留档**：本方法⛔ **不恢复 `state`** —— `state` 由**创建时** `initialState` 置入
+    ///   （真实读档路径：`BuildingFactory.SpawnFromSave` 先 `InstantiateFromDef(..., (BuildingState)data.state)`
+    ///   ⇒ `BuildingFactory:155 b.state = initialState`；本方法随后被阶段 2 分发调用）。
+    ///   ⇒ ⛔ **勿直接对"已存在且 `state` 未按存档置入"的实例调本方法**（否则该实例 `state` 沿用旧值 ·
+    ///   实测：升级料齐未完工的建筑读档后 `state` 退化为 `Active`，会绕过 `OnConstructionComplete` 的收尾）。
+    /// </summary>
     public void LoadState(SavePayload payload)
     {
         if (payload.typeName != typeof(BuildingSaveData).AssemblyQualifiedName) return;

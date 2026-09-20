@@ -343,7 +343,7 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         var vault = b.GetComponent<TreasureVault>();
         if (vault != null) vault.RestoreContents(data.treasuryContents);
 
-        // 2_12 步骤7 / D155：累计投入恢复（D155 修复成本基数 / D162 拆除返还基数）。旧档缺字段 → 兜底按 def.cost。
+        // 2_12 步骤7 / D155：累计投入件数恢复（⚠️ `M1-C` · U-1 后**备而未用** ⇒ 仅存档往返保真，⛔ 不入算式）。旧档缺字段 → 兜底按 def.cost。
         b.totalInvested = data.totalInvested > 0
             ? data.totalInvested
             : (b.def != null ? b.def.cost.TotalCount : 0);   // ⭐ M1-C 件2（裁决 4-a 同源化）：兜底改 def.cost.TotalCount（全部资源）
