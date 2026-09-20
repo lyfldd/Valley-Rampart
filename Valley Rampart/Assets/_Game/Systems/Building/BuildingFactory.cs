@@ -333,7 +333,12 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         b.maxHp = Mathf.Max(1, data.maxHp);
         b.hp = Mathf.Clamp(data.hp, 0, b.maxHp);
         var storage = b.GetComponent<StorageComponent>();
-        if (storage != null) storage.RestoreContents(data.storageContents);
+        if (storage != null)
+        {
+            // ⭐ M1-B 件4：先按恢复后的等级重算容量，再灌存量（否则高等级仓按 Lv1 容量 clamp：实测 Lv3 粮仓 180→60 净损 120）
+            storage.RefreshCapacity();
+            storage.RestoreContents(data.storageContents);
+        }
         // ⭐ M1-A：国库容器内容（仅主城有；非主城 ≡ 空列表）
         var vault = b.GetComponent<TreasureVault>();
         if (vault != null) vault.RestoreContents(data.treasuryContents);

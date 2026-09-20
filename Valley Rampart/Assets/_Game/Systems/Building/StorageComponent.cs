@@ -28,7 +28,25 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     /// <summary>存量（资源 → 量）。⭐ 多资源并存（§5.2 硬规则 3）。</summary>
     private readonly Dictionary<ResourceType, int> _items = new Dictionary<ResourceType, int>();
 
-    /// <summary>存储变化事件（QQQ.2 §需求7 / DR-15：WarehousePanel 订阅实时刷新）。关闭退订避免泄漏。</summary>
+    /// <summary>
+    /// 存储变化事件（QQQ.2 §需求7 / DR-15：WarehousePanel 订阅实时刷新）。关闭退订避免泄漏。
+    ///
+    /// ⭐ **契约语义（`M1-B` 件1 固化 · `09` §7.5-⑦）**：
+    ///   · **何时发** —— 只在**真实发生量变**的写口发：<see cref="Add"/>／<see cref="TakeOut"/>／
+    ///     <see cref="Clear"/>／<see cref="TrimToCapacity"/>／<see cref="Harvest"/>（量 &gt; 0）／
+    ///     <see cref="RestoreContents"/>。**空转/幂等路径不发**（`amount ≤ 0`／标签拒收／容量为 0／取到 0）。
+    ///   · **发几次** —— **每次写口调用各发 1 次**；`Add`／`TakeOut` **部分成功也发**；
+    ///     <see cref="RestoreContents"/> 逐条目经 `Add` ⇒ **每条目 1 次 ＋ 收尾 1 次（N＋1 次）**；
+    ///     <see cref="Harvest"/> 整批 1 次。⛔ **无节流** —— 每秒生产／搬运会等频触发，
+    ///     **节流由订阅方自理**（`09` §7.5-⑦「必须节流」）。
+    ///   · **载荷** —— 只带**本仓引用**，⛔ **不带 diff**（改了哪个资源、改了多少都不知道）
+    ///     ⇒ 订阅方**必须全量重读**（<see cref="Query"/>／<see cref="TotalCount"/>／
+    ///     <see cref="UsedSpace"/>／<see cref="GetAmount"/>…），⛔ **不得增量累加**
+    ///     （会与 <see cref="TrimToCapacity"/>／<see cref="RestoreContents"/> 的批量写口失同步）。
+    ///   · **读值时效** —— 汇总量为**现算**（`M1-B` 件1 决定：**不加缓存**）⇒ 回调内读到的**即最新值**，
+    ///     ⛔ 无需等下一帧。（⚠️ 若将来加缓存：<see cref="FreeSpace"/> 与 <see cref="UsedSpace"/>
+    ///     为**同算式双出口**，**必须同走缓存**，否则两条读数会分叉。）
+    /// </summary>
     public event System.Action<StorageComponent> OnStorageChanged;
 
     // ===== 生命周期 =====
