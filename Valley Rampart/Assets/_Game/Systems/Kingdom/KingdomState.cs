@@ -164,9 +164,12 @@ public class KingdomState
         EconomyDiagnosis.RegisterFlow(id, -g, -s, -w, -f, -m);
     }
 
-    /// <summary>按比例退还资源包（拆除退款 ratio=0.5 等；metal 随比退还，不静默丢铁）。
+    /// <summary>按比例退还资源包（metal 随比退还，不静默丢铁）。
     /// 2_23 资源 P0 批A/R-A1（D632 A′）：改走 AddResources 收口台账直写——本次退款计入经济诊断
-    /// 入账窗口（一致性；本点为潜伏点：AI 生产调用点=0，玩家走 RulerController.Refund 独立通道）。</summary>
+    /// 入账窗口（一致性；本点为潜伏点：AI 生产调用点=0，玩家走 RulerController.Refund 独立通道）。
+    /// ⚠️ `M1-C` 件2／件3 后**拆除退款已不由此路径**（改「随本体掉箱」⇒ `ChestManager.SpawnChest`）
+    ///   ⇒ 陈注释「拆除退款 ratio=0.5 等」已勘正；`ratio` 形参在生产码中只剩默认值 `1.0` 调用
+    ///   （唯一调用方 `SiegeProductionSystem`），形参去留归后续片（⛔ 本片不改签名）。</summary>
     public void Refund(ResourceList cost, float ratio = 1.0f)
     {
         AddResources(cost * ratio);   // ⭐ M1-A：逐条目按比例（Mathf.RoundToInt，与旧逐字段同口径）

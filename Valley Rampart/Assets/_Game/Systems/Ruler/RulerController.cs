@@ -290,8 +290,11 @@ public class RulerController : Singleton<RulerController>, ISaveable
         }
     }
 
-    /// <summary>按比例退还资源包（拆除退款 ratio=0.5）。metal 随比退还，不静默丢铁。
-    /// ⭐ `M1-A`：逐条目退（`Mathf.RoundToInt` 与旧逐字段同口径）。</summary>
+    /// <summary>按比例退还资源包。metal 随比退还，不静默丢铁。
+    /// ⭐ `M1-A`：逐条目退（`Mathf.RoundToInt` 与旧逐字段同口径）。
+    /// ⚠️ `M1-C` 件2／件3 后**拆除退款已不由此路径**（改「随本体掉箱」⇒ `ChestManager.SpawnChest`）
+    ///   ⇒ 本方法的 `ratio` 形参在生产码中**只剩默认值 `1.0` 调用**（唯一调用方 `SiegeProductionSystem`）
+    ///   ⇒ 陈注释「拆除退款 ratio=0.5」已勘正；形参去留归后续片（⛔ 本片不改签名）。</summary>
     public void Refund(ResourceList cost, float ratio = 1.0f)
     {
         if (cost.items == null) return;

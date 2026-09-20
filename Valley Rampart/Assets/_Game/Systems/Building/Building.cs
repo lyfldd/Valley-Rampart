@@ -138,11 +138,15 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public int maxHp;
     public ResourceGrade grade = ResourceGrade.Normal;
     /// <summary>
-    /// 累计投入资源量（2_12 步骤7 / D155：修复成本 = 累计投入 × SO 比例）。
-    /// 建造首付/升级费累加；拆除返还（D162）读它；修复按它算 D155。入档（BuildingSaveData）。
-    /// 用单一近似总量（resourcepack 求和）而非四资源分账——返还/修复粗糙按比例缩放同一 pack。
+    /// 累计投入资源量（**件数标量** · 2_12 步骤7 / D155 遗留）。入档（`BuildingSaveData`）。
+    /// ⚠️ **`M1-C` · U-1 修复后：备而未用（仅入档 `SaveState` ＋ 日志）** —— 曾作「修复成本基数（D155）／
+    ///   拆除返还基数（D162）」，现两处均改由 <see cref="PaidStageCost"/>（**逐类型精确累加**）派生 ⇒
+    ///   本字段**零读点**（处置已裁：**(a) 保留**，⛔ 不动 `BuildingSaveData` 格式）。
+    /// ⚠️ **根因留档（U-1）**：本字段自 `D162` 起就是「**单一近似总量**（`resourcepack` 求和）**而非分资源账**」，
+    ///   旧口径再拿它当分子、拿 `def.cost`（**仅基础造价**）当分母去「按占比摊同一 pack」⇒ 一旦有升级投入
+    ///   （分子含升级、分母不含）即**把升级资源折成基础资源类型**（资源张冠李戴）。⛔ **勿再据此做退还/修复算式**。
     /// </summary>
-    [Tooltip("累计投入（建造+升级累加）。D155 修复成本基数 / D162 拆除返还基数")]
+    [Tooltip("累计投入件数（D155/D162 遗留）。M1-C·U-1 后备而未用（仅入档/日志），⛔ 勿再作退还/修复基数")]
     public int totalInvested;
 
     // ===== 3.5 P1-15 当前在册工人（3.5.3 §7.4 / 3.5.4 §8.5）=====
@@ -429,7 +433,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         this.level = 1;
         this.footprint = footprintOverride.x > 0 && footprintOverride.y > 0 ? footprintOverride : Vector2Int.one;
 
-        // 2_12 步骤7 / D155：累计投入（修复成本基数 / 拆除返还基数）。
+        // 2_12 步骤7 / D155：累计投入件数（⚠️ `M1-C` · U-1 后**备而未用** · 见字段注释）。
         // ⭐ `M1-C` 件1（裁决自陈-3）：投料口径下「投入」＝**实际投进去的量**
         //   （金在下单时记 ＋ 料在入工地仓时记）⇒ 此处一律**从 0 起算**，
         //   ⛔ 不再按下单时的 `def.cost` 预记（否则拆除全退会退「从未搬进去的料」）。
@@ -855,7 +859,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// <summary>
     /// ⭐ `M1-C` 件4 收口：拆除进度到 1 ⇒ 真拆。
     /// · 件2（`09` §16.2）：退还量 ＝ **全退**（⛔ 不随受损减少 —— `hp/maxHp` 比例机制**退役**）
-    ///   ＋ 按 **`def.cost` 全部资源**摊（⛔ 不再只摊 金/石/木/粮 · `09#48`）。
+    ///   ＋ **逐阶段造价逐类型累加**（⛔ 不再只摊 金/石/木/粮 · `09#48`；⛔ 亦不再是「累计投入 ÷ `def.cost` 占比摊」
+    ///   —— 该旧口径见 `BuildRefundPack` 注释所述 **U-1 资源张冠李戴**，已随本片修复退役）。
     /// · 件3（`09` §16.1-4）：退还 **随「建筑本体」掉箱**（⛔ 退役 `RulerController.Refund` 直入国库路径
     ///   ⇒ ⚠️ 行为变化：拆房后退的材料**落在箱子里，要工人搬回**）。
     /// </summary>
@@ -873,23 +878,111 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         Die(DeathCause.Demolished);
     }
 
-    /// <summary>退还量 ＝ 累计投入（**全退** · 件2 · `09` §16.2），按 `def.cost` **全部资源**占比摊（`09#48`）。
-    /// ⚠️ `costSum` 改用 `def.cost.TotalCount`（**全部资源**），⛔ 不再用四/五资源口径的 `SumCostOf`。</summary>
+    /// <summary>
+    /// ⭐ `M1-C` · **U-1 修复（丙′）**：退还量 ＝ **已支付阶段造价（逐类型精确累加）** ＋ 在投阶段已到料。
+    /// ⛔ 退役旧口径「累计投入 × 占比摊」（`invested × e.amount / baseSum`）—— 该口径**分母只用基础造价**
+    /// 而分子含升级投入 ⇒ **升级投入被折进基础资源类型**（实测：House L1 应 {Wood:14,Stone:6} 实退 {Wood:20}；
+    /// Warehouse L1 应 {Gold:4,Stone:14,Wood:10} 实退 {Gold:14,Stone:14} ＝ **资源张冠李戴**）。
+    /// ⭐ 新口径：各阶段造价（`def.cost` ／ `levels[i].upgradeCost`）**本身就是逐类型精确量**
+    /// ⇒ **直接逐阶段累加**，⛔ 不需要"按占比摊"（零舍入误差）；⛔ **不再读 `totalInvested`**（标量近似）。
+    /// ⛔ 不改签名；掉箱 `Faction.None` 不变。
+    /// </summary>
     private ResourceList BuildRefundPack()
     {
-        if (def == null || def.cost.items == null || def.cost.items.Length == 0) return ResourceList.Empty;
-        int costSum = def.cost.TotalCount;
-        int invested = totalInvested > 0 ? totalInvested : costSum;
-        int baseSum = Mathf.Max(1, costSum);
-        var pack = ResourceList.Empty;
-        for (int i = 0; i < def.cost.items.Length; i++)
+        if (def == null) return ResourceList.Empty;
+        var pack = PaidStageCost();
+        if (_awaitingMaterials)
         {
-            var e = def.cost.items[i];
-            int amount = Mathf.FloorToInt((float)invested * e.amount / baseSum);   // ⛔ 无 hp/maxHp 比例（全退）
-            if (amount > 0) pack = pack.Set(e.type, amount);
+            // 在投阶段：该阶段「金」（下单即扣 · 裁决 2 金-A）＋ 工地仓**已到料**
+            // ⚠️ 按**已到料**（⛔ 非需求全额）—— 否则与 `DropSiteStoreToChest()` 掉出的同一批料**双重退还**
+            pack = pack + GoldOnlyOf(CurrentStageCost());
+            if (_siteStore != null) pack = pack + _siteStore.Contents;
         }
         return pack;
     }
+
+    /// <summary>
+    /// ⭐ U-1 修复：**已支付阶段**的累计造价（逐类型精确累加）。
+    /// ＝ `def.cost`（建造）＋ `Σ_{i=0}^{level-2} levels[i].upgradeCost`（已完成升级）
+    ///   ＋〔在投升级**已付清**（料齐但进度未满 ⇒ `level` 尚未 ++）⇒ 计该次〕
+    ///   ＋〔在投修复**已付清** ⇒ 计修复费〕。
+    /// ⛔ 不读 `totalInvested`（其自 `D162` 起为**标量近似** · 见字段注释）；⛔ 不"按占比摊"。
+    /// </summary>
+    private ResourceList PaidStageCost()
+    {
+        var pack = ResourceList.Empty;
+
+        // 阶段态：`Constructing` ⟺ 有阶段在投（首次建造／升级／修复，三者由 `_pending*` 区分）
+        bool inProgress = state == BuildingState.Constructing;
+        bool paid = inProgress && !_awaitingMaterials;             // 在投阶段已付清（料齐／无料）
+        bool isBuild = inProgress && InProgressStageIsBuild();
+        bool isRepair = inProgress && _pendingRepair;
+
+        // ① 建造阶段：已完工（非"在投的首次建造"）或在投且已付清
+        if (!isBuild || paid) pack = pack + def.cost;
+
+        // ② 已完成升级 ＋ ③ 在投升级已付清（`level` 未 ++ ⇒ 单独补计）
+        int n = Mathf.Max(0, level - 1);
+        if (inProgress && paid && !isBuild && !isRepair) n++;
+        if (def.levels != null)
+        {
+            for (int i = 0; i < n && i < def.levels.Length; i++)
+            {
+                var uc = def.levels[i].upgradeCost;
+                if (uc.items == null) continue;
+                for (int k = 0; k < uc.items.Length; k++)
+                    if (uc.items[k].amount != 0) pack = pack.Add(uc.items[k].type, uc.items[k].amount);
+            }
+        }
+
+        // ④ 在投修复已付清（进度未满）：修复费 ＝ 已完成阶段造价 × ratio（与 `GetRepairCost` 同源）
+        if (isRepair && paid) pack = pack + pack * RepairCostRatio();
+        return pack;
+    }
+
+    /// <summary>
+    /// 当前**在投阶段**的完整配方（供 `BuildRefundPack` 取其「金」部分）。
+    /// 升级 ⇒ `levels[level-1]`；废墟重建 ⇒ `GetRepairCost()`；否则 ⇒ 首次建造 `def.cost`。
+    /// </summary>
+    private ResourceList CurrentStageCost()
+    {
+        if (_pendingRepair) return GetRepairCost();
+        if (!InProgressStageIsBuild() && def.levels != null && level - 1 < def.levels.Length)
+            return def.levels[level - 1].upgradeCost;
+        return def.cost;
+    }
+
+    /// <summary>
+    /// 在投阶段是否为**首次建造**（＝「建造阶段尚未付清」）。判据优先级：
+    /// ① 运行期 `_pendingUpgrade` / `_pendingRepair` 标志（权威 · 二者为「后续阶段」）；
+    /// ② `level > 1` ⇒ 已有完成升级 ⇒ 建造必已完成；
+    /// ③ **读档兜底**：`_pendingUpgrade` / `_pendingRepair` **未入档**（既有 `M1-C` 缺口 · 已报后续片）
+    ///    ⇒ 用「在投配方 `_siteNeed`」比对 `SiteNeedOf(def.cost)`（相等 ⇒ 首次建造）；
+    /// ④ `_siteNeed` 为空 ⇒ **无料可搬**（纯金造价／AI 台账直扣直建／零造价）⇒ 亦按首次建造处理。
+    /// ⚠️ ③④ 依赖「升级配方 ≠ 建造配方」且「无『去金为空』的升级」：本端机械扫描全库
+    ///    **12 栋含升级资产 · 各级 0 碰撞** ＋ **21 级升级 · 去金为空 0 处**（实测）
+    ///    ⇒ 当前资产集下**精确**；新增资产若碰撞则须先补 `_pending*` 入档。
+    /// </summary>
+    private bool InProgressStageIsBuild()
+    {
+        if (_pendingUpgrade || _pendingRepair) return false;
+        if (level > 1) return false;
+        if (_siteNeed.IsZero) return true;
+        return SamePack(_siteNeed, SiteNeedOf(def.cost));
+    }
+
+    /// <summary>两条资源量列表是否逐类型等价（`ResourceList` 无 `Equals` ⇒ 单源小工具）。</summary>
+    private static bool SamePack(ResourceList a, ResourceList b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+            if (b.Get(a.items[i].type) != a.items[i].amount) return false;
+        return true;
+    }
+
+    /// <summary>修复费比例（`RepairConfig` SO · 缺省 0.5 · 单源：`GetRepairCost` ／ `PaidStageCost` 共用）。</summary>
+    private static float RepairCostRatio()
+        => RepairConfig.Instance != null ? Mathf.Clamp01(RepairConfig.Instance.repairCostRatio) : 0.5f;
 
     /// <summary>
     /// 工地仓内容物掉箱（`09` §16.3-4「建造中的建筑（工地）有 HP · 能被打 · 打毁 ⇒ 仓里材料掉箱」）。
@@ -910,10 +1003,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     // ===== `SumCostOf` —— ⭐ `M1-C` 件2 随「全资源口径」同源化**已删** =====
     //   改前口径：`includeMetal=false` ⇒ 旧「四资源」（金/石/木/粮）；`true` ⇒ 旧「五资源」（＋铁）。
-    //   改后（裁决 4-a 同源化）：`BuildRefundPack`（拆除退还）／`GetRepairCost`（修复费）／
-    //     `LoadState` 兜底／`BuildingFactory.SpawnFromSave` 兜底**一律改用 `def.cost.TotalCount`**（全部资源）
+    //   改后（裁决 4-a 同源化）：`LoadState` 兜底／`BuildingFactory.SpawnFromSave` 兜底改用 `def.cost.TotalCount`
     //     ⇒ 本方法**零调用方**（全库 grep：仅本注释命中）⇒ 按裁决 4「零调用即删」同源处理删除。
     //   ⚠️ 现有 40 栋 `cost` 只含 金/石/木/粮/铁 ⇒ 两种口径**读数逐值相同**（本删除零行为差异）。
+    //   ⭐ `M1-C` · U-1 修复后：`BuildRefundPack`（拆除退还）／`GetRepairCost`（修复费）**已改由 `PaidStageCost()`
+    //     逐类型累加** ⇒ ⛔ **不再有 `costSum` 分母**（旧「累计投入 ÷ `def.cost` 占比摊」口径整体退役）。
 
     // ===== ISaveable 实现（3.5 实施计划 P0 步骤3）=====
 
@@ -996,9 +1090,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         maxHp = Mathf.Max(1, data.maxHp);
         hp = Mathf.Clamp(data.hp, 0, maxHp);
 
-        // 2_12 步骤7 / D155：累计投入恢复。旧档缺字段(data.totalInvested=0，且玩家建筑无默认) → 兜底按 def.cost 计
-        // ⭐ `M1-C` 件2（裁决 4-a 同源化）：兜底口径改 `def.cost.TotalCount`（**全部资源**），与
-        //   `BuildRefundPack` / `GetRepairCost` 的 `costSum` 同源，⛔ 不再用四资源口径的 `SumCostOf`。
+        // 2_12 步骤7 / D155：累计投入件数恢复（⚠️ `M1-C` · U-1 后**备而未用** ⇒ 仅存档往返保真，⛔ 不入任何算式）。
+        //   旧档缺字段(data.totalInvested=0，且玩家建筑无默认) → 兜底按 `def.cost.TotalCount` 计（保持旧档读数不变）。
         totalInvested = data.totalInvested > 0
             ? data.totalInvested
             : (isPlayerBuilt && def != null ? def.cost.TotalCount : 0);
@@ -1045,33 +1138,19 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 2_12 步骤7 / D155：修复/废墟重建成本（库存储入时点调用，勿入每帧路径）。
-    /// = 累计投入 × RepairConfig.repairCostRatio，按 **`def.cost` 全部资源**占比分摊回「资源量列表」。
-    /// 累计投入用 totalInvested（投料累加）；旧档/地图预置无累计投入 → 回退 def.cost。
     /// ⭐ `M1-A`：返回类型 `ResourcePack` ⇒ `ResourceList`。
-    /// ⭐ `M1-C` 件2（裁决 4-a）：与 `BuildRefundPack` **同源化** —— `costSum` 改用 `def.cost.TotalCount`
-    ///   （**全部资源**），⛔ 不再用四/五资源口径的 `SumCostOf`；`IsRefundResource` 过滤一并退役。
-    ///   ⚠️ 现有 40 栋 `cost` 只含 金/石/木/粮/铁 ⇒ 本次改动**读数逐值零差异**（未来造价加资源即自动正确）。
+    /// ⭐ `M1-C` 件2（裁决 4-a）：与 `BuildRefundPack` **同源化**（`SumCostOf`／`IsRefundResource` 一并退役）。
+    /// ⭐ `M1-C` · **U-1 修复（丙′）＋ U-3**：基数改 **`PaidStageCost()`（已支付阶段造价 · 逐类型精确累加）**
+    ///   × `RepairConfig.repairCostRatio`（⛔ 不再"按 `def.cost` 占比摊"、⛔ **不再读 `totalInvested`**）。
+    ///   ⇒ **U-3（修复费复利）消失**：旧基数 `totalInvested` 含**历史修复花费**（`BuildingPanel:322/340` 的
+    ///   `AddInvested` ＋ 修复料逐笔入账）⇒ 每次重建递增 `C → 1.5C → 2.25C → 3.375C…`；新基数与修复历史无关。
     /// </summary>
     public ResourceList GetRepairCost()
     {
-        if (def == null || def.cost.items == null || def.cost.items.Length == 0) return ResourceList.Empty;
-        int costSum = def.cost.TotalCount;
-        int invested = totalInvested > 0 ? totalInvested : costSum;
-        if (invested <= 0) return ResourceList.Empty;
-
-        float ratio = RepairConfig.Instance != null ? Mathf.Clamp01(RepairConfig.Instance.repairCostRatio) : 0.5f;
-        int total = Mathf.Max(1, Mathf.RoundToInt(invested * ratio));
-
-        // 按 def.cost 全部资源占比分摊（避免纯按总额使单一资源爆表）
-        int baseSum = Mathf.Max(1, costSum);
-        var cost = ResourceList.Empty;
-        for (int i = 0; i < def.cost.items.Length; i++)
-        {
-            var e = def.cost.items[i];
-            int amount = Mathf.RoundToInt((float)total * e.amount / baseSum);
-            if (amount > 0) cost = cost.Set(e.type, amount);
-        }
-        return cost;
+        if (def == null) return ResourceList.Empty;
+        var full = PaidStageCost();
+        if (full.IsZero) return ResourceList.Empty;
+        return full * RepairCostRatio();   // 逐类型 `Mathf.RoundToInt`（`ResourceList.operator *` 单源）
     }
 
     // ===== 战斗（3.4 实现 IDamageable）=====

@@ -41,8 +41,9 @@ public struct BuildingSaveData
     public int byproductOreAmount;     // 矿石伴生子仓存量（T1.4/D609；尾插零 bump，旧档缺→0）
     // QQQ.3 B8-5 / LC-B2：grade 入档（修复读档后产能建筑永久降贫瘠档 rate×0.7）。
     public int grade;           // (int)ResourceGrade 资源等级（仅资源点建筑有效；旧档缺字段→默认 0=Barren 但由 SpawnFromSave 兜底 Normal）
-    // 2_12 步骤7 / D155：累计投入（修复成本基数 / 拆除返还基数）。旧档缺字段→默认 0（D155 兜底按 def.cost 算）。
-    public int totalInvested;   // 建造+升级累加投入总量
+    // 2_12 步骤7 / D155：累计投入件数。⚠️ `M1-C` · U-1 修复后**备而未用**（曾作修复成本基数/拆除返还基数，
+    //   现两处均改由 `Building.PaidStageCost()` 逐类型派生）⇒ 仅存档往返保真，⛔ 不入算式。旧档缺字段→默认 0。
+    public int totalInvested;   // 建造+升级累加投入件数（备而未用 · 字段保留 ⇒ ⛔ 不动本格式）
     // 2_16 步骤2：王国归属（D329 门面）。旧档缺字段→默认 0（玩家），向后兼容。
     public int kingdomId;       // 王国归属 id（0=玩家；AI/动态王国=Registry id）
     // 【HH.294 片4·4-E】锚点消费记录（`03` §7.8 锚点返还对偶：拆了建筑要还锚点）。
