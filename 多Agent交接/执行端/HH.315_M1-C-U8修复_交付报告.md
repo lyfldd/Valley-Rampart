@@ -194,7 +194,7 @@ refundChest=1chest {Wood:6}（＝def.cost{Wood:4}＋repair{Wood:2}）
 - **进局唯一通道**：`TestHarnessApi.EnterTestRun`（⛔ 禁裸跑已守）；**收尾三态**：残留 0／`isDirty=False`／根对象 51。
 - **探针**：⛔ 零文件（MCP 临时驱动 · 收尾卸钩）；日志 `Valley Rampart/Logs/u8/`（⛔ 不入库）。
 - **commit**：`8d32e0fc`（具名 `git add` 三文件 · 131 insertions／8 deletions · ⛔ 未 push）。
-- ⚠️ 附注：上一轮《`HH.315_M1-C-U8评估_评估报告.md`》此前**未入库**（pre-commit 钩子提示）⇒ 本轮一并提交（见报告回填笔）。
+- **报告提交**：`f8f41a6b`（本交付报告 ＋ 上一轮《`HH.315_M1-C-U8评估_评估报告.md`》（此前未入库 · pre-commit 钩子提示 ⇒ 按「交付即 commit」一并入库）· 2 文件 581 insertions · ⛔ 未 push）。
 
 ---
 
