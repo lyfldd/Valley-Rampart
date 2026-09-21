@@ -94,7 +94,7 @@ public static class Valley_HH319_F1LongRun
             //   ⚠️ v1 教训：压回 50 时井产水会把仓顶到 82（>80%）⇒ 井自己广告 Transport 抢走靶例（实测已发生）。
             if (rt >= nextSuppress)
             {
-                nextSuppress = rt + 3f;
+                nextSuppress = rt + 0.25f;   // ⚠️ `U-15` 轮次教训：15× 下 3s 周期压不住（3s≈45 游戏秒·产水 180 ⇒ 井仓常满 ⇒ Transport 抢先）
                 int ww2 = wellStore.GetAmount(ResourceType.Water);
                 if (ww2 > 30) wellStore.TakeOut(ResourceType.Water, ww2 - 20);
             }

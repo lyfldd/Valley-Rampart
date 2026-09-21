@@ -97,11 +97,22 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
     public int GetAmount(ResourceType type)
         => _container != null ? _container.GetAmount(type) : 0;
 
+    /// <summary>⭐ `U-15`（`D809`/`D810` 止血）：本国库能否收该资源（**标签面** · 转发容器 · 无容量语义）。
+    /// 调用面：`StorageComponent.CanRulerAccept`（判据层/落点层共用）。</summary>
+    public bool Accepts(ResourceType type) => _container != null && _container.Accepts(type);
+
+    /// <summary>⭐ `U-15`：本国库还能收几个该资源（**容量面** · 体积 0 ⇒ `int.MaxValue`）。
+    /// 调用面：`StorageComponent.TreasuryCanAccept`（防 `Deposit` overflow ⇒ `SpillToChest` 装箱）。</summary>
+    public int CanAccept(ResourceType type) => _container != null ? _container.CanAccept(type) : 0;
+
     /// <summary>
     /// 入国库（步骤11 堵溢出黑洞，D222/D223"溢出装箱"）。先装库内容量，超容部分**装箱落主城格**（杜绝静默丢资源）。
     /// 返回实际入库量；装箱超额部分不走返回值（已落箱，不丢）。
     /// ⭐ `M1-A`：装箱改用「资源量列表」单条目承载 —— 原 8 桶结构下的**折损/无桶丢弃**（特食/肉按粮折算、
     /// 水晶/火油不入箱）**结构性消失**（`ResourcePack` 无桶所致，随类型退役 ⇒ 上报为结构强制的行为变化）。
+    /// ⚠️ `U-15`（`L-60`）：`overflow` **同时**承载「**满载**」与「**标签不收**」两种语义 ⇒
+    ///   对后者装箱会产生「箱被 `U-2` 链搬回原仓」的**环**。本批止血 ＝ **调用方先问**（`Accepts`/`CanAccept`）
+    ///   ⇒ 从源头不产生该 overflow；⛔ 本处**不动**（语义区分归 `M1-G` 与双链合一同批）。
     /// </summary>
     public int Deposit(ResourceType type, int amt)
     {

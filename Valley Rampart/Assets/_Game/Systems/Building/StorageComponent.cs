@@ -265,11 +265,26 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     }
 
     // ===== 收取（IHarvestable · `M1-G` 改两段式搬运，本片保持原路径）=====
+    // ⭐ `U-15` 止血（`D809`/`D810`）：本组的**去向（国库）是写死的** ⇒ 判据层与落点层**必须双向过滤可收性**
+    //   （`IsReadyToHarvest` 判据 ＋ `Harvest`/`HarvestCarry` 落点）；
+    // ⚠️ 本处只是**止血**：根除（双链合一 ＋ `L-60` 的「拒收 vs 满」语义区分）归 `M1-G`。
 
-    /// <summary>是否有可取内容（`IHarvestable`）。</summary>
-    public bool IsReadyToHarvest() => TotalCount > 0;
+    /// <summary>是否有「**可入国库**」的内容（`IHarvestable`）。
+    /// ⭐ `U-15`（`D809`/`D810` 止血）：本判据的消费者（`ScheduleCenterStub:100/:118` 清理与派发 ·
+    ///   `BuildingPanel:187/:405` 按钮启用与守卫）**去向写死国库** ⇒ 国库不收的资源（水/弹药族）不得计入
+    ///   ⇒ 防「先取后丢 / 转箱空转」（`D810` 勘正：真实危害＝空转 ＋ 工人永久占用 ＋ 箱子堆积，⛔ 非资源损失）。
+    /// ⚠️ 判据用**玩家国库**（id=0）—— 与落点一致（`Harvest`/`HarvestCarry` 均写死玩家国）；⛔ **非按国逻辑**（根除归 `M1-G`）。
+    /// ⚠️ ⛔ 不得用 `TotalCount &gt; 0` 做快路径（水井仓有水 ⇒ 件数 &gt; 0 但不可收 ⇒ 必须逐资源问）。</summary>
+    public bool IsReadyToHarvest()
+    {
+        foreach (var type in ResourceCatalog.AllTypes)
+            if (GetAmount(type) > 0 && CanRulerAccept(type)) return true;
+        return false;
+    }
 
-    /// <summary>全量收取转入国库（玩家手动收取路径 · `BuildingPanel` 收按钮）。</summary>
+    /// <summary>收取**可入国库**的内容（玩家手动收取路径 · `BuildingPanel` 收按钮）。
+    /// ⭐ `U-15` 止血：国库不接受的资源**留仓**（⛔ 不计入 total · ⛔ 不清除）；可收的**只取实际入库量**。
+    /// ⚠️ 逐条直接扣减（不经 `TakeOut`）⇒ 保持「`Harvest` 整批 1 次 `OnStorageChanged`」的既有契约（`M1-B` 件1）。</summary>
     public int Harvest()
     {
         int total = 0;
@@ -277,12 +292,32 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
         {
             int amount = GetAmount(type);
             if (amount <= 0) continue;
-            total += amount;
-            RulerController.Instance?.ModifyResource(type, true, amount);
+            if (!CanRulerAccept(type)) continue;          // ⭐ ① 标签不收 ⇒ 留仓（防转箱空转）
+            int can = TreasuryCanAccept(type);            // ⭐ ② 容量上限 ⇒ 不制造 overflow（防 SpillToChest 装箱）
+            int move = Mathf.Min(amount, can);
+            if (move <= 0) continue;
+            total += move;
+            RulerController.Instance?.ModifyResource(type, true, move);
+            if (move >= amount) _items.Remove(type);      // ⚠️ 只取走**实际入库**的那部分（⛔ 不得整型清）
+            else _items[type] = amount - move;
         }
-        _items.Clear();
         if (total > 0) OnStorageChanged?.Invoke(this);
         return total;
+    }
+
+    /// <summary>⭐ `U-15`：国库能否收该资源（**标签面** · 无容量语义 · 转发 <see cref="TreasureVault"/>）。
+    /// ⚠️ 写死**玩家国库**（id=0）—— 与落点一致（本类 `Harvest`/`HarvestCarry` 的去向）；⛔ 非按国逻辑。</summary>
+    private static bool CanRulerAccept(ResourceType type)
+    {
+        var tv = TreasureVault.Get(0);
+        return tv != null && tv.Accepts(type);
+    }
+
+    /// <summary>⭐ `U-15`：国库还能收几个该资源（**容量面** · 体积 0 ⇒ `int.MaxValue`）。</summary>
+    private static int TreasuryCanAccept(ResourceType type)
+    {
+        var tv = TreasureVault.Get(0);
+        return tv != null ? tv.CanAccept(type) : 0;
     }
 
     // ===== 搬运携带量（3.5.3 §3.1 / 3.5 前置缺口 §2.2；P1-8）=====
@@ -305,7 +340,8 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     }
 
     /// <summary>本仓首个非空资源（资源表序 ⇒ 确定性；空仓 ⇒ 默认 Gold 占位）。
-    /// ⏭️ 多资源仓下的**过渡读口**（搬运广告等单资源假设点的落点，归 `M1-G` 收口）。</summary>
+    /// ⏭️ 多资源仓下的**过渡读口**（搬运广告等单资源假设点的落点，归 `M1-G` 收口）。
+    /// ⭐ 现多一层**可收性守卫**（`U-15`）：调用方 `HarvestCarry` 会先问国库能否收，不收则整趟不取。</summary>
     public ResourceType PrimaryStoredType()
     {
         foreach (var type in ResourceCatalog.AllTypes)
@@ -316,13 +352,20 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     /// <summary>
     /// ⏭️ **过渡实现**（`M1-G` 删）：搬一次（≤携带量）入国库，返回实际搬走量；剩余留待下轮。
     /// 多资源仓下取**首个非空资源**（资源表序 ⇒ 确定性）；行为与旧单资源仓逐个搬运等价。
+    /// ⭐ `U-15`（`D809`/`D810` 止血）：现多一层**可收性守卫** ——
+    ///   国库不接受 ⇒ 完全不取（⛔ 防「先取后丢 / 转箱空转」）；国库容量不足 ⇒ 按剩余可收量收窄
+    ///   ⇒ 不制造 `Deposit` overflow（防 `SpillToChest` 装箱 ⇒ 箱被 `U-2` 链搬回 ⇒ 成环）。
+    ///   ⚠️ `TakeOut` 必须在「确定能入国库」**之后**（`L-60`）；⛔ 不得靠 `Deposit` 的 overflow 兜底。
     /// </summary>
     public int HarvestCarry()
     {
         var type = PrimaryStoredType();
-        int amount = Mathf.Min(GetAmount(type), Mathf.Max(1, GetCarryAmount(type)));
+        if (!CanRulerAccept(type)) return 0;                 // ⭐ ① 标签不收 ⇒ 完全不取
+        int can = TreasuryCanAccept(type);                   // ⭐ ② 容量上限
+        if (can <= 0) return 0;                              // ⚠️ 国库满 ⇒ 不取（防 `Mathf.Max(1,…)` 强取 1 ⇒ overflow 装箱）
+        int amount = Mathf.Min(GetAmount(type), Mathf.Max(1, Mathf.Min(GetCarryAmount(type), can)));
         if (amount <= 0) return 0;
-        int taken = TakeOut(type, amount);
+        int taken = TakeOut(type, amount);                   // ⚠️ 在"确定能入国库"之后（`L-60`）
         if (taken > 0) RulerController.Instance?.ModifyResource(type, true, taken);
         return taken;
     }
