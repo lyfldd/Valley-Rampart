@@ -23,7 +23,8 @@ public class ChestEntity : MonoBehaviour, IInteractable, ITaskSource
     /// <summary>生成的绝对天数，过期 = 生成天 + ChestConfig.expireDays（D148）。</summary>
     public float bornDay;
 
-    /// <summary>来源阵营（任意阵营可拾 D146；记录来源供 2_14 掠夺）。</summary>
+    /// <summary>⚠️ `M1-D`/#57（`D802` `Q7`）：**语义已废**（新箱恒 `None` · `SpawnChest` 已去 `faction` 参数）——
+    /// 字段**保留仅存档保真**（`ChestSaveEntry.ownerFaction` 读写不动 · ⛔ 不改存档格式）。</summary>
     public Faction ownerFaction = Faction.None;
 
     /// <summary>HP=1 一击碎（D247），破碎后内容物返回地面可再拾。</summary>
@@ -74,6 +75,7 @@ public class ChestEntity : MonoBehaviour, IInteractable, ITaskSource
             _store = gameObject.AddComponent<StorageComponent>();
             _store.SetDeclaredPaths(new[] { WarehousePaths.All });
         }
+        _store.droppable = false;   // ⭐ `M1-D` 件4 护栏（`09` §九 :358「箱子的仓打『不可掉落』标签」⇒ ⛔ 防"箱再掉箱"递归）
         _store.capacity = SpaceOf(pack);
         _store.RestoreContents(pack);
     }

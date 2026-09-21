@@ -29,7 +29,7 @@ public class ChestSaveEntry
     /// <summary>生成绝对天数（过期扫描 curDay - bornDay >= expireDays 依赖，必须原值恢复）。</summary>
     public float bornDay;
 
-    /// <summary>来源阵营（int 平铺；任意阵营可拾 D146，记录来源供 2_14 掠夺）。</summary>
+    /// <summary>⚠️ `M1-D`/#57 后**语义已废**（新箱恒 `None`）—— 字段**保留仅存档保真**（⛔ 不动存档格式 · `D802` `Q7`）。</summary>
     public int ownerFaction;
 
     /// <summary>内容物（⭐ `M1-A`／`09#50`：资源量列表 `ResourceList`，任意资源均可承载；`JsonUtility` 直接序列化）。

@@ -240,6 +240,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>职业属性快照缓存（Initialize 时从 Data 生成，非 NpcProfessionDef 用默认值）</summary>
     private ProfessionSnapshot _professionSnapshot;
 
+    /// <summary>⭐ `M1-D`（`D802` `Q1`）：致死一击施加者（`TakeDamage` 的 `source` 暂存 · `Die` 发布事件时填入 `Killer`）。
+    /// 语义＝**最后一次成功伤害的施加者**（＝"谁结束的生命周期"）；环境/处决等无 source ⇒ null。</summary>
+    private IDamageable _lastDamageSource;
+
     // ===== 静态单位攻击（3.7 P1 审查修复：sim StaticThinkCore 的 Unity 等价物）=====
     // 塔/弩炮/投掷机是 isStatic 单位（无 NPCBrain），但 NpcProfessionDef.isStatic 语义要求
     // "有攻击值的按 CD 攻击射程内敌人"。Unity 侧此前无驱动 → 静态单位挂弹不发射。
@@ -573,9 +577,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// 受到伤害，只扣血。伤害已由 DamageSystem 算好+取整（百分比减伤+RoundToInt+保底1）。
     /// 血量≤0 触发 Die。发布 UnitHpChangedEvent 供血条 UI 刷新。
     /// </summary>
-    public virtual void TakeDamage(int finalDamage)
+    public virtual void TakeDamage(int finalDamage, IDamageable source = null)
     {
         if (Data == null || !IsAlive) return;
+        _lastDamageSource = source;   // ⭐ `M1-D` 件1：Killer 链（致死一击施加者 · 每次伤害都刷新，含 null）
 
         int oldHp = CurrentHp;
         CurrentHp = Mathf.Max(0, CurrentHp - finalDamage);
@@ -675,7 +680,9 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>
     /// 死亡处理：发布 UnitDiedEvent -> 注销注册 -> 回池（3.0.1 §7.4，替代原 Destroy）。
     /// 3.4 改造：UnitDiedEvent 扩为 IDamageable + Faction + Position + Killer + Cause。
-    /// Killer 此处为 null（TakeDamage 无 source），DamageSystem 可在调用方补充击杀者信息。
+    /// ⭐ `M1-D` 件1（`D802` `Q1`）：`Killer` 改填 **致死一击施加者**（`TakeDamage` 的 `source` 暂存于 `_lastDamageSource`）。
+    ///   ⛔ 旧注释「Killer 此处为 null（TakeDamage 无 source），DamageSystem 可在调用方补充」**退役**——
+    ///   该承诺从未兑现（全库零补充实现）⇒ `D493`/`D490` 生产不可达，本批随 Killer 链一并打通。
     /// </summary>
     protected virtual void Die()
     {
@@ -692,9 +699,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             this,                          // Unit (IDamageable)
             Data != null ? Data.faction : Faction.None,  // Faction
             transform.position,            // Position
-            null,                          // Killer（TakeDamage 无 source，此处为 null）
+            _lastDamageSource,             // Killer（⭐ `M1-D`：致死一击施加者；环境/拆除等无 source ⇒ null）
             DeathCause.Killed              // Cause（战斗致死）
         ));
+        _lastDamageSource = null;          // ⭐ `M1-D`：发布后清（防对象池复用残留）
 
         // QQQ.2 T17：通知任务调度器该 NPC 死亡（清其指派）
         if (npcId != 0) OnUnitDied?.Invoke(npcId);

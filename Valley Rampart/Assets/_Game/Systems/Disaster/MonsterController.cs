@@ -22,6 +22,7 @@ public class MonsterController : UnitController
     public MonsterType Type => def != null ? def.type : MonsterType.Raider;
     public bool IsElite { get; private set; }
     public float VisionRadiusCells { get; private set; } = 8f;
+    /// <summary>⚠️ `M1-D` 件8 后**无消费**（原唯一消费 ＝ `DropLoot` 掉落量 · 已退役）；保留承载 `MonsterDef.carryResource`（供未来换代）。</summary>
     public int CarryResource { get; private set; } = 5;
     public float RetreatHpRatio { get; private set; } = 0.2f;
 
@@ -45,36 +46,22 @@ public class MonsterController : UnitController
     public void SetMode(MonsterMode newMode) => mode = newMode;
 
     /// <summary>
-    /// 2_14 怪物死亡：D213 掉落箱子（内容=所携掠夺资源），再走基类注销/回池。
-    /// 若成功回传送门（Looting 结束后携带回门吸收入口）则在 MonsterAI 处清除携带标志，不落箱。
+    /// 2_14 怪物死亡：走基类注销/回池。
+    /// ⛔ `M1-D` 件8（`D802`/`D803` `Q8` 裁）：原 `DropLoot()`（`D213`：`CarryResource` × `def.lootResource` **凭空落箱**）**退役** ——
+    ///   怪物**无仓** ⇒ 按「死者仓＋标签」统一口径**不产生掉落箱**（`09` §9.7 清单无怪物项）。
+    ///   ⚠️ **行为变化已声明**：怪物被击杀不再掉落资源（`D803` 裁「不得静默退役」· 判据 9）；
+    ///   ⚠️ `MonsterDef.carryResource`/`lootResource` 字段**保留**（标注「M1-D 后无消费」）；⛔ 不落箱 ＝ 本批预期。
     /// </summary>
     protected override void Die()
     {
         if (_counted) { _counted = false; s_activeCount--; }
-        DropLoot();
         base.Die();
     }
 
-    /// <summary>怪物被击杀 → 在死亡点掉一只箱子（CarryResource 量），供玩家拾取。</summary>
-    private void DropLoot()
-    {
-        if (def == null || CarryResource <= 0) return;
-        if (!ChestManager.HasInstance || GridSystem.Instance == null) return;
-        var cellOpt = GridSystem.Instance.WorldToCoord(transform.position);
-        if (!cellOpt.HasValue) return;
-        var pack = BuildLootPack();
-        if (pack.IsZero) return;
-        ChestManager.Instance.SpawnChest(cellOpt.Value, pack, Faction.Monster);
-    }
-
-    /// <summary>掉落内容（⭐ `M1-A`：改「资源量列表」，**直接承载实际资源类型** ——
-    /// 旧 `ResourcePack` 8 桶结构下 Ore/Crystal/火油/特食/肉「无承载槽 ⇒ 回退粮」的**有损映射结构性消失**）。
-    /// ⚠️ 上报为结构强制的行为变化（弹药仍可承载）。</summary>
-    private ResourceList BuildLootPack()
-    {
-        ResourceType t = def != null ? def.lootResource : ResourceType.Food;
-        return ResourceList.Of(new ResourceAmount(t, CarryResource));
-    }
+    // ===== `DropLoot()` / `BuildLootPack()` —— ⛔ `M1-D` 件8 **已退役**（`D213` 怪物掉落）=====
+    //   改前：`CarryResource`（＝掉落数量数值参数 · ⛔ 非仓内容）＋ `def.lootResource`（模板类型）⇒ 死亡点凭空落箱。
+    //   改后（统一口径）：怪物无仓 ⇒ 不落箱。⚠️ 行为变化：击杀怪物不再产出资源箱（`D803` 裁 · 已显式声明）。
+    //   grep 证据（改后）：`DropLoot|BuildLootPack` 全库 0 命中（本题注除外）。
 
     /// <summary>攻击配置（从 MonsterDef 构造；Slinger 远程射程圆=6 格 D258，近战肉搏）。</summary>
     public AttackProfile BuildAttackProfile()

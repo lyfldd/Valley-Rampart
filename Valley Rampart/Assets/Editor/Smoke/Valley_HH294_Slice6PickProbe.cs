@@ -402,7 +402,7 @@ public static class HH294Slice6PickProbe
         if (spot == null) { Log("§D 宝箱：❌ 找不到 Plain 空地"); yield break; }
 
         var pack = ResourceList.Of(new ResourceAmount(ResourceType.Wood, 10));   // ⭐ M1-A 适配
-        var chest = chestMgr.SpawnChest(spot.Value, pack, Faction.PlayerCamp);
+        var chest = chestMgr.SpawnChest(spot.Value, pack);   // ⭐ M1-D/#57：去 faction 实参
         yield return null;
         if (chest == null) { Log("§D 宝箱：❌ SpawnChest 返回 null"); yield break; }
         var sr = chest.GetComponent<SpriteRenderer>();

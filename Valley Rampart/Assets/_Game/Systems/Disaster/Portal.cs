@@ -167,7 +167,9 @@ public class Portal : MonoBehaviour, IDamageable, IGridOccupant, ISaveable
     }
 
     // 设计§2.4 被打规则：白天无敌 → 反向强化（召唤间隔减半 + 广播增援）→ HP≤0 摧毁
-    public void TakeDamage(int finalDamage)
+    // ⭐ `M1-D` 件1：签名与 `IDamageable` 对齐（加 `source = null`）—— ⛔ 仅签名对齐：
+    //   传送门死亡走 `DestroyPortal()`（不发 `UnitDiedEvent`）⇒ 与战利品/掉落链无关。
+    public void TakeDamage(int finalDamage, IDamageable source = null)
     {
         if (state == PortalState.DayProtected || state == PortalState.Destroying) return; // 白天不可攻击
         hp = Mathf.Max(0, hp - finalDamage);

@@ -295,29 +295,43 @@ public static class Valley2_20B_Smoke_M7
         }
         else Check(false, "P10 攻城槌", "直构失败");
 
-        // ===== P11 狂战 buff（击杀正/拆除负）=====
+        // ===== P11 狂战 buff（⭐ M1-D 改走**生产路径**：`ApplyDamage` → `TakeDamage(source)` → `Die` → 事件 Killer）=====
+        //   鉴别力：改前＝直构 `UnitDiedEvent`（绕过生产入口 ⇒ 假阳性 · L-51）；Killer 链断裂时生产值恒 null ⇒ 本探针必红。
         var buc2 = SpawnUnitDirect(Occupation.Berserker, new Vector2(26, 6));
         if (buc2 != null)
         {
             cleanup.Add(buc2.gameObject);
-            var vuc = SpawnUnitDirect(Occupation.Warrior, new Vector2(28, 6));
-            vuc.kingdomId = -1;   // 材料隔离：探针死亡不进玩家幸福桶/王国口径（防 HappinessSystem 首日空桶 KeyNotFound 污染）
+            // 负例（生产路径）：第三方击杀（tuc0）⇒ buc2 不叠层
+            var vuc0 = SpawnUnitDirect(Occupation.Warrior, new Vector2(27, 6));
+            var tuc0 = SpawnUnitDirect(Occupation.Warrior, new Vector2(28, 6));
+            if (vuc0 != null && tuc0 != null)
+            {
+                vuc0.kingdomId = -1; tuc0.kingdomId = -1;   // 材料隔离（防 HappinessSystem 首日空桶污染）
+                cleanup.Add(vuc0.gameObject); cleanup.Add(tuc0.gameObject);
+                int stacks0 = buc2.Frenzy != null ? buc2.Frenzy.Stacks : 0;
+                ds.ApplyDamage(tuc0, vuc0, 9999);   // 生产路径致死（killer=tuc0）
+                Check((buc2.Frenzy != null ? buc2.Frenzy.Stacks : 0) == stacks0, "P11 第三方击杀不叠层（负·生产路径）",
+                    "killer=tuc0（⛔ 非 buc2）⇒ Stacks=" + (buc2.Frenzy != null ? buc2.Frenzy.Stacks : 0) + " 不变");
+            }
+            else Check(false, "P11 负例单位", "直构失败");
+            // 正例（生产路径）：buc2 击杀 ⇒ 叠层 +1
+            var vuc = SpawnUnitDirect(Occupation.Warrior, new Vector2(29, 6));
             if (vuc != null)
             {
+                vuc.kingdomId = -1;   // 材料隔离
                 cleanup.Add(vuc.gameObject);
-                // 负探针：拆除死因不叠层
-                EventBus.Publish(new UnitDiedEvent(vuc, vuc.GetFaction(), vuc.GetPosition(), buc2, DeathCause.Demolished));
-                Check(buc2.Frenzy == null || buc2.Frenzy.Stacks == 0, "P11 拆除不叠层", "Cause=Demolished → Stacks=0（负）");
-                // 正探针：被击杀死因 → 叠层1
-                EventBus.Publish(new UnitDiedEvent(vuc, vuc.GetFaction(), vuc.GetPosition(), buc2, DeathCause.Killed));
-                Check(buc2.Frenzy != null && buc2.Frenzy.Stacks == 1, "P11 击杀叠层", "Stacks=" + (buc2.Frenzy != null ? buc2.Frenzy.Stacks : -1) + "（+20%移速/+30%攻速/层，D490）");
-                Object.DestroyImmediate(vuc.gameObject);
+                int stacks1 = buc2.Frenzy != null ? buc2.Frenzy.Stacks : 0;
+                ds.ApplyDamage(buc2, vuc, 9999);   // 生产路径致死（killer=buc2）
+                int stacks2 = buc2.Frenzy != null ? buc2.Frenzy.Stacks : -1;
+                Check(stacks2 == stacks1 + 1, "P11 击杀叠层（正·生产路径）",
+                    "killer=buc2 ⇒ Stacks " + stacks1 + "→" + stacks2 + "（D490 · 改前直构事件为假阳性）");
             }
+            else Check(false, "P11 正例单位", "直构失败");
             Object.DestroyImmediate(buc2.gameObject);
         }
         else Check(false, "P11 狂战", "直构失败");
 
-        // ===== P12 兽人战利品 =====
+        // ===== P12 兽人战利品（⭐ M1-D 重写：走**生产路径** ＋ 来源＝死者背包内容）=====
         int chestBefore = ChestManager.Instance.Count;
         var okuc = SpawnUnitDirect(Occupation.Berserker, GridSystem.Instance.CoordToWorld(new GridCoord(40, 8)));   // 合法世界坐标（等距反解不越界，WorldToCoord 可落箱）
         if (okuc != null)
@@ -325,14 +339,21 @@ public static class Valley2_20B_Smoke_M7
             cleanup.Add(okuc.gameObject);
             okuc.raceId = RaceIds.Orc;   // 材料强制兽人（玩家可能非兽人）
             var puc = SpawnUnitDirect(Occupation.Warrior, GridSystem.Instance.CoordToWorld(new GridCoord(41, 8)));
-            puc.kingdomId = -1;   // 材料隔离：探针死亡不进玩家幸福桶/王国口径
             if (puc != null)
             {
+                puc.kingdomId = -1;   // 材料隔离
                 cleanup.Add(puc.gameObject);
-                EventBus.Publish(new UnitDiedEvent(puc, puc.GetFaction(), puc.GetPosition(), okuc, DeathCause.Killed));
+                // ⭐ M1-D：死者须**带背包且有货**（来源＝死者仓内容）——直构单位无背包 ⇒ 补挂 + 装货
+                var inv = puc.GetOrAddInventory();
+                int stored = inv.TryStore(ResourceType.Wood, 5);
+                ds.ApplyDamage(okuc, puc, 9999);   // 生产路径致死（killer=okuc → 事件 Killer 真值 → TrySpawnOrcLoot）
                 int chestAfter = ChestManager.Instance.Count;
-                Check(chestAfter == chestBefore + 1, "P12 兽人战利品", "兽人击杀 → 箱 " + chestBefore + "→" + chestAfter + "（D493 金0.5~1 占位，谁拾取归谁）");
-                Object.DestroyImmediate(puc.gameObject);
+                var buf = new List<ChestEntity>();
+                ChestManager.Instance.FillChestsInCellRect(new RectInt(41, 8, 1, 1), buf);
+                int wood = 0;
+                for (int ci = 0; ci < buf.Count; ci++) if (buf[ci] != null) wood += buf[ci].contents.Get(ResourceType.Wood);
+                Check(chestAfter == chestBefore + 1, "P12 兽人战利品（生产路径）", "兽人击杀 → 箱 " + chestBefore + "→" + chestAfter + "（M1-D：来源＝死者背包）");
+                Check(wood == stored && stored > 0, "P12 箱内容＝死者背包", "格(41,8) 箱内 Wood=" + wood + "（期望 " + stored + " · 鉴别力：改前＝凭空随机金 0.5~1）");
             }
             Object.DestroyImmediate(okuc.gameObject);
         }

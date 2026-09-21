@@ -910,10 +910,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     private void FinishDemolish()
     {
         var refundPack = BuildRefundPack();
-        // ⭐ 件3：随本体掉箱（`Faction.None` ＝ 无主箱 · `09` §9.8；`09#57` 参数去留归 `M1-D` ⇒ ⛔ 不改签名）
+        // ⭐ 件3：随本体掉箱（无主箱 · `09` §9.8）；⭐ `M1-D`/#57：`SpawnChest` 已去 `faction` 形参（D802 Q7）
         if (!refundPack.IsZero && ChestManager.HasInstance)
         {
-            ChestManager.Instance.SpawnChest(coord, refundPack, Faction.None);
+            ChestManager.Instance.SpawnChest(coord, refundPack);
             Debug.Log($"[Building] {def?.id} 拆除退还掉箱 @({coord.x},{coord.y})：{refundPack}"
                       + "（⛔ 国库不即时增加 · 需工人搬回 · `09` §16.1-4）");
         }
@@ -1044,8 +1044,46 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         _siteStore.Clear();
         if (ChestManager.HasInstance)
         {
-            ChestManager.Instance.SpawnChest(coord, contents, Faction.None);
+            ChestManager.Instance.SpawnChest(coord, contents);   // ⭐ `M1-D`/#57：去 faction 参数（箱无主）
             Debug.Log($"[Building] {def?.id} 工地仓材料掉箱 @({coord.x},{coord.y})：{contents}（`09` §16.3-4）");
+        }
+    }
+
+    /// <summary>
+    /// ⭐ `M1-D` 件5（`09#49` · §九「对象生命周期结束 ⇒ 它的仓变成掉落箱」· `D802` `Q3` `Die` 路径）：
+    /// **产出仓**（本体 `StorageComponent`）内容 ⇒ 掉箱（**一容器一箱** · 与工地仓/国库仓分箱 · `D802` `Q6`）。
+    /// ⚠️ 件4 标签：`droppable == false` ⇒ 跳过（不可掉落仓内容不回吐；默认 `true`＝默认可掉 · `D803` 裁）。
+    /// ⚠️ 空仓 ⇒ 不生成实体（§九 生成条件）；⛔ 与 `DropSiteStoreToChest`（工地仓）各自独立（`U-4` 职责分离不变）。
+    /// </summary>
+    private void DropStorageToChest()
+    {
+        var storage = GetComponent<StorageComponent>();
+        if (storage == null || !storage.droppable) return;         // 件4：不可掉落标签（默认可掉）
+        var contents = storage.Contents;
+        if (contents.IsZero) return;                               // 空仓 ⇒ 不落箱
+        storage.Clear();
+        if (ChestManager.HasInstance)
+        {
+            ChestManager.Instance.SpawnChest(coord, contents);
+            Debug.Log($"[Building] {def?.id} 产出仓内容掉箱 @({coord.x},{coord.y})：{contents}（`09` §九 / `M1-D` 件5）");
+        }
+    }
+
+    /// <summary>
+    /// ⭐ `M1-D` 件5：**国库仓**（`TreasureVault` 子容器）内容 ⇒ 掉箱（`09` §9.7「国库金仓 ✅ 可掉」）。
+    /// ⚠️ 金币当前不在仓（金进仓随 `M1-E`）⇒ 本路径当前承载材料/粮；空容器 ⇒ 不落箱（§九 生成条件）。
+    /// </summary>
+    private void DropVaultToChest()
+    {
+        var vault = GetComponent<TreasureVault>();
+        if (vault == null) return;
+        var contents = vault.Contents;
+        if (contents.IsZero) return;                               // 空仓 ⇒ 不落箱
+        vault.ResetAll();
+        if (ChestManager.HasInstance)
+        {
+            ChestManager.Instance.SpawnChest(coord, contents);
+            Debug.Log($"[Building] {def?.id} 国库仓内容掉箱 @({coord.x},{coord.y})：{contents}（`09` §9.7 / `M1-D` 件5）");
         }
     }
 
@@ -1225,6 +1263,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     // ===== 战斗（3.4 实现 IDamageable）=====
 
+    /// <summary>⭐ `M1-D`（`D802` `Q1`）：致死一击施加者（`TakeDamage` 的 `source` 暂存 · `Die` 发布事件时填 `Killer`）。
+    /// ⚠️ `Die` 侧按 `cause` 判：仅 `Killed` 用本字段；`Demolished`（拆除）恒 `null`
+    /// （防「先被打过、后被拆除」把旧攻击者带进事件）。</summary>
+    private IDamageable _lastDamageSource;
+
     /// <summary>是否工事（2_12 步骤7 / D165）：城墙/城门/桥/防御塔被破直接销毁，不进废墟。主城(Special)例外进废墟可修。</summary>
     public bool IsFortification
         => def != null && (def.role == BuildingRole.Wall || def.isGate || def.isBridge
@@ -1235,9 +1278,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// 血量≤0：工事(D165)直接销毁；非工事(含主城 D163)进废墟(Ruined)可修复，不直接判负。
     /// 非 Active 态不受伤。
     /// </summary>
-    public void TakeDamage(int amount)
+    public void TakeDamage(int amount, IDamageable source = null)
     {
         if (state != BuildingState.Active) return; // 非 Active 不受伤
+        _lastDamageSource = source;                 // ⭐ `M1-D` 件1：Killer 链（致死一击施加者 · 工事 `Die(Killed)` 用）
         hp = Mathf.Max(0, hp - amount);
         if (hp <= 0)
         {
@@ -1329,6 +1373,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         //   ⚠️ 拆除路径 `FinishDemolish` 已先行掉箱并清空 ⇒ 此处幂等（`Contents` 空 ⇒ 不重复落箱）。
         UnregisterSiteStore();
         DropSiteStoreToChest();
+        // ⭐ `M1-D` 件5（`09#49` · `D802` `Q3`/`Q6`）：**产出仓 ＋ 国库仓** 分箱掉箱
+        //   （工地仓＝独立第三路，上句已办 ⇒ 三路互不重叠）。⛔ `EnterRuined`（非工事被打爆）仓留存
+        //   —— 生命周期未结束（可修 · D154）⇒ 不在此路径（Q3 负向判据）。
+        DropStorageToChest();
+        DropVaultToChest();
 
         // 3.5 P1-10：训练建筑摧毁 → 训练队列中断回退（居民存活、资源不退）
         if (TrainingSystem.Instance != null)
@@ -1342,7 +1391,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             this,              // Unit (IDamageable)
             faction,           // Faction
             transform.position,// Position
-            null,              // Killer（建筑被击杀时无特定击杀者，DamageSystem 可补充）
+            cause == DeathCause.Killed ? _lastDamageSource : null,   // Killer（⭐ M1-D：工事被破=致死一击施加者；拆除恒 null）
             cause              // Cause（Killed=被击杀，Demolished=玩家拆除）
         ));
 

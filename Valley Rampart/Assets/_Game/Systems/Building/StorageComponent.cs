@@ -25,6 +25,15 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     /// <summary>**一条容量线**（§5.2 硬规则 1）：装什么都占它。</summary>
     public int capacity = 100;
 
+    /// <summary>
+    /// ⭐ `M1-D` 件4（`09` §九 `:350`／§9.7 · `D803` 裁）：「**能否掉落**」标签（**第二维** · 与「收什么」正交）——
+    /// 本仓内容在宿主生命周期结束（`Building.Die`）时是否转为掉落箱。
+    /// · **默认 `true` ＝ 默认可掉**（`D803`）；须拦的仓（人口仓/水仓等）由数据行显式置 `false`；
+    /// · ⛔ 与 `Accepts`（前缀匹配）**零耦合** —— 只被「掉箱抽取器」（`Building.DropStorageToChest`）读取；
+    /// · ⛔ **不入档**（随资产/创建点重建恢复 ⇒ 无存档形状变化）。
+    /// </summary>
+    public bool droppable = true;
+
     /// <summary>存量（资源 → 量）。⭐ 多资源并存（§5.2 硬规则 3）。</summary>
     private readonly Dictionary<ResourceType, int> _items = new Dictionary<ResourceType, int>();
 
@@ -56,6 +65,7 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
         if (building == null || building.def == null) return;
         // ⭐ 收什么＝数据行（`09` §三／判据 1）；⛔ 本片起不再由 def.outputResource 决定容器类型。
         SetDeclaredPaths(building.def.warehousePaths);
+        droppable = building.def.droppable;   // ⭐ `M1-D` 件4：能否掉落＝数据行（第二维 · 默认 true）
         RefreshCapacity();
         // 2_12 步骤8.4：加入王国仓库注册表（替代 WarehouseHelper 全场景扫描）
         WarehouseRegistry.Register(this);

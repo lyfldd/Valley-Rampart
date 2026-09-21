@@ -129,8 +129,8 @@ public static class Valley_HH109_Smoke_SaveDomain
         // ===== P1 Chest 入档：两箱→存→破坏态→读→逐项一致 =====
         var packA = ResourceList.Of(new ResourceAmount(ResourceType.Gold, 7), new ResourceAmount(ResourceType.Stone, 3));   // ⭐ M1-A 适配
         var packB = ResourceList.Of(new ResourceAmount(ResourceType.Wood, 5), new ResourceAmount(ResourceType.Food, 2));   // ⭐ M1-A 适配
-        var boxA = chestMgr.SpawnChest(new GridCoord(cellA.x, cellA.y), packA, Faction.PlayerCamp);
-        var boxB = chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), packB, Faction.None);
+        var boxA = chestMgr.SpawnChest(new GridCoord(cellA.x, cellA.y), packA);   // ⭐ M1-D/#57：去 faction 实参
+        var boxB = chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), packB);
         Debug.Log(TAG + " [P1前置] Spawn后立即 Count=" + chestMgr.Count + "（A/B 非 null=" + (boxA != null) + "/" + (boxB != null) + "）");
         yield return null;
         Debug.Log(TAG + " [P1前置] yield后 Count=" + chestMgr.Count
@@ -151,7 +151,7 @@ public static class Valley_HH109_Smoke_SaveDomain
 
             // 破坏态：移走箱A+箱B 同格再放一箱（读档后应被存档态覆盖=幂等直证）
             chestMgr.Remove(boxA);   // 破坏态用 Remove（Pickup 的 Interactor 参数为值类型不收 null；Remove=拾取/过期同款移除语义）
-            chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), ResourceList.Of(new ResourceAmount(ResourceType.Gold, 99)), Faction.Monster);   // ⭐ M1-A 适配
+            chestMgr.SpawnChest(new GridCoord(cellB.x, cellB.y), ResourceList.Of(new ResourceAmount(ResourceType.Gold, 99)));   // ⭐ M1-D/#57：去 faction 实参
             yield return null;
             int countDirty = chestMgr.Count;
 

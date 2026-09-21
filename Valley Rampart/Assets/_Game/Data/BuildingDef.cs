@@ -52,6 +52,11 @@ public class BuildingDef : ScriptableObject
              "⚠️ 本栏是「仓库标签」的**过渡数据源**；`10` 建筑能力表的 `store` 能力（`M6-F`）落地后迁入能力声明。")]
     public string[] warehousePaths;
 
+    [Tooltip("**能否掉落**（`09` §九 · ⭐ `M1-D` 件4 新增 · 第二维）：本建筑（本体仓）生命周期结束时，仓内容是否转为掉落箱。\n" +
+             "默认 true＝**默认可掉**（`D803` 裁）；须拦的仓（人口仓/水仓等）显式置 false。\n" +
+             "⛔ 与 warehousePaths（收什么）正交 —— 不参与前缀匹配；⛔ 不入档（随资产重建恢复）。")]
+    public bool droppable = true;
+
     [Header("行为标记")]
     public bool isObstacle;            // 是否阻挡移动/寻路（城墙=是；资源点=否）
     public ProducerConfig producer;    // 非空 = 生成物（产资源 or 产单位）

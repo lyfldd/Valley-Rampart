@@ -723,7 +723,7 @@ public static class HH316U2Smoke
     }
 
     private static ChestEntity SpawnChestAt(Vector2Int c, ResourceList pack, Faction f)
-        => ChestManager.HasInstance ? ChestManager.Instance.SpawnChest(new GridCoord(c.x, c.y), pack, f) : null;
+        => ChestManager.HasInstance ? ChestManager.Instance.SpawnChest(new GridCoord(c.x, c.y), pack) : null;   // ⭐ M1-D/#57：去 faction 实参（f 形参保留兼容调用点）
 
     private static int ChestCountAt(GridCoord c)
         => ChestManager.HasInstance ? ChestManager.Instance.CountAt(c) : -1;

@@ -403,13 +403,14 @@ public class DamageSystem : Singleton<DamageSystem>
                 if (transferred > 0)
                 {
                     finalDamage = Mathf.Max(1, finalDamage - transferred);
-                    shield.TakeDamage(Mathf.Max(1, transferred));
+                    // ⭐ `M1-D` 件1（`D802` `Q1`）：转移伤害的施加者仍是**原 `source`**（⛔ 不是 victim）
+                    shield.TakeDamage(Mathf.Max(1, transferred), source);
                 }
             }
         }
 
         // 扣血（TakeDamage 只扣血，公式已在此算好）
-        target.TakeDamage(finalDamage);
+        target.TakeDamage(finalDamage, source);   // ⭐ `M1-D` 件1：Killer 链（致死一击施加者）
 
         // 发布受击事件（节流，决策 7）
         PublishDamagedEvent(target, source, finalDamage);
@@ -607,31 +608,47 @@ public class DamageSystem : Singleton<DamageSystem>
         // 4. 清理节流字典（防字典累积死者条目；对象池回池重置时 ClearThrottleForVictim 再保险）
         _lastEventTime.Remove(victim);
 
-        // 5. 兽人族级战利品（2_20 M7 D493）：兽人单位战斗击杀（Killer.raceId==Orc && Cause==Killed）
-        //    → 尸体处掉资源箱（金 0.5~1 占位，D142 箱子落地同构）；谁拾取归谁（涌现不判归属）；AI 镜像同享（D399）。
-        //    兽人战营效果②「战利品价值+50%」（D493）在此结算乘算。
+        // 5. 兽人族级战利品（2_20 M7 D493；⭐ `M1-D` 重写 —— `09#45`/`#58`/`#59`/`#60` · `D802`/`D803` 裁）：
+        //    兽人（Killer.raceId==Orc）战斗击杀 ⇒ 尸体处掉**死者背包内容**（⛔ 非凭空随机金）；背包空 ⇒ 不落箱；
+        //    谁拾取归谁（无主先到先得 · 涌现不判归属）；AI 镜像同享（D399）。`×1.5` 乘算体随 `M1-E`（金进仓）落地。
         TrySpawnOrcLoot(evt);
     }
 
-    /// <summary>兽人战利品掉落（D493，见 OnUnitDied 注）。击杀者为建筑/非兽人/拆除/饿死不触发。</summary>
+    /// <summary>
+    /// 兽人战利品掉落（`D493`；⭐ `M1-D` 整段重写 —— `09#45`/`#58`/`#59`/`#60` · `D802`/`D803` 裁）：
+    /// · 触发 ＝ 击杀者身份是**兽人**（`killer.raceId == RaceIds.Orc`）＋ `Cause==Killed`（Killer 链已随本批打通 · `D802` `Q1`）；
+    /// · 来源 ＝ **死者仓内容**（`WorkerInventory` · `M1-A` 裁-2 单资源 ⇒ 只读 ＋ 一次性转 `ResourceList`）；
+    ///   ⭐ 背包空 ⇒ ⛔ 不落箱（`09` §九「生成条件：仓非空才生成实体」）；
+    /// · ⛔ 退役「凭空随机金」（原 `Random.Range(0.5f,1f)`：与死者资产无关 ＋ 破 R4 确定性 ＝ `09#59`）；
+    /// · ⛔ 退役「国有战营 ×1.5」判据（`09#58` 改击杀者身份）；⭐ **`×1.5` 乘算体本批不落地**
+    ///   （`D802` `Q2`：金不在仓 ⇒ 无生效对象）⇒ 待 `M1-E`（金进仓后）在本方法内补乘算；
+    /// · 日志（`09#60`）：按**击杀者身份**记录（`raceId`/`npcId`/`kingdomId`）—— ⛔ 不再用乘后值反推。
+    /// 击杀者为建筑/非兽人/拆除 ⇒ 不触发；建筑仓内容掉箱走 `Building.Die`（`D802` `Q3` 三分类）。
+    /// </summary>
     private void TrySpawnOrcLoot(UnitDiedEvent evt)
     {
         if (evt.Cause != DeathCause.Killed) return;
         if (!(evt.Killer is UnitController killer) || killer == null) return;
-        if (killer.raceId != RaceIds.Orc) return;
-        if (evt.Unit is Building) return;                 // 拆建筑不算战利品（战斗击杀=单位阵亡）
+        if (killer.raceId != RaceIds.Orc) return;                  // `#58`：判据 ＝ 击杀者身份（D802 Q1/Q2）
+        if (evt.Unit is Building) return;                          // 拆建筑不算战利品（仓转箱走 Building.Die · Q3）
         if (ChestManager.Instance == null || GridSystem.Instance == null) return;
 
-        float value = Random.Range(0.5f, 1f);              // 金 0.5~1 占位（§6.1 P0 调优）
-        // 战营效果②：战利品价值+50%（2_20.1 §三，挂点=战利品掉落结算处）
-        if (KingdomRace.HasExclusiveBuilding(killer.kingdomId, BuildingIds.WarCamp))
-            value *= 1.5f;
-        int gold = Mathf.Max(1, Mathf.RoundToInt(value));
+        // ⭐ 来源 ＝ 死者仓内容（`#45`/`#59`）：死者须为带背包的单位。
+        //   ⚠️ 用 GetComponent 查询（⛔ 不用 GetOrAddInventory —— 不给死者补挂空包）；怪物/无包单位 ⇒ 无仓 ⇒ 不落箱（Q8）。
+        var victim = evt.Unit as UnitController;
+        if (victim == null) return;
+        var inv = victim.GetComponent<WorkerInventory>();
+        if (inv == null || inv.IsEmpty) return;                    // 仓空 ⇒ 不落箱（`09` §九）
+        var pack = ResourceList.Of(new ResourceAmount(inv.carriedType, inv.carriedAmount));
 
         var cellOpt = GridSystem.Instance.WorldToCoord(evt.Position);
         if (!cellOpt.HasValue) return;
-        var chest = ChestManager.Instance.SpawnChest(cellOpt.Value, ResourceList.Of(new ResourceAmount(ResourceType.Gold, gold)), Faction.None);
-        Debug.Log($"[OrcLoot] 兽人 {killer.npcId} 击杀 {evt.Unit} @ {evt.Position} → 战利品箱 金{gold}（战营{(value > 1.49f ? "×1.5" : "无")}）{(chest != null ? "落地" : "落箱失败")}");
+        inv.carriedAmount = 0;                                     // 物随人死：抽空背包（防对象池复用残留）
+        var chest = ChestManager.Instance.SpawnChest(cellOpt.Value, pack);
+        // ⭐ `#60`：日志按「击杀者身份」记录（⛔ 不依赖未落地的 ×1.5；`[OrcLoot]` 关键字保留 ＝ 七考观察锚）。
+        Debug.Log($"[OrcLoot] 兽人 r{killer.raceId}/npc{killer.npcId}(k{killer.kingdomId}) 击杀 {victim.Data?.occupation} @ {evt.Position}"
+            + $" → 战利品箱 {pack}（来源=死者背包）{(chest != null ? "落地" : "落箱失败")}");
+        // ⭐ `×1.5` 本批不落地（`D802` `Q2`：金不在仓 ⇒ 无生效对象）—— 待 `M1-E`（金进仓后）在此补「击杀者兽人 ⇒ 金币 ×1.5」。
     }
 
     // ===== 公开查询（供 NPCBrain 选目标用）=====
