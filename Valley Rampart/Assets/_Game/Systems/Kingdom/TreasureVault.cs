@@ -15,14 +15,15 @@ using UnityEngine;
 /// 当作**搬运源**（国库内容被工人搬去普通仓）⇒ 保持"主城本体无仓"的结构不变。
 /// ⇒ 国库内容**随建筑存档显式存取**（`BuildingSaveData.treasuryContents` · 判据 6）。
 ///
-/// ⚠️ **本片不做（后续子片）**：金（`09#47`／`M1-E`）仍走 `RulerController` 直通 ⇒ 本容器**不收金**
-/// （故声明只写材料族＋粮族，⛔ 不含 `res_currency`/`res_ammo`）。
+/// ⭐ **`M1-E`（`09#47`）已做**：金降为普通资源 ⇒ 本容器**扩收金**（`res_currency` 族 · 体积 0 ⇒ 不占容量）；
+/// `RulerController.Gold` 字段退役 ⇒ 只读门面，真源即本容器（`09` §4.3 A 组 `B1~B3`）。
 /// </summary>
 public class TreasureVault : MonoBehaviour, IBuildingComponent
 {
-    /// <summary>国库声明（**收什么** · `09` §三）：材料族 ＋ 粮族 ⇒ 与原 `Managed` 9 项逐项等价
-    /// （Stone/Wood/Ore/Metal/Crystal/FireOil ＋ Food/SpecialFood/Meat）；⛔ 不含金（M1-E）与弹药（HH.19 口径 2）。</summary>
-    static readonly string[] VaultPaths = { "res_material", "res_food" };
+    /// <summary>国库声明（**收什么** · `09` §三）：材料族 ＋ 粮族 ＋ ⭐ 币族（`M1-E`）⇒ 与原 `Managed` 9 项逐项等价
+    /// （Stone/Wood/Ore/Metal/Crystal/FireOil ＋ Food/SpecialFood/Meat）＋ 金（体积 0 ⇒ 不占容量）；
+    /// ⛔ 不含弹药（HH.19 口径 2）。</summary>
+    static readonly string[] VaultPaths = { "res_material", "res_food", "res_currency" };
 
     /// <summary>按国查（⭐ `09` §4.3 A：多国不再互相覆盖）。</summary>
     static readonly Dictionary<int, TreasureVault> _byKingdom = new Dictionary<int, TreasureVault>();
@@ -64,7 +65,7 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
         // 不调 StorageComponent.Init（否则会被 def.warehousePaths 覆盖本声明）；手动注册以并入凑单
         WarehouseRegistry.Register(_container);
 
-        Debug.Log($"[TreasureVault] 国库就绪：k{KingdomId} 单容器（收 res_material + res_food），BaseCapacity={BaseCapacity}");
+        Debug.Log($"[TreasureVault] 国库就绪：k{KingdomId} 单容器（收 res_material + res_food + res_currency[金·体积0]），BaseCapacity={BaseCapacity}");
     }
 
     /// <summary>主城等级/容量刷新时重设容器容量（对齐"国库随主城升级"）。</summary>
@@ -90,7 +91,7 @@ public class TreasureVault : MonoBehaviour, IBuildingComponent
         if (_container != null) _container.RestoreContents(contents);
     }
 
-    // ===== 供 RulerController 中转的非金资源读写（金走 Ruler 直通不调用本类）=====
+    // ===== 供 RulerController/KingdomState 中转的资源读写（⭐ M1-E 起含金 —— 金降普通资源，走本容器 CRUD）=====
 
     /// <summary>某资源存量（未声明/无容器 ⇒ 0）。</summary>
     public int GetAmount(ResourceType type)

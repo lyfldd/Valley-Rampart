@@ -641,14 +641,24 @@ public class DamageSystem : Singleton<DamageSystem>
         if (inv == null || inv.IsEmpty) return;                    // 仓空 ⇒ 不落箱（`09` §九）
         var pack = ResourceList.Of(new ResourceAmount(inv.carriedType, inv.carriedAmount));
 
+        // ⭐ `M1-E` 件7（`09` §9.9 · `D805` `Q7` 同批）：**兽人 `×1.5` 落地** —— 击杀者必为兽人（上方已保证）；
+        //   **只乘金**（⛔ 其它资源不乘）；⭐ 乘在**掉落的搬运量**上（§9.9 · ⛔ 不乘在仓的内容上）；
+        //   多出的 0.5 倍属「**生成**」⇒ 不受动作级守恒约束（守恒作用域＝微观搬运动作 · §8.3）。
+        bool goldBoosted = false;
+        if (inv.carriedType == ResourceType.Gold)
+        {
+            int boosted = Mathf.RoundToInt(inv.carriedAmount * 1.5f);
+            pack = ResourceList.Of(new ResourceAmount(ResourceType.Gold, boosted));
+            goldBoosted = true;
+        }
+
         var cellOpt = GridSystem.Instance.WorldToCoord(evt.Position);
         if (!cellOpt.HasValue) return;
         inv.carriedAmount = 0;                                     // 物随人死：抽空背包（防对象池复用残留）
         var chest = ChestManager.Instance.SpawnChest(cellOpt.Value, pack);
-        // ⭐ `#60`：日志按「击杀者身份」记录（⛔ 不依赖未落地的 ×1.5；`[OrcLoot]` 关键字保留 ＝ 七考观察锚）。
+        // ⭐ `#60`：日志按「击杀者身份」记录（⛔ 不用乘后值反推）；`[OrcLoot]` 关键字保留 ＝ 七考观察锚。
         Debug.Log($"[OrcLoot] 兽人 r{killer.raceId}/npc{killer.npcId}(k{killer.kingdomId}) 击杀 {victim.Data?.occupation} @ {evt.Position}"
-            + $" → 战利品箱 {pack}（来源=死者背包）{(chest != null ? "落地" : "落箱失败")}");
-        // ⭐ `×1.5` 本批不落地（`D802` `Q2`：金不在仓 ⇒ 无生效对象）—— 待 `M1-E`（金进仓后）在此补「击杀者兽人 ⇒ 金币 ×1.5」。
+            + $" → 战利品箱 {pack}（来源=死者背包{(goldBoosted ? " · 金币×1.5（§9.9 生成）" : "")}）{(chest != null ? "落地" : "落箱失败")}");
     }
 
     // ===== 公开查询（供 NPCBrain 选目标用）=====

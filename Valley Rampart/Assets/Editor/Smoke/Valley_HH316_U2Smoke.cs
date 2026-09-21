@@ -235,10 +235,11 @@ public static class HH316U2Smoke
                 + "\n§C 在册[国/npc:态]=" + AssignedUnitsText());
         }
 
-        // ================= §D 判据5：金路径（⛔ 不进「声明收金」的仓）=================
+        // ================= §D 判据5：金路径（⭐ M1-E 口径演进：金**走仓**）=================
         Log("");
-        Log("## §D 判据5「金 ⛔ 不进声明收金的仓（复刻 Well 误配面）」");
-        Log("§D 鉴别力：若金误走 `FindNearestAvailable` ⇒ 金进「最近可收金仓」（本探针注入仓）且 Gold 字段不变");
+        Log("## §D 判据5「金路径（⭐ M1-E 起：金走 FindNearestAvailable ⇒ 进最近同国收金仓 —— 全库仅国库收金 · U-7 已修）」");
+        Log("§D 鉴别力（⭐ M1-E 口径）：金走仓 ⇒ 应进「最近的同国 ＋ 收金仓」——本探针注入仓与国库（Vault）**同在主城** ⇒ 二者竞争；");
+        Log("§D     读「注入仓金」与「Vault 金」**双侧**即可判去向（⚠️ 旧 M1-C 口径「金直通 Gold 字段 · ⛔ 不进仓」已被 D805 件4 推翻）");
         var host = FindPlayerCastle();
         if (host == null) Log("❌ 玩家主城不在场 ⇒ §D 中止（探针收金仓无法挂王国）");
         else
@@ -258,9 +259,12 @@ public static class HH316U2Smoke
             while (dChest != null && !dChest.IsEmpty && Time.frameCount - gf0 < 4000 && Time.realtimeSinceStartup - grt0 < 150f)
             { yield return null; KeepAlive(dChest); }   // ⛔ 观测窗保活
             yield return WaitDelivered(0);   // 等最后一批搬完（箱空瞬间最后一批仍在背包）
-            Log("§D ⭐ 读数：金=" + dGold0 + "→" + Gold() + "（该箱 7 应为其中一部分 ⇒ Gold 字段收款；"
-                + "⚠️ 世界背景亦有入账 ⇒ **以「注入仓金=0」为鉴别判据**）"
-                + " ｜注入仓金=" + gs.GetAmount(ResourceType.Gold) + "（期望 **0** ⇒ ⛔ 未走 FindNearestAvailable）"
+            int vaultGoldD = TreasureVault.Instance != null ? TreasureVault.Instance.GetAmount(ResourceType.Gold) : -1;
+            Log("§D ⭐ 读数（⭐ M1-E 口径）：金(Vault)=" + dGold0 + "→" + Gold()
+                + " ｜注入仓金=" + gs.GetAmount(ResourceType.Gold)
+                + " ｜Vault 金=" + vaultGoldD
+                + " ⇒ 判读：注入仓金=0 且 Vault 已增 ⇒ 金**走仓**（进 Vault · 距离胜）；"
+                + "⚠️ 世界背景亦有入账 ⇒ 以「双侧读数」判去向，⛔ 不用形容词"
                 + " ｜箱=" + (dChest != null ? CostText(dChest.contents) : "空/已熔"));
             // 清理探针仓
             WarehouseRegistry.Unregister(gs);

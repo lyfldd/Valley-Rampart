@@ -10,7 +10,10 @@ using UnityEngine;
 ///
 /// ⭐ `M1-A`（`09#50`／`#51`）：成本结构由固定 8 桶 `ResourcePack` ⇒ **「资源量列表」`ResourceList`**，
 /// 本类**逐条目**处理（⛔ 不再是硬编码的 石/木/粮/铁 四连查）⇒ 造价加一项资源**无需改本类**。
-/// 金(Gold)仍走 `RulerController` 直通（**行为不变** —— 「扣费统一一个 API」归 `M1-E`，`09#47`）。
+/// ⭐ `M1-E`（`09#47` `B8`）：金降为普通资源 ⇒ **金与普通资源同路**（`TryCheckEnough`/`LockTakes`/`ApplyTakes`），
+/// ⛔ 三条金特判分支（原走 `RulerController.CanAfford/Spend`）**整段退役**；金真源＝国库容器
+/// （`TreasureVault` 的 `res_currency` 条目 · 体积 0 ⇒ 不占容量 ⇒ 恒可入）。
+/// ⚠️ 金扣减后**须补发 `RulerResourceChangedEvent`**（原经 `RulerController.ModifyResource` 自动发布 ⇒ 金走仓后不再经它）。
 ///
 /// ⚠️ 调用频率红线：本类只许在**结算时点**调用（建造/训练点击、搬运卸货、升级确认），
 ///    禁止在 Update / 每帧 / 活跃逻辑路径里调用。
@@ -36,14 +39,6 @@ public static class WarehouseHelper
         {
             var e = entries[i];
             if (e.amount <= 0) continue;
-            if (e.type == ResourceType.Gold)
-            {
-                // 金：货币直通（M1-E 前行为不变）
-                if (RulerController.Instance == null
-                    || !RulerController.Instance.CanAfford(ResourceList.Of(new ResourceAmount(ResourceType.Gold, e.amount))))
-                    return false;
-                continue;
-            }
             if (!TryCheckEnough(warehouses, e.type, e.amount)) return false;
         }
 
@@ -52,28 +47,31 @@ public static class WarehouseHelper
         for (int i = 0; i < entries.Length; i++)
         {
             var e = entries[i];
-            takes[i] = e.amount > 0 && e.type != ResourceType.Gold
-                ? LockTakes(warehouses, e.type, e.amount)
-                : null;
+            takes[i] = e.amount > 0 ? LockTakes(warehouses, e.type, e.amount) : null;
         }
 
-        // 执行减（先金，再仓库资源；已预校验足够 ⇒ 不会出现部分应用）
+        // ⭐ `M1-E`：金扣减的事件补发前置读数（金走仓后不再经 `RulerController.ModifyResource` ⇒ 见 PublishGoldChanged）
+        int goldBefore = -1;
+        for (int i = 0; i < entries.Length; i++)
+            if (entries[i].amount > 0 && entries[i].type == ResourceType.Gold) { goldBefore = TreasuryGold(kingdomId); break; }
+
+        // 执行减（⭐ `M1-E`：金与普通资源**同路** —— ⛔ 无金特判，逐条目走仓）
         for (int i = 0; i < entries.Length; i++)
         {
             var e = entries[i];
             if (e.amount <= 0) continue;
-            if (e.type == ResourceType.Gold)
-                RulerController.Instance.Spend(ResourceList.Of(new ResourceAmount(ResourceType.Gold, e.amount)));
-            else
-                ApplyTakes(warehouses, e.type, takes[i]);
+            ApplyTakes(warehouses, e.type, takes[i]);
         }
+
+        if (goldBefore >= 0) PublishGoldChanged(kingdomId, goldBefore);
         return true;
     }
 
     /// <summary>是否从王国仓库+国库负担得起这笔成本（原子判定，不改动）。</summary>
     public static bool CanAfford(ResourceList cost) => CanAfford(0, cost);
 
-    /// <summary>B1-5（2_24 批1，D605）：带主体参数重载（语义同 TrySettle）。</summary>
+    /// <summary>B1-5（2_24 批1，D605）：带主体参数重载（语义同 TrySettle）。
+    /// ⭐ `M1-E`：金与普通资源**同路**（逐条目走 `TryCheckEnough` ⇒ 金在国库容器内被统一计数）。</summary>
     public static bool CanAfford(int kingdomId, ResourceList cost)
     {
         if (cost.IsZero) return true;
@@ -85,16 +83,24 @@ public static class WarehouseHelper
         {
             var e = entries[i];
             if (e.amount <= 0) continue;
-            if (e.type == ResourceType.Gold)
-            {
-                if (RulerController.Instance == null
-                    || !RulerController.Instance.CanAfford(ResourceList.Of(new ResourceAmount(ResourceType.Gold, e.amount))))
-                    return false;
-                continue;
-            }
             if (!TryCheckEnough(warehouses, e.type, e.amount)) return false;
         }
         return true;
+    }
+
+    /// <summary>目标国国库金存量（⭐ `M1-E`：金真源＝该国国库容器 `res_currency` 条目）。</summary>
+    private static int TreasuryGold(int kingdomId)
+    {
+        var tv = TreasureVault.Get(kingdomId);
+        return tv != null ? tv.GetAmount(ResourceType.Gold) : 0;
+    }
+
+    /// <summary>金扣减后补发资源变化事件（⭐ `M1-E` 连带）：金走仓 ⇒ ⛔ 不再经 `RulerController.ModifyResource`
+    /// 自动发布；无本补发则四订阅者（`ResourceHUD`/`TrainingPanel`/`TradePanel`/`MachinePanel`）金读数不刷新。</summary>
+    private static void PublishGoldChanged(int kingdomId, int before)
+    {
+        int after = TreasuryGold(kingdomId);
+        if (after != before) EventBus.Publish(new RulerResourceChangedEvent(ResourceType.Gold, before, after));
     }
 
     // ===== 定位器（2_12 步骤8.4：仓库注册表替代 FindObjectsOfType 全场景扫描）=====

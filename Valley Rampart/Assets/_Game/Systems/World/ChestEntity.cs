@@ -157,7 +157,8 @@ public class ChestEntity : MonoBehaviour, IInteractable, ITaskSource
     /// 玩家手点 ＝ **调用搬运任务的一种形式**（`09` §9.8 :390）⇒ **立案一个搬运任务**
     /// （立即触发一次调度 ⇒ 工人在场即来搬；无空闲工人则照常每 tick 广告、来日再来）。
     /// ⛔ **不提供「捡」的能力**（§9.8 :389「它**就是个仓**」）／⛔ **无独立入账口** —— 到账只走
-    /// 链 A 卸货段（`UnloadInventory` → `AddGatherOverflow` 分流：金→`Gold` 字段／材料→国库仓）。
+    /// 链 A 卸货段（`UnloadInventory` → 就近同国仓；无仓 ⇒ `AddGatherOverflow` 兜底）。
+    /// ⭐ `M1-E`：**金与材料同路**（原「金→`Gold` 字段」直通已退役 ⇒ 金进该国国库仓）。
     /// </summary>
     public InteractionResult Interact(Interactor ctx)
     {

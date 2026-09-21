@@ -30,7 +30,7 @@ MonoBehaviour:
   rotatable: 0
   moduleType: 2
   warehousePaths:
-  - res_currency.gold
+  - res_fluid.water
   isObstacle: 0
   producer:
     kind: 0

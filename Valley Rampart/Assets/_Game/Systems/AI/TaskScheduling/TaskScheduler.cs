@@ -698,6 +698,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     /// <summary>
     /// HH.86/DZ-045 件2d：采集溢出/无背包入国库按工人国分流——玩家(0)=RulerController 原逻辑逐位；
     /// AI(>0)=本国 KingdomState.AddResources 台账（旧恒入玩家库=资敌实锤）；国已注销=丢弃+日志（防亡国资源入玩家库）。
+    /// ⭐ `M1-E`：**金经此口亦入仓**（玩家 ⇒ `ModifyResource(..., 0)` ⇒ 玩家国库仓；AI ⇒ `AddResources` ⇒
+    /// `AddToLedger` 金条目 ⇒ `ChangeTreasuryGold` ⇒ 本国国库仓）—— ⛔ 本方法逻辑无需改（落点已透明）。
     /// </summary>
     private void AddGatherOverflow(UnitController uc, ResourceType type, int amount)
     {
@@ -788,14 +790,14 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // 2_17 修复卡γ：第 3 参带工人归属国——玩家工人卸玩家库(0)、AI 工人卸 AI 库，跨王国绝不互卸。
         var uc = brain.GetComponent<UnitController>();
         var wkingdom = uc != null ? uc.kingdomId : 0;
-        // ⭐ HH.316 件5（D798 §五）：**金直通** —— 金 ⛔ 不走 `FindNearestAvailable`（全库唯一声明收金的是
-        //   `Well.asset` **误配仓** · 挂 U-7）⇒ 金走归属国分流：玩家(0) → `RulerController.ModifyResource`
-        //   ⇒ `Gold` 字段；AI(>0) → `KingdomState` 台账桶。⏭️ 待 `M1-E`（金进国库仓）落地后再切仓路径。
+        // ⭐ `M1-E`（`09#47` · `D805` 件4）：**金已切仓** —— 金与普通资源同路（`FindNearestAvailable`
+        //   会命中本国国库容器 `res_currency` 条目 · 体积 0 ⇒ 恒有余量）⇒ ⛔ 原「金直通」（走
+        //   `RulerController` ⇒ `Gold` 字段）**退役**；无可用仓时由 `AddGatherOverflow` 兜底（金 ⇒
+        //   `ModifyResource(..., kingdomId)` ⇒ 该国国库仓）。`U-7` 已修 ⇒ 水井不再收金。
         // DZ-072a（HH.107 件2）：副产两资源按归属国路由——玩家(0)卸国库 Vault（TreasureVault.Managed 扩面）；
         // AI(>0) 直走台账 AddGatherOverflow（AI 经济=台账制 2_17 §追记②；AI 主城 Vault 系 CastleCore 无守卫
         // 误挂的玩家国库结构=消费黑洞，AI 消费面读台账不读 Vault，卸进去即黑洞——照 AddWater 桶路由先例语义）。
-        if (inv.carriedType == ResourceType.Gold
-            || (wkingdom > 0 && (inv.carriedType == ResourceType.Crystal || inv.carriedType == ResourceType.FireOil)))
+        if (wkingdom > 0 && (inv.carriedType == ResourceType.Crystal || inv.carriedType == ResourceType.FireOil))
         {
             // ⚠️ 连带修复（`HH.316`）：原此处复调 `inv.UnloadAll()`（顶部已清空 ⇒ 恒返 0 ⇒ 该批**静默丢**）
             //   —— 箱内容物含副产（任意资源）时 AI 工人搬走即丢 ⇒ 与 U-2「内容物到账」硬冲突 ⇒ 改用已取出的 `amount`。
@@ -822,9 +824,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     /// ⭐ `HH.316` 件4：**箱源**搬运的第二段落点 —— **装载成功后**按**搬运者国 ＋ 实载资源**即时解析。
     /// 为什么不能照建筑在广告时解析：箱**无主**（`SourceKingdom → -1`）⇒ `ResolveWarehouse` 对 `-1` 全跳过
     /// （回退国库锚点）⇒ 故箱源 `destType=None`，落点在此定（`InjectCarryStimulus` 前）。
-    /// 规则：**金 ⇒ 国库锚点**（⛔ 不找仓 · 见件5 金直通）；其余 ⇒ 最近「**同国 ＋ 收该资源 ＋ 有余量**」仓
-    /// （`WarehouseRegistry.FindNearestAvailable`）⇒ 无仓回退国库锚点。到账由 `UnloadInventory` 统一收口
-    /// （就近仓 ＋ `AddGatherOverflow` 兜底 · 资源不丢）。
+    /// 规则（⭐ `M1-E`/`D805` 件4 后**统一**）：最近「**同国 ＋ 收该资源 ＋ 有余量**」仓
+    /// （`WarehouseRegistry.FindNearestAvailable`）—— **金亦同路**（命中本国国库容器）；无仓回退国库锚点。
+    /// 到账由 `UnloadInventory` 统一收口（就近仓 ＋ `AddGatherOverflow` 兜底 · 资源不丢）。
     /// </summary>
     private void ResolveChestDest(NPCBrain brain, KingdomTask task)
     {
@@ -833,12 +835,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         var uc = brain != null ? brain.GetComponent<UnitController>() : null;
         int kingdom = uc != null ? uc.kingdomId : 0;                       // 谁搬回 ⇒ 归谁国（09 §9.8）
         var type = inv != null ? inv.carriedType : ResourceType.Gold;
-        if (type != ResourceType.Gold && brain != null)
+        if (brain != null)
         {
             var best = WarehouseRegistry.FindNearestAvailable(type, brain.transform.position, kingdom);
             if (best != null) { task.destPos = best.transform.position; return; }
         }
-        task.destPos = ResolveTreasury(task);   // 金 ／ 无可用仓 ⇒ 国库锚点（卸货段分流兜底）
+        task.destPos = ResolveTreasury(task);   // 无可用仓 ⇒ 国库锚点（卸货段分流兜底）
     }
 
     // ===== ⭐ M1-C 件1：搬料两段式（取料仓 → 工人背包 → 工地仓）=====

@@ -114,8 +114,10 @@ public class KingdomState
     }
 
     // ===== 国库真源读 API（2_17 步骤 2a：KingdomState.resources 转正为 AI 国库台账）
-    // 2_17 §〇 追记② 裁 B：AI 经济=台账制（与 P0 人口台账同哲学），独立于 RulerController/WarehouseRegistry/
-    // TreasureVault（玩家物流专用）。语义镜像 PlayerRuler.CanAfford/Spend/Refund（弹药不参与造价，仅五经济资源）。
+    // 2_17 §〇 追记② 裁 B：AI 经济=台账制（与 P0 人口台账同哲学），语义镜像 PlayerRuler.CanAfford/Spend/Refund。
+    // ⭐ `M1-E`（`09#47` · `Q0`「`#52` 金面并入本片」）：**金**已并入**本国国库容器**
+    //   （`TreasureVault.Get(id)` 的 `res_currency` 条目）—— 读写均走仓；⛔ 非金面（石/木/粮/铁 ＋ 副产三桶）
+    //   仍为台账（`#52` 非金面归 `M1-G`）。⇒ 语义与玩家侧**同源**（`B8`「扣费＝统一一个 API」）。
     // 2_17 前 AI 无脑不消费，本 API 由王国脑（步骤 8+）消费；确定性、无事件发布（台账制）。
 
     /// <summary>是否负担得起该资源包（原子校验；弹药不参与造价）。
@@ -138,16 +140,19 @@ public class KingdomState
     {
         switch (type)
         {
+            // ⭐ `M1-E`（`09#47`）：金真源＝**本国国库容器**（⛔ 不再读台账 `resources` ⇒ 金已降普通资源）
+            case ResourceType.Gold: return TreasureVaultGold();
             case ResourceType.Crystal: return crystal;    // DZ-072a 副产台账
             case ResourceType.FireOil: return fireOil;    // DZ-072a 副产台账
             case ResourceType.Ore: return ore;            // T1.8（D609）矿石台账桶
-            default: return resources.Get(type);          // 金/石/木/粮/铁（及未来新增资源）
+            default: return resources.Get(type);          // 石/木/粮/铁（及未来新增资源）
         }
     }
 
     /// <summary>扣除资源包（调用前需先 CanAfford；台账制直接减字段，不进玩家事件链）。
     /// 2_23 资源 P0 批A/R-A1（D630 收支口径 A+）：支出登记进经济诊断当日窗口（负数=出）。
-    /// ⭐ `M1-A`：逐条目扣（五经济资源走 `resources` ＋ 副产三台账桶走各自字段）。</summary>
+    /// ⭐ `M1-A`：逐条目扣（五经济资源走 `resources` ＋ 副产三台账桶走各自字段）。
+    /// ⭐ `M1-E`：**金条目改走本国国库容器**（`ChangeTreasuryGold`）⇒ 与 `CanAfford`/`GetResourceValue` 同源。</summary>
     public void Spend(ResourceList cost)
     {
         int g = 0, s = 0, w = 0, f = 0, m = 0;
@@ -202,11 +207,35 @@ public class KingdomState
         if (delta == 0) return;
         switch (type)
         {
+            // ⭐ `M1-E`（`Q0`「`#52` 金面并入」）：金改走**本国国库容器**（⛔ 不再进 `resources` ⇒ 否则与仓＝双真源，
+            //   违 `M1-A`/`HH.8` 禁双写红线）；本口为 `AddResources`/`Spend` 共用 ⇒ 一处改两处生效。
+            case ResourceType.Gold: ChangeTreasuryGold(delta); break;
             case ResourceType.Crystal: crystal += delta; break;
             case ResourceType.FireOil: fireOil += delta; break;
             case ResourceType.Ore: ore += delta; break;
             default: resources = resources.Add(type, delta); break;
         }
+    }
+
+    /// <summary>本国国库金存量（⭐ `M1-E`：金真源＝国库容器 `res_currency` 条目；主城未就绪 ⇒ 0）。</summary>
+    private int TreasureVaultGold()
+    {
+        var tv = TreasureVault.Get(id);
+        return tv != null ? tv.GetAmount(ResourceType.Gold) : 0;
+    }
+
+    /// <summary>本国国库金增减（⭐ `M1-E`）：主城未生成/被毁 ⇒ **`Q6` 退化＝丢弃＋告警**（对齐 `TaskScheduler:714`
+    /// 「国已注销 ⇒ 丢弃+日志」先例）；金体积 0 ⇒ ⛔ 无溢出/容量面（`Deposit` 恒全收）。</summary>
+    private void ChangeTreasuryGold(int delta)
+    {
+        var tv = TreasureVault.Get(id);
+        if (tv == null)
+        {
+            Debug.LogWarning($"[KingdomState] k{id} 国库未就绪，金 {delta} 不入账（Q6 退化·M1-E）");
+            return;
+        }
+        if (delta > 0) tv.Deposit(ResourceType.Gold, delta);
+        else tv.Take(ResourceType.Gold, -delta);
     }
 
     /// <summary>汇总五经济资源的本笔增量（供经济诊断窗口登记；非五资源不计）。</summary>

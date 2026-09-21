@@ -9,7 +9,7 @@ using UnityEngine;
 //   - 单例模式：全局唯一，挂在 MainMenuScene 的独立 GameObject 上，DontDestroyOnLoad 跟随场景。
 //   - 资源管理：通过 ModifyResource 统一入口修改资源，每次修改发布 RulerResourceChangedEvent。
 //   - 君主死亡：订阅 UnitDiedEvent 检测君主阵亡，触发 GameState.GameOver。
-//   - 存档集成：实现 ISaveable 接口，SaveManager 在 Global 阶段保存/恢复君主国家资源。
+//   - 存档集成：实现 ISaveable 接口，SaveManager 在 Global 阶段保存/恢复**君主名字**（⭐ M1-E：资源真源＝国库容器，随建筑存档）。
 //
 // 战斗属性（Attack/Defense/WalkSpeed/RunSpeed/Hp）由 UnitController 管理，
 // 访问方式：RulerController.Instance.MonarchUnit.Attack 等。
@@ -44,10 +44,12 @@ public class RulerController : Singleton<RulerController>, ISaveable
     // 君主是否存活（退役后恒 false；GameOver 已由 ThroneAnchor.IsKingdomLost 轮询驱动，D249）
     public bool IsMonarchAlive => false;
 
-    // 国家资源（金币/石材/木材/食物），通过 ModifyResource 统一修改
-    public int Gold { get; private set; }
-    // 2_12 步骤8.4（HH.16 裁决 B：多仓库聚合）：非金资源真源迁国库仓库（主城 TreasureVault），
-    // 旧字段改为只读中转国库；金(Gold)=货币直通保留字段（HH.8）。
+    // ⭐ `M1-E`（`09#47`）：金降为普通资源 ⇒ **字段退役 · 本属性为只读门面**（真源＝国库容器 `res_currency` 条目）。
+    // ⛔ 改动顺序是硬约束（`D805` `Q4`）：先断 `GetResourceValue` 金分叉 ⇒ 再转本门面 ⇒ 最后删 `ModifyResource` 金分支
+    //   （反序 ⇒ `Gold => GetResourceValue(Gold) => Gold` 递归死循环）。
+    public int Gold => GetResourceValue(ResourceType.Gold);
+    // 2_12 步骤8.4（HH.16 裁决 B：多仓库聚合）：资源真源＝国库仓库（主城 TreasureVault），
+    // 旧字段全部退役为只读中转国库；⭐ `M1-E` 起**金亦在内**（不再有"货币直通字段"）。
     // ===== 3.5 P1 粮大类子资源（§13.11 特殊食物/肉；真源同迁国库）=====
     public int Stone => GetResourceValue(ResourceType.Stone);
     public int Wood => GetResourceValue(ResourceType.Wood);
@@ -141,8 +143,8 @@ public class RulerController : Singleton<RulerController>, ISaveable
     {
         if (rulerData == null) return;
 
-        // 2_12 步骤8.4：金=货币直通字段；非金初始由难度初始化/读档统一入国库，不再直写旧字段。
-        Gold = rulerData.initialGold;
+        // ⭐ `M1-E`：初值不再直写字面字段 —— 金/非金统一由 `ApplyInitialResourcesFromDifficulty`
+        //   一次性入国库容器（本方法只在 Awake 早期同步资产引用）。
         Debug.Log($"[RulerController] 已从资产同步君主数据: {rulerData.name}");
     }
 
@@ -194,8 +196,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
     {
         monarchUnit = null;
         RulerName = "无名君主";
-        Gold = 0;
-        // 2_12 步骤8.4：非金真源=国库仓库，随主城一并清空
+        // ⭐ `M1-E`：金亦在国库容器内 ⇒ 由下行 `ResetAll` 一并清空（⛔ 不再有独立金字段可清零）
         TreasureVault.Instance?.ResetAll();
         Debug.Log("[RulerController] ResetState: 引用已清除，资源归零");
     }
@@ -216,41 +217,31 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
     // ===== 资源管理 =====
 
-    // 统一资源修改入口（引导书 5.4 节）。
-    // type=资源类型，isIncrease=true增加/false减少，amount=变化量。
+    // 兼容重载：目标仓默认＝玩家国（id=0）⇒ ⭐ `M1-E`（`D805` `Q3` 尾参默认值法）现有调用点**零改**。
+    public void ModifyResource(ResourceType type, bool isIncrease, int amount) => ModifyResource(type, isIncrease, amount, 0);
+
+    // 统一资源修改入口（引导书 5.4 节；⭐ `M1-E`/`09#47` `B8`「扣费＝统一一个 API」落点）。
+    // type=资源类型，isIncrease=true增加/false减少，amount=变化量；kingdomId=**目标仓**（0=玩家 / >0=AI 国）。
     // 每次修改都会发布 RulerResourceChangedEvent 通知其他系统（UI 刷新、成就检测等）。
-    // 防御逻辑：Mathf.Abs 防止负数反向操作，Mathf.Max(0) 防止资源变为负数。
-    //
-    // TODO(2_12步骤8)：随 Ruler 全量迁移到仓库系统(IWarehouse)退役当前真源记账。HH.8 裁决分批A。
-    //   * 金(Gold)=货币不占存储，本方法保留直通；
-    //   * 非金资源在步骤3~7 阶段仍是真源（本步稳定为兼容壳的语义就位，不双写、不改逻辑）；
-    //   * 禁双写红线：不得在 Ruler 字段 与 IWarehouse.Deposit 对新账并行记账（会资源复制）——迁移完成一次性切换真源。
-    public void ModifyResource(ResourceType type, bool isIncrease, int amount)
+    // 防御逻辑：Mathf.Abs 防止负数反向操作；扣减由仓 `Take` 限量（≤存量 ⇒ 不会为负）。
+    // ⭐ `M1-E`：金与普通资源**完全同构** —— ⛔ 不再有金分支（`HH.8` 的 `TODO(2_12步骤8)` 在此兑现）；
+    //   金真源＝`TreasureVault.Get(kingdomId)` 的 `res_currency` 条目（体积 0 ⇒ 不占容量 ⇒ 无溢出面）。
+    // ⛔ 禁双写红线（`HH.8`）：不得在 Ruler/KingdomState 字段与新仓并行记账。
+    public void ModifyResource(ResourceType type, bool isIncrease, int amount, int kingdomId = 0)
     {
         amount = Mathf.Abs(amount);  // 防止负数反向操作
 
-        // 金：货币直通，字段记账（HH.8）。
-        if (type == ResourceType.Gold)
-        {
-            int old = Gold;
-            int nv = Mathf.Max(0, isIncrease ? old + amount : old - amount);
-            Gold = nv;
-            Debug.Log($"[RulerController] 金 {(isIncrease ? "+" : "-")}{amount}，当前: {nv}");
-            EventBus.Publish(new RulerResourceChangedEvent(type, old, nv));
-            return;
-        }
-
-        // 2_12 步骤8.4（禁双写红线物理落点，HH.8）：非金真源=国库仓库，旧字段退役。
-        var tv = TreasureVault.Instance;
+        // ⭐ 目标仓解析（`B8`）：按国取国库容器；未就绪 ⇒ `Q6` 退化（写＝丢弃＋告警，对齐 `TaskScheduler:714` 先例）。
+        var tv = TreasureVault.Get(kingdomId);
         if (tv == null)
         {
-            Debug.LogWarning($"[RulerController] 国库未就绪，忽略非金资源变化: {type} {amount}");
+            Debug.LogWarning($"[RulerController] k{kingdomId} 国库未就绪，忽略资源变化（Q6 退化）: {type} {(isIncrease ? "+" : "-")}{amount}");
             return;
         }
         int before = tv.GetAmount(type);
         int moved = isIncrease ? tv.Deposit(type, amount) : tv.Take(type, amount);
         int after = tv.GetAmount(type);
-        Debug.Log($"[RulerController] 国库 {type} {(isIncrease ? "+" : "-")}{moved}，当前: {after}");
+        Debug.Log($"[RulerController] k{kingdomId} 国库 {type} {(isIncrease ? "+" : "-")}{moved}，当前: {after}");
         EventBus.Publish(new RulerResourceChangedEvent(type, before, after));
     }
 
@@ -305,11 +296,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
         }
     }
 
-    // 按资源类型获取当前值
+    // 按资源类型获取当前值（⭐ `M1-E`/`Q4`：**断金分叉** —— 金不再特判 ⇒ 与普通资源同路，防 `Gold` 门面递归）
     private int GetResourceValue(ResourceType type)
     {
-        if (type == ResourceType.Gold) return Gold;   // 金=货币直通字段
-        // 2_12 步骤8.4：非金真源=国库仓库（HH.16 裁决 B）
+        // 2_12 步骤8.4 / `M1-E`：真源＝国库容器（HH.16 裁决 B）；金为其 `res_currency` 条目
         return TreasureVault.Instance != null ? TreasureVault.Instance.GetAmount(type) : 0;
     }
 
@@ -354,8 +344,7 @@ public class RulerController : Singleton<RulerController>, ISaveable
             return;
         }
         var res = DifficultyManager.Instance.GetInitialResources();
-        // 2_12 步骤8.4：金=货币直通字段；非金一次性绝对入国库（先清后入，防累积重复）
-        Gold = Mathf.Max(0, res.Get(ResourceType.Gold));
+        // ⭐ `M1-E`/`09#47`：金降普通资源 ⇒ 初始资源**一次性绝对入国库**（先清后入，防累积重复），金亦在内。
         var tv = TreasureVault.Instance;
         if (tv != null)
         {
@@ -363,18 +352,17 @@ public class RulerController : Singleton<RulerController>, ISaveable
             if (res.items != null)
             {
                 for (int i = 0; i < res.items.Length; i++)
-                    if (res.items[i].type != ResourceType.Gold)
-                        DepositToTreasury(res.items[i].type, res.items[i].amount);
+                    DepositToTreasury(res.items[i].type, res.items[i].amount);
             }
         }
         else
         {
-            Debug.LogWarning("[RulerController] 按难度初始化：国库未就绪，非金初始暂不落地");
+            Debug.LogWarning("[RulerController] 按难度初始化：国库未就绪，初始资源暂不落地（Q6 退化·M1-E）");
         }
-        Debug.Log($"[RulerController] 按难度应用初始资源: Gold={Gold}, Stone={tv?.GetAmount(ResourceType.Stone) ?? 0}, Wood={tv?.GetAmount(ResourceType.Wood) ?? 0}, Food={tv?.GetAmount(ResourceType.Food) ?? 0}");
+        Debug.Log($"[RulerController] 按难度应用初始资源: Gold={tv?.GetAmount(ResourceType.Gold) ?? 0}, Stone={tv?.GetAmount(ResourceType.Stone) ?? 0}, Wood={tv?.GetAmount(ResourceType.Wood) ?? 0}, Food={tv?.GetAmount(ResourceType.Food) ?? 0}");
     }
 
-    /// <summary>非金资源一次性入国库（初始/读档迁移共用；绝对置入前提是国库已清空）。</summary>
+    /// <summary>资源一次性入国库（初始共用；绝对置入前提是国库已清空）。⭐ `M1-E`：金亦走此口（⛔ 不再排除）。</summary>
     private void DepositToTreasury(ResourceType type, int amount)
     {
         if (amount <= 0) return;
@@ -388,11 +376,10 @@ public class RulerController : Singleton<RulerController>, ISaveable
     {
         var data = new RulerSaveData
         {
-            rulerName = RulerName,
-            gold = Gold
-            // ⭐ M1-A：非金资源真源＝国库容器（`TreasureVault`），随**建筑存档**存取
-            // （`BuildingSaveData.treasuryContents`）；原「旧字段 + 读档迁移桥」随 `ResourcePack`
-            // 退役整段删除（`D788` §4：旧档可作废 ⇒ 不写存档迁移脚本）。
+            rulerName = RulerName
+            // ⭐ `M1-A`/`M1-E`：资源真源＝国库容器（`TreasureVault`），随**建筑存档**存取
+            // （`BuildingSaveData.treasuryContents`）；`gold` 字段 ⛔ **不再写**（`D805` `Q5` 改裁：
+            // ⛔ 不写迁移桥 · 旧档金随 `D788` §4「旧档可作废」报废 · 旧档有金 ⇒ `LoadState` 显式告警）。
         };
         return new SavePayload
         {
@@ -411,17 +398,20 @@ public class RulerController : Singleton<RulerController>, ISaveable
 
         var data = JsonUtility.FromJson<RulerSaveData>(payload.json);
         RulerName = string.IsNullOrEmpty(data.rulerName) ? "无名君主" : data.rulerName;
-        // 2_12 步骤8.4：金=货币直通字段恢复（非金由国库容器随建筑存档恢复）。
-        Gold = data.gold;
+        // ⭐ `M1-E`（`D805` `Q5`）：金真源＝国库容器（随建筑存档恢复）⇒ ⛔ 不从旧档 `gold` 恢复（无桥）。
+        if (data.gold > 0)
+            Debug.LogWarning($"[RulerController] 旧档金 {data.gold} 随 M1-E 迁移作废（D788 §4 口径）");
     }
 }
 
-// 君主存档数据结构。仅保存金与君主名字，
-// 战斗属性由 UnitController 的 ISaveable 单独保存；非金资源真源＝国库容器（随建筑存档）。
+// 君主存档数据结构。仅保存君主名字，
+// 战斗属性由 UnitController 的 ISaveable 单独保存；资源真源＝国库容器（随建筑存档）。
 [System.Serializable]
 public class RulerSaveData
 {
     public string rulerName;
+    /// <summary>⛔ **已退役 · 不再读写**（⭐ `M1-E`：金迁进仓存档 ⇒ 本字段留位保 schema 不变 ·
+    /// `D805` `Q5` 改裁：⛔ 无迁移桥 · 旧档金作废）；`LoadState` 对旧档 `>0` 显式告警。</summary>
     public int gold;
     // ⭐ M1-A：原非金字段（stone/wood/food/specialFood/meat）与「旧档迁移桥」整段退役
     //（`09#50` `ResourcePack` 退役 ＋ `D788` §4 旧档可作废 ⇒ 不写迁移脚本）。

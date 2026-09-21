@@ -192,6 +192,14 @@ public class KingdomRegistry : Singleton<KingdomRegistry>, ISaveable
                     // 2_17 步骤4 台账转派生：workerCount/warriorCount 为实体派生只读属性，不再从存档恢复
                     // （读档单位 SpawnFromSave 回笼，王国派生统计自动重建）
                 };
+                // ⭐ `M1-E`（`D805` `Q5` 同口径延伸）：金真源已改仓 ⇒ 旧档台账里的金**作废**（⛔ 无迁移桥），
+                //   与玩家侧 `RulerSaveData.gold` 告警对称；防"僵尸第二真源"（`M1-A`/`HH.8` 禁双写红线精神）。
+                int legacyGold = state.resources.Get(ResourceType.Gold);
+                if (legacyGold > 0)
+                {
+                    Debug.LogWarning($"[KingdomRegistry] k{e.id} 旧档台账金 {legacyGold} 随 M1-E 迁移作废（D788 §4 口径）");
+                    state.resources = state.resources.Set(ResourceType.Gold, 0);
+                }
                 if (state.IsPlayer)
                 {
                     _playerRegistered = true;

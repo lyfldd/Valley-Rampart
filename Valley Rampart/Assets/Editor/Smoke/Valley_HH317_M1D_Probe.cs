@@ -13,7 +13,7 @@ using static BuildingFactory;
 //  收尾纪律（L-32）：真暂停(Time.timeScale=0) → 封盘 → ExitTestRun → 退 Play。
 //
 //  段（与判据一一对应）：
-//    §B 判据1 Killer 链（生产事件直证）／判据2 D490／判据3 战利品来源（正＋空包负）／判据4 ×1.5 不落地／判据10 日志
+//    §B 判据1 Killer 链（生产事件直证）／判据2 D490／判据3 战利品来源（正＋空包负）／判据4 ×1.5 已落地（M1-E 件7）／判据10 日志
 //    §C 判据5 标签（不可掉仓 ⛔／可掉仓 ✅；盲区② 工地仓并入 §D②）
 //    §D 判据6 #49 三分类（①工事被打毁掉箱 ②拆除分箱 ③EnterRuined 仓留存无箱-负向）
 //    §E 判据7 EnforceCellLimit 洒落邻格（总量守恒）
@@ -103,7 +103,7 @@ public static class HH317M1DProbe
 
         // ================= §B 判据1/2/3/4/10 =================
         Log("");
-        Log("## §B 判据1 Killer 链 ＋ 判据2 D490 ＋ 判据3 来源＝死者背包 ＋ 判据4 ×1.5 不落地 ＋ 判据10 日志");
+        Log("## §B 判据1 Killer 链 ＋ 判据2 D490 ＋ 判据3 来源＝死者背包 ＋ 判据4 ×1.5 已落地（M1-E 件7）＋ 判据10 日志");
         Log("§B 鉴别力声明：样本走生产入口 `DamageSystem.ApplyDamage(source,target,9999)`（⛔ 非直构事件 · L-51）——");
         Log("§B         改前 Killer 生产恒 null（D802 实证）⇒ 判据1 必红且战利品不落箱；改前内容＝凭空随机金 ⇒ 判据3/4 必红。");
         var k1 = SpawnUnitDirect(Occupation.Berserker, CellCenter(NearCell(anchorCell, 3)));
@@ -160,7 +160,8 @@ public static class HH317M1DProbe
             }
             else Check(false, "§B 负例直构", "v2 失败");
 
-            // 判据4：×1.5 本批不落地（死者含金 ⇒ 逐值原样、⛔ 无 ×1.5）
+            // 判据4：×1.5 **已落地**（⭐ `M1-E` 件7 · `D805` `Q7` 同批 —— 口径随 M1-E 由「不落地」演进为「落地」：
+            //   判据＝击杀者兽人 ＆ 死者背包为金 ⇒ 箱内容 = RoundToInt(原量 × 1.5) = 15；只乘金 · `09` §9.9 生成口径）
             var v3 = SpawnUnitDirect(Occupation.Warrior, CellCenter(NearCell(anchorCell, 6)));
             if (v3 != null)
             {
@@ -171,8 +172,9 @@ public static class HH317M1DProbe
                 ds.ApplyDamage(k1, v3, 9999);
                 var nc3 = FindNewChest(before3);
                 int gotG = nc3 != null ? nc3.contents.Get(ResourceType.Gold) : -1;
-                Check(nc3 != null && gotG == g && g == 10, "判据4 ×1.5 本批不落地（预期：无 ×1.5 痕迹）",
-                    "死者背包 Gold=" + g + " ⇒ 箱内容 Gold=" + gotG + "（⛔ 未乘 · 待 M1-E 金进仓后落地）");
+                int expG = Mathf.RoundToInt(10 * 1.5f);
+                Check(nc3 != null && g == 10 && gotG == expG, "判据4 ×1.5 已落地（M1-E 件7：只乘金 · RoundToInt）",
+                    "死者背包 Gold=" + g + " ⇒ 箱内容 Gold=" + gotG + "（期望 " + expG + " ＝ RoundToInt(10×1.5) · §9.9 生成口径）");
             }
             else Check(false, "§B 判据4直构", "v3 失败");
         }
