@@ -47,7 +47,8 @@ public class KingdomState
     public ResourceList resources;
 
     // ===== 矿洞副产台账（DZ-072a，D562 / HH.107 件2）=====
-    // 水晶/火油为副产稀缺资源，单列两桶不进 ResourcePack 五经济资源（AddWater/WaterNetwork 专用桶先例语义；
+    // 水晶/火油为副产稀缺资源，单列两桶不进 ResourcePack 五经济资源（⭐ `M1-F`：原"AddWater/WaterNetwork
+    // 专用桶先例"随水网退役 ⇒ 先例改引本类 `crystal`/`fireOil`/`ore` 自身；
     // 造价/退还语义不涉，避免扩全局结构）。由 TaskScheduler.AddGatherOverflow/副产搬运分流入账，
     // TrainingSystem.PayRecruit 消费（P8 配对审：AI 侧转职水晶检解锁）。不入档（KingdomState=运行时态，每局 Foundry 重建）。
     /// <summary>副产水晶存量（AI 国库台账；玩家(0) 不用此桶——玩家走 TreasureVault）。</summary>

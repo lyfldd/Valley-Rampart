@@ -29,10 +29,11 @@ public static class ResourceCatalog
         }
     }
 
-    // ===== 资源表（§4.3 A 组 · 已有 13 项，与 ResourceType 枚举现值 1:1）=====
-    // ⚠️ 第 14 项「回血包 res_consumable.medkit」表内已列、**落码归 M6**（09 §4.3 A 组末行 ＋ D789 裁 A）
-    //    ⇒ 本片不落（现在落＝孤儿资源，会被 §十-1 启动自检报警）。
-    // ⚠️ B 组（人口）／D 组（水）标签未入本表 —— 其枚举项尚不存在，落码归 M1-B／M1-F。
+    // ===== 资源表（A 组 13 项 ＋ D 组水 1 项 ＝ 14 项，与 ResourceType 枚举现值 1:1）=====
+    // ⚠️ A 组「第 14 项 回血包 res_consumable.medkit」**尚未落码**、归 M6（09 §4.3 A 组末行 ＋ D789 裁 A）
+    //    ⇒ 现在落＝孤儿资源，会被 §十-1 启动自检报警。
+    // ✅ D 组（水 · 枚举第 14 项）**已落**（`M1-F` 件1 · `D807` Q3 定案 `res_fluid.water` · 体积 1）。
+    // ⚠️ B 组（人口）标签仍在表外 —— 其枚举项尚不存在，落码归 `#43`（人口账本读口 · 已独立挂账）。
     // ⭐ 体积初值（§4.2 · 已定 2026-09-18）：一切资源＝1，仅金币＝0（不占容量）；数值批可调。
     private static readonly Entry[] Table =
     {
@@ -51,6 +52,9 @@ public static class ResourceCatalog
         new Entry(ResourceType.StoneAmmo,    new[] { "res_ammo.stone" },                               1, "石头弹"),
         new Entry(ResourceType.FireballAmmo, new[] { "res_ammo.fireball" },                            1, "火弹"),
         new Entry(ResourceType.MagicAmmo,    new[] { "res_ammo.magic" },                               1, "魔弹"),
+        // ⭐ D 组（水 · `M1-F` 件1 · `09#44`）：水按资源处理（普通仓 ＋ 工人搬 ＋ 整数）。
+        //   体积 1（`D807` Q2：保"水井仓满 100 ⇒ 停产"语义，⛔ 非 0）；标签 `res_fluid.water`（`D807` Q3 定案）。
+        new Entry(ResourceType.Water,        new[] { "res_fluid.water" },                             1, "水"),
     };
 
     private static readonly Dictionary<ResourceType, Entry> Index = BuildIndex();

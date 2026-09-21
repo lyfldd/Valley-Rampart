@@ -34,7 +34,8 @@ public static class WorldLifecycle
         if (RulerController.Instance != null) RulerController.Instance.ResetState();
         if (KingdomManager.Instance != null) KingdomManager.Instance.ResetState();
         if (PopulationSystem.Instance != null) PopulationSystem.Instance.ResetState();
-        if (WaterNetwork.Instance != null) WaterNetwork.Instance.ResetState();   // T13/M10（HH.92）：AI 水桶跨轮残留清偿——策划侦察实锤缺口（正式局换局同样受益）
+        // ⭐ `M1-F`：原 `WaterNetwork.Instance.ResetState()`（T13/M10 AI 水桶跨轮清偿）随水网退役**已删**
+        //   —— 水已入**水井仓**（随建筑销毁/存档走），⛔ 无全局桶可残留。
         if (RanchSystem.Instance != null) RanchSystem.Instance.ResetState();
         if (SiegeProductionSystem.Instance != null) SiegeProductionSystem.Instance.ResetState();
 

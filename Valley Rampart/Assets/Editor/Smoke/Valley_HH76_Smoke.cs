@@ -51,9 +51,9 @@ public static class Valley_HH76_Smoke
 
         var results = new List<string>();
 
-        // ---- P1' 结构：4 AI 国 Well 各=1 + AI 桶蓄水 ----
+        // ---- P1' 结构：4 AI 国 Well 各=1 + 井仓蓄水（⭐ `M1-F` 水仓化：原 AI 桶 ⇒ AI 国井仓）----
         yield return new WaitForSeconds(2.5f);   // 井产水积累窗
-        var wn = WaterNetwork.Instance;
+        // ⭐ `M1-F`：`WaterNetwork` 已退役 ⇒ 读数改走 `TestFixtureApi.ReadKingdomWaterInWells`。
         var reg = KingdomRegistry.Instance;
         var wellByKid = new Dictionary<int, int>();
         var bs = Object.FindObjectsOfType<Building>();
@@ -70,8 +70,8 @@ public static class Valley_HH76_Smoke
             var k = all[i];
             if (k.IsPlayer) continue;
             int w; wellByKid.TryGetValue(k.id, out w);
-            float bucket = wn.GetStored(k.id);
-            detail.Append($"k{k.id}井={w}桶={bucket:F0} ");
+            float bucket = TestFixtureApi.ReadKingdomWaterInWells(k.id);
+            detail.Append($"k{k.id}井={w}井仓={bucket} ");
             if (w != 1 || bucket <= 0f) p1 = false;
         }
         results.Add($"P1' 结构 全AI模板含井+蓄水 {detail} ={p1}");

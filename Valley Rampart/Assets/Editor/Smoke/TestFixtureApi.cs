@@ -89,13 +89,18 @@ public static class TestFixtureApi
         if (TerritorySystem.Instance != null) TerritorySystem.Instance.ClaimInitial(state.id);
 
         // 5) T8 三源同步注入
-        var wn = WaterNetwork.Instance;
+        // ⭐ `M1-F` 水仓化（`09#44` · `D807`）：原 `WaterNetwork` 注水 ⇒ 改**给该国水井仓注满**（仓读数口径）。
         float waterAdded = 0f;
-        if (wn != null && !wn.IsBucketFull(state.id))
+        var wbs = UnityEngine.Object.FindObjectsOfType<Building>();
+        for (int i = 0; i < wbs.Length; i++)
         {
-            float room = wn.capacity - wn.GetStored(state.id);
-            wn.AddWater(room, state.id);   // AI 桶注满（不触玩家桶，D545 主体对称纪律）
-            waterAdded = wn.GetStored(state.id);
+            var wb = wbs[i];
+            if (wb == null || wb.def == null || wb.def.id != "Well" || wb.kingdomId != state.id) continue;
+            var wst = wb.GetComponent<StorageComponent>();
+            if (wst == null) continue;
+            int room = wst.capacity - wst.GetAmount(ResourceType.Water);
+            if (room > 0) wst.Add(ResourceType.Water, room);   // 井仓注满（⛔ 不触他国井 · D545 主体对称纪律）
+            waterAdded = wst.GetAmount(ResourceType.Water);
         }
         int warehouseStored = FillFixtureWarehouse(state.id, spec.warehouseFill);
 
@@ -159,9 +164,58 @@ public static class TestFixtureApi
             var q = list[i].Query();
             for (int j = 0; j < q.Count; j++) wh += q[j].amount;
         }
-        float water = WaterNetwork.Instance != null ? WaterNetwork.Instance.GetStored(kingdomId) : 0f;
+        float water = ReadKingdomWaterInWells(kingdomId);   // ⭐ `M1-F` 水仓化：原 `WaterNetwork.GetStored` ⇒ 井仓读数
         if (k == null) return (0, 0, 0, 0, 0, wh, water);
         return (k.GetResourceValue(ResourceType.Gold), k.GetResourceValue(ResourceType.Stone), k.GetResourceValue(ResourceType.Wood), k.GetResourceValue(ResourceType.Food), k.GetResourceValue(ResourceType.Metal), wh, water);   // ⭐ M1-A 适配
+    }
+
+    // ===== ⭐ `M1-F` 水仓化读数（`09#44` · `D807`）：原 `WaterNetwork` 三口的**仓化替代** =====
+
+    /// <summary>⭐ `M1-F` 水仓化：该国**全部水井仓**内 `Water` 合计（原 `WaterNetwork.GetStored(kid)` 的仓化读数）。</summary>
+    public static int ReadKingdomWaterInWells(int kingdomId)
+    {
+        int sum = 0;
+        var wbs = UnityEngine.Object.FindObjectsOfType<Building>();
+        for (int i = 0; i < wbs.Length; i++)
+        {
+            var wb = wbs[i];
+            if (wb == null || wb.def == null || wb.def.id != "Well" || wb.kingdomId != kingdomId) continue;
+            var st = wb.GetComponent<StorageComponent>();
+            if (st != null) sum += st.GetAmount(ResourceType.Water);
+        }
+        return sum;
+    }
+
+    /// <summary>⭐ `M1-F` 水仓化：给该国水井仓加水（探针造差值用 · 原 `WaterNetwork.AddWater` 替代），返回实际加入量。</summary>
+    public static int AddWaterToKingdomWells(int kingdomId, int amount)
+    {
+        if (amount <= 0) return 0;
+        int added = 0;
+        var wbs = UnityEngine.Object.FindObjectsOfType<Building>();
+        for (int i = 0; i < wbs.Length && added < amount; i++)
+        {
+            var wb = wbs[i];
+            if (wb == null || wb.def == null || wb.def.id != "Well" || wb.kingdomId != kingdomId) continue;
+            var st = wb.GetComponent<StorageComponent>();
+            if (st != null) added += st.Add(ResourceType.Water, amount - added);
+        }
+        return added;
+    }
+
+    /// <summary>⭐ `M1-F` 水仓化：从该国水井仓扣水（探针造差值用 · 原 `WaterNetwork.ConsumeWater` 替代），返回实际扣量。</summary>
+    public static int TakeWaterFromKingdomWells(int kingdomId, int amount)
+    {
+        if (amount <= 0) return 0;
+        int taken = 0;
+        var wbs = UnityEngine.Object.FindObjectsOfType<Building>();
+        for (int i = 0; i < wbs.Length && taken < amount; i++)
+        {
+            var wb = wbs[i];
+            if (wb == null || wb.def == null || wb.def.id != "Well" || wb.kingdomId != kingdomId) continue;
+            var st = wb.GetComponent<StorageComponent>();
+            if (st != null) taken += st.TakeOut(ResourceType.Water, amount - taken);
+        }
+        return taken;
     }
 
     // ===== T9：生育/招工条件读数（同 PopulationSystem.OnNewDayPerKingdom 口径的公开读数复刻）=====

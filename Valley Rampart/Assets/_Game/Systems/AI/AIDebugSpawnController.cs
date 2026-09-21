@@ -425,10 +425,10 @@ public class AIDebugSpawnController : MonoBehaviour
 
     /// <summary>
     /// QQQ.2 T22 验证场景：生产链路端到端联调。
-    /// 一键生成：水井（产水入网，不需工人）+ 农场（耗水产粮，需工人）+ 仓库（接收搬运）+ 2 工人。
+    /// 一键生成：水井（⭐ `M1-F`：免工自产入本仓）+ 农场（耗水产粮，需工人）+ 仓库（接收搬运）+ 2 工人。
     /// 验证链（依赖 T9/T15/T17/T19，本会话已完成）：
-    ///   ① 水井 → WaterNetwork 产水（4 水/秒，容量 100）
-    ///   ② 农场有工人（HasWorkerAssigned）+ 水（ConsumeWater 2/次）→ 产粮
+    ///   ① 水井 → **水井仓**产水（4 点/秒，仓容 100 · ⭐ `M1-F` 水仓化）
+    ///   ② 农场有工人（HasWorkerAssigned）+ **农场仓水**（耗 2 点/次 · ⭐ `M1-F`）→ 产粮
     ///   ③ 农场存储达标 → TaskScheduler 派搬运任务 → 工人搬粮入仓（StorageComponent.HarvestCarry）
     /// 仓库面板（T12）落地后可同步观察实时显示。
     /// </summary>
@@ -438,7 +438,7 @@ public class AIDebugSpawnController : MonoBehaviour
             ? GridSystem.Instance.Config.cellSize.x : 2.26f;
         if (BuildingFactory.Instance == null) return;
 
-        // ① 水井（产水入网，不需要工人）
+        // ① 水井（⭐ `M1-F`：免工自产入本仓，不需要工人）
         PlaceBuilding("Buildings/Well", center + new Vector2(-4f * cs, 0f));
         // ② 农场（耗水产粮，需工人派生产任务）
         PlaceBuilding("Buildings/farm", center + new Vector2(1f * cs, 0f));
@@ -452,9 +452,9 @@ public class AIDebugSpawnController : MonoBehaviour
 
     /// <summary>
     /// QQQ.4 T13 验证场景：资源生命周期端到端（双任务并行 + 工人背包 + 搬运入仓）。
-    /// 一键生成：水井（产水入网）+ 农场（耗水产粮）+ 仓库（卸货目标）+ 木头堆（采集点）+ 3 工人。
+    /// 一键生成：水井（⭐ `M1-F`：免工自产入本仓）+ 农场（耗水产粮）+ 仓库（卸货目标）+ 木头堆（采集点）+ 3 工人。
     /// 验证链（依赖 QQQ.4 T1-T12）：
-    ///   ① 农场双任务（T1/T2）：初始水网缺水(&lt;20) → 农场同时派 Production（耕作）+ WaterHaul（挑水）→ 2 工人分工
+    ///   ① 搬水链（⭐ `M1-F` 真搬运）：农场仓水 &lt;20 → 农场派 WaterHaul（源＝同国有水**水井** → 卸水入**农场仓**）→ 工人分工
     ///   ② 采集入背包（T8/T10/T12）：**右键**木头堆资源格（`PrioritizeHarvestCommand`·【片 6-2】玩家采集入口）→
     ///      工人采集入背包 → 搬运到仓库 → 左上角资源增加
     ///   ③ 流浪汉营地徘徊（T4/T5）：流浪汉仅在营地 ±3 格活动，不朝主城
@@ -466,7 +466,7 @@ public class AIDebugSpawnController : MonoBehaviour
         if (BuildingFactory.Instance == null) return;
         Vector2 center = WorldManager.Instance != null ? WorldManager.Instance.GetKingdomAnchorWorld() : Vector2.zero;
 
-        // ① 水井（产水入网，不需要工人）
+        // ① 水井（⭐ `M1-F`：免工自产入本仓，不需要工人）
         PlaceBuilding("Buildings/Well", center + new Vector2(-4f * cs, 0f));
         // ② 农场（耗水产粮，需工人派生产任务）
         PlaceBuilding("Buildings/farm", center + new Vector2(1f * cs, 0f));

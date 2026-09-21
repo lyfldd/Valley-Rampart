@@ -31,6 +31,8 @@ MonoBehaviour:
   moduleType: 1
   warehousePaths:
   - res_food.grain
+  - res_fluid.water
+  droppable: 1
   isObstacle: 0
   producer:
     kind: 0

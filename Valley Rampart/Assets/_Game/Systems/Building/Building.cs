@@ -1457,8 +1457,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     [Header("任务调度（QQQ.2 T17）")]
     [Tooltip("存储达标触发搬运阈值（存量 ≥ capacity×此值 发布 Transport）")]
     public float transportThreshold = 0.8f;
-    [Tooltip("水网缺水阈值（Stored < 此值 农场发布 WaterHaul）")]
-    public float waterThreshold = 20f;
+    [Tooltip("农场缺水阈值（**农场仓** Water 量 < 此值 发布 WaterHaul · ⭐ `M1-F` 起读本仓；整数化 `D807` Q4）")]
+    public int waterThreshold = 20;
 
     /// <summary>任务源世界坐标（建筑坐标）。</summary>
     public Vector2 SourcePos => transform.position;
@@ -1474,7 +1474,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// 按建筑类型声明任务（QQQ.2 §10.3 / DR-16）：
     ///   ① 生产建筑无工人在场且未满 → Production（destType=None）
     ///   ② 有存储且存量 ≥ capacity×transportThreshold → Transport（destType=NearestWarehouse）
-    ///   ③ 农场缺水（水网 Stored<waterThreshold）→ WaterHaul（destType=WaterNetwork）
+    ///   ③ 农场缺水（**农场仓** Water < waterThreshold）→ WaterHaul（源＝最近**同国**有水**水井** ·
+    ///      destType=SpecificBuilding 终点＝本农场 · `M1-F` 件4 真搬运）
     /// 军事/其他不在此扩。无条件返回 false。
     /// 【HH.294 片 6-2·6-D】原「①一次性资源点被确认采集 → Gather」分支**随实体退役已删**
     ///   —— 采集任务改由 `WorldGatherSource` 广告（数据寻址·唯一天然资源采集源）。
@@ -1507,7 +1508,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
         // ① 采集：一次性资源点（isConsumable）被玩家确认采集 → Gather 任务 —— 【片 6-2·6-D】已删（见方法头注）
 
-        // ② 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：自动产水入网，不派生产任务）
+        // ② 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：⭐ `M1-F` 起免工自产入**本仓**，不派生产任务）
         if (producer != null
             && !producer.IsWell
             && (storage == null || !storage.IsFullFor(producer.OutputResource))
@@ -1537,18 +1538,60 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             }
         }
 
-        // ④ 挑水：仅农场（产粮耗水）在本国水网缺水时发挑水任务（采石/矿洞不耗水，不派）
-        // HH.86/DZ-044 件2c：旧读全图玩家桶（Stored=0 桶）——AI 农田在玩家桶满时永不发挑水=AI 农田断水；
-        // 改读本国桶 GetStored(kingdomId)（GetStored(0)==Stored 旧语义等价，玩家逐位不动）。
-        if (producer != null && producer.OutputResource == ResourceType.Food
-            && WaterNetwork.Instance != null && WaterNetwork.Instance.GetStored(kingdomId) < waterThreshold)
+        // ④ 搬水：仅农场（产粮耗水）在**自己仓**水不足时发搬水任务（采石/矿洞不耗水，不派）。
+        //  ⭐ `M1-F` 件4（`09#44` · `09` §4.3 D 组 · `D807`）：改**真搬运** ——
+        //    源＝**最近同国有水水井**（`SourcePos` ⇒ 第一段位移＝去水井取水）、
+        //    终点＝本农场（第二段位移＝卸水入农场仓）；args 携带卸水落点与缺口量。
+        //  ⚠️ **国别过滤必带**（`D807` §二-1）：⛔ 只选**同国**且 `Water > 0` 的 Active 水井
+        //    —— 退役的 `ResolveWaterSource` 不过滤国别（半假搬运掩盖）；真搬运下 AI 农场会挑玩家井水（历史同族缺陷）。
+        //  ⭐ 无候选（同国无水井/井全空）⇒ 不发布（避免下发即失败的空跑）。
+        if (producer != null && producer.OutputResource == ResourceType.Food && storage != null)
         {
-            task = new KingdomTask(KingdomTaskType.WaterHaul, this);
-            task.destType = KingdomDestType.WaterNetwork;
-            return true;
+            int waterHave = storage.GetAmount(ResourceType.Water);
+            if (waterHave < waterThreshold)
+            {
+                var well = FindNearestSameKingdomWellWithWater();
+                if (well != null)
+                {
+                    task = new KingdomTask(KingdomTaskType.WaterHaul, well);   // ⭐ 源＝水井（第一段位移）
+                    task.destType = KingdomDestType.SpecificBuilding;
+                    task.destPos = transform.position;                          // 终点＝本农场（第二段位移）
+                    task.args = new HaulWaterArgs
+                    {
+                        target = storage,                          // 卸水落点＝农场仓
+                        need = waterThreshold - waterHave          // 缺口量（装载上限 · ⛔ 不多搬）
+                    };
+                    return true;
+                }
+            }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// ⭐ `M1-F` 件4：**最近同国有水水井**（搬水任务第一段位移目标 · `D807` §二-1 国别过滤必做）。
+    /// 判据：`def.id == "Well"` ＋ `state == Active` ＋ **同 `kingdomId`** ＋ **仓内 `Water > 0`**。
+    /// ⛔ 不过滤 `kingdomId` ＝ 退役 `ResolveWaterSource` 的缺陷（真搬运下会让 AI 农场挑玩家井水）。
+    /// ⚠️ 本端全扫 `BuildingRegistry`（照 `ResolveWaterSource` 旧形制 · 搬水为低频任务广告路径）。
+    /// </summary>
+    private Building FindNearestSameKingdomWellWithWater()
+    {
+        if (BuildingRegistry.Instance == null) return null;
+        var all = BuildingRegistry.Instance.All;
+        Building best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var w = all[i];
+            if (w == null || w.def == null || w.def.id != "Well" || w.state != BuildingState.Active) continue;
+            if (w.kingdomId != kingdomId) continue;                              // ⭐ 国别过滤（D807 §二-1）
+            var ws = w.GetComponent<StorageComponent>();
+            if (ws == null || ws.GetAmount(ResourceType.Water) <= 0) continue;   // ⛔ 无水井不候选
+            float d = GridMath.DistCells(w.transform.position, transform.position);
+            if (d < bestDist) { bestDist = d; best = w; }
+        }
+        return best;
     }
 
     /// <summary>注册到调度器回调（Building 纳入任务派发）。</summary>

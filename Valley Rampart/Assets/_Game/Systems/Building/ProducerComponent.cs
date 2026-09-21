@@ -12,7 +12,7 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     private float _rate;
     private ResourceType _resourceType;
 
-    // ===== QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位，实际产水入网）=====
+    // ===== QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位，⭐ `M1-F` 起实际产水**入本仓**）=====
     private bool _isWell;
 
     // ===== QQQ.3 B8-7 / LC-B9：主产累计器（修复低速率建筑永远不产出）=====
@@ -22,7 +22,7 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
 
     /// <summary>当前是否有工人 Working（QQQ.2 T9/DR-4：仅 Working 算在场，DR-19）。</summary>
     public bool HasWorkerAssigned => TaskScheduler.Instance != null && TaskScheduler.Instance.HasWorkerAssigned(_building);
-    /// <summary>是否水井（QQQ.2 T15：水井自动产水入网，不派生产任务）。</summary>
+    /// <summary>是否水井（⭐ `M1-F` 起：**免工自产 · 产水入本仓**；⛔ 不派生产任务 ⇒ `Building.TryAdvertiseTask` 用它排除）。</summary>
     public bool IsWell => _isWell;
     /// <summary>主产资源类型（QQQ.2 T15：农场 outputResource=Food 才发挑水任务）。</summary>
     public ResourceType OutputResource => _resourceType;
@@ -35,7 +35,7 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
         _storage = building.GetComponent<StorageComponent>();
         _mainAccumulator = 0f;
 
-        // QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位，实际产水入网；跳过产金分支）
+        // QQQ.2 T15：水井特判（well.asset outputResource=Gold 占位 ⇒ ⭐ `M1-F` 起实际产水**入本仓**；跳过产金分支）
         _isWell = building.def.id == "Well";
         RefreshRate();
 
@@ -64,13 +64,12 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     {
         if (_building == null || !_building.IsActive) return;
 
-        // QQQ.2 T15：水井产水入网（DR-14：rate=4 水/秒；水为隐藏资源不占存储，UI 不显示）
+        // ⭐ `M1-F` 件2（`09#44` · `09` §4.3 D 组）：水井产水入**本仓**（普通仓 · ⛔ 不再入 `WaterNetwork`）。
+        //   ⚠️ 保留"免工自产"（`D807` 裁）：早返回 ⛔ 不落下方 `HasWorkerAssigned` 守卫 ⇒ 水井不需工人。
+        //   ⭐ AI/玩家分账天然成立（每国自己的井 → 自己的仓 ⇒ 原 `_aiStoredByKingdom` 桶语义消解）。
         if (_isWell)
         {
-            // D535（HH.73 供水修复批）：原 2_17 批3a「AI 井恒不产水」拦截解除，改按归属路由——
-            // AI 井(kingdomId>0) 产水入本国 AI 桶（WaterNetwork.AddWater 重载），玩家井(kingdomId=0)
-            // 逐位走原玩家桶路径（HH.30 零回归）；AI 桶满停产对齐玩家 IsFull 语义。
-            TickWaterToNetwork(_building.kingdomId);
+            TickWaterToStorage();
             return;
         }
 
@@ -99,34 +98,36 @@ public class ProducerComponent : MonoBehaviour, IBuildingComponent
     }
 
     /// <summary>
-    /// 水井产水入网（QQQ.2 T15 / DR-14：rate=4 水/秒）。水为隐藏资源不占 Storage，
-    /// 按归属入桶（D535：kingdomId=0 玩家桶逐位原逻辑；>0 入 AI 桶），桶满停产避免浪费（DR-8）。
+    /// 水井产水入本仓（`M1-F` 件2 · `09#44`：水按资源处理 · 普通仓）。
+    /// 仓满（`IsFullFor(Water)`）⇒ 停产避免浪费（DR-8）—— ⭐ `D807` Q2：水体积 1 ⇒ 井仓满 100 停产，
+    /// 与退役前 `WaterNetwork.capacity=100` 同语义（`Well.asset producer.capacity=0` ⇒ 仓容落 100）。
     /// </summary>
-    private void TickWaterToNetwork(int kingdomId)
+    private void TickWaterToStorage()
     {
-        if (WaterNetwork.Instance == null) return;
-        if (WaterNetwork.Instance.IsBucketFull(kingdomId)) return;   // 桶满 → 停产（玩家/AI 同语义，D535）
-        _mainAccumulator += _rate;
+        if (_storage == null) return;
+        if (_storage.IsFullFor(ResourceType.Water)) return;   // 仓满 ⇒ 停产（DR-8）
+        _mainAccumulator += _rate;                            // 复用同一累计器（整数点产出 · DR-14）
         int water = Mathf.FloorToInt(_mainAccumulator);
         if (water > 0)
         {
             _mainAccumulator -= water;
-            WaterNetwork.Instance.AddWater(water, kingdomId);   // =0 走玩家桶（原单参重载逐位等价），>0 入 AI 桶
+            _storage.Add(ResourceType.Water, water);          // 放到满为止（部分成功 · 09 §7.1）
         }
     }
 
     /// <summary>
-    /// 农场产粮耗水（QQQ.2 T15 / DR-9 + DR-18：每次产出耗 2 水）。
-    /// ConsumeWater(2) 成功才允许本秒产出；失败则停产 + 头顶冒"缺水"提示。
+    /// 农场产粮耗水（`M1-F` 件3 · `09` §4.3 D 组：**从农场自己的仓扣**）。
+    /// 每次产出耗 **2 点**（整数化 · `D807` Q4）；不足 ⇒ 停产 ＋ 头顶冒"缺水"（形制不变）。
     /// </summary>
     private bool TryConsumeFarmWater()
     {
-        if (WaterNetwork.Instance == null) return false;
-        // 2_17 步骤11 批3a（B′）：农田耗水按建筑归属路由——玩家(kingdomId=0) 耗玩家网水（原逻辑）；
-        // AI(kingdomId>0) 耗 AI 桶水（恒 0 → AI 农田缺水停产，堵 "AI 农田吃玩家网水" 泄漏面）。
-        if (WaterNetwork.Instance.ConsumeWater(2f, _building != null ? _building.kingdomId : 0)) return true;
-        // 缺水停产 + 头顶冒"缺水"图标提示（OverheadSpeech 复用气泡机制）
-        OverheadSpeech.Show(_building.transform, "缺水", duration: 1.2f);
-        return false;
+        if (_storage == null || !_storage.CanTake(ResourceType.Water, 2))
+        {
+            // 缺水停产 + 头顶冒"缺水"图标提示（OverheadSpeech 复用气泡机制）
+            if (_building != null) OverheadSpeech.Show(_building.transform, "缺水", duration: 1.2f);
+            return false;
+        }
+        _storage.TakeOut(ResourceType.Water, 2);
+        return true;
     }
 }

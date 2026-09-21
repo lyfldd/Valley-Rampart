@@ -5,10 +5,9 @@ using UnityEngine;
 //  2_17 步骤11 批3a/3b 探针冒烟 —— per-kingdom 水桶 B′ + 科技闭环解锁态
 //  HH.30 策划批3 验收点（执行端自跑/委  用户触发）：
 //  ① AI 桶初值断言：AI 王国立国 castleLevel==1 + moduleLevels 全0（玩家桶零染）
-//  ② WaterNetwork B′ 双语义锁死：
-//      正探针 玩家桶：ConsumeWater(2,0) 从玩家桶扣（玩家桶语义逐位不变）
-//      负探针 AI 桶：ConsumeWater(2, kingdomId>0) 恒 false（AI 桶无供应→农田缺水停产）
-//      负探针 零染：AI 桶操作不触碰玩家桶 _stored（玩家存量不变）
+//  ② 水仓化结构探针（⭐ `M1-F` 演进：原 `WaterNetwork` B′ 双语义随水网退役 ⇒ 改「井仓接线」口径）：
+//      `09#44` · `D807`「水按资源处理」⇒ 水进**普通仓**（水井有仓）⇒ 判据改「每口井有仓 ∧ 仓 Accepts(Water)」
+//      （改前鉴别：`Well.asset` 已写 `res_fluid.water`，但枚举未落 ⇒ Accepts=false ⇒ FAIL）。
 //  ③ ExecuteTech 闭环（TechGap 升满归零）：
 //      纯谓词探针：moduleLevels[(int)target]==cap → TechGap 返回 0（无需求，行动停）
 //      升阶路径：全0 → 花金升 +1 → 升满 cap → TechGap=0（闭环活且自洽）
@@ -55,29 +54,22 @@ public static class Valley2_17_Smoke_11
             c.Add($"S11-①AI桶初值={(aiInitOk && aiChecked > 0 ? "OK" : (aiChecked == 0 ? "SKIP(无AI王国)" : "FAIL"))}(AI王国×{aiChecked})");
         }
 
-        // ============ ② WaterNetwork B′ 正/负探针 ============
-        var wn = WaterNetwork.Instance;
-        if (wn == null) { c.Add("S11-②水网=FAIL(WaterNetwork null)"); }
-        else
+        // ============ ② 水仓化结构探针（⭐ `M1-F` 演进 · 见文件头说明）============
         {
-            // 玩家桶：先注入 10 水再扣 2，验证玩家桶语义（stored 单调随玩家操作，原逻辑不变）
-            float before = wn.Stored;
-            wn.AddWater(10f, 0);                        // 玩家桶注水
-            float afterAdd = wn.Stored;
-            bool playerConsume = wn.ConsumeWater(2f, 0); // 玩家桶扣 2
-            float afterCon = wn.Stored;
-            bool playerLogical = (afterAdd - before) == 10f && playerConsume && (before + 10 - 2 - afterCon) <= 0.0001f;
-
-            // 负探针：AI 桶 ConsumeWater(2, 99) 恒 false（AI 无供应→缺水停产）
-            bool aiConsume = wn.ConsumeWater(2f, 99);
-            bool aiBlocked = !aiConsume;
-
-            // 负探针零染：AI 桶操作后玩家桶存量不变（=刚扣完后的值）
-            float afterAiOp = wn.Stored;
-            bool noLeak = System.Math.Abs(afterAiOp - afterCon) < 0.0001f;
-
-            bool b2Ok = playerLogical && aiBlocked && noLeak;
-            c.Add($"S11-②水网B′={(b2Ok ? "OK" : "FAIL")} 玩家桶[注+10/扣2/存量{afterCon:F1}] AI扣99折={(aiBlocked ? "阻(缺水停产✓)" : "漏(✓?)")} 零染={(noLeak ? "OK" : "FAIL")}");
+            int wells = 0, withStore = 0, acceptWater = 0;
+            var blds = Object.FindObjectsOfType<Building>();
+            for (int i = 0; i < blds.Length; i++)
+            {
+                var b = blds[i];
+                if (b == null || b.def == null || b.def.id != "Well") continue;
+                wells++;
+                var st = b.GetComponent<StorageComponent>();
+                if (st == null) continue;
+                withStore++;
+                if (st.Accepts(ResourceType.Water)) acceptWater++;
+            }
+            bool b2Ok = wells > 0 && withStore == wells && acceptWater == wells;
+            c.Add($"S11-②水仓化（⭐ M1-F 演进）井={wells} 有仓={withStore} 收水={acceptWater} ={(b2Ok ? "OK" : "FAIL")}");
         }
 
         // ============ ③ ExecuteTech 闭环（TechGap 升满归零）· 纯谓词 ============

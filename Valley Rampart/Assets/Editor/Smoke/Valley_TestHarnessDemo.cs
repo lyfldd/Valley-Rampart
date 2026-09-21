@@ -19,7 +19,7 @@ using UnityEditor;
 //  T4 对照：R1(15x) 与 R2(10x) 判定列逐项对拍（日级事件，timeScale 只压挂钟）；
 //           1x 档 wall-clock 不经济（20 日=2h），列报留 P0 调优批按需跑（结构等价=AdvanceTime 日序同链）。
 //  T15 三查（每轮清场后）：实体计数=0 / EventBus 已知事件订阅在场（全量计数口列报）/ 单例静态字典抽查
-//           （WaterNetwork 旧桶=0+KingdomBrainRegistry.Count=0=T13 补缺实证）。
+//           （⭐ `M1-F`：原"WaterNetwork 旧桶=0"⇒"旧世界井仓水=0"（仓化读数）+KingdomBrainRegistry.Count=0=T13 补缺实证）。
 // ============================================================================
 public static class Valley_TestHarnessDemo
 {
@@ -126,7 +126,7 @@ public static class Valley_TestHarnessDemo
             snapshotPrev = new List<UnitController>(UnitRegistry.Instance.GetAllUnits());
             prevMap = WorldManager.Instance.ActiveMap;
             int brainCountBefore = KingdomBrainRegistry.Instance != null ? KingdomBrainRegistry.Instance.Count : -1;
-            float oldWater = WaterNetwork.Instance != null ? WaterNetwork.Instance.GetStored(fks[0]) : -1f;
+            float oldWater = TestFixtureApi.ReadKingdomWaterInWells(fks[0]);   // ⭐ `M1-F` 仓化读数
             TestHarnessApi.ExitTestRun();
             SmokeApi.ResetWorldForNext();
             yield return null;   // 陷阱2：留一帧
@@ -134,10 +134,10 @@ public static class Valley_TestHarnessDemo
             int unitAfter = CountUnits();
             bool mapNew = WorldManager.Instance.ActiveMap != prevMap;
             int brainAfter = KingdomBrainRegistry.Instance != null ? KingdomBrainRegistry.Instance.Count : -1;
-            float waterAfter = WaterNetwork.Instance != null ? WaterNetwork.Instance.GetStored(fks[0]) : -1f;
+            float waterAfter = TestFixtureApi.ReadKingdomWaterInWells(fks[0]);   // ⭐ `M1-F` 仓化读数
             bool ebSpot = EventBus.HasSubscribers<TimeDayChangedEvent>() && EventBus.HasSubscribers<UnitDiedEvent>();
             results.Add($"T15 R{round + 1} 零残留三查：实体={unitAfter}(需0) 地图新实例={mapNew} 脑注册 {brainCountBefore}→{brainAfter}(需0=T13) " +
-                        $"旧水桶 {oldWater:0}→{waterAfter:0}(需0=T13) EventBus抽查={ebSpot} ={(unitAfter == 0 && mapNew && brainAfter == 0 && waterAfter == 0)}");
+                        $"旧井仓水 {oldWater}→{waterAfter}(需0=T13 · ⭐ M1-F 仓化) EventBus抽查={ebSpot} ={(unitAfter == 0 && mapNew && brainAfter == 0 && waterAfter == 0)}");
         }
 
         Application.logMessageReceived -= OnLog;

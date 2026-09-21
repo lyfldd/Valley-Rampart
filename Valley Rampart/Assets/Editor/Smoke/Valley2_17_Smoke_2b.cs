@@ -125,21 +125,25 @@ public static class Valley2_17_Smoke_2b
         }
         checks.Add($"玩家零回归={(playerZero ? "OK" : "FAIL")}");
 
-        // ===== ③ wellOK：AI 水井不产水入网（kingdomId>0 守卫）=====
+        // ===== ③ wellOK：AI 水井产水入**本国井仓**（⛔ 不充玩家井仓 · ⭐ `M1-F` 水仓化口径）=====
+        // 演进说明（⛔ 不得静默改）：原"AI 水井不得充玩家水网"（读 `WaterNetwork.Stored`）随水网退役 ⇒
+        // 等效判据 = 「玩家国井仓读数不因 AI 井产水而变 ＋ AI 国井仓只增不减（仓满持平）」。
         bool wellOk = false;
         if (W != null)
         {
             var wprod = W.GetComponent<ProducerComponent>();
-            var wn = WaterNetwork.Instance;
-            if (wprod != null && wn != null)
+            if (wprod != null)
             {
-                float wBefore = wn.Stored;
-                for (int i = 0; i < 5; i++) wprod.Tick();   // 每 tick 4 水/秒 ×5 → 若入网必 >0
-                wellOk = wn.Stored == wBefore;              // AI 水井不得充玩家水网
+                int playerBefore = TestFixtureApi.ReadKingdomWaterInWells(0);
+                int aiBefore = TestFixtureApi.ReadKingdomWaterInWells(W.kingdomId);
+                for (int i = 0; i < 5; i++) wprod.Tick();   // 每 tick 4 点/秒 ×5 → 水必入本国井仓
+                int playerAfter = TestFixtureApi.ReadKingdomWaterInWells(0);
+                int aiAfter = TestFixtureApi.ReadKingdomWaterInWells(W.kingdomId);
+                wellOk = playerAfter == playerBefore && aiAfter >= aiBefore;
             }
         }
         else wellOk = true;   // well def 缺失 → 跳过（不算 FAIL）
-        checks.Add($"AI水井不产水={(wellOk ? "OK" : "FAIL")}");
+        checks.Add($"AI水井入本国井仓不充玩家={(wellOk ? "OK" : "FAIL")}");
     }
 
     private static IEnumerator WaitFrames(int n)

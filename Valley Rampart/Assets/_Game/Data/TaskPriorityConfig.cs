@@ -40,7 +40,7 @@ public enum KingdomTaskType
     GoldMine,   // 产金（税务所）→ C
     // ===== QQQ.2 §10.1 扩展（末尾追加保持旧值稳定）=====
     Production, // 生产（农场/采石/矿洞，原地劳作；与 Produce 语义对齐，供 KingdomTask 用）
-    WaterHaul,  // 搬水（水井→水网）
+    WaterHaul,  // 搬水（⭐ `M1-F` 起：水井仓 →（工人搬）→ 农场仓 · 09#44）
     Gather,      // 采集（一次性资源点）
     // ===== 2_12 步骤9 弹药（D207~D212，HH.19 A×4；末尾追加保持序列化稳定）=====
     AmmoReload  // 装填（战争机器/塔弹药：工人搬弹药填弹仓；运输档 B）

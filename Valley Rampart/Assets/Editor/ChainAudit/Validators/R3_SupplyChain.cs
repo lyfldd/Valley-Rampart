@@ -94,7 +94,7 @@ public static class R3_SupplyChain
                 Add(res.Supply, def.outputResource, path + " ProducerComponent(rate=" + def.producer.rate + ")");
 
             if (wellPlaceholder && def.producer.rate > 0f)
-                Add(res.Supply, null, path + " ProducerComponent(水→隐藏桶 WaterNetwork；非 ResourceType 桶)");
+                Add(res.Supply, null, path + " ProducerComponent(水→水井仓 · ResourceType.Water · ⭐ M1-F 落码)");
 
             // MineByproductComponent（isMineByproduct：恒产 Crystal/FireOil/Ore）
             if (def.isMineByproduct)

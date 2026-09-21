@@ -63,7 +63,7 @@ public static class P1Observer
         "[KingdomFoundry]", "[TerritorySystem]", "[KingdomRegistry]", "[SaveManager]",
         "[TimeManager]", "[DayCycle", "[KingdomRegistry]", "[PopulationSystem]",
         "[SmokeApi]", "[WorldLifecycle]", "[VagrantCamp",
-        "[WaterNetwork]", "[AIEconomySettlement]",  // HH.73/D535：AI 供水链观测（AI 桶水量+日结入账）
+        "[AIEconomySettlement]",  // AI 日结入账（⭐ `M1-F`：原 "[WaterNetwork]" 观测锚随水网退役删除）
         // HH.86/DZ-065 件1g：派工/生产/资源/时间域补齐（四考全维度观测=L3 盲区治理；6 tag 计划口径中
         // [PopulationSystem]/[AIEconomySettlement] 已在案上方，实补 4）
         "[TaskScheduler]", "[ProductionSystem]", "[RulerController]", "[SatietySystem]",

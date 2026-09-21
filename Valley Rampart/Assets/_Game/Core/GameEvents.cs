@@ -193,7 +193,10 @@ public enum ResourceType
     // 命名避开两侧 ProjectileType.Stone/Fireball/Magic 撞名（sim 训练仓同），用 XxAmmo 后缀（HH.19 裁决口径1）。
     StoneAmmo,    // 石头弹（投掷机厂：石→石弹 D207/D210；战争机器/塔弹仓）
     FireballAmmo, // 火弹（投掷机厂：火油→火弹 D128）
-    MagicAmmo     // 魔弹（投掷机厂：水晶→魔弹 D128）
+    MagicAmmo,    // 魔弹（投掷机厂：水晶→魔弹 D128）
+    // ===== M1-F 件1 水（`09#44` ＋ `09` §4.3 D 组，末尾追加保持旧值稳定；2026-09-21）=====
+    // 水按资源处理（普通仓 ＋ 工人搬 ＋ 整数）：体积 1（`D807` Q2）／标签 `res_fluid.water`（`D807` Q3 定案）。
+    Water         // 水（水井产 → 水井仓；农场产粮耗 2 点/次 · 从农场仓扣 · `D807`）
 }
 
 // 君主资源变化事件。由 RulerController.ModifyResource 发布。

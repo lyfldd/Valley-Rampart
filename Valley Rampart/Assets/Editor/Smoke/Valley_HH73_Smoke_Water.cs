@@ -7,13 +7,16 @@ using UnityEditor;
 //  HH.73 AI 供水链修复批 冒烟（D535；任务书=多Agent交接/策划端/HH.73_AI供水链修复批_任务书.md §三）
 //  用法：菜单「Valley/验证/HH73_AI供水修复」——MainMenuScene 或 GameScene Play 后点（自动进局）。
 //  结构：TestHarnessApi.EnterTestRun 正门进局（HH.150，seed=20273 固定，smoke_w73 槽）→ 等就稳 →
-//    P1 结构：AI 国预置含 Well（baseBuildingDefIds 插序）+ AI 桶有水（GetStored 公开口）。
-//    P2 行为正：AI 农田恢复产粮——快进窗口内 AI 桶被消耗（ConsumeWater 只由 TryConsumeFarmWater 调用，
+//    P1 结构：AI 国预置含 Well（baseBuildingDefIds 插序）+ AI 国**井仓**有水（⭐ `M1-F` 仓化读数）。
+//    P2 行为正：AI 农田恢复产粮——快进窗口内 AI **井仓**被消耗（耗水只由 TryConsumeFarmWater 从**农场仓**扣 · ⭐ `M1-F`，
 //       桶水下降=产粮事件真实发生）+ AI farm Storage 曾 >0（产出面证据）。
 //    P3 行为负：玩家桶零泄漏——玩家桶全程 ==0（AI 井水不泄玩家桶）+ AI 桶独立波动（路由互斥证明：
 //       若 AI 农田错走玩家桶，玩家桶 0 不足以支付 → AI farm 必缺水停产 → P2 必失败；P2 过=P3 路由正确）。
-//    P4 存档：AI 桶入档——Save→记值→改桶→Load→AI 桶保持（容差 ±2 防井产水一帧增量）。
+//    P4 存档：水随井仓入档（`BuildingSaveData.storageContents`）——Save→记值→改仓→Load→井仓保持（容差 ±2 防井产水一帧增量）。
 //  收尾：QuitSmoke（自动清 smoke_ 槽+退 Play）。不改产品代码（探针只读公开口）。
+//  ⭐ `M1-F` 水仓化演进（`D807` / `09#44` · 2026-09-21）：`WaterNetwork` 已退役 ⇒ 本探针全部读数改**水井仓**
+//     （`TestFixtureApi.ReadKingdomWaterInWells` / `AddWaterToKingdomWells` / `TakeWaterFromKingdomWells`），
+//     判据语义等价（"AI 桶"⇒"AI 国井仓"；P3 玩家零泄漏 ⇒ 玩家国井仓合计全程 0）。
 //  P5 同 seed 22360 对照跑=独立长局段（观察器+HH.71 协议），不在本容器。
 // ============================================================================
 public static class Valley_HH73_Smoke_Water
@@ -66,7 +69,7 @@ public static class Valley_HH73_Smoke_Water
         yield return new WaitForSeconds(0.5f);   // 稳态窗口（HH.69 教训）
 
         var reg = KingdomRegistry.Instance;
-        var wn = WaterNetwork.Instance;
+        // ⭐ `M1-F`：`WaterNetwork` 已退役 ⇒ 读数改走 `TestFixtureApi` 仓化三口（见文件头演进说明）。
         var results = new List<string>();
 
         // 收集 AI 国（id>0，取前 3）
@@ -98,15 +101,15 @@ public static class Valley_HH73_Smoke_Water
         bool p1Well = wellCount >= aiKids.Count;                 // 每 AI 国 ≥1 井
         bool p1Water = true;
         for (int i = 0; i < aiKids.Count; i++)
-            if (wn.GetStored(aiKids[i]) <= 0f) p1Water = false;
-        results.Add($"P1 结构 预置Well数={wellCount}(需≥{aiKids.Count}) AI桶有水={p1Water}({DumpBuckets(wn, aiKids)}) ={p1Well && p1Water}");
+            if (TestFixtureApi.ReadKingdomWaterInWells(aiKids[i]) <= 0) p1Water = false;
+        results.Add($"P1 结构 预置Well数={wellCount}(需≥{aiKids.Count}) AI井仓有水={p1Water}({DumpWells(aiKids)}) ={p1Well && p1Water}");
 
         // ---- P2 行为正 + P3 玩家桶零泄漏（同窗口观测）----
-        float playerBefore = wn.GetStored(0);
+        float playerBefore = TestFixtureApi.ReadKingdomWaterInWells(0);
         var aiMinInWindow = new Dictionary<int, float>();   // 窗口内逐国最低值（桶单调涨时末值==峰值，须窗口内跟踪）
-        for (int i = 0; i < aiKids.Count; i++) aiMinInWindow[aiKids[i]] = wn.GetStored(aiKids[i]);
+        for (int i = 0; i < aiKids.Count; i++) aiMinInWindow[aiKids[i]] = TestFixtureApi.ReadKingdomWaterInWells(aiKids[i]);
         float aiPeakAll = 0f;
-        for (int i = 0; i < aiKids.Count; i++) aiPeakAll = Mathf.Max(aiPeakAll, wn.GetStored(aiKids[i]));
+        for (int i = 0; i < aiKids.Count; i++) aiPeakAll = Mathf.Max(aiPeakAll, TestFixtureApi.ReadKingdomWaterInWells(aiKids[i]));
 
         TimeManager.Instance.SetSecondsPerDay(15f);   // 快进：5s 真实=1 游戏日（公开 API，P0 冒烟先例）
         TimeManager.Instance.SetGameSpeed(3f);
@@ -124,13 +127,13 @@ public static class Valley_HH73_Smoke_Water
                 if (st != null) farmMax = Mathf.Max(farmMax, st.TotalCount);
             }
             // 玩家桶负跳变检测（零泄漏）
-            float pv = wn.GetStored(0);
+            float pv = TestFixtureApi.ReadKingdomWaterInWells(0);
             if (pv < playerBefore - 0.001f) playerDrop = true;
             playerBefore = pv;
             // AI 桶窗口内峰谷（产水升+农田耗水降——逐国 min 持续跟踪）
             for (int i = 0; i < aiKids.Count; i++)
             {
-                float v = wn.GetStored(aiKids[i]);
+                float v = TestFixtureApi.ReadKingdomWaterInWells(aiKids[i]);
                 aiPeakAll = Mathf.Max(aiPeakAll, v);
                 aiMinInWindow[aiKids[i]] = Mathf.Min(aiMinInWindow[aiKids[i]], v);
             }
@@ -140,7 +143,7 @@ public static class Valley_HH73_Smoke_Water
         float peakForLog = 0f, troughForLog = float.MaxValue;
         for (int i = 0; i < aiKids.Count; i++)
         {
-            float v = wn.GetStored(aiKids[i]);
+            float v = TestFixtureApi.ReadKingdomWaterInWells(aiKids[i]);
             float peak = Mathf.Max(aiPeakAll, v);
             if (peak - aiMinInWindow[aiKids[i]] >= 2f) aiConsumed = true;
             peakForLog = Mathf.Max(peakForLog, peak);
@@ -149,7 +152,7 @@ public static class Valley_HH73_Smoke_Water
         bool p2 = aiConsumed && farmMax > 0f;
         results.Add($"P2 行为正 AI桶窗口峰谷降={ (peakForLog - troughForLog).ToString("F1") }(需≥2) farmStorage峰={farmMax:F0} ={p2}");
         bool p3 = !playerDrop && aiPeakAll > 0f;         // 玩家桶零变化 + AI 桶独立有水 = 路由互斥
-        results.Add($"P3 行为负 玩家桶零泄漏={(!playerDrop)}(终值{wn.GetStored(0):F0}) AI桶独立波动={aiPeakAll > 0f} ={p3}");
+        results.Add($"P3 行为负 玩家井仓零泄漏={(!playerDrop)}(终值{TestFixtureApi.ReadKingdomWaterInWells(0)}) AI井仓独立波动={aiPeakAll > 0f} ={p3}");
 
         // ---- P4 存档：AI 桶入档（Save→改→Load→保持）----
         int probeKid = aiKids[0];
@@ -157,13 +160,13 @@ public static class Valley_HH73_Smoke_Water
         // 先把桶扣到低位（公开 ConsumeWater 模拟消费），保证存档点与改后点有足够区分度
         // （桶近满时 vBefore≈98/改后=100，差 2 无法区分「档恢复」vs「突变残留」）
         int drainGuard = 0;
-        while (wn.GetStored(probeKid) > 20f && drainGuard++ < 20) wn.ConsumeWater(10f, probeKid);
+        while (TestFixtureApi.ReadKingdomWaterInWells(probeKid) > 20 && drainGuard++ < 20) TestFixtureApi.TakeWaterFromKingdomWells(probeKid, 10);
         yield return null;
         bool saved = SaveManager.Instance.Save(SLOT + "_p4");
         yield return null;
-        float vBefore = wn.GetStored(probeKid);
-        wn.AddWater(80f, probeKid);                       // 改桶（制造与存档点的差值）
-        float vMutated = wn.GetStored(probeKid);
+        float vBefore = TestFixtureApi.ReadKingdomWaterInWells(probeKid);
+        TestFixtureApi.AddWaterToKingdomWells(probeKid, 80);   // 改井仓（制造与存档点的差值 · ⭐ `M1-F` 仓化）
+        float vMutated = TestFixtureApi.ReadKingdomWaterInWells(probeKid);
         bool loaded = SaveManager.Instance.Load(SLOT + "_p4");
         // 等读档世界重建
         float lt0 = Time.realtimeSinceStartup;
@@ -173,7 +176,7 @@ public static class Valley_HH73_Smoke_Water
             if (Time.realtimeSinceStartup - lt0 > 60f) break;
         }
         yield return new WaitForSeconds(0.3f);
-        float vAfter = wn.GetStored(probeKid);
+        float vAfter = TestFixtureApi.ReadKingdomWaterInWells(probeKid);
         // 判据（D535 入档语义）：读回明显低于改后值（≠100 的突变残留=档未恢复）且不低于存档值-2
         // （读档后水井继续产水 → 读回=vBefore+产水增量，92=88+4 即此形态；若 aiBuckets 未入档，
         //  LoadState 不恢复 → 读回=改后 100+。区间判定对井产水时序鲁棒。
@@ -193,10 +196,11 @@ public static class Valley_HH73_Smoke_Water
         SmokeApi.QuitSmoke();
     }
 
-    private static string DumpBuckets(WaterNetwork wn, List<int> kids)
+    /// <summary>⭐ `M1-F` 水仓化：井仓水量转储（原 `DumpBuckets(WaterNetwork)` 的仓化替代）。</summary>
+    private static string DumpWells(List<int> kids)
     {
         var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < kids.Count; i++) sb.Append($"k{kids[i]}={wn.GetStored(kids[i]):F0} ");
+        for (int i = 0; i < kids.Count; i++) sb.Append($"k{kids[i]}={TestFixtureApi.ReadKingdomWaterInWells(kids[i])} ");
         return sb.ToString().TrimEnd();
     }
 }

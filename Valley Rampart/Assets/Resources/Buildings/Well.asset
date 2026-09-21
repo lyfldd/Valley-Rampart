@@ -31,6 +31,7 @@ MonoBehaviour:
   moduleType: 2
   warehousePaths:
   - res_fluid.water
+  droppable: 0
   isObstacle: 0
   producer:
     kind: 0

@@ -43,8 +43,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     public float workDuration = 2f;
     [Tooltip("任务超时（秒）：MovingToSource 迟迟未到达则放弃（防卡死）")]
     public float taskTimeout = 30f;
-    [Tooltip("WaterHaul 一次搬水量")]
-    public float waterCarryAmount = 10f;
+    [Tooltip("WaterHaul 一次搬水量（⛔ `M1-F` 起**不再参与搬水链** —— 装载上限改由 `StorageComponent.GetCarryAmount(Water)` 决定；"
+             + "字段保留占位：`GameScene` 序列化稳定面 · 整数化 `D807` Q4）")]
+    public int waterCarryAmount = 10;
     [Tooltip("Gather 一次采集量")]
     public int gatherAmount = 5;
     [Tooltip("规模派工单建筑任务最大同时派工上限（D95，默认不超过 8）。")]
@@ -263,7 +264,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         }
 
         // ③ 收集可派任务（QQQ.4 T1：按"源+任务类型"去重，允许同一源并发不同类型任务——
-        //    农场可同时派 Production（耕作）+ WaterHaul（挑水），修复"取水+耕作无法同时执行"）
+        //    农场可派 Production（耕作）＋搬水任务（⭐ `M1-F` 件4 起源＝**水井** ⇒ 去重键＝「水井+WaterHaul」
+        //    ⚠️ 同 tick 内同一水井只服务一个农场（串行）· 完成后再广告下一个）
         //    2_8 步骤3（D95）：Transport 去重放宽为按容量（同源可多工人搬运）；其余独占任务按源+类型去重
         var jobs = new List<KingdomTask>();
         foreach (var s in _sources)
@@ -520,6 +522,24 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                                 stale.Add(id);
                             }
                         }
+                        else if (task.type == KingdomTaskType.WaterHaul && task.args is HaulWaterArgs)
+                        {
+                            // ⭐ `M1-F` 件5 搬水**装载段**（`09#44` 真搬运 · `09` §4.3 D 组）：从 `task.source`
+                            //   （＝**水井**）的 `StorageComponent` 取水入背包 —— 与 Transport 同构 ⇒ 复用
+                            //   `LoadInventoryFromSource`（源是建筑仓 ⇒ `GetComponent<StorageComponent>` 直接命中；
+                            //   装载上限＝`st.GetCarryAmount(Water)`）。
+                            //   ⚠️ 退役前本任务落 `else ⇒ Complete`（半假搬运：水凭空入桶）⇒ 本分支是修复核心。
+                            if (LoadInventoryFromSource(brain, task))
+                            {
+                                _npcStateMap[id] = TaskState.MovingToDest;
+                                InjectCarryStimulus(brain, task);
+                            }
+                            else
+                            {
+                                Complete(id, task, brain);   // 水井仓已空 → 完成（等下轮广告）
+                                stale.Add(id);
+                            }
+                        }
                         else
                         {
                             Complete(id, task, brain);
@@ -539,6 +559,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                                 UnloadAmmoToMagazine(brain, task);   // 装填：背包弹药写入单位 A* 弹仓
                             else if (task.type == KingdomTaskType.Build && task.args is HaulToSiteArgs)
                                 DepositToSite(brain, task);          // ⭐ M1-C 件1：卸料进「工地仓」（阈值拦截）
+                            else if (task.type == KingdomTaskType.WaterHaul && task.args is HaulWaterArgs wa)
+                                DepositWaterToFarm(brain, task, wa); // ⭐ `M1-F` 件5 搬水卸货段：卸水入农场仓
                             else
                                 UnloadInventory(brain, task);        // 搬运：背包资源入仓库/国库
                             Complete(id, task, brain);
@@ -654,14 +676,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     UnloadInventory(brain, task);
                 break;
 
-            case KingdomTaskType.WaterHaul:
-                // HH.86/DZ-044 件2c：入工人本国桶（旧恒入 0 桶=AI 工人挑水资玩家桶）——AI 桶上升、玩家桶不变。
-                if (WaterNetwork.Instance != null)
-                {
-                    var wuc = brain != null ? brain.GetComponent<UnitController>() : null;
-                    WaterNetwork.Instance.AddWater(waterCarryAmount, wuc != null ? wuc.kingdomId : 0);
-                }
-                break;
+            // ⭐ `M1-F` 件5：原 `case KingdomTaskType.WaterHaul`（完成 ⇒ `AddWater(waterCarryAmount,…)` 凭空入桶）
+            //   **整段已删** —— 新链路（件5 装载/卸货两段）下 WaterHaul 在 Working 即转 MovingToDest，
+            //   ⛔ 不会落到 ExecuteCompletion；保留会残留"水凭空入桶"路径（`09#44` 禁）。
 
             case KingdomTaskType.Gather:
                 var ga = task.args as GatherTaskArgs;
@@ -911,6 +928,34 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (lost > 0) AddGatherOverflow(brain != null ? brain.GetComponent<UnitController>() : null, type, lost);
     }
 
+    /// <summary>
+    /// ⭐ `M1-F` 件5 搬水第二段（`09#44` · `09` §4.3 D 组）：**工人背包（水）→ 农场仓**。
+    /// 卸货走农场仓 `Add`（放到满为止 · 部分成功 · `09` §7.1）；落点失效或被拒的余量
+    /// **退回水井仓**（`task.source`），退不进再按归属国分流（照 `ReturnOverflow` 形制 · ⛔ 不丢资源）。
+    /// </summary>
+    private void DepositWaterToFarm(NPCBrain brain, KingdomTask task, HaulWaterArgs wa)
+    {
+        if (brain == null || wa == null) return;
+        var inv = GetInventory(brain);
+        if (inv == null || inv.IsEmpty) return;
+        var type = inv.carriedType;          // ⛔ 仍单资源背包（多资源化属 `M1-F` 的 `F-2` 批）
+        int amount = inv.UnloadAll();
+        if (amount <= 0) return;
+
+        var srcComp = task != null ? task.source as Component : null;
+        var wellStore = srcComp != null ? srcComp.GetComponent<StorageComponent>() : null;   // 退回落点＝水井仓
+        var target = wa.target;
+        if (target == null)
+        {
+            // 农场仓已毁（农场被拆/打毁）⇒ 不丢资源：退回水井仓，退不进再按国分流
+            ReturnOverflow(brain, type, amount, wellStore);
+            return;
+        }
+        int accepted = target.Add(type, amount);      // 放到满为止（部分成功）
+        int overflow = amount - accepted;
+        if (overflow > 0) ReturnOverflow(brain, type, overflow, wellStore);
+    }
+
     // ===== 2_12 步骤9 装填两段式（D207~D212，HH.19 A×4）：取弹（弹药仓库→背包）→ 卸入单位弹仓 =====
 
     /// <summary>
@@ -1018,9 +1063,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             case KingdomDestType.NearestWarehouse:
                 task.destPos = ResolveWarehouse(task);
                 break;
-            case KingdomDestType.WaterNetwork:
-                task.destPos = ResolveWaterSource(task);
-                break;
+            // ⭐ `M1-F` 件5：原 `case KingdomDestType.WaterNetwork ⇒ ResolveWaterSource` **已删** ——
+            //   该枚举值退役保占位（`D807` Q6），搬水任务改由广告侧直接设 `destPos`
+            //   （`Building.TryAdvertiseTask` ⇒ `SpecificBuilding` ＋ 农场坐标）。
             case KingdomDestType.SpecificBuilding:
             case KingdomDestType.UnitMagazine:   // 2_12 步骤9：终点=单位自身位置（发布时已设 destPos）；此处保持
             default:
@@ -1064,22 +1109,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return ResolveTreasury(task);
     }
 
-    /// <summary>挑水水源位置 = 最近 Active 水井（QQQ.4 T2：修复挑水目标指向 WaterNetwork.transform 恒 (0,0) 的 bug），无则回退任务源。</summary>
-    private Vector2 ResolveWaterSource(KingdomTask task)
-    {
-        var wells = FindObjectsOfType<Building>();
-        Building best = null;
-        float bestDist = float.MaxValue;
-        for (int i = 0; i < wells.Length; i++)
-        {
-            var w = wells[i];
-            if (w == null || w.def == null || w.def.id != "Well" || w.state != BuildingState.Active) continue;
-            float d = GridMath.DistCells(w.transform.position, task.SourcePos);
-            if (d < bestDist) { bestDist = d; best = w; }
-        }
-        if (best != null) return best.transform.position;
-        return task != null ? task.SourcePos : Vector2.zero;
-    }
+    // ⭐ `M1-F` 件5：原 `ResolveWaterSource`（= 最近 Active 水井 · ⛔ **不过滤国别**）**整段已删** ——
+    //   源在广告时已定（`Building.FindNearestSameKingdomWellWithWater` · **带国别过滤** · `D807` §二-1），
+    //   `destPos` 由广告侧直接写入（终点＝农场）⇒ 运行期不再解析水源。
 
     // ===== 辅助 =====
 

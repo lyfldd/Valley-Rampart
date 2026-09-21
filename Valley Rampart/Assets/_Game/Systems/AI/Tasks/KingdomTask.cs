@@ -8,7 +8,9 @@ public enum KingdomDestType
     None,             // 无终点（原地劳作）
     Treasury,         // 国库
     NearestWarehouse, // 最近可用仓库（无则回退国库）
-    WaterNetwork,     // 水网
+    // ⭐ `M1-F` 起**退役**（`D807` Q6）：水不再有"网"这种容器 ⇒ 本值保留**占位**（序列化稳定面 · ⛔ 不删不重编号），
+    //   代码侧不再写入/解析；搬水任务改走 `SpecificBuilding`（终点＝农场）。
+    WaterNetwork,
     SpecificBuilding, // 指定建筑
     // ===== 2_12 步骤9 弹药（D207~D212，HH.19 A×4；末尾追加保持序列化稳定）=====
     UnitMagazine      // 单位弹仓（战争机器/塔本体；装填任务到达即把背包弹药写入 Ammo* 字段）
@@ -84,6 +86,22 @@ public class HaulToSiteArgs
     public ResourceType resourceType;    // 本次搬的资源
     public StorageComponent pickup;      // 取料仓（解析后的最近同国仓；装载段读它）
     public int need;                     // 缺口量（装载上限 · ⛔ 不多搬）
+}
+
+/// <summary>
+/// ⭐ 搬水任务参数（`M1-F` 件4 · `09#44`「水按资源处理」）：**水井仓 →（工人搬）→ 农场仓** 两段式任务。
+///
+/// 语义（⛔ 不新增 `KingdomTaskType` 枚举 —— 沿用 `WaterHaul`，靠本 args 类型区分语义）：
+///   · 任务源（`task.source`）＝ **水井**（`Building`）⇒ `SourcePos` ＝ 水井位置（**第一段位移 ＝ 去水井取水**）；
+///   · `destType = SpecificBuilding` ＋ `destPos` ＝ **农场位置**（第二段位移 ＝ 去农场卸水）；
+///   · `target` ＝ 农场仓（卸水落点）；`need` ＝ 缺口量（装载上限 · ⛔ 不多搬）。
+/// ⚠️ ⛔ 不复用 `HaulToSiteArgs`：其 `site` 字段类型是 `ConstructionSiteStore`（工地仓专用），
+///    而水的卸水落点是**普通仓**（`StorageComponent`）⇒ 类型不兼容（照 `M1-C` 件1 先例形制另立）。
+/// </summary>
+public class HaulWaterArgs
+{
+    public StorageComponent target;   // 卸水落点（农场仓 · `M1-F` 件3 的耗水仓）
+    public int need;                  // 缺口量（装载上限 · ⛔ 不多搬）
 }
 
 /// <summary>
