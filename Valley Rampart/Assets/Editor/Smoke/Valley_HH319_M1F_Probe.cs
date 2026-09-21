@@ -172,7 +172,7 @@ public static class Valley_HH319_M1F_Probe
                 var t3b = new KingdomTask(KingdomTaskType.WaterHaul, well);
                 t3b.destType = KingdomDestType.SpecificBuilding;
                 t3b.destPos = farm.transform.position;
-                t3b.args = new HaulWaterArgs { target = farmStore, need = 20 };
+                t3b.args = new HaulWaterArgs { target = farmStore };   // ⭐ `D809` 件3：need 已删（零消费方）
                 TaskScheduler.Instance.DispatchExternal(brain3b, t3b);
                 Debug.Log("[HH319探针] 判据3 已主动派 WaterHaul（源=井 ⇒ 终点=农场 · args=HaulWaterArgs）");
                 // 等状态机自己进 Working（≤5s）；若卡在 MovingToSource（阈值/阻挡）⇒ **构造法兜底**写入 Working。
@@ -270,7 +270,7 @@ public static class Valley_HH319_M1F_Probe
                 var tC = new KingdomTask(KingdomTaskType.WaterHaul, well);
                 tC.destType = KingdomDestType.SpecificBuilding;
                 tC.destPos = farm.transform.position;
-                tC.args = new HaulWaterArgs { target = farmStore, need = 20 };
+                tC.args = new HaulWaterArgs { target = farmStore };   // ⭐ `D809` 件3：need 已删（零消费方）
                 var miLoad = typeof(TaskScheduler).GetMethod("LoadInventoryFromSource", BindingFlags.NonPublic | BindingFlags.Instance);
                 var miDep = typeof(TaskScheduler).GetMethod("DepositWaterToFarm", BindingFlags.NonPublic | BindingFlags.Instance);
                 loadOk3c = miLoad != null && (bool)miLoad.Invoke(TaskScheduler.Instance, new object[] { brainC, tC });

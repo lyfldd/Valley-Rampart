@@ -1558,8 +1558,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
                     task.destPos = transform.position;                          // 终点＝本农场（第二段位移）
                     task.args = new HaulWaterArgs
                     {
-                        target = storage,                          // 卸水落点＝农场仓
-                        need = waterThreshold - waterHave          // 缺口量（装载上限 · ⛔ 不多搬）
+                        target = storage   // 卸水落点＝农场仓（⭐ `D809` 件3：水不需要 `need` —— 与 Transport 同构）
                     };
                     return true;
                 }

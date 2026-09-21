@@ -94,14 +94,16 @@ public class HaulToSiteArgs
 /// 语义（⛔ 不新增 `KingdomTaskType` 枚举 —— 沿用 `WaterHaul`，靠本 args 类型区分语义）：
 ///   · 任务源（`task.source`）＝ **水井**（`Building`）⇒ `SourcePos` ＝ 水井位置（**第一段位移 ＝ 去水井取水**）；
 ///   · `destType = SpecificBuilding` ＋ `destPos` ＝ **农场位置**（第二段位移 ＝ 去农场卸水）；
-///   · `target` ＝ 农场仓（卸水落点）；`need` ＝ 缺口量（装载上限 · ⛔ 不多搬）。
+///   · `target` ＝ 农场仓（卸水落点）。
 /// ⚠️ ⛔ 不复用 `HaulToSiteArgs`：其 `site` 字段类型是 `ConstructionSiteStore`（工地仓专用），
 ///    而水的卸水落点是**普通仓**（`StorageComponent`）⇒ 类型不兼容（照 `M1-C` 件1 先例形制另立）。
+/// ⭐ 本类**不需要** `need`（缺口量）：水搬运与 `Transport` **同构**（按 `StorageComponent.GetCarryAmount(Water)`
+///    决定装载量 · 见 `TaskScheduler.LoadInventoryFromSource`），而 `09` §16.1-2 的「阈值拦截」是
+///    **建造专属契约**（`HaulToSiteArgs.need` 由 `LoadSiteMaterials` 读）⇒ 水不需要（`D809` 补证单件3 · 零行为删除）。
 /// </summary>
 public class HaulWaterArgs
 {
     public StorageComponent target;   // 卸水落点（农场仓 · `M1-F` 件3 的耗水仓）
-    public int need;                  // 缺口量（装载上限 · ⛔ 不多搬）
 }
 
 /// <summary>
