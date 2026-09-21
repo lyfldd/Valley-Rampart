@@ -573,6 +573,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// </summary>
     public void OnSiteMaterialsReady()
     {
+        // ⭐ `U-8` 件3 硬化（D800 `Q3`）：正在拆 ⇒ ⛔ 不走完工收口 —— 封「已在途恰好到货 ⇒ `IsSatisfied`
+        //   ⇒ `Clear()` 清空已到料」窗口（唯一触发点 ＝ `ConstructionSiteStore.Deposit:141`）。
+        //   ⚠️ 内容物此后仍随 `FinishDemolish → DropSiteStoreToChest` 掉箱（⛔ 不丢）⇒ 与件7「留仓」口径一致。
+        if (_demolishing) return;
         if (!_awaitingMaterials) return;
         UnregisterSiteStore();
         _siteStore?.Clear();
@@ -591,6 +595,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         // ⭐ `M1-C` 件4（`09` §16.3-3）：拆除**有耗时与工人**（与建造对称）——
         //   仅在**有工人到场**时推进（`09` §16.3.1「工人侧按进度推进」）；到 1 ⇒ 真拆（掉箱 ＋ 生命周期结束）。
         //   ⚠️ 拆除分支**先于**建造分支：拆除中的建筑可能仍处 `Constructing`（拆一个投料中的工地）。
+        //   ⚠️ `U-8` 件10（`E2`）加注：本门控实为「**有人接单**」—— `HasAssignedWorker` 用源级
+        //     `CountAssignedWorkers`（`TaskScheduler.cs:152-159`，⛔ 无 state 过滤）⇒ 含 `Assigned`／
+        //     `MovingToSource` 期（工人可能还在路上）＋ 拆除前已在派的残留任务，⛔ **非**「工人已到场 Working」。
+        //   ⚠️ `U-8` 件10（`O7`）：拆除标称 `DemolishDuration()`=6s（`BuildConfig.demolishBaseSeconds`），
+        //     实测因「途中推进 ＋ 每轮 ≥1 tick 空档 ＋ 需 ≥2 轮派工」与标称不等（读数见交付报告判据 7）。
         if (_demolishing)
         {
             if (HasAssignedWorker())
@@ -622,13 +631,23 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         UpdateProgressBar();
     }
 
-    /// <summary>是否已有工人到场（拆除进度门控 · `09` §16.3.1）。</summary>
+    /// <summary>是否已有工人到场（拆除进度门控 · `09` §16.3.1）。
+    /// ⚠️ `U-8` 件10（`E2`）加注：本门控用**源级** `CountAssignedWorkers`（`TaskScheduler.cs:152-159`，
+    ///   ⛔ 无 state／args 过滤）⇒ 语义实为「**有人接单**」（含 `Assigned`／`MovingToSource` 期 —— 工人可能还在
+    ///   路上）＋ 拆除前已在派的 `Production`／`Transport` 残留任务也计入，⛔ **非**「工人已到场 `Working`」。
+    ///   ⛔ 本批不改门控语义（`D800` `Q5` 只裁 `DemolishDuration` 的 `n` 过滤）；精化（改 `Working`／按 args 过滤）＝另报裁。</summary>
     private bool HasAssignedWorker()
         => TaskScheduler.HasInstance && TaskScheduler.Instance.CountAssignedWorkers(this) > 0;
 
     /// <summary>
     /// 拆除时长（`so-data-driven`：进 SO `BuildConfig.demolishBaseSeconds`；与建造对称用同一协作系数 k）。
     /// ⛔ 不硬编码魔法数值。
+    /// ⭐ `U-8` 件5（`D800` `Q5` · **形态甲**）：`n` **按 `DemolishTaskArgs` 过滤**（只计拆除任务）——
+    ///   防「拆除前已在派的 `Production`／`Transport` 残留任务」被源级计数误算成拆除协作工人（虚增 n ⇒ 缩短时长）。
+    ///   ⚠️ 本片维持「拆除＝单人」（派工对非 `Transport` 任务 `slots=1` ＋ 按 `(source,type)` 去重 ⇒ 正常路径
+    ///   `n≤1`）⇒ ⭐ **`k` 协作分支当前恒不生效**（显式保留 ＋ 加注：`k` 与建造侧共用
+    ///   `BuildConfig.cooperativeBuildK`，⛔ 不删）。多工人协作 ＝ 另案（观察项 `O6`）。
+    /// ⚠️ `U-8` 件10（`O7`）：标称 6s，实测受「门控含派工/走动期 ⇒ 途中推进」等影响（读数见交付报告判据 7）。
     /// </summary>
     public float DemolishDuration()
     {
@@ -636,10 +655,16 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             _buildConfig = Resources.Load<BuildConfig>("Config/BuildConfig");
         float baseSeconds = _buildConfig != null ? Mathf.Max(0.01f, _buildConfig.demolishBaseSeconds) : 6f;
         if (_buildConfig == null || _buildConfig.cooperativeBuildK <= 0f) return baseSeconds;
-        int n = TaskScheduler.HasInstance ? TaskScheduler.Instance.CountAssignedWorkers(this) : 1;
+        int n = TaskScheduler.HasInstance
+            ? TaskScheduler.Instance.CountAssignedWorkers(this, IsDemolishTask)   // ⭐ 件5：只计拆除任务
+            : 1;
         if (n <= 1) return baseSeconds;
         return Mathf.Max(0.01f, baseSeconds / (1f + (n - 1) * _buildConfig.cooperativeBuildK));
     }
+
+    /// <summary>⭐ `U-8` 件5：只计「拆除任务」（`args is DemolishTaskArgs`）—— `DemolishDuration` 的 `n` 过滤谓词。
+    /// ⚠️ 静态（⛔ 不捕获 `this`）⇒ Roslyn 缓存委托 ⇒ 无每帧分配。</summary>
+    private static bool IsDemolishTask(KingdomTask t) => t != null && t.args is DemolishTaskArgs;
 
     /// <summary>
     /// 2_12 步骤7B / D117：驱动头顶施工进度条。
@@ -836,14 +861,26 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// ⭐【HH.294 片4·4-H】**「可否拆」＝数据栏判据**（`03` §7.5「本层不判'能不能删'⇒ 业务规则归**高级层／数据栏**」）。
     /// 改前该三字段组合**写在 UI 里现算**（`BuildingPanel.cs:169`）——判定归数据，UI 只读结果。
     /// 与 `Demolish()` 的守卫**同源**（同一表达式，禁两处各写一遍）。
+    /// ⭐ `U-8` 件8（`E3` · `D800`）：补 `state != Ruined` 判据 —— ① 消除「数据层可拆／UI 隐藏按钮」的口径分裂
+    ///   （`BuildingPanel.cs:79` 对 `Ruined` 隐藏拆除按钮 ⇒ 本判据此前与 UI **不同源**）；
+    ///   ② 顺手封 `E1` 陈旧面板路径（`BuildingPanel` ⛔ 不订阅 `BuildingRuinedEvent` ⇒ 面板开着时建筑被打毁
+    ///   ⇒ 拆除按钮仍在 ⇒ `BuildingPanel.cs:393` 的 `if (!_target.CanDemolish) return;` 在此拦下）。
+    /// ⚠️ 附报（观察项 · ⛔ 本片不改）：`Ruined` 的清理出口此后只剩「重建」（玩家无路径彻底清掉废墟）。
     /// </summary>
-    public bool CanDemolish => isPlayerBuilt && def != null && def.isDestructible && !def.isResourceNode;
+    public bool CanDemolish => isPlayerBuilt && def != null && def.isDestructible && !def.isResourceNode
+        && state != BuildingState.Ruined;
 
     /// <summary>
     /// 拆除入口（由 `BuildingPanel` 调）。
     /// ⭐ `M1-C` 件4（`09` §16.3-3「拆除要耗时与工人 ⇒ 与建造对称」）：本方法**只进入拆除态**；
     /// 真正拆除在进度到 1（且**有工人到场**）时由 `FinishDemolish()` 执行。
     /// ⛔ 退役旧行为：原「瞬时 `Die` ＋ 按 `hp/maxHp` 比例直接退国库」。
+    /// ⭐ `U-8` 件1（案甲 · `D800` `Q1`）：本方法内**就地补注册本体为任务源** —— 非 `Active` 态建筑此前
+    ///   不在 `_sources`（注册守卫只收 `Active`）⇒ 无工人可派 ⇒ `_demolishProgress` 恒 0 ⇒ 卡死。
+    /// ⭐ `U-8` 件3（`D800` `Q3`）：拆除中**注销工地仓源**（⛔ 不再广告搬料；⛔ 内容物不动 ⇒ 仍由 `FinishDemolish` 掉箱）。
+    /// ⚠️ **顺序约束**：`EnsureRegistered()` 必须在 `_demolishing = true` **之后**调用 ——
+    ///   `IsValid`（本文件 `:1349-1350`）为三项 `||`（`Active || _awaitingMaterials || _demolishing`）
+    ///   ⇒ 只有置真后才保证**任意 state** 下 `IsValid=true` ⇒ `TaskScheduler.Tick:223` 不会把本体清出在册表。
     /// </summary>
     public void Demolish()
     {
@@ -852,6 +889,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (state == BuildingState.Dead || state == BuildingState.Placing) return;
         _demolishing = true;
         _demolishProgress = 0f;
+        // ⭐ `U-8` 件3（D800 `Q3`）：拆除中 ⛔ 不再广告搬料（注销工地仓源）。
+        //   ⚠️ `UnregisterSiteStore` 只从 `_sources` 移除 ＋ 清 `_siteRegistered`，⛔ 不动 `_items`
+        //   ⇒ 内容物安全（唯一掉箱口 `DropSiteStoreToChest` 与「是否在册」正交 · `U-4` 职责分离不变）。
+        UnregisterSiteStore();
+        // ⭐ `U-8` 件1（案甲）：就地补注册（幂等）—— ⚠️ 必须在 `_demolishing = true` 之后（见方法头注顺序约束）。
+        EnsureRegistered();
         UpdateVisual();
         Debug.Log($"[Building] {def?.id} 开始拆除（时长≈{DemolishDuration():F1}s · 需工人到场推进 · `09` §16.3-3）");
     }
@@ -960,7 +1003,8 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// 在投阶段是否为**首次建造**（＝「建造阶段尚未付清」）。判据优先级：
     /// ① 运行期 `_pendingUpgrade` / `_pendingRepair` 标志（权威 · 二者为「后续阶段」）；
     /// ② `level > 1` ⇒ 已有完成升级 ⇒ 建造必已完成；
-    /// ③ **读档兜底**：`_pendingUpgrade` / `_pendingRepair` **未入档**（既有 `M1-C` 缺口 · 已报后续片）
+    /// ③ **旧档兜底**：`_pendingUpgrade` / `_pendingRepair` 为**旧档兼容**（⭐ `U-8` 件9（`U-5`）起新档已入档
+    ///    ⇒ 本兜底只对「新档之外」＝旧档生效）
     ///    ⇒ 用「在投配方 `_siteNeed`」比对 `SiteNeedOf(def.cost)`（相等 ⇒ 首次建造）；
     /// ④ `_siteNeed` 为空 ⇒ **无料可搬**（纯金造价／AI 台账直扣直建／零造价）⇒ 亦按首次建造处理。
     /// ⚠️ ③④ 依赖「升级配方 ≠ 建造配方」且「无『去金为空』的升级」：本端机械扫描全库
@@ -1035,6 +1079,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             maxHp = maxHp,
             faction = (int)faction,
             state = (int)state,
+            // ⭐ `U-8` 件9（`U-5`）：在投阶段标志入档（尾插零 bump · 旧档缺字段→false ⇒ ③④ 兜底仍生效）
+            pendingUpgrade = _pendingUpgrade,
+            pendingRepair = _pendingRepair,
             sourceType = (int)sourceType,
             storageContents = storage != null ? storage.Contents : ResourceList.Empty,
             treasuryContents = vault != null ? vault.Contents : ResourceList.Empty,
@@ -1070,8 +1117,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// ⚠️ **`N-3` 防御性留档**：本方法⛔ **不恢复 `state`** —— `state` 由**创建时** `initialState` 置入
     ///   （真实读档路径：`BuildingFactory.SpawnFromSave` 先 `InstantiateFromDef(..., (BuildingState)data.state)`
     ///   ⇒ `BuildingFactory:155 b.state = initialState`；本方法随后被阶段 2 分发调用）。
-    ///   ⇒ ⛔ **勿直接对"已存在且 `state` 未按存档置入"的实例调本方法**（否则该实例 `state` 沿用旧值 ·
-    ///   实测：升级料齐未完工的建筑读档后 `state` 退化为 `Active`，会绕过 `OnConstructionComplete` 的收尾）。
+    ///   ⇒ ⛔ **勿直接对"已存在且 `state` 未按存档置入"的实例调本方法**（否则该实例 `state` 沿用旧值）。
+    ///   ⭐ `U-8` 件10 勘正：旧注"实测：升级料齐未完工的建筑读档后 `state` 退化为 `Active`"系**构造法样本**
+    ///   （对已存在实例直调 ⇒ `state` 沿用旧值）；**生产路径**下 `state` 逐值往返
+    ///   （`SaveState:1037 state=(int)state` → `BuildingFactory:292 state=(BuildingState)data.state` →
+    ///   `:155 b.state = initialState`）⇒ ⛔ **不退化**（非 `Active` 存档态确实存在 ⇒ 件1/件2 的补注册为必需）。
     /// </summary>
     public void LoadState(SavePayload payload)
     {
@@ -1111,6 +1161,9 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         // ⭐ `M1-C` 件1／件4：投料态与拆除态恢复（判据 7：新档能存能读 —— 工地仓内容物／进度一并）
         _demolishing = data.demolishing;
         _demolishProgress = Mathf.Clamp01(data.demolishProgress);
+        // ⭐ `U-8` 件9（`U-5`）：在投阶段标志恢复（尾插零 bump · 旧档缺字段→false ⇒ `InProgressStageIsBuild` ③④ 兜底仍生效）
+        _pendingUpgrade = data.pendingUpgrade;
+        _pendingRepair = data.pendingRepair;
         _siteNeed = data.siteNeed;
         _awaitingMaterials = false;
         if (data.awaitingMaterials && !_siteNeed.IsZero)
@@ -1146,6 +1199,11 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             if (def != null && def.isBridge)
                 GridSystem.Instance.SetBridge(coord, Mathf.Max(1, footprint.x), Mathf.Max(1, footprint.y), true);
         }
+
+        // ⭐ `U-8` 件2：读档时正在拆除 ⇒ 补注册本体（存档态非 `Active` ⇒ `BuildingFactory:189` 只收 `Active`
+        //   ⇒ 本体未在册）；⛔ 不补则 `Demolish():851` 幂等守卫使玩家再也点不动 ⇒ **永久冻结**（比重试更糟）。
+        //   ⚠️ 形态与件1 同源（同一句复用）；⛔ 不改 `BuildingFactory:189` 守卫（把存档字段语义塞进工厂＝职责串层）。
+        if (_demolishing) EnsureRegistered();
     }
 
     /// <summary>
@@ -1198,6 +1256,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     {
         state = BuildingState.Ruined;
 
+        // ⭐ `U-8` 件6（`E1`）互斥口径：**生命周期事件优先于玩家指令**（`09` §16.3.1「耐久到 0 ⇒ 触发生命周期结束」）。
+        //   `Demolish()` ⛔ 不改 `state` ⇒ 拆除中仍 `Active` ⇒ `TakeDamage:1182` 照常受伤 ⇒ 打空进本方法；
+        //   ⛔ 若不清 `_demolishing`：闩锁无解（`Demolish:851` 幂等 ＋ `StartRebuildFromRuins:514-523` 亦不清）
+        //   ⇒ `Update:594` 永走拆除分支 且 `HasAssignedWorker()` 恒 false ⇒ **重建永久冻结** ＋ 料齐时 `Clear()` 吞料。
+        //   ⛔ 否决「`Demolish()` 侧互斥」形态（本场景是"先开拆、后被打毁"，该形态不解决）。
+        _demolishing = false;
+        _demolishProgress = 0f;
+
         // 在册工人撤出（废墟不供职；工人在内可能被打/被卡，撤出存活）
         EscapeWorkers();
         // 训练中断回退（若为训练建筑）
@@ -1205,6 +1271,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             TrainingSystem.Instance.OnBuildingDestroyed(this);
         // 从任务调度器注销（不再是 Active 源）；保持 GridSystem 占格 → D154 阻挡持续
         if (TaskScheduler.HasInstance) TaskScheduler.Instance.Unregister(this);
+        // ⭐ `U-8` 件7（`E1`）：废墟态 ⛔ 不再广告搬料（否则工人给废墟继续送料）。
+        //   ⚠️ 内容物 **留仓**（⛔ 不 `Clear()`）：`Ruined` ⛔ 不是生命周期结束（可重建 · D154「废墟不 Free 占格 · 可修复」）
+        //   ⇒ 材料留在工地仓等重建 ⇒ 重建时 `BeginMaterialPhase → EnsureSiteStore` 复用同一实例（`:548`）
+        //   ⇒ `SetNeed` 重置需求 ＋ 旧 `_items` 仍在 ⇒ 够则即时开工、差则继续搬（正是留仓的价值）。
+        //   ⛔ 不动 `DropSiteStoreToChest` / `Die` 路径（工地被打毁掉箱走 `Die:1259`）。
+        UnregisterSiteStore();
 
         UpdateVisual();
         if (EventBus.HasSubscribers<BuildingRuinedEvent>())   // DZ-077：无订阅者不广播
@@ -1436,7 +1508,10 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// <summary>从调度器注销回调。</summary>
     public void OnUnregister() { }
 
-    /// <summary>建筑转 Active 时注册到任务调度器（IsValid 才注册）。</summary>
+    /// <summary>建筑转 Active 时注册到任务调度器（IsValid 才注册）。
+    /// ⚠️ `U-8` 件10（`O5` · `D800` 裁本片不动）：`TaskScheduler.cs:86-98`（守卫 `:95`）有**同型守卫**
+    ///   （单例创建时的 `Active` 补注册 · 同一语义写两遍）⇒ 未来若改注册语义**须同查两处**；
+    ///   ⛔ 本片维持其 `Active` 语义（`Q1` 案甲 ⛔ 否决案乙的"四处状态集同步"）。</summary>
     private void RegisterWithTaskScheduler()
     {
         // 2_17 修复卡β：删除补丁D注册侧守卫(L968)。AI 王国建筑(kingdomId>0)也登记为任务源——
@@ -1444,5 +1519,16 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         // 玩家(0)/自然(-1)/AI(>0) 一律注册，派工归属由 TaskScheduler.Tick 池隔离路由决定。
         if (TaskScheduler.HasInstance && state == BuildingState.Active)
             TaskScheduler.Instance.Register(this);
+    }
+
+    /// <summary>⭐ `U-8` 件1（案甲 · `D800` `Q1`）：确保本体已在任务源表（幂等 · ⛔ **无 state 条件**）。
+    /// 供非 `Active` 场景补注册：① `Demolish()`（任意可拆态；⚠️ 须在 `_demolishing = true` **之后**调 —— `IsValid` 依赖它）；
+    /// ② `LoadState()`（读档时正在拆除 ⇒ `BuildingFactory:189` 只收 `Active` ⇒ 本体未注册 ⇒ ⛔ 不补则永久冻结）。
+    /// ⛔ 不改 `RegisterWithTaskScheduler` 的 `Active` 语义（两者职责分离）；
+    /// ⛔ 不新增 `IsRegistered` 查询口 —— `TaskScheduler.Register`（`TaskScheduler.cs:118-122`）经 `_sources.Add`
+    /// 天然幂等（重复调用安全 ⇒ 新建查询 API 零收益）。</summary>
+    private void EnsureRegistered()
+    {
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.Register(this);
     }
 }

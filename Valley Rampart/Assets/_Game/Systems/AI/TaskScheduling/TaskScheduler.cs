@@ -158,6 +158,24 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return count;
     }
 
+    /// <summary>⭐ `U-8` 件5（`D800` `Q5` · **形态甲**）：该源当前被派工人总数（**带任务过滤**）。
+    /// 例：只计「拆除任务」（`args is DemolishTaskArgs`）⇒ 防「拆除前已在派的 `Production`／`Transport`
+    /// 残留任务」被误算成拆除协作工人（虚增 `n` ⇒ 缩短拆除时长）。
+    /// ⭐ **调用面 ＝ 1 处**：`Building.DemolishDuration()`（`n` 过滤谓词 `Building.IsDemolishTask`）。
+    /// ⚠️ 谓词应为**静态**（⛔ 不捕获 ⇒ Roslyn 缓存委托 ⇒ 无每帧分配）。</summary>
+    public int CountAssignedWorkers(ITaskSource source, System.Func<KingdomTask, bool> filter)
+    {
+        if (source == null) return 0;
+        int count = 0;
+        foreach (var kv in _npcTaskMap)
+        {
+            if (!ReferenceEquals(kv.Value.source, source)) continue;
+            if (filter != null && !filter(kv.Value)) continue;
+            count++;
+        }
+        return count;
+    }
+
     public void AbandonTask(int npcId)
     {
         if (!_npcTaskMap.TryGetValue(npcId, out var task)) return;
@@ -1283,13 +1301,25 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 
     /// <summary>任务 Working 时长（QQQ.2 T19/DR-11：Gather 按源侧 `GatherTaskArgs.gatherSeconds`，其余统一 workDuration）。
     /// 【HH.294 片 6-2 收尾】原 `if (task.source is Building …) secs = b.def.gatherSeconds;` **死分支已删** ——
-    /// 实体资源点退役 ⇒ Gather 源只剩 `WorldGatherSource`（耗时由源侧按 feature 逐型填入·B-1 逐型原值）。</summary>
+    /// 实体资源点退役 ⇒ Gather 源只剩 `WorldGatherSource`（耗时由源侧按 feature 逐型填入·B-1 逐型原值）。
+    /// ⭐ `U-8` 件4（`D800` `Q4`）：**拆除任务工时 ＝ 源侧 `Building.DemolishDuration()`**（同 Gather 形制）。
+    ///   **活读**（⛔ 非快照）：`DemolishDuration()` 依赖 `CountAssignedWorkers` ⇒ 每帧可变；且拆除需多轮派工
+    ///   ⇒ 每轮都取最新值才与「建筑自推」（`Building.cs:594-606`）一致；`≤0` ⇒ 兜底 `workDuration`（照上分支形制）。
+    /// ⚠️ 慢通道副产物（预期行为 · 判据须给读数）：改后多数情况下拆除由 `FinishDemolish` **先收口**
+    ///   （进度门控含派工期 ⇒ 比 Working 早 ≈1 tick）⇒ 该任务被 `OnBuildingDied` **放弃**（⛔ 非「完成」）——
+    ///   与「建筑自推」口径一致。</summary>
     private float GetTaskDuration(KingdomTask task)
     {
         if (task != null && task.type == KingdomTaskType.Gather && task.args is GatherTaskArgs ga)
         {
             float secs = ga.gatherSeconds;
             return secs > 0f ? secs : workDuration;
+        }
+        // ⭐ `U-8` 件4：拆除工时活读源侧（`target` ＝ 拆除中的 `Building` 本体）
+        if (task != null && task.args is DemolishTaskArgs da && da.target != null)
+        {
+            float ds = da.target.DemolishDuration();
+            return ds > 0f ? ds : workDuration;
         }
         return workDuration;
     }

@@ -64,4 +64,11 @@ public struct BuildingSaveData
     public bool demolishing;
     /// <summary>拆除进度 0→1。</summary>
     public float demolishProgress;
+
+    // ===== ⭐ `U-8` 件9（`U-5`）：在投阶段标志（尾插零 bump · 旧档缺字段→false）=====
+
+    /// <summary>在投阶段是否「升级」（`Building._pendingUpgrade` 入档 ⇒ 读档后中途升级完成**真的升级**）。</summary>
+    public bool pendingUpgrade;
+    /// <summary>在投阶段是否「废墟重建/修复」（`Building._pendingRepair` 入档 ⇒ 读档后在投修复按修复口径退费）。</summary>
+    public bool pendingRepair;
 }
