@@ -64,6 +64,22 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private TaskPriorityConfig _priorityConfig;
     private ResourceBiasConfig _biasConfig;   // 2_23 资源 P0 批B/R-B1（D529）：资源偏向活权重（SO 可配）
 
+    // ===== 放弃原因（⭐ `U-16` 件2 · `D815` 裁定 §2.4／§四）=====
+    /// <summary>任务放弃原因 —— **日志契约取值域（7 值）**，`private`（`Abandon` 亦 private ⇒ 零跨文件面；
+    /// 判据只从日志读，⛔ 不为此把枚举公开）。
+    /// ⛔ `Inert`（`Complete` 之后那 6 处惰性 `stale.Add`）**不入本枚举** —— 它们本该**永不到达** `Abandon`。
+    /// ⭐ 分流依据：`甲′-a`（困死/路径失败）落 `Unreachable`；`甲′-b`（30 s 到不了）落 `Timeout`。</summary>
+    private enum AbandonReason
+    {
+        External,        // 外部撤回（AbandonTask / 招募 / 建筑驱离）
+        Dead,            // 工人死亡（OnNpcDied）
+        Unreachable,     // 路径失败（OnPathFailed）
+        SourceInvalid,   // 源失效（建筑死亡 / 源 IsValid=false）
+        Timeout,         // 超时未到达（MovingToSource / MovingToDest）
+        BrainLost,       // brain 引用丢失
+        Unknown          // 未分类（default 态 / 惰性 stale 兜底）
+    }
+
     // ===== 单例 =====
 
     protected override void Awake()
@@ -181,14 +197,14 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     {
         if (!_npcTaskMap.TryGetValue(npcId, out var task)) return;
         _npcBrainMap.TryGetValue(npcId, out var brain);
-        Abandon(npcId, task, brain);
+        Abandon(npcId, task, brain, AbandonReason.External);
     }
 
     public void OnNpcDied(int npcId)
     {
         if (!_npcTaskMap.TryGetValue(npcId, out var task)) return;
         _npcBrainMap.TryGetValue(npcId, out var brain);
-        Abandon(npcId, task, brain);
+        Abandon(npcId, task, brain, AbandonReason.Dead);
     }
 
     /// <summary>
@@ -201,7 +217,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         int id = evt.Unit.npcId;
         if (id == 0 || !_npcTaskMap.TryGetValue(id, out var task)) return;
         _npcBrainMap.TryGetValue(id, out var brain);
-        Abandon(id, task, brain);
+        Abandon(id, task, brain, AbandonReason.Unreachable);
     }
 
     public void OnBuildingDied(ITaskSource source)
@@ -215,7 +231,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         for (int i = 0; i < stale.Count; i++)
         {
             _npcBrainMap.TryGetValue(stale[i], out var brain);
-            Abandon(stale[i], _npcTaskMap[stale[i]], brain);
+            Abandon(stale[i], _npcTaskMap[stale[i]], brain, AbandonReason.SourceInvalid);
         }
     }
 
@@ -360,6 +376,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         _taskStartTime[id] = Time.time;
         _workStartTime.Remove(id);
         _suspendStartTime.Remove(id);
+        // ⭐ `U-16` 件1（`D815` 裁定 §2.5）：**任务在册 ⇒ 置让位标记**（`NPCBrain.TaskMoveYield` 的唯一输入）。
+        //   置位点＝本处（`:362 _suspendStartTime.Remove` 之后、`InjectStimulus` 之前）；`DispatchExternal:329`
+        //   亦经本方法 ⇒ 自动覆盖。⚠️ **复位点已全在**（`Complete`／`Abandon` ＋ `NPCBrain.ResetForReuse` 兜底）
+        //   ⇒ ⛔ 不新增复位、⛔ 不动 `ClearNpc`（它不是唯一出口）。
+        //   ⚠️ 该字段此前**全库零处置 `true`**（`D813` 实测）⇒ 「移动独占」形同虚设，本批恢复。
+        brain.IsKingdomTaskWorker = true;
         InjectStimulus(brain, task);   // TaskStimulus 保留兜底（决策核据此维持工作焦点/威胁挂起）
         NavigateToSource(brain, task); // 2_8 步骤2：PathFollower 直接走向 SourcePos 微格落点
         Debug.Log($"[TaskScheduler] 派发 {task.type} 任务 → npcId {id} @ {task.SourcePos}（优先级 {GetPriority(task.type)}）");
@@ -402,7 +424,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private void UpdateAssignedTasks()
     {
         if (_npcTaskMap.Count == 0) return;
-        var stale = new List<int>();
+        // ⭐ `U-16` 件2（`D815` 裁定 §2.3）：`List<(int, AbandonReason)>` —— 单列表、保序、值类型零额外分配。
+        //   ⛔ 否决"按 reason 分多列表"（会打乱现状"按收集序 Abandon"的隐性保序）。
+        var stale = new List<(int id, AbandonReason reason)>();
         float cellSize = GetCellSize();
 
         foreach (var kv in new Dictionary<int, KingdomTask>(_npcTaskMap))
@@ -411,12 +435,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             var task = kv.Value;
             if (!_npcBrainMap.TryGetValue(id, out var brain) || brain == null)
             {
-                stale.Add(id);   // 引用丢失，放弃
+                stale.Add((id, AbandonReason.BrainLost));   // 引用丢失，放弃
                 continue;
             }
             if (!brain.IsAlive)
             {
-                stale.Add(id);   // 死亡（OnUnitDied 应已清，此处双保险）
+                stale.Add((id, AbandonReason.Dead));   // 死亡（OnUnitDied 应已清，此处双保险）
                 continue;
             }
             TaskState st = _npcStateMap.TryGetValue(id, out var cur) ? cur : TaskState.Assigned;
@@ -427,7 +451,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 //   到账断链（判据1）。装载前各态（Assigned/MovingToSource/Working）照旧放弃。
                 if (!(task.source is ChestEntity && st == TaskState.MovingToDest))
                 {
-                    stale.Add(id);   // 源失效，放弃
+                    stale.Add((id, AbandonReason.SourceInvalid));   // 源失效，放弃
                     continue;
                 }
             }
@@ -449,7 +473,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                         }
                         else if (Time.time - _taskStartTime[id] > taskTimeout)
                         {
-                            stale.Add(id);          // 超时未到达，放弃
+                            stale.Add((id, AbandonReason.Timeout));   // 超时未到达，放弃（⭐ `甲′-b` 落本支）
                         }
                         else
                         {
@@ -489,7 +513,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             else
                             {
                                 Complete(id, task, brain);   // 无货可搬 → 直接完成（ExecuteCompletion 兜底入国库）
-                                stale.Add(id);
+                                stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：Complete 已 ClearNpc ⇒ 恒不触发 Abandon
                             }
                         }
                         else if (task.type == KingdomTaskType.AmmoReload)
@@ -504,7 +528,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             else
                             {
                                 Complete(id, task, brain);   // 弹药仓空/类型不足 → 完成（等下轮需求）
-                                stale.Add(id);
+                                stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：同上
                             }
                         }
                         else if (task.type == KingdomTaskType.Build && task.args is HaulToSiteArgs)
@@ -519,7 +543,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             else
                             {
                                 Complete(id, task, brain);   // 取料仓已空 / 阈值已满足 → 完成（等下轮广告）
-                                stale.Add(id);
+                                stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：同上
                             }
                         }
                         else if (task.type == KingdomTaskType.WaterHaul && task.args is HaulWaterArgs)
@@ -537,13 +561,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             else
                             {
                                 Complete(id, task, brain);   // 水井仓已空 → 完成（等下轮广告）
-                                stale.Add(id);
+                                stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：同上
                             }
                         }
                         else
                         {
                             Complete(id, task, brain);
-                            stale.Add(id);
+                            stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：同上
                         }
                     }
                     break;
@@ -564,11 +588,11 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             else
                                 UnloadInventory(brain, task);        // 搬运：背包资源入仓库/国库
                             Complete(id, task, brain);
-                            stale.Add(id);
+                            stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：同上
                         }
                         else if (Time.time - _taskStartTime[id] > taskTimeout)
                         {
-                            stale.Add(id);   // 超时未到达卸货点，放弃（背包资源保留，不丢）
+                            stale.Add((id, AbandonReason.Timeout));   // 超时未到达卸货点，放弃（背包资源保留，不丢）
                         }
                         else
                         {
@@ -578,17 +602,18 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     break;
 
                 default:
-                    stale.Add(id);
+                    stale.Add((id, AbandonReason.Unknown));
                     break;
             }
         }
 
         for (int i = 0; i < stale.Count; i++)
         {
-            if (_npcTaskMap.TryGetValue(stale[i], out var task))
+            var (staleId, staleReason) = stale[i];
+            if (_npcTaskMap.TryGetValue(staleId, out var task))
             {
-                _npcBrainMap.TryGetValue(stale[i], out var brain);
-                Abandon(stale[i], task, brain);
+                _npcBrainMap.TryGetValue(staleId, out var brain);
+                Abandon(staleId, task, brain, staleReason);
             }
         }
     }
@@ -626,8 +651,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         OverheadSpeech.Show(brain.transform, "劳作中…", duration: 0.8f);
     }
 
-    /// <summary>放弃任务：清记录 + 复位工人 + 移除刺激（不执行完成动作）。</summary>
-    private void Abandon(int npcId, KingdomTask task, NPCBrain brain)
+    /// <summary>放弃任务：清记录 + 复位工人 + 移除刺激（不执行完成动作）。
+    /// ⭐ `U-16` 件2（`D815` 裁定 §四）：**加 `reason` ＋ 一行可 grep 日志** —— 此前本方法**全程无日志**
+    ///   （对照 `Complete` 有），是"派而不执行"长期无法定位的根因之一。</summary>
+    private void Abandon(int npcId, KingdomTask task, NPCBrain brain, AbandonReason reason)
     {
         // QQQ.2 T19 / RES-A2：Gather 中断（工人阵亡/被打断/源失效）→ 资源点解锁可再点击（进度重置不保留）
         // 【HH.294 片 6-2·B-4①】原 `gb.isBeingGathered = false`（Building 采集锁）**随实体退役已删** ——
@@ -639,6 +666,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             if (task != null) brain.RemoveTaskStimulus(task.source);
         }
         ClearNpc(npcId);
+        // ⭐ 日志契约（`D815` §四 · 四要素 ＋ 容 null）：`task` 与 `brain` 均可能为 null（`:591` 处 `TryGetValue` 可失败）。
+        Debug.Log($"[TaskScheduler] Abandon {task?.type} → npcId {npcId} reason={reason}");
     }
 
     private void ClearNpc(int npcId)

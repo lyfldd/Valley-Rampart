@@ -190,6 +190,24 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// <summary>是否王国任务工人（T-K/T-R）：移动由 WorkerTask 独占，普通决策核不分发移动。</summary>
     public bool IsKingdomTaskWorker;
 
+    /// <summary>⭐ `U-16` 案①（`D815` 裁定 §2.1／§2.6）：**任务在册期的移动让位门**（**单真值源** ⇒ 两处消费：
+    /// `Update` 的 Execute 门 ＋ `Think` 的到达态冻结 ⇒ ⛔ 不会"两处条件漂移"）。
+    ///   让位 ⟺ 在册任务 ∧ **非豁免**；豁免 ⟺ 焦点是威胁 ∨ 谱系 ＝ `FullRetreat`（真撤退）。
+    /// ⛔ **不含 `Cautious`**：其枚举语义＝「**维持工作**」（`StimulusTypes:41`），且 `_taskDiscount` 打折是
+    ///   **有意设计**（`AttentionSystem:271/351` × `NPCBrain:735`）⇒ 纳入豁免＝**撤销该设计**。
+    /// ⚠️ 取用面 ＝ **最近一次完整决策** `_lastCtx`：`Think` 内本帧新 `ctx.FocusDecision` 尚未算出 ⇒ 只能读上一 tick
+    ///   （两处消费同一来源 ⇒ 语义一致）。</summary>
+    private bool TaskMoveYield
+    {
+        get
+        {
+            if (!IsKingdomTaskWorker) return false;
+            if (_lastCtx.FocusDecision.IsValid && _lastCtx.FocusDecision.Focus is ThreatStimulus) return false;
+            if (_lastCtx.PostureDecision.Spectrum == BehaviorSpectrum.FullRetreat) return false;
+            return true;
+        }
+    }
+
     // ===== 段② Q1-B（D252）：精英怪 MonsterMode 模式开关（壳层字段，非 FactorContext 结构体；默认关闭，普通单位零影响）=====
     private bool _isMonsterBrain;                              // 精英怪（Brute）并入 NPCBrain 时置位
     private MonsterMode _monsterMode = MonsterMode.Raiding;     // 当前模式（Raiding 默认）
@@ -478,7 +496,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // 王国任务工人（T-K/T-R）：移动由 WorkerTask 独占，跳过普通 Executor 移动，
         // 否则 Working 时工人被普通决策核（wander/逃跑）拉离采集点（对齐 SimBrain.IsKingdomTaskWorker）。
         // 注意：Think 仍跑（保证 ThreatFactor 刷新），只跳过移动 Execute。
-        if (_executor != null && !IsKingdomTaskWorker)
+        // ⭐ `U-16` 案①（`D815`）：让位改由 **`TaskMoveYield`** 判断（在册 ∧ 非豁免）——
+        //   `IsKingdomTaskWorker` 全库原本**零处置 `true`**（`D813` 实测）⇒ 本门恒不生效；
+        //   现由 `TaskScheduler.Dispatch` 置位 ⇒ 与"任务层直写 `NavigateToSource`"配对成立。
+        //   ⚠️ 豁免（焦点是威胁 ∨ `FullRetreat`）时**照旧执行** ⇒ 威胁逃逸不被任务锁死。
+        if (_executor != null && !TaskMoveYield)
         {
             _executor.Execute(in _lastCmd, Time.deltaTime, GetCellSize());
         }
@@ -701,7 +723,11 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
         // ⓪ 组装 FactorContext（世界/自身原始状态）
         FactorContext ctx = BuildBaseContext();
         ctx.LastRaw = _lastRaw;
-        ctx.ArrivedAtFocus = _executor.ArrivedAtFocus;
+        // ⭐ `U-16` 案①（`D815` 裁定 §2.6）：与 Execute 门**共用同一真值源** `TaskMoveYield` ——
+        // 让位期 `Execute` 被跳过 ⇒ `ArrivedAtFocus` 会**冻结在上帧值** ⇒ 若照旧回灌，恢复瞬间
+        // 可能被判"已到达" ⇒ `L2` 选 `Idle`/`WorkAt` ⇒ **误触 `ExecuteWorkAt` 的 `HarvestCarry`**。
+        // ⇒ 仅"真跳过"时置 false；豁免执行期**逐位保持改前语义**（`FullRetreat` 期 `ArrivedAtFocus` 影响 L2 模块选择）。
+        ctx.ArrivedAtFocus = TaskMoveYield ? false : _executor.ArrivedAtFocus;
 
         // ① 记忆组件 Tick（量化器读 ctx.LastRaw 上一帧缓存）
         for (int i = 0; i < _memoryComponents.Length; i++)
