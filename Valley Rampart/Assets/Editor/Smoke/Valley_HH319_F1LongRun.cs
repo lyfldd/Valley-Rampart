@@ -202,6 +202,8 @@ public static class Valley_HH319_F1LongRun
         var farm = Place("Buildings/farm", anchor + new Vector2(6f, 0f), 0);
         SpawnWorker(anchor + new Vector2(-1f, 1.6f), 0);
         SpawnWorker(anchor + new Vector2(1f, -1.6f), 0);
+        SpawnWorker(anchor + new Vector2(-2.2f, -1.6f), 0);   // ⭐ `D839` §B-2：玩家国工人 2 → 4（保「消费 ≥ 产生」）
+        SpawnWorker(anchor + new Vector2(2.2f, 1.6f), 0);
         if (well == null || farm == null) { Debug.LogError("[HH319O18] 布置失败 ⇒ 中止。"); yield break; }
         var ws = well.GetComponent<StorageComponent>();
         var fs = farm.GetComponent<StorageComponent>();
@@ -214,9 +216,8 @@ public static class Valley_HH319_F1LongRun
         int tc = ws.TotalCount;
         bool ready = ws.IsReadyToHarvest();
         bool btnCan = tc > 0;                                      // `G-1`：面板启用判据（`BuildingPanel:191`）
-        U16Write($"{U16Tag}·a1] {Stamp()} ⭐A1/`G-1` 鉴别力｜靶例仓（纯水井仓）：TotalCount={tc} ⇒ **面板可点={btnCan}**（G-1 判据 `TotalCount>0`）"
-                 + $" ｜ IsReadyToHarvest()={ready}（旧口径「可入国库」· 水不可入国库 ⇒ 应 False）"
-                 + $" ⇒ ⭐**两列差异={btnCan != ready}**（True＝G-1 生效·本档测到真判据）");
+        U16Write($"{U16Tag}·a1] {Stamp()} 靶例仓（纯水井仓）TotalCount={tc} ｜ 面板可点（TotalCount>0）={btnCan}"
+                 + $" ｜ IsReadyToHarvest()={ready} ｜ 两列差异={btnCan != ready}");
 
         // ---- ⭐ 件B-2／判据 9：**对照组（有空闲工人）** —— 证明本档确实点到 `Q1` 接线 ----
         // ⭐ `D834` §A1：**「标记」列已删**（`consumed = f2 && !f3` 结构性恒 false：`f2` 是点击**前**读数 ⇒ 必假）
@@ -228,13 +229,32 @@ public static class Valley_HH319_F1LongRun
         int tr1 = CountTransport();
         U16Write($"{U16Tag}·ctrl] {Stamp()} ⭐对照组（**探针口径**空闲工人={id0}）：点击前 在册Transport={tr0}"
                  + $" ⇒ 点击后 在册Transport={tr1}（期望 +1）⇒ **派到任务={tr1 > tr0}**"
-                 + $" ｜ ⭐`Q1` **点击前后差集**＝{TaskDiff(snap0)}（期望含 `Transport`）");
+                 + $" ｜ 点击前后差集 {TaskDiff(snap0)}");
 
-        // ---- ⭐⭐ 件B-1：`O-18`「无空闲工人」组 —— 先占满全部玩家国工人 ----
-        // ⭐ `D837` §B：**占满工人段已移到 `A2` 之后**（原位置在 `A2` 前 ⇒ `A2` 差集必空 ⇒ 平凡真）。
-        int occupied = -1;                                  // 占位（真值在 `A2` 之后填）
+        // ---- ⭐⭐ `D839` §A：**`A2`（拆除中点击）段 —— 位置在「占满工人」之前**（工人仍空闲）----
+        //   ⭐ 自证判据：落盘 `·a2]` 的时间戳须**先于** `·o18]`（⛔ 若仍在其后 ⇒ 未移到位）。
+        //   ⚠️ 新靶例 `well2`（⛔ 不复用已点击过的 `well` —— 差集基线会被历史残留污染）。
+        var well2 = Place("Buildings/Well", anchor + new Vector2(-6f, -4f), 0);
+        var ws2 = well2 != null ? well2.GetComponent<StorageComponent>() : null;
+        if (well2 != null && ws2 != null && well2.CanDemolish)
+        {
+            yield return new WaitForSeconds(3f);                   // 新井自产（保证 `TotalCount > 0`）
+            well2.Demolish();
+            yield return null;
+            var snap4 = TaskSnapshot();
+            int tr4 = CountTransport();
+            TaskScheduler.Instance.RequestHaulNow(ws2);
+            yield return null;
+            int tr5 = CountTransport();
+            string diff4 = TaskDiff(snap4);
+            U16Write($"{U16Tag}·a2] {Stamp()} 新靶例 well2 · _demolishing=True ｜ 在册Transport {tr4} → {tr5} ｜ 点击前后差集 {diff4}");
+        }
+        else U16Write($"{U16Tag}·a2] {Stamp()} 跳过：well2={well2 != null} ws2={ws2 != null} CanDemolish={(well2 != null ? well2.CanDemolish.ToString() : "-")}");
+
+        // ---- ⭐⭐ `D839` §A：**`A2` 段已整段移到本行之前**（⛔ 上批误为"插占满块" ⇒ 顺序未变）----
+        int occupied = -1;
         int idleNow = IdleWorkerCount();
-        // ⭐⭐ `D837` §B：**占满全部玩家国工人**（**移到 `A2` 之后** ⇒ `A2` 得以在**工人仍空闲**时执行）
+        // ⭐ `D839` §B：**占满全部玩家国工人**（本段位于 `A2` 之后 ⇒ `·a2]` 时间戳须**先于** `·o18]`）
         occupied = 0;
         foreach (var uc in PlayerWorkers())
         {
@@ -256,36 +276,10 @@ public static class Valley_HH319_F1LongRun
         // ⭐ `D834` §E-3 **场景前提口径声明**：本档「无空闲工人」用的是**探针口径**（`PlayerWorkers() ∧ !InMap`），
         //   ⚠️ 与 `Tick.idle`（`TaskScheduler.cs:266-281`：`+IsIdleForTask` ＋ 职业 ∈{Worker,Civilian,Porter} ＋ ⛔ 不限国度）
         //   **既非充分也非必要** ⇒ 故本行**同帧并报两列** ＋ 只把「任务数增/不增」当判据面（`A2` 口径要求）。
-        U16Write($"{U16Tag}·o18] {Stamp()} ⭐⭐⭐**无空闲工人组**（占用尝试={occupied} · **探针口径**空闲工人={idleNow}）：点击前 在册Transport={tr2}"
-                 + $" ⇒ 点击后 在册Transport={tr3} ⇒ **任务未派={notDispatched}**"
-                 + $" ｜ ⭐**点击前后差集＝{diff2}**（期望（无新增））"
-                 + $" ⇒ ⭐⭐`O-18` 判定＝**{(notDispatched ? "成立（无空闲工人时手点「派搬运」不产生任务 · ⭐ 「标记被静默消费」已由码面定案 · ⛔ 非本探针所证）" : "不成立")}**");
+        U16Write($"{U16Tag}·o18] {Stamp()} 在册Transport {tr2} → {tr3} ｜ 点击前后差集 {diff2} ｜ 占用尝试 {occupied} ｜ 探针口径空闲工人 {idleNow}");
+        U16Write($"{U16Tag}·summary] ⚠️ 判定须人工裁定");
 
-        // ---- ⭐ 件B-6／`A2`：**拆除中点击**（`_demolishing` ⇒ 广告分支改为 `Build`）----
-        // ⭐ `D834` §B-3：**换未被污染的靶例建筑**（⛔ 不得复用已点击过的 `well` —— 其 `_forceHaulOnce` 已消费、
-        //   `TaskTypesOf` 含对照组遗留 ⇒ 差集基线脏）⇒ 另 `Place` 一口新井。
-        var well2 = Place("Buildings/Well", anchor + new Vector2(-6f, -4f), 0);
-        var ws2 = well2 != null ? well2.GetComponent<StorageComponent>() : null;
-        if (well2 != null && ws2 != null && well2.CanDemolish)
-        {
-            yield return new WaitForSeconds(3f);                   // 新井自产（保证 `TotalCount > 0`）
-            well2.Demolish();                                      // ⭐ 进入 `_demolishing`
-            yield return null;
-            var snap4 = TaskSnapshot();                            // ⭐ 差集基线（拆除后、点击前）
-            int tr4 = CountTransport();
-            TaskScheduler.Instance.RequestHaulNow(ws2);            // 同一点击
-            yield return null;
-            int tr5 = CountTransport();
-            string diff4 = TaskDiff(snap4);
-            bool noTransport = diff4 == "（无新增）" || !diff4.Contains("Transport");
-            U16Write($"{U16Tag}·a2] {Stamp()} ⭐A2 拆除中点击（**新靶例** `well2` · _demolishing=True）：点击前 在册Transport={tr4}"
-                     + $" ⇒ 点击后={tr5} ｜ ⭐**点击前后差集＝{diff4}**（期望 **Build 拆除任务** · ⛔ 非 Transport）"
-                     + $" ⇒ 判据：**差集无 Transport={noTransport}**"
-                     + $"（⚠️ 本档**删「标记」列** —— 原式 `f4 && !f5` 结构性恒 false · `D834` §A1）");
-        }
-        else U16Write($"{U16Tag}·a2] {Stamp()} ⚠️A2 跳过：新靶例不可用（well2={well2 != null} ws2={ws2 != null} CanDemolish={(well2 != null ? well2.CanDemolish.ToString() : "-")}）");
-
-        U16Write($"{U16Tag}·summary] ★ 收尾：A1 两列差异 ／ 对照组派到任务＋差集 ／ A2 新靶例差集（**已移至占满之前**）／ O-18 任务未派 —— 四项读数已**落盘**（`D834` §A3）。");
+        U16Write($"{U16Tag}·summary] ★ 收尾：`·a1]`／`·ctrl]`／`·a2]`／`·o18]` 四行读数见上（`D834` §A3 落盘）。");
         // ⭐⭐ `D837` §D-1：**本档补收尾**（原缺 `U16End`＋`QuitSmoke` ⇒ 落盘件**无「封存」行** ⇒ 缺收尾证据）
         U16End();                                   // ⭐ 写 `# 封存 <时刻> ⇒ <路径>`（落盘凭证）
         TestHarnessApi.ExitTestRun();               // 正门收尾：恢复考跑态/timeScale/渲染减负
@@ -343,6 +337,8 @@ public static class Valley_HH319_F1LongRun
         var farm = Place("Buildings/farm", anchor + new Vector2(6f, 0f), 0);
         SpawnWorker(anchor + new Vector2(-1f, 1.6f), 0);
         SpawnWorker(anchor + new Vector2(1f, -1.6f), 0);
+        SpawnWorker(anchor + new Vector2(-2.2f, -1.6f), 0);   // ⭐ `D839` §B-2：玩家国工人 2 → 4（保「消费 ≥ 产生」）
+        SpawnWorker(anchor + new Vector2(2.2f, 1.6f), 0);
         TestFixtureApi.AddWaterToKingdomWells(0, 50);
         if (farm != null)
         {
@@ -486,6 +482,8 @@ public static class Valley_HH319_F1LongRun
         var farm = Place("Buildings/farm", anchor + new Vector2(6f, 0f), 0);
         SpawnWorker(anchor + new Vector2(-1f, 1.6f), 0);
         SpawnWorker(anchor + new Vector2(1f, -1.6f), 0);
+        SpawnWorker(anchor + new Vector2(-2.2f, -1.6f), 0);   // ⭐ `D839` §B-2：玩家国工人 2 → 4（保「消费 ≥ 产生」）
+        SpawnWorker(anchor + new Vector2(2.2f, 1.6f), 0);
         if (well == null || farm == null)
         {
             Debug.LogError($"[HH319长局·{tag}] 布置失败 well={well != null} farm={farm != null} ⇒ 中止。");
@@ -632,7 +630,14 @@ public static class Valley_HH319_F1LongRun
                             // ⭐⭐ `D838` §D-1 **主依据**：逐帧 `Δ背包 ≈ −Δ井仓`（容差 20% ⇒ `Δ背包 ≥ 0.8×|Δ井仓|`）
                             //   ⛔ 不再以"背包存量 > 0"当主依据（存量可能来自更早的装载 ⇒ 无鉴别力）。
                             if (dB > 0 && dB * 5 >= (-dW) * 4) _alignOk++;
-                            else { _alignFail++; _alignDeficit += (-dW) - dB; }
+                            else
+                            {
+                                _alignFail++; _alignDeficit += (-dW) - dB;
+                                // ⭐ `D839` §C-1：**未对齐帧完整明细**（井仓 Δ ／ 背包 Δ ／ 在册任务 ／ 容差差值）
+                                if (_alignLog.Count < 12)
+                                    _alignLog.Add($"f{_u16Frames} 井仓={wellN}(Δ{dW}) 背包Δ={dB} 背包存量={bagN} 在册WaterHaul={haulInMapNow}"
+                                                  + $" 井边Working装载={wellSideLoader} 容差差={(-dW) - dB}（|Δ井仓|={-dW} vs Δ背包={dB}）");
+                            }
                             if (matchedNow) { _pairMatched++; _pendDrop = false; }
                             else { _pendDrop = true; _pendAmt = -dW; }     // 留待下一帧再判（±1）
                             if (_dropLog.Count < 40)
@@ -823,13 +828,14 @@ public static class Valley_HH319_F1LongRun
     // ⭐⭐ `D838` §D-1：**主依据改为「逐帧 `Δ背包 ≈ −Δ井仓` 对齐」**（⛔ 不再以"背包存量>0"当主依据）
     private static int _alignOk, _alignFail;                 // 对齐（合法装载 ⇒ 水进了背包）／未对齐
     private static int _alignDeficit;                        // 未对齐帧的缺口合计（|Δ井仓| − Δ背包）
+    private static readonly List<string> _alignLog = new List<string>();   // ⭐ `D839` §C-1：未对齐帧**完整明细**
     private static int _suppressSum;                         // ⭐ 探针靶例维持的压水总量（＝合法右手项 · ⛔ 非旁路）
     // ⭐ `D837` §D-2：原 `_suppressAtWinStart`（窗口口径遗留）**已删**（5 处 `CS0414` 全清）。
     // ---- ⭐⭐ `D836` §A：**载体再改**（策划端裁定 · 比"窄口径"更干净）----
     //   口径：**每个 `Δ井仓<0` 的帧 ⇒ 须能配对到「该帧有玩家国工人处于 `WaterHaul` ∧ `TaskState.Working`
     //    ∧ 距井 ≤3.5」**；⭐ 依据＝**探针压制发生在"井边无工人"时** ⇒ **该口径天然排除压制帧**。
     //   判据：`Δ井仓<0` ∧ **该帧井边无 `WaterHaul·Working` 工人** ⇒ 未配对（疑旁路取走）；有 ⇒ 合法装载 ✓。
-    private const float WellRateForTest = 0.5f;              // ⭐ `D837` §A-2：井产水速率（运行期反射改 · ⛔ 不改 `.asset`）
+    private const float WellRateForTest = 0.1f;              // ⭐ `D837` §A-2／`D839` §B：井产水速率（运行期反射改 · ⛔ 不改 `.asset`）
     private static int _bagGainTotal;                        // ⭐ `L-82`：**生产合法量** ＝ `ΣΔ背包载水⁺`
     private static int _consSuppPrev;                        // 上一帧的压制累计（算"本帧是否发生压制"）
     private static readonly List<string> _pairLog = new List<string>();   // 判红窗口明细
@@ -889,6 +895,7 @@ public static class Valley_HH319_F1LongRun
         _pairTotal = 0; _pairMatched = 0; _pairUnmatched = 0; _pairDeficit = 0;
         _suppressSum = 0; _bagGainTotal = 0; _consSuppPrev = 0;   // ⭐ `D837` §A-1 后 `_suppressSum` 应恒 0
         _alignOk = 0; _alignFail = 0; _alignDeficit = 0;          // ⭐ `D838` §D-1 主依据
+        _alignLog.Clear();
         _pairLog.Clear(); _dropLog.Clear();
         // ⭐ `F-1` 收尾批新增面
         _dispatchTypeN.Clear(); _farmConcN.Clear();
@@ -1475,12 +1482,13 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4 主依据（`D838` §D-1）**：逐帧「`Δ背包 ≈ −Δ井仓`」（容差 20%）"
                       + $" ⇒ **对齐帧={_alignOk}** ／ **未对齐帧={_alignFail}**（缺口合计={_alignDeficit}）"
                       + $"｜⛔ 不再以「背包存量>0」当主依据（存量可来自更早装载 ⇒ 无鉴别力）");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 **未对齐帧完整明细**（`D839` §C-1）：{(_alignLog.Count == 0 ? "（无）" : string.Join(" ／ ", _alignLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⚠️ **计数口径（`D838` §D-3）**：本判据内两个「计数」**不同口径、⛔ 不可互比** ——"
                       + $" ①`下降帧总数`={_pairTotal}＝**逐帧**采样；②诊断行 `井仓 Δ<0 总帧`={_wellDropFrames}＝**每秒**采样（`·farm]` 节律）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ `L-82` **测量污染比值**：生产合法量（`ΣΔ背包载水⁺`）={_bagGainTotal} ／ 探针注入量（`Σ压制`）={_suppressSum}"
                       + $" ⇒ 比值={(_suppressSum > 0 ? (_bagGainTotal * 1.0f / _suppressSum).ToString("F3") : "∞")}"
                       + $"（⚠️ 比值 <1 ⇒ 场景中「探针干预」占主导 ⇒ 报策划端 · ⛔ 不自改场景）");
-        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 未配对明细（期望空）：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
+        sb.AppendLine($"{U16Tag}·summary] （旧配对口径 · 已被 `D838` §D-1 取代 · ⛔ 不再判读）未配对明细：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 `Δ井仓<0` 逐帧明细（前 {Mathf.Min(_dropLog.Count, 40)} 条）：{(_dropLog.Count == 0 ? "（无）" : string.Join(" ／ ", _dropLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⚠️ **判定须人工裁定**（本串只报读数 · ⛔ 不含任何判定字样 · `D836` §B）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 配对窗口明细（判红才列 · 期望空）：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
