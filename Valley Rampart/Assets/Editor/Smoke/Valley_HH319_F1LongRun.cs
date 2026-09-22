@@ -293,6 +293,7 @@ public static class Valley_HH319_F1LongRun
         }
         var wellStore = well.GetComponent<StorageComponent>();
         var farmStore = farm.GetComponent<StorageComponent>();
+        _targetFarm = farm;   // ⭐ `O-15` 列 A/B：**靶例农场**锚（⛔ 全库其它农场不计入两列）
         TestFixtureApi.AddWaterToKingdomWells(0, 50);                      // 井仓给 50 水（< cap×0.8 ⇒ ⛔ 不触发井的 Transport 广告）
         farmStore.TakeOut(ResourceType.Water, farmStore.GetAmount(ResourceType.Water));   // 农场缺水 ⇒ 广告 WaterHaul
         Debug.Log($"[HH319长局·{tag}] 布置：well@{well.transform.position} farm@{farm.transform.position} "
@@ -451,7 +452,15 @@ public static class Valley_HH319_F1LongRun
             int wmin = wellStore.GetAmount(ResourceType.Water);
             if (wmin < wellMin) wellMin = wmin;
 
-            if (completed && rt > t6 + 3f) break;   // 一次完整往返达成 ⇒ 命中即停（L-34）
+            // ⭐ `O-15`（`D821` §五 件2）：**命中后不立即收口** —— 原 `rt > t6 + 3f` 仅 ~6 真实秒即
+            //   收口（Wins 实测）⇒ 覆盖不到"补水后农场是否恢复派工"⇒ 改为达成后**再额外观察 ≈23 真实秒**
+            //   （⛔ 不改"可判定最早日＋命中即停"的纪律：仍在 `completed` 之后停，只是延长尾巴）。
+            if (completed && _postWatchUntil < 0f)
+            {
+                _postWatchUntil = rt + 23f;
+                U16Write($"{U16Tag}·postwatch] {Stamp()} +{rt:F2}s 靶例达成（E2~E6 齐）⇒ 额外观察至 +{_postWatchUntil:F2}s");
+            }
+            if (completed && _postWatchUntil > 0f && rt > _postWatchUntil) break;   // 命中 ＋ 延长窗满 ⇒ 停（L-34）
         }
 
         // ---- 汇总 ----
@@ -517,6 +526,12 @@ public static class Valley_HH319_F1LongRun
     private static int _farmWorkFrames, _farmIdleFrames;     // 判据 1 新列：本秒是否有农场工人 Working
     private static int _farmThirstFrames, _farmOkFrames;     // 判据 1 新列：本秒 TryConsumeFarmWater 是否失败（缺水停产）
     private static int _farmWaterPeakInThirst;               // 缺水期水位峰值（对照）
+    // ---- ⭐ `O-15` 批（`D821` §五 件2）：靶例农场 Production 两列 ＋ 观测窗延长 ----
+    private static Building _targetFarm;                     // 靶例农场（列 A/B 的锚 · ⛔ 非靶例农场不计）
+    private static int _farmProdDispatchN;                   // 列 A：靶例农场 `Production` **派发数**
+    private static int _farmProdInMapFrames;                 // 列 A 旁证：靶例农场 `Production` **在册帧数**
+    private static string _farmProdLastState = "(未观测到)";   // 列 B：最后一次在册时的 `state` ＋ `pfState`
+    private static float _postWatchUntil = -1f;              // ⭐ 命中后再观察的截止时刻（真实秒）
     private static bool _threatInjected;                        // 判据 4：威胁已注入（第①段 · 远）
     private static bool _threatInjected2;                       // 判据 4：威胁已注入（第②段 · 近）
     private static int _stage1DispatchN = -1;                   // 判据 4a：第①段时的派发计数基线（等新派发窗口）
@@ -550,6 +565,9 @@ public static class Valley_HH319_F1LongRun
         _dispatchTypeN.Clear(); _farmConcN.Clear();
         _farmWorkFrames = _farmIdleFrames = _farmThirstFrames = _farmOkFrames = 0;
         _farmWaterPeakInThirst = 0;
+        // ⭐ `O-15` 批
+        _targetFarm = null; _farmProdDispatchN = 0; _farmProdInMapFrames = 0;
+        _farmProdLastState = "(未观测到)"; _postWatchUntil = -1f;
         _farmWaterPeak2 = 0; _farmGained = false; _farmFirstGainRt = -1f;
         Application.logMessageReceived += OnLog;             // P3：console 镜像（⭐ 本批第一优先）
         EventBus.Subscribe<PathFailedEvent>(OnPathFailedEvt); // P3：PathFailedEvent 只读计数（按 npcId 分桶）
@@ -611,6 +629,13 @@ public static class Valley_HH319_F1LongRun
         int n; _dispatchN.TryGetValue(id, out n); _dispatchN[id] = n + 1;
         // ⭐ `F-1` 收尾批 判据 4：**派发按类型计数**（缺水期 `WaterHaul` 应 ↑、`Production` 应 ↓ —— 两侧都给读数）。
         int tn; _dispatchTypeN.TryGetValue(type, out tn); _dispatchTypeN[type] = tn + 1;
+        // ⭐ `O-15` **列 A**（`D821` §五 件2）：**靶例农场的 `Production` 派发数** —— 用途＝区分
+        //   「**没派**」（＝0 ⇒ 广告链未产出该任务）vs「**派了但到不了**」（>0 ⇒ 派发后卡在位移/劳作）。
+        if (type == "Production" && _targetFarm != null)
+        {
+            var pt = TaskOf(id);
+            if (pt != null && ReferenceEquals(pt.source, _targetFarm)) _farmProdDispatchN++;
+        }
         var uc = FindUnit(id);
         // ⭐ 判据 3：**派发时刻**的 `IsKingdomTaskWorker` 读数（`D815` §件1 置位后应为 True；
         //   若同帧被 OnPathFailed 清 ⇒ 读 False ⇒ 与 `在册(False)` 同时出现＝甲′-a 铁证）。
@@ -825,6 +850,20 @@ public static class Valley_HH319_F1LongRun
                 if (t.args is HaulWaterArgs hw && ReferenceEquals(hw.target, farmStore)) conc++;
             }
         int cn; _farmConcN.TryGetValue(conc, out cn); _farmConcN[conc] = cn + 1;
+        // ⭐ `O-15` **列 B**（同上）：靶例农场最后一次 `Production` **在册**时的 `state` ＋ `pfState`
+        //   ⇒ 用于判断"派了但到不了"时卡在**哪一段**（`Assigned`/`MovingToSource`/`Working`…）。
+        if (_targetFarm != null && tm != null)
+            foreach (var kv in tm)
+            {
+                var t = kv.Value;
+                if (t == null || t.type != KingdomTaskType.Production) continue;
+                if (!ReferenceEquals(t.source, _targetFarm)) continue;
+                _farmProdInMapFrames++;
+                var tuc = FindUnit(kv.Key);
+                string stP = TaskScheduler.HasInstance ? TaskScheduler.Instance.GetWorkerState(kv.Key).ToString() : "?";
+                float dFarm = tuc != null ? Vector2.Distance(tuc.transform.position, _targetFarm.transform.position) : -1f;
+                _farmProdLastState = $"npc={kv.Key} state={stP} 在册=True 距农场={dFarm:F2} | {PfDesc(tuc, false)} @+{rt:F2}s";
+            }
         U16Write($"{U16Tag}·farm] {Stamp()} +{rt:F2}s 农场仓水={now} 峰值={_farmWaterPeak2}"
                  + $" 首次见水时刻={(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
                  + $" ⭐农场工人Working={farmWorking} ⭐缺水产={thirst} ⭐同农场在途WaterHaul={conc}");
@@ -1081,6 +1120,13 @@ public static class Valley_HH319_F1LongRun
             foreach (var kv in l3) s3.Append($"{kv.Key}×{kv.Value} ");
             sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4（`D-2`）· **派发按类型计数**：{(s3.Length > 0 ? s3.ToString().Trim() : "（无）")}"
                           + " ⇒ `WaterHaul` 应 ↑（前置生效）、`Production` 应 ↓（缺水期让位 · 可接受）");
+            // ⭐⭐ `O-15`（`D821` §五 件2）两列 ＋ 定性
+            sb.AppendLine($"{U16Tag}·summary] ⭐⭐ `O-15` 列 A · **靶例农场 `Production` 派发数={_farmProdDispatchN}**"
+                          + $" ／ 在册帧数={_farmProdInMapFrames}"
+                          + $" ⇒ 定性：{(_farmProdDispatchN == 0 ? "**没派**（广告链未产出该任务）" : "**派了**（⇒ 看列 B 是否到不了）")}");
+            sb.AppendLine($"{U16Tag}·summary] ⭐⭐ `O-15` 列 B · 最后一次靶例农场 `Production` 在册读数：{_farmProdLastState}");
+        }
+        {
             sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 1 新列汇总 · 农场「有工人 Working」秒数={_farmWorkFrames} ／ 无={_farmIdleFrames}"
                           + $" ｜ 「缺水产」秒数={_farmThirstFrames}（其水位峰值={_farmWaterPeakInThirst}）／ 不缺水={_farmOkFrames}"
                           + " ⇒ ⭐ 缺水秒数应显著下降（基线 34/37 条 `·farm]` 水位=0 —— `D-2` 饥饿）");
