@@ -665,3 +665,18 @@ public readonly struct KingdomAttackedEvent
     public readonly int HitDay;
     public KingdomAttackedEvent(int kingdomId, int hitDay = -1) { KingdomId = kingdomId; HitDay = hitDay; }
 }
+
+/// <summary>⭐ `M1-G-1b` 件1（`#42` · `09` §十二 `:527-529`「转职**补一条写入**」）：**转职事件**。
+/// 发布点：`UnitController.SetOccupation`（**单点写入** ⇒ 覆盖全库 9 处调用面）。
+/// ⚠️ 幂等：`from == to` **不发**（防事件风暴 · `PopulationSystem` 批量转职）。
+/// ⏔ 不入档（事件非状态 · 职业真源＝`UnitSaveData.occupation`）。
+/// 消费面：⛔ 当前**零订阅方**（备而未用 · 说明见交付报告 §A-②）。
+/// </summary>
+public readonly struct UnitOccupationChangedEvent
+{
+    public readonly UnitController unit;
+    public readonly Occupation from;
+    public readonly Occupation to;
+    public UnitOccupationChangedEvent(UnitController unit, Occupation from, Occupation to)
+    { this.unit = unit; this.from = from; this.to = to; }
+}

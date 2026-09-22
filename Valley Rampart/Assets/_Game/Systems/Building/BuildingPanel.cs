@@ -185,7 +185,7 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                 bool transporting = TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(_target);
                 _harvestButton.text = transporting
                     ? $"搬运中 {storage.UsedSpace}/{storage.capacity}"
-                    : $"收取 {storage.UsedSpace}/{storage.capacity}";
+                    : $"派搬运 {storage.UsedSpace}/{storage.capacity}";   // ⭐ `M1-G-1b` 件5：文案「收取」⇒「派搬运」（手点＝调用搬运任务 · `09` §9.8 `:390`）
                 _harvestButton.SetEnabled(storage.IsReadyToHarvest());
             }
         }
@@ -407,7 +407,10 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         // ⭐ `U-15`（`D809`/`D810`）：启用（:187）与守卫（本行）同用 `IsReadyToHarvest` ⇒ 其语义已改为
         //   「有**可入国库**的内容」⇒ **纯水井仓自动变灰**（正确处理 —— 收了会转箱空转）。
         if (storage == null || !storage.IsReadyToHarvest()) return;
-        storage.Harvest();  // 内部调 RulerController.ModifyResource 转入国库（⭐ U-15 起只收可收部分）
+        // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**玩家手点 ＝ 调用搬运任务的一种形式**（`09` §9.8 `:390`）
+        //   ⇒ 按钮由「瞬间入国库」改为**派一次搬运**（`TaskScheduler` 立案 ＋ 立即调度；工人到场即搬）。
+        //   ⛔ 不再直调 `Harvest()`（那是写死玩家国库的旁路，与 `#40` 同族）。
+        if (TaskScheduler.HasInstance) TaskScheduler.Instance.RequestHaulNow(storage);
         Refresh();
     }
 

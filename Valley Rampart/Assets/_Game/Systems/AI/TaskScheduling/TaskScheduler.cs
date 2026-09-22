@@ -368,6 +368,24 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         Tick();   // 立即派发一次（常规 tick 由 Update 照旧驱动，⛔ 不改变其节律）
     }
 
+    /// <summary>⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**玩家手点「派搬运」** 的重载 ——
+    /// 传 `StorageComponent`（⛔ 非 `ITaskSource`）⇒ 取 `GetComponentInParent<Building>`（兼容「箱＝仓」：箱容器挂本体）。
+    /// 语义：给该建筑置**一次性强制搬运标记**（`Building.RequestForceHaulOnce`）⇒ 广告侧**先判 ④ 并跳阈值** ⇒
+    /// 再复用 `RequestHaulNow((ITaskSource)b)` 立即调度一次（⭐ 派出的任务类型**必须是 `Transport`**）。
+    /// ⚠️ 若该仓无父 `Building`（或已不在册）⇒ 退化为**直接 `Harvest()`**（旧口径兜底 · ⛔ 不静默失败）。</summary>
+    public void RequestHaulNow(StorageComponent st)
+    {
+        if (st == null) return;
+        var b = st.GetComponentInParent<Building>();
+        if (b == null)
+        {
+            st.Harvest();   // ⛔ 无父建筑（异常态）⇒ 退回旧口径（保底不丢）
+            return;
+        }
+        b.RequestForceHaulOnce();
+        RequestHaulNow((ITaskSource)b);
+    }
+
     /// <summary>派发任务到指定 NPC：记录 + 注入刺激。</summary>
     private void Dispatch(NPCBrain brain, KingdomTask task)
     {

@@ -82,7 +82,14 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// <summary>有效职业（优先运行时覆盖，否则 Data.occupation）。</summary>
     public Occupation EffectiveOccupation => _runtimeOccupation >= 0 ? (Occupation)_runtimeOccupation : (Data != null ? Data.occupation : Occupation.Civilian);
     /// <summary>设置运行时职业（TrainingSystem 转职用；随 UnitSaveData.occupation 持久化）。</summary>
-    public void SetOccupation(Occupation occ) { _runtimeOccupation = (int)occ; }
+    public void SetOccupation(Occupation occ)
+    {
+        // ⭐ `M1-G-1b` 件1（`#42`）：**转职补一条写入**（单点发布 ⇒ 覆盖全库 9 处调用面）。
+        var from = EffectiveOccupation;
+        if (from == occ) return;                 // 幂等：⛔ 不变不发（防事件风暴）
+        _runtimeOccupation = (int)occ;
+        EventBus.Publish(new UnitOccupationChangedEvent(this, from, occ));
+    }
 
     // ===== 2_17 步骤10 Faction 收编：AI 王国单位贯彻 AiKingdom（不污染共享 UnitData SO）=====
     private int _runtimeFaction = -1;   // -1 = 未设置，走派生判定；AI 王国单位走 _runtimeFaction≥0 显式覆写或派生兜底

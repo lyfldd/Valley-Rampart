@@ -1482,9 +1482,20 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// 【HH.294 片 6-2·6-D】原「①一次性资源点被确认采集 → Gather」分支**随实体退役已删**
     ///   —— 采集任务改由 `WorldGatherSource` 广告（数据寻址·唯一天然资源采集源）。
     /// </summary>
+    // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**一次性强制搬运广告**标记 ＋ 内部 set 口。
+    private bool _forceHaulOnce;
+    /// <summary>置位「一次性强制搬运广告」—— 由 `TaskScheduler.RequestHaulNow(StorageComponent)` 调用
+    /// （＝ `Q1` 玩家手点「派搬运」的接线）。⚠️ 标记在 `TryAdvertiseTask` **入口读后即清**（见该处注释）。</summary>
+    public void RequestForceHaulOnce() { _forceHaulOnce = true; }
+
     public bool TryAdvertiseTask(out KingdomTask task)
     {
         task = null;
+        // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**一次性强制搬运标记 —— 入口读后即清**。
+        //   ⛔ 必须在**任何 `return` 之前**（含 `:state != Active` 与 `_demolishing` 两条提前返回）
+        //   ⇒ 否则标记残留到下一 tick ⇒ 误触（裁定钉死）。
+        bool forceHaul = _forceHaulOnce;
+        _forceHaulOnce = false;
 
         // ⭐ `M1-C` 件4（`09` §16.3-3）：**拆除中 ⇒ 只广告「拆除任务」**（工人到场推进拆除进度），
         //   ⛔ 不再广告 Production/Transport/WaterHaul（拆除中的建筑不该继续生产／搬运）。
@@ -1507,6 +1518,22 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         var producer = GetComponent<ProducerComponent>();
         var storage = GetComponent<StorageComponent>();
         var sched = TaskScheduler.Instance;
+
+        // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**一次性强制搬运** —— `Q1`「玩家手点 ＝ 调用搬运任务的一种形式」
+        //   （`09` §9.8 `:390`）的接线落点。语义：**先判 ④**（跳 ② 生产 / ③ 搬运的分支竞争）＋ ⭐ **跳 `transportThreshold`**
+        //   （玩家手点是**显式意图**，⛔ 不受"存量 ≥ capacity×0.8"节流）。⚠️ 仍受 ③ 的同款前置（`capacity > 0 && TotalCount > 0`）。
+        if (forceHaul && storage != null && storage.capacity > 0 && storage.TotalCount > 0)
+        {
+            var ft = storage.PrimaryStoredType();
+            task = new KingdomTask(KingdomTaskType.Transport, this);   // ⭐ 必须是 `Transport`（⛔ 非 Production/WaterHaul）
+            task.destType = KingdomDestType.NearestWarehouse;
+            task.args = new ScaleTaskArgs
+            {
+                resourceType = ft,
+                totalResourceDemand = storage.GetAmount(ft)
+            };
+            return true;
+        }
 
         // ① 采集：一次性资源点（isConsumable）被玩家确认采集 → Gather 任务 —— 【片 6-2·6-D】已删（见方法头注）
 
