@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEditor;
@@ -36,7 +37,45 @@ public static class Valley2_20B_Smoke_M7
     {
         var wm = Object.FindAnyObjectByType<WorldManager>();
         if (wm == null) { Debug.LogError("[2_20B冒烟] 未找到 WorldManager——请在 Play 上下文执行（先 Play 再点菜单）。"); return; }
+        StartArchive();   // ⭐ `HH.319` 收口件1：console **自动归档**（六轮全量落盘 · ⛔ 只增不改既有判据）
         new GameObject("M7_SmokeRunner").AddComponent<M7SmokeHost>().Host(RunCoroutine());
+    }
+
+    // ===== ⭐ `HH.319` 收口件1：六轮自动归档（落 `Logs/hh319_m7/`）=====
+    //   动因：`U-20` 批 `M7` 因「耗时长 · 逐轮结果只进 console」而未闭合（判据 4④）⇒ 本档令
+    //   六轮**自动跑完并落盘**（⛔ 不依赖 `read_console` 轮询 · ⛔ 不需人工等待/盯屏）。
+    private static string _archPath;
+    private static int _roundFail, _failTotal;
+    private static float _roundT0;
+
+    private static void StartArchive()
+    {
+        try
+        {
+            var dir = Path.Combine(Directory.GetCurrentDirectory(), "Logs/hh319_m7");
+            Directory.CreateDirectory(dir);
+            _archPath = Path.Combine(dir, "hh319_m7_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".log");
+            File.AppendAllText(_archPath, "# 2_20B M7 六轮归档 " + System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n");
+            Application.logMessageReceived += OnArchLog;
+            Debug.Log("[2_20B冒烟] ★ 归档已开启：" + _archPath);
+        }
+        catch (System.Exception e) { Debug.LogWarning("[2_20B冒烟] 归档初始化失败：" + e.Message); }
+    }
+
+    private static void OnArchLog(string msg, string stack, LogType type)
+    {
+        if (_archPath == null || string.IsNullOrEmpty(msg)) return;
+        if (msg.IndexOf("[2_20B", System.StringComparison.Ordinal) < 0) return;
+        string pre = type == LogType.Error || type == LogType.Exception ? "[ERR] "
+                   : type == LogType.Warning ? "[WARN] " : "";
+        try { File.AppendAllText(_archPath, pre + msg + "\n"); } catch { /* 归档失败不阻断跑局 */ }
+    }
+
+    private static void StopArchive()
+    {
+        if (_archPath == null) return;
+        Debug.Log($"[2_20B冒烟] ★★ 六轮归档完成：总 FAIL={_failTotal} ｜ 文件={_archPath}");
+        Application.logMessageReceived -= OnArchLog;
     }
 
     private static IEnumerator RunCoroutine()
@@ -76,10 +115,13 @@ public static class Valley2_20B_Smoke_M7
             var sb = new StringBuilder();
             bool allPass = true;
             var cleanup = new List<Object>();
+            _roundFail = 0;                                   // ⭐ 收口件1：逐轮 FAIL 计数
+            _roundT0 = Time.realtimeSinceStartup;             // ⭐ 收口件1：逐轮耗时
 
             void Check(bool ok, string name, string detail)
             {
                 allPass &= ok;
+                if (!ok) _roundFail++;                        // ⭐ 收口件1（只增 · ⛔ 不改判据）
                 sb.Append(ok ? "PASS" : "FAIL").Append(" ").Append(name).Append(" :: ").Append(detail).Append('\n');
                 Debug.Log((ok ? "[2_20B][PASS] " : "[2_20B][FAIL] ") + name + " :: " + detail);
             }
@@ -437,10 +479,16 @@ public static class Valley2_20B_Smoke_M7
             Check(false, "R" + (i + 1) + " 清场 VagrantCamp 零残留", "Instance 随清场销毁（ResetState 编排不可达，需复核）");
 
         yield return null;   // 陷阱2：留一帧让 Destroy 落地（GameState=Loading 下安全），再进下一轮
+
+        // ⭐ `HH.319` 收口件1：**逐轮归档行**（轮次／族／seed／耗时／FAIL）—— ⛔ 只增
+        _failTotal += _roundFail;
+        Debug.Log($"[2_20B冒烟] ★ 逐轮归档 第 {i + 1}/{rounds.Length} 轮 族={round.raceName} seed={round.seed}"
+                  + $" 耗时={(Time.realtimeSinceStartup - _roundT0):F1}s FAIL={_roundFail} {(allPass ? "ALL PASS" : "有 FAIL")}");
         }
 
         // ===== 全部轮次完成 =====
         // HH.150 正门收尾：ExitTestRun 全量恢复（考跑态/timeScale/渲染减负）+ QuitSmoke 清场退 Play
+        StopArchive();   // ⭐ 收口件1：先落「六轮总计」行再解挂（⛔ 顺序不可反）
         TestHarnessApi.ExitTestRun();
         SmokeApi.QuitSmoke();
     }

@@ -506,6 +506,7 @@ public static class Valley_HH319_F1LongRun
     private static readonly Dictionary<int, float> _workStartLast = new Dictionary<int, float>();   // 每 npc 最近一次 `_workStartTime`
     private static readonly Dictionary<int, float> _workDurLast = new Dictionary<int, float>();     // 每 npc 最近一次 `GetTaskDuration(task)`
     private static readonly Dictionary<string, int> _abandonTypeReason = new Dictionary<string, int>();  // `type/reason` 分桶
+    private static readonly Dictionary<int, int> _unreachByNpc = new Dictionary<int, int>();     // ⭐ `U-20` 收口件2：`Unreachable` 按 npc 分桶
     private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
@@ -537,6 +538,7 @@ public static class Valley_HH319_F1LongRun
         _completeWaterHaulFromDest = 0; _completeAnomalyN = 0;
         // `U-20` 件2／件3 新增面
         _workStartLast.Clear(); _workDurLast.Clear(); _abandonTypeReason.Clear();
+        _unreachByNpc.Clear();
         _unknownSrcN = 0; _srcTotalN = 0;
         _farmWaterPeak2 = 0; _farmGained = false; _farmFirstGainRt = -1f;
         Application.logMessageReceived += OnLog;             // P3：console 镜像（⭐ 本批第一优先）
@@ -632,6 +634,11 @@ public static class Valley_HH319_F1LongRun
         //   「路程短但另有卡死源」（如 `Production`）⇒ 单有总数无法定性。
         string tr = type + "/" + reason;
         int trn; _abandonTypeReason.TryGetValue(tr, out trn); _abandonTypeReason[tr] = trn + 1;
+        // ⭐ `U-20` 收口件2：`Unreachable` 按 npc 分桶（⇒ 前二名占比 ≥99% 才能自证「`甲′-a` 独占」）。
+        if (reason == "Unreachable")
+        {
+            int un; _unreachByNpc.TryGetValue(id, out un); _unreachByNpc[id] = un + 1;
+        }
         bool flag = FlagOf(id);
         FlagTrace(id);
         U16Write($"{U16Tag}·abandon] {Stamp()} type={type} npc={id} reason={reason} 第{_abandonN[id]}次"
@@ -1022,6 +1029,8 @@ public static class Valley_HH319_F1LongRun
                       + $" ＝ {(_srcTotalN > 0 ? (_unknownSrcN * 100f / _srcTotalN).ToString("F1") : "0")}%"
                       + $"（盲区＝`ClearNpc` 先于日志发 ⇒ 只能回看；⛔ 由下一行的 `Working计时已到` 布尔补强，两列不一致即报）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 3 · Abandon 按 `type/reason` 分桶：{TypeReasonLine()}");
+        // ⭐ `U-20` 收口件2：`Unreachable` 前二名 npc 占比（期望 ≥99% ⇒ 自证 `甲′-a` 独占 · `L-67`）
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 1 · 卸货到账（水位式）：农场仓水峰值＝{_farmWaterPeak2}"
                       + $" 首次见水＝{(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
                       + $" ⇒ 到账={(_farmWaterPeak2 > 0)}");
@@ -1059,6 +1068,28 @@ public static class Valley_HH319_F1LongRun
         var sb = new StringBuilder();
         foreach (var kv in d) sb.Append($"npc{kv.Key}×{kv.Value} ");
         return sb.ToString().Trim();
+    }
+
+    /// <summary>⭐ `U-20` 收口件2：`Unreachable` **前二名 npc 占比**（npc × 次数 × 占比）。
+    /// 口径（`D818` §三 改裁）：`Unreachable` 的唯一来源是 `甲′-a`（恒困死工人 · `U-18` 未修）⇒
+    /// **暴露量 ≠ 回归指标**（`L-67`）⇒ 本行用于**持续自证**「`Unreachable` 由极少数恒困死 npc 独占」，
+    /// ⛔ 不改任何判据语义。</summary>
+    private static string UnreachTop2Line()
+    {
+        int total = 0; foreach (var kv in _unreachByNpc) total += kv.Value;
+        if (total == 0) return "（无）";
+        var list = new List<KeyValuePair<int, int>>(_unreachByNpc);
+        list.Sort((a, b) => b.Value.CompareTo(a.Value));
+        var sb = new StringBuilder($"总数={total} ｜ ");
+        int top2 = 0;
+        for (int i = 0; i < list.Count && i < 2; i++)
+        {
+            top2 += list[i].Value;
+            sb.Append($"npc{list[i].Key}×{list[i].Value}（{(list[i].Value * 100f / total):F1}%） ");
+        }
+        sb.Append($"⇒ 前二名合计={top2} ＝ {(top2 * 100f / total):F1}%（判据 ≥99%）");
+        if (list.Count > 2) sb.Append($" ｜ 其余 {list.Count - 2} 个 npc 合计={total - top2}");
+        return sb.ToString();
     }
 
     /// <summary>⭐ `U-20` 件3：Abandon 的 `type/reason` 分桶行（长列表 ⇒ 按计数降序，便于定性两段任务 vs 短程任务）。</summary>
