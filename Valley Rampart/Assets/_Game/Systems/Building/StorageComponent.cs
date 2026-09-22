@@ -264,17 +264,18 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
         return Add(ResourceType.Metal, metal);
     }
 
-    // ===== 收取（IHarvestable · `M1-G` 改两段式搬运，本片保持原路径）=====
-    // ⭐ `U-15` 止血（`D809`/`D810`）：本组的**去向（国库）是写死的** ⇒ 判据层与落点层**必须双向过滤可收性**
-    //   （`IsReadyToHarvest` 判据 ＋ `Harvest`/`HarvestCarry` 落点）；
-    // ⚠️ 本处只是**止血**：根除（双链合一 ＋ `L-60` 的「拒收 vs 满」语义区分）归 `M1-G`。
+    // ===== 收取（`IHarvestable` · ⭐ `M1-G-1b`/`1c` 后现状）=====
+    // ⭐ `U-15` 止血（`D809`/`D810`）＋ ⭐ `M1-G` 收口：本组的**去向是写死的（玩家国库 id=0）** ⇒
+    //   判据层与落点层**必须双向过滤可收性**；⚠️ 「源仓直通国库」的另一端口已随 `#40` **删除**
+    //   ⇒ **在役落点仅 `Harvest()`**（玩家手动收取路径）。
 
     /// <summary>是否有「**可入国库**」的内容（`IHarvestable`）。
-    /// ⭐ `U-15`（`D809`/`D810` 止血）：本判据的消费者（`ScheduleCenterStub:100/:118` 清理与派发 ·
-    ///   `BuildingPanel:187/:405` 按钮启用与守卫）**去向写死国库** ⇒ 国库不收的资源（水/弹药族）不得计入
-    ///   ⇒ 防「先取后丢 / 转箱空转」（`D810` 勘正：真实危害＝空转 ＋ 工人永久占用 ＋ 箱子堆积，⛔ 非资源损失）。
-    /// ⚠️ 判据用**玩家国库**（id=0）—— 与落点一致（`Harvest`/`HarvestCarry` 均写死玩家国）；⛔ **非按国逻辑**（根除归 `M1-G`）。
-    /// ⚠️ ⛔ 不得用 `TotalCount &gt; 0` 做快路径（水井仓有水 ⇒ 件数 &gt; 0 但不可收 ⇒ 必须逐资源问）。</summary>
+    /// ⭐ `M1-G-1c` 件C-10（`D827`）：**消费者清单已重写**（旧列 `ScheduleCenterStub:100/:118` 施已随
+    ///   `U-15` 根除项删除；旧列 `BuildingPanel:187/:405` **已不再调用** —— 该面板判据已改 `TotalCount &gt; 0`）。
+    /// ⇒ ⭐ **现役消费者 ＝ 仅 Editor 探针**（`Valley_HH319_U15Probe` 等止血取证档）；
+    ///   ⚠️ 生产面**不再据此灰化按钮**（「水井仓可点 ⇒ 派搬运」）。
+    /// ⚠️ 判据用**玩家国库**（id=0）—— 与 `Harvest()` 落点一致；⛔ **非按国逻辑**。
+    /// ⚠️ ⛔ 不得用 `TotalCount &gt; 0` 做快路径（水井仓有水 ⇒ 件数 &gt; 0 但国库不收 ⇒ 必须逐资源问）。</summary>
     public bool IsReadyToHarvest()
     {
         foreach (var type in ResourceCatalog.AllTypes)
@@ -306,7 +307,7 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     }
 
     /// <summary>⭐ `U-15`：国库能否收该资源（**标签面** · 无容量语义 · 转发 <see cref="TreasureVault"/>）。
-    /// ⚠️ 写死**玩家国库**（id=0）—— 与落点一致（本类 `Harvest`/`HarvestCarry` 的去向）；⛔ 非按国逻辑。</summary>
+    /// ⚠️ 写死**玩家国库**（id=0）—— 与在役落点 `Harvest()` 一致（⛔ 非按国逻辑）。</summary>
     private static bool CanRulerAccept(ResourceType type)
     {
         var tv = TreasureVault.Get(0);
@@ -338,7 +339,8 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
 
     /// <summary>本仓首个非空资源（资源表序 ⇒ 确定性；空仓 ⇒ 默认 Gold 占位）。
     /// ⏭️ 多资源仓下的**过渡读口**（搬运广告等单资源假设点的落点，归 `M1-G` 收口）。
-    /// ⭐ 现多一层**可收性守卫**（`U-15`）：调用方 `HarvestCarry` 会先问国库能否收，不收则整趟不取。</summary>
+    /// ⚠️ `M1-G-1c` 件C-4（`D827`）：原注「调用方 `HarvestCarry` 会先问国库能否收」**已作废** —— 该调用方**已随 `#40` 删除**；
+    ///   现役同族守卫在 `Harvest()`（逐资源问 `CanRulerAccept`／`TreasuryCanAccept`）与链 A 落点（见 `StorageComponent` 墓碑注）。</summary>
     public ResourceType PrimaryStoredType()
     {
         foreach (var type in ResourceCatalog.AllTypes)

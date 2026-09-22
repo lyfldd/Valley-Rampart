@@ -5,8 +5,11 @@ using UnityEditor;
 // ============================================================================
 //  HH.319 `M1-F` · `F-1` 补证单（`D809`）· **水账取证**（第二套搬运链落点）
 //  用法：菜单「Valley/验证/HH319 水账取证」——进 Play 后点。
-//  目的：`ScheduleCenterStub.DispatchTransport` 对"水井仓"（`IsReadyToHarvest()=TotalCount>0`）
-//        会派工人执行 `BehaviorExecutor → StorageComponent.HarvestCarry()` ⇒ 本容器**复现该落点动作**
+//  目的（⭐ `M1-G-1c` 件C-9 勘正）：原写「`ScheduleCenterStub.DispatchTransport` 对水井仓会派工人执行
+//        `BehaviorExecutor → StorageComponent.HarvestCarry()` ⇒ 本容器复现该落点动作」—— ⛔ **两符号均已删**
+//        （`DispatchTransport` 随 `U-15` 根除项 · `HarvestCarry` 随 `#40`）⇒ ⚠️ 本档现为**历史复现档**：
+//        以**在役手动收取口** `Harvest()` 复现"去向写死玩家国库"这一**旧口径的影响面**（井仓水能否被取走）。
+//        ⚠️ 逻辑仍成立（它测的是"写死国库的收取动作对水的影响"），但⛔ **结论不可当作现役链路读数**。
 //        并比对「全库 Water 合计」⇒ 判断水是否有落点（国库 `VaultPaths` 不含 `res_fluid.water`）。
 //  ⛔ 本容器只取证：不改生产码、不动水域逻辑、不改资产。
 //  收尾：QuitSmoke（退 Play）。

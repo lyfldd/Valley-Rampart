@@ -671,6 +671,8 @@ public readonly struct KingdomAttackedEvent
 /// ⚠️ 幂等：`from == to` **不发**（防事件风暴 · `PopulationSystem` 批量转职）。
 /// ⏔ 不入档（事件非状态 · 职业真源＝`UnitSaveData.occupation`）。
 /// 消费面：⛔ 当前**零订阅方**（备而未用 · 说明见交付报告 §A-②）。
+/// ⭐ 覆盖**全部**职业变更（含成长／招募）—— 发布点在 `SetOccupation` 单点，
+///   故 `TrainingSystem`（训练转职）与 `PopulationSystem`（成长）、`VagrantCampSystem`（招募）等**九处**均走本事件（语义分组见交付报告）。
 /// </summary>
 public readonly struct UnitOccupationChangedEvent
 {

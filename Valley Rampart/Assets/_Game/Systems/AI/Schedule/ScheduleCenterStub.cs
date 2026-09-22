@@ -13,19 +13,19 @@ using UnityEngine;
 /// <summary>
 /// 调度中心（§7 输入端一致性 + 3.3.5 资源流转）。
 /// 职责：
-///   1. 搬运派发（3.3.5）：产能建筑 IsReadyToHarvest → 找空闲工人 → TaskStimulus 注入
-///   2. 防重复：_transporting 标记（建筑存储清空后释放）
+///   ~~1. 搬运派发（3.3.5）：产能建筑 IsReadyToHarvest → 找空闲工人 → TaskStimulus 注入~~
+///       ⭐ `M1-G-1c` 件C-8（`D827`）：**第 1 条已随 `U-15` 根除项删除** —— 链 B（本中心自建"搬运刺激 ＋
+///       直通国库落点"）整段退役，搬运统一由**链 A**（`Building` ④ `Transport` 广告 · 有阈值 ⇒ `TaskScheduler` 两段式）承担。
+///   ~~2. 防重复：_transporting 标记（建筑存储清空后释放）~~ ⭐ 随件 F 一并删除（字段已无引用）。
 ///   3. 昼夜节律：夜间停发户外任务（防"调度中心夜间刚派活、威胁层就撤退"两系统打架）
 /// 后续扩展：砍树/建造/随军任务统一走本中心派发（P1）。
 /// </summary>
 public class ScheduleCenterStub : MonoBehaviour
 {
-    [Header("搬运任务配置（3.3.5 资源流转）")]
-    [Tooltip("搬运任务刺激强度（B 级，同砍树档位）")]
-    public float transportIntensity = 2f;
-    [Tooltip("搬运任务有效期（秒）：工人被打断没去 → 刺激过期 → 下 tick 重派")]
-    public float transportExpiry = 5f;
-    [Tooltip("搬运派发间隔（秒）")]
+    [Header("派发节奏配置")]
+    // ⭐ `M1-G-1c` 件F-2（`D827`）：`transportIntensity`／`transportExpiry` **已删**（随链 B 退役 ·
+    //   实读 0 引用 ⇒ 仅剩声明）；⚠️ `assignInterval` **保留**（仍被 `Update` 使用）。
+    [Tooltip("派发间隔（秒）")]
     public float assignInterval = 1f;
 
     [Header("战争机器乘员（改动②：工人操作战争机器）")]
@@ -38,7 +38,8 @@ public class ScheduleCenterStub : MonoBehaviour
     [Tooltip("测试用砍树任务位置（白天派发 B 级任务）")]
     public Transform treeTarget;
 
-    private readonly Dictionary<StorageComponent, HashSet<NPCBrain>> _transporting = new Dictionary<StorageComponent, HashSet<NPCBrain>>();
+    // ⭐ `M1-G-1c` 件F-1（`D827`）：原 `_transporting`（防重复标记）**已删** —— 实读 **0 引用**
+    //   （其唯一消费者链 B 已随 `U-15` 根除项删除）。
     // 机器（单位/建筑）-> 已派工人的名单（续命其操作任务，防堆叠）
     private readonly Dictionary<object, List<NPCBrain>> _crewAssignments = new Dictionary<object, List<NPCBrain>>();
     private float _assignTimer;

@@ -406,11 +406,11 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
     {
         if (_target == null) return;
         var storage = _target.GetComponent<StorageComponent>();
-        // ⭐ `U-15`（`D809`/`D810`）：启用（:187）与守卫（本行）同用 `IsReadyToHarvest` ⇒ 其语义已改为
-        //   「有**可入国库**的内容」⇒ **纯水井仓自动变灰**（正确处理 —— 收了会转箱空转）。
-        // ⭐ `M1-G-1c` 件G-1（`D826` §五）：守卫同样改 `TotalCount > 0`。
-        //   ⚠️ 旧注「纯水井仓自动变灰（正确处理）」**已作废** —— 水井仓现在**应该**可点（派一次搬运把水送去能收水的仓）；
-        //   ⭐「**无任何可用仓**」的失败由**任务层**承担（本批已有 `Abandon` 出口 ＋ 日志 ⇒ ⛔ UI 不加"可用仓"前置）。
+        // ⭐ `M1-G-1c` 件C-7（`D827`）**整块合并重写**（⛔ 原「启用（:187）与守卫（本行）同用 `IsReadyToHarvest`」
+        //   已为**事实错误**：两处判据均改 `TotalCount > 0` ⇒ 本行不再保留任何旧陈述）：
+        //   · 判据 ＝ `TotalCount > 0`（**启用** `Refresh` 内 · **守卫** 本行）⇒ ⛔ 与 `IsReadyToHarvest` 无关；
+        //   · ⭐ **水井仓可点**（派一次搬运把水送去**能收水的仓**）；
+        //   · ⭐「**无任何可用仓**」的失败由**任务层**承担（`Abandon` 出口 ＋ 日志 ⇒ ⛔ UI 不加"可用仓"前置）。
         if (storage == null || storage.TotalCount <= 0) return;
         // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**玩家手点 ＝ 调用搬运任务的一种形式**（`09` §9.8 `:390`）
         //   ⇒ 按钮由「瞬间入国库」改为**派一次搬运**（`TaskScheduler` 立案 ＋ 立即调度；工人到场即搬）。

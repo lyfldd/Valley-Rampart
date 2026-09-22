@@ -429,7 +429,8 @@ public class AIDebugSpawnController : MonoBehaviour
     /// 验证链（依赖 T9/T15/T17/T19，本会话已完成）：
     ///   ① 水井 → **水井仓**产水（4 点/秒，仓容 100 · ⭐ `M1-F` 水仓化）
     ///   ② 农场有工人（HasWorkerAssigned）+ **农场仓水**（耗 2 点/次 · ⭐ `M1-F`）→ 产粮
-    ///   ③ 农场存储达标 → TaskScheduler 派搬运任务 → 工人搬粮入仓（StorageComponent.HarvestCarry）
+    ///   ③ 农场存储达标 → `TaskScheduler` 派搬运任务 → 工人**两段式**搬运（`LoadInventoryFromSource` 源仓→背包
+    ///      ⇒ `UnloadInventory` 背包→仓 · ⭐ `M1-G-1c` 件C-5 勘正：原写「`StorageComponent.HarvestCarry`」＝**已删旁路**）
     /// 仓库面板（T12）落地后可同步观察实时显示。
     /// </summary>
     public void SpawnProductionChainScenario(Vector2 center)
