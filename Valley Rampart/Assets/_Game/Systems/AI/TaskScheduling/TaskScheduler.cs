@@ -410,11 +410,27 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (brain == null || task == null) return;
         var uc = brain.GetComponent<UnitController>();
         if (uc == null || GridSystem.Instance == null) return;
-        var pf = uc.GetComponent<PathFollower>();
-        if (pf == null) pf = uc.gameObject.AddComponent<PathFollower>();
         var subOpt = GridSystem.Instance.WorldToSubCoord(task.SourcePos);
         if (!subOpt.HasValue) return;
-        pf.SetDestination(GridSystem.Instance.SubCoordToWorld(subOpt.Value));
+        EnsurePfAndSetDest(brain, GridSystem.Instance.SubCoordToWorld(subOpt.Value));
+    }
+
+    /// <summary>⭐ `U-16b` 件A（`D816` §6.1／§6.4）：**确保 `PathFollower` ＋ 设终点** —— 任务层设路径的**唯一共用口**
+    /// （`NavigateToSource`〔去**源**〕与 `InjectCarryStimulus`〔去**终点**〕共用；⛔ **禁第三份拷贝**）。
+    /// 落点直接吃 `task.destPos` 原值：`PathFollower.SetDestination:44` **自身已 `SpawnPosSnapper.SnapWorld`**
+    /// ⇒ ⛔ 不做 `WorldToSubCoord`/`SubCoordToWorld` 微格换算（语义等价、少一份拷贝）。
+    /// ⚠️ `SetDestination:45-48` 有**同目标缓存**（`_state==Following ∧ 距离 ≤ DestEpsilonWorld ⇒ 不重寻`）
+    /// ⇒ 本口被 `InjectCarryStimulus` 每 tick 调用**零额外开销**（其注释自陈"供 Executor 每帧同目标调用零开销"）。
+    /// ⚠️ 与改前 `NavigateToSource` 的唯一差异：改前在「源坐标越界（`WorldToSubCoord` 返 null）」时**已补挂 `pf`** 再返回；
+    ///   现改为**先判越界、后补挂** ⇒ 该**不可达分支**（源恒为地图内建筑）的副作用差异，任务行为逐位不变。</summary>
+    private void EnsurePfAndSetDest(NPCBrain brain, Vector2 destWorld)
+    {
+        if (brain == null) return;
+        var uc = brain.GetComponent<UnitController>();
+        if (uc == null) return;
+        var pf = uc.GetComponent<PathFollower>();
+        if (pf == null) pf = uc.gameObject.AddComponent<PathFollower>();
+        pf.SetDestination(destWorld);
     }
 
     /// <summary>
@@ -1064,7 +1080,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         AddGatherOverflow(owner, type, amount);
     }
 
-    /// <summary>搬运段刺激注入：目标 = destPos（仓库/国库），区别于 Working 段的 SourcePos 刺激。</summary>
+    /// <summary>搬运段刺激注入：目标 = destPos（仓库/国库），区别于 Working 段的 SourcePos 刺激。
+    /// ⭐ `U-16b` 件A（`D816` §6.1）：**本段同时承担"位移驱动"** —— 末端补 `EnsurePfAndSetDest(brain, task.destPos)`。
+    ///   ⚠️ 改前本段**只注刺激**（⛔ 无路径）⇒ `MovingToDest` 段位移**只有 Executor 一条路**；`U-16` 案① 让位一成
+    ///   ⇒ 该段立刻**失去位移驱动**（`D816` §四 认账 · `HH316 §B` 真回归）⇒ 本口补齐，与 `NavigateToSource` 对称。
+    ///   ⚠️ 调用面：`:487`／`:517`／`:537`（装载成功转 `MovingToDest`）＋ `:599`（未到达**每 tick 续命**）
+    ///   ⇒ 每 tick 调用安全（`SetDestination` 同目标缓存）。</summary>
     private void InjectCarryStimulus(NPCBrain brain, KingdomTask task)
     {
         if (brain == null) return;
@@ -1075,6 +1096,8 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             task.intensity,
             expiry: Time.time + taskExpiry,
             issuer: task.source));
+        // ⭐ 位移驱动（与刺激同源同点 ⇒ 语义一致）：`destPos` 已由 `ResolveChestDest` 等解析完毕（调用序保证）。
+        EnsurePfAndSetDest(brain, task.destPos);
     }
 
     // ===== 终点解析（QQQ.2 §10.3：派发时动态解析 destPos，不硬编码）=====

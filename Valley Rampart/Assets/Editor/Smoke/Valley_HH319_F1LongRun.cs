@@ -48,6 +48,16 @@ using UnityEditor;
 //           （`abandon`＝判据 7 · `flag`＝判据 3 逐次跃迁 · `inv`＝判据 3 不变量 · `yield`＝判据 4 豁免列）。
 //        d) **新增第 3 菜单**「…_豁免列(威胁注入)」⇒ ⛔ 独立档，不污染判据 1/2 的靶例跑。
 //        ⚠️ 判据 1~6 原有语义**一字未改**；本条属**只增不改**。
+//     ⑥ 【⭐ `U-16b` 件B／件C · `D816` §八】：
+//        a) **判据 2 口径修正**：`完成 WaterHaul` 须与 `·trans]` 跃迁**配对** —— `[HH319U16·complete]` 新增
+//           `⭐来源分支=`（由 `_lastKnownState` 回看**最近非 None** 的 state）＋ `计入真完成=`；
+//           ⭐ **只有来源 ＝ `MovingToDest` 才计入**（`Working` ⇒ 装载失败分支 ⇒ ⛔ 不算达成）。
+//        b) **判据 5 口径重写**：只判「来源**非** `MovingToDest` 的异常完成」（计数 `_completeAnomalyN` ⇒ 应为 0），
+//           ⛔ 不再与"装载失败 ⇒ 直接完成"混判。
+//        c) 新增 `[HH319U16·farm]`（**卸货到账**水位式逐秒：农场仓 `Water` ＋ 峰值 ＋ 首次见水时刻）。
+//        d) 新增第 4 菜单「U16b reason覆盖列(构造法)」：定向触发 `External`／`SourceInvalid`／`BrainLost`
+//           （⚠️ **构造法** ＋ 单列「生产路径可达性」，`L-51`）；⛔ 独立档。
+//        ⭐ `·trans]` **保留**（本轮判据救星）。
 // ============================================================================
 public static class Valley_HH319_F1LongRun
 {
@@ -84,6 +94,134 @@ public static class Valley_HH319_F1LongRun
     {
         if (!EditorApplication.isPlaying) { Debug.LogError("[HH319长局] 须先进入 Play 后调用本菜单。"); return; }
         new GameObject("HH319_LongRunHost").AddComponent<RunHost>().Host(RunCoroutine(15f, "yield", threatStage: true));
+    }
+
+    /// <summary>⭐ `U-16b` 件C（`D816` §八-件C · 判据 5）：**reason 覆盖列** —— 定向触发 `External`／`SourceInvalid`／`BrainLost`
+    /// 三条**未被自然走到**的 `Abandon` 路径。
+    /// ⚠️⚠️ **构造法声明（`L-51`）**：本档**直呼 `TaskScheduler` 的 public API**
+    ///   （`AbandonTask` `:180` ／ `OnBuildingDied` `:207`）＋ `BrainLost` 走**反射删私有表** ⇒
+    ///   ⛔ **均非生产路径触发** ⇒ 每行**同时给出「生产路径可达性」**（见各 `·reason]` 行）。
+    /// ⛔ 独立档 ⇒ 不污染判据 1/2 的靶例跑。</summary>
+    [MenuItem("Valley/验证/HH319 U16b reason覆盖列(构造法)")]
+    public static void RunReasonColumn()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[HH319长局] 须先进入 Play 后调用本菜单。"); return; }
+        new GameObject("HH319_LongRunHost").AddComponent<RunHost>().Host(RunReasonCoroutine());
+    }
+
+    private static IEnumerator RunReasonCoroutine()
+    {
+        const string tag = "reason";
+        U16Begin(tag);
+        Debug.Log($"[HH319长局·{tag}] ── 起（reason 覆盖列 · ⚠️ 构造法 · L-51 声明见落盘）");
+        var cfg = new NewGameConfig
+        {
+            worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = 2,
+            worldSize = WorldSize.Small, selectedSlotId = "smoke_w319L" + tag, kingdomName = "河谷王国"
+        };
+        yield return TestHarnessApi.EnterTestRun(cfg, 15f);
+        float t0 = Time.realtimeSinceStartup;
+        while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
+               || KingdomRegistry.Instance == null || KingdomRegistry.Instance.Count < 2)
+        {
+            yield return null;
+            if (Time.realtimeSinceStartup - t0 > 120f)
+            { Debug.LogError($"[HH319长局·{tag}] 等世界就绪超时。"); yield return Finish(tag, null); yield break; }
+        }
+        yield return new WaitForSeconds(0.5f);
+
+        Vector2 anchor = WorldManager.Instance.GetKingdomAnchorWorld();
+        var well = Place("Buildings/Well", anchor + new Vector2(-6f, 0f), 0);
+        var farm = Place("Buildings/farm", anchor + new Vector2(6f, 0f), 0);
+        SpawnWorker(anchor + new Vector2(-1f, 1.6f), 0);
+        SpawnWorker(anchor + new Vector2(1f, -1.6f), 0);
+        TestFixtureApi.AddWaterToKingdomWells(0, 50);
+        if (farm != null)
+        {
+            var fs = farm.GetComponent<StorageComponent>();
+            if (fs != null) fs.TakeOut(ResourceType.Water, fs.GetAmount(ResourceType.Water));
+        }
+        U16Write($"{U16Tag}·reason] {Stamp()} 布置 well={well != null} farm={farm != null}（等世界自行派工 ⇒ 取在册者做靶）");
+
+        float start = Time.realtimeSinceStartup;
+        bool d1 = false, d2 = false, d3 = false;
+        while (Time.realtimeSinceStartup - start < 50f)
+        {
+            yield return null;
+            float rt = Time.realtimeSinceStartup - start;
+            if (!d1)
+            {
+                int id = FirstAssignedPlayerNpc();
+                if (id != 0)
+                {
+                    d1 = true;
+                    U16Write($"{U16Tag}·reason] 构造① **External**：直呼 public `TaskScheduler.AbandonTask({id})`（`TaskScheduler.cs:180`）"
+                             + $" ｜生产路径可达性：`VagrantCampSystem` 招募 ／ `Building.RemoveWorkers` 建筑驱离（⛔ 本档走构造法）");
+                    TaskScheduler.Instance.AbandonTask(id);
+                }
+            }
+            else if (!d2)
+            {
+                int id = FirstAssignedPlayerNpc();
+                var t = id != 0 ? TaskOf(id) : null;
+                if (t != null && t.source != null)
+                {
+                    d2 = true;
+                    var c = t.source as Component;
+                    U16Write($"{U16Tag}·reason] 构造② **SourceInvalid**：直呼 public `TaskScheduler.OnBuildingDied(source)`（`TaskScheduler.cs:207`）"
+                             + $" 靶 npc={id} 源={(c != null ? c.gameObject.name : "?")}"
+                             + $" ｜生产路径可达性：`TaskScheduler.Unregister(source)`（建筑死亡/废弃）调用（⛔ 本档走构造法）");
+                    TaskScheduler.Instance.OnBuildingDied(t.source);
+                }
+            }
+            else if (!d3)
+            {
+                int id = FirstAssignedPlayerNpc();
+                if (id != 0)
+                {
+                    d3 = true;
+                    U16Write($"{U16Tag}·reason] 构造③ **BrainLost**：**反射删私有 `_npcBrainMap[{id}]`**（⛔ 非 public API ⇒ 只能构造）"
+                             + $" ｜生产路径可达性：`UpdateAssignedTasks` 的 `!TryGetValue || brain == null` 支 —— 需「brain 已 Destroy 而字典未清」，"
+                             + $"正常帧序下 `OnNpcDied` 会先清 ⇒ ⚠️ **难以稳定构造** ⇒ 本档以构造法取证并如实标注");
+                    RemoveBrainRef(id);
+                }
+            }
+            if (d1 && d2 && d3 && rt > 10f) break;
+        }
+        U16Write($"{U16Tag}·reason] 结果 d1(External)={d1} d2(SourceInvalid)={d2} d3(BrainLost)={d3}");
+        yield return Finish(tag, null);
+    }
+
+    /// <summary>取一个「玩家国 ∧ 在册」的 npcId（0＝无）。</summary>
+    private static int FirstAssignedPlayerNpc()
+    {
+        var m = TaskMap();
+        if (m == null) return 0;
+        foreach (var kv in m)
+        {
+            var uc = FindUnit(kv.Key);
+            if (uc == null || !uc.IsAlive || uc.kingdomId != 0) continue;
+            if (uc.EffectiveOccupation == Occupation.Ruler) continue;
+            return kv.Key;
+        }
+        return 0;
+    }
+
+    private static KingdomTask TaskOf(int id)
+    {
+        var m = TaskMap();
+        KingdomTask t;
+        return (m != null && m.TryGetValue(id, out t)) ? t : null;
+    }
+
+    /// <summary>⭐ 构造法（`L-51`）：反射删 `_npcBrainMap[id]` ⇒ 触发 `BrainLost` 支（⛔ 非 public API）。</summary>
+    private static void RemoveBrainRef(int id)
+    {
+        var ts = TaskScheduler.Instance;
+        if (ts == null) return;
+        var f = typeof(TaskScheduler).GetField("_npcBrainMap", BindingFlags.NonPublic | BindingFlags.Instance);
+        var m = f != null ? f.GetValue(ts) as Dictionary<int, NPCBrain> : null;
+        if (m != null) m.Remove(id);
     }
 
     private class RunHost : MonoBehaviour { public void Host(IEnumerator r) => StartCoroutine(r); }
@@ -144,6 +282,7 @@ public static class Valley_HH319_F1LongRun
         float nextDiag = 0f, nextSuppress = 0f, nextAdv = 0f;
         float nextInv = 0f;                     // ⭐ 判据 3：每秒一条"在册数 vs 置位数"不变量
         float nextThreatLog = 0f;               // ⭐ 判据 4：威胁注入后逐秒读数
+        float nextFarm = 0f;                    // ⭐ `U-16b` 判据 1：农场仓水位逐秒读数（卸货到账）
         bool completed = false;
         float start = Time.realtimeSinceStartup;
 
@@ -215,6 +354,8 @@ public static class Valley_HH319_F1LongRun
 
             // ⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false** ⇒ 玩家国「在册任务数」应＝「置位工人数」。
             if (rt >= nextInv) { nextInv = rt + 1f; U16InvariantLine(rt); }
+            // ⭐ `U-16b` 判据 1（`D816` §八）：**卸货到账**读数 —— 农场仓水位逐秒（增量 ＝ 真卸货；E6 为事件式补充）。
+            if (rt >= nextFarm) { nextFarm = rt + 1f; U16FarmLine(rt, farmStore); }
 
             // ⭐ 判据 4（豁免列档专有）：在册任务期**注入威胁** ⇒ 工人应"能逃/挂起"，⛔ 不被任务锁死。
             //   ⚠️ 注入口勘正：`AIDebugSpawnController` 的 `Enemy*` 条目走 `Faction.Monster` +
@@ -327,6 +468,14 @@ public static class Valley_HH319_F1LongRun
     private static int _dispatchFlagTrue, _dispatchFlagFalse;   // 判据 3：派发时刻 IsKingdomTaskWorker 读数
     private static int _completeFlagTrue, _completeFlagFalse;   // 判据 3：完成时刻读数
     private static readonly Dictionary<int, string> _flagLast = new Dictionary<int, string>();     // 判据 3：逐次跃迁
+    // ---- `U-16b` 件B（`D816` §八）：判据 2／5 **口径修正**面 ----
+    private static readonly Dictionary<int, string> _lastKnownState = new Dictionary<int, string>();  // 每 npc 最近一次**非 None** 的 state
+    private static int _completeWaterHaulFromDest;   // ⭐ 判据 2：来源分支 ＝ `MovingToDest` 到达（**唯一计入**）
+    private static readonly Dictionary<string, int> _completeSourceN = new Dictionary<string, int>(); // 来源分支分布
+    private static int _completeAnomalyN;            // ⭐ 判据 5：来源**非** `MovingToDest` 的 WaterHaul 完成（＝异常分支）
+    private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
+    private static float _farmFirstGainRt = -1f;     // 首次增量时刻
+    private static bool _farmGained;
     private static bool _threatInjected;                        // 判据 4：威胁已注入（第①段 · 远）
     private static bool _threatInjected2;                       // 判据 4：威胁已注入（第②段 · 近）
     private static int _stage1DispatchN = -1;                   // 判据 4a：第①段时的派发计数基线（等新派发窗口）
@@ -349,6 +498,10 @@ public static class Valley_HH319_F1LongRun
         _dispatchFlagTrue = _dispatchFlagFalse = _completeFlagTrue = _completeFlagFalse = 0;
         _threatInjected = false; _threatInjected2 = false; _threatNpcId = 0; _stage1DispatchN = -1;
         _threatSeq.Clear(); _threatEnemies.Clear();
+        // `U-16b` 件B 新增面
+        _lastKnownState.Clear(); _completeSourceN.Clear();
+        _completeWaterHaulFromDest = 0; _completeAnomalyN = 0;
+        _farmWaterPeak2 = 0; _farmGained = false; _farmFirstGainRt = -1f;
         Application.logMessageReceived += OnLog;             // P3：console 镜像（⭐ 本批第一优先）
         EventBus.Subscribe<PathFailedEvent>(OnPathFailedEvt); // P3：PathFailedEvent 只读计数（按 npcId 分桶）
         _u16Hooked = true;
@@ -497,12 +650,24 @@ public static class Valley_HH319_F1LongRun
         if (id == 0) return;
         int n; _completeN.TryGetValue(id, out n); _completeN[id] = n + 1;
         if (type == "WaterHaul") _completeWaterHaul++;
+        // ⭐⭐ `U-16b` 件B（`D816` §八 判据 2）：**来源分支配对** —— `Complete` 日志在 `ClearNpc` **之后** 发出
+        //   ⇒ `GetWorkerState` 恒 `None` ⇒ 必须回看**最近一次非 None 的 state**（由 `·seq]`／`·trans]` 维护）。
+        //   ⭐ **只有来源 ＝ `MovingToDest` 才计入"真完成"**；`Working` ⇒ 装载失败分支（`HH319` 首跑 2 条即此）。
+        string src;
+        if (!_lastKnownState.TryGetValue(id, out src) || src == null) src = "未知";
+        int sn; _completeSourceN.TryGetValue(type + "/" + src, out sn); _completeSourceN[type + "/" + src] = sn + 1;
+        if (type == "WaterHaul")
+        {
+            if (src == TaskState.MovingToDest.ToString()) _completeWaterHaulFromDest++;
+            else _completeAnomalyN++;
+        }
         // ⭐ 判据 3：完成时刻应为**已复位**（`Complete:602` 写 false）⇒ `Istask=False` 即配对成立。
         bool flag = FlagOf(id);   // ⚠️ `Complete` 的日志在 `ClearNpc` 之后 ⇒ 此处读到的就是复位后值
         if (flag) _completeFlagTrue++; else _completeFlagFalse++;
         FlagTrace(id);
         U16Write($"{U16Tag}·complete] {Stamp()} type={type} npc={id} 第{_completeN[id]}次"
-                 + $" 在册(taskMap)={InMap(id)} Istask={flag}");
+                 + $" 在册(taskMap)={InMap(id)} Istask={flag} ⭐来源分支={src}"
+                 + $" 计入真完成={(type == "WaterHaul" && src == TaskState.MovingToDest.ToString())}");
     }
 
     /// <summary>P3：`PathFailedEvent` 只读计数（⚠️ 只写文件 · 不 `Debug.Log`）。</summary>
@@ -521,6 +686,7 @@ public static class Valley_HH319_F1LongRun
     {
         var uc = FindUnit(id);
         string st = TaskScheduler.HasInstance ? TaskScheduler.Instance.GetWorkerState(id).ToString() : "noSched";
+        if (st != TaskState.None.ToString()) _lastKnownState[id] = st;   // ⭐ 判据 2 配对用（只记非 None）
         U16Write($"{U16Tag}·seq] {Stamp()} +{rt:F2}s npc={id} state={st} 在册={InMap(id)} Istask={FlagOf(id)}"
                  + $" {TaskSrcDesc(id)}"
                  + (uc == null ? " uc=null（已亡/被回收）" : $" | {PfDesc(uc, withAstar: false)}"));
@@ -543,13 +709,26 @@ public static class Valley_HH319_F1LongRun
         for (int i = 0; i < _tracked.Count; i++)
         {
             int id = _tracked[i];
-            string now = (TaskScheduler.HasInstance ? TaskScheduler.Instance.GetWorkerState(id).ToString() : "?")
-                         + "|在册=" + InMap(id);
+            string stNow = TaskScheduler.HasInstance ? TaskScheduler.Instance.GetWorkerState(id).ToString() : "?";
+            if (TaskScheduler.HasInstance && stNow != TaskState.None.ToString()) _lastKnownState[id] = stNow;   // ⭐ 判据 2 配对用
+            string now = stNow + "|在册=" + InMap(id);
             string prev;
             if (_lastState.TryGetValue(id, out prev) && prev == now) continue;
             _lastState[id] = now;
             U16Write($"{U16Tag}·trans] {Stamp()} +{rt:F2}s npc={id} {prev ?? "(首次)"} → {now}");
         }
+    }
+
+    /// <summary>⭐ `U-16b` 判据 1（`D816` §八）：**卸货到账**逐秒读数（农场仓 `Water` 水位 ＋ 峰值 ＋ 首次增量时刻）。
+    /// 与 `E6` 互补：`E6` 是"背包转空 ∧ 农场水>0"的**事件式**判定；本行是**水位式** ⇒ "增量 > 0"即到账硬证。</summary>
+    private static void U16FarmLine(float rt, StorageComponent farmStore)
+    {
+        if (farmStore == null) return;
+        int now = farmStore.GetAmount(ResourceType.Water);
+        if (now > _farmWaterPeak2) _farmWaterPeak2 = now;
+        if (now > 0 && !_farmGained) { _farmGained = true; _farmFirstGainRt = rt; }
+        U16Write($"{U16Tag}·farm] {Stamp()} +{rt:F2}s 农场仓水={now} 峰值={_farmWaterPeak2}"
+                 + $" 首次见水时刻={(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}");
     }
 
     /// <summary>⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false**。
@@ -774,6 +953,16 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 3 · 派发时刻 Istask=True {_dispatchFlagTrue} ／ False {_dispatchFlagFalse}"
                       + $"　完成时刻 Istask=True {_completeFlagTrue} ／ False {_completeFlagFalse}"
                       + $"　⇒ 完成侧全 False={(_completeFlagTrue == 0)}（复位配对）");
+        // ---- ⭐⭐ `U-16b` 件B（`D816` §八 判据 1/2/5 新口径）----
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ 判据 2（`U-16b` 新口径）：`完成 WaterHaul` 总 **{_completeWaterHaul}** 条"
+                      + $" ／ ⭐ **来源＝`MovingToDest` 到达 ＝ {_completeWaterHaulFromDest} 条（唯一计入）**"
+                      + $" ／ 异常分支 ＝ {_completeAnomalyN} 条（`Working` 装载失败等）");
+        sb.AppendLine($"{U16Tag}·summary]     完成来源分支分布：{SrcLine()}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 1 · 卸货到账（水位式）：农场仓水峰值＝{_farmWaterPeak2}"
+                      + $" 首次见水＝{(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
+                      + $" ⇒ 到账={(_farmWaterPeak2 > 0)}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 5（`U-16b` 新口径）：**异常完成**（来源非 `MovingToDest`）＝ **{_completeAnomalyN}**"
+                      + " ⇒ 应为 0（⛔ 不得与「装载失败 ⇒ 直接完成」混判）");
         if (_threatInjected)
         {
             sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 · 威胁注入后序列（共 {_threatSeq.Count} 条）：");
@@ -805,6 +994,15 @@ public static class Valley_HH319_F1LongRun
         if (d.Count == 0) return "（无）";
         var sb = new StringBuilder();
         foreach (var kv in d) sb.Append($"npc{kv.Key}×{kv.Value} ");
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>⭐ `U-16b` 判据 2：完成来源分支分布（`type/来源state` ⇒ 计数）。</summary>
+    private static string SrcLine()
+    {
+        if (_completeSourceN.Count == 0) return "（无完成）";
+        var sb = new StringBuilder();
+        foreach (var kv in _completeSourceN) sb.Append($"{kv.Key}×{kv.Value} ");
         return sb.ToString().Trim();
     }
 
