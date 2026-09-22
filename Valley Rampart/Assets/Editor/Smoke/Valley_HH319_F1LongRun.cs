@@ -293,7 +293,8 @@ public static class Valley_HH319_F1LongRun
         yield break;
     }
 
-    /// <summary>⭐ `U-16` 案① 批件4（`D815` 判据 4）：**豁免列**档 —— 在册任务期注入威胁，
+    /// <summary>⭐ `U-16` 案① 批件4（`D815`）：**豁免列（威胁注入）**档 —— ⚠️ `D838` §D-2 **改名**（原亦称「判据 4」，
+    /// 与「井仓水量判据 4」**编号冲突** ⇒ 现名 **豁免列-威胁注入**，⛔ 不再占「判据 4」）。在册任务期注入威胁，
     /// 验"工人能逃／挂起"（4a）与"`Cautious` 未越阈时继续干活"（4b）。
     /// ⛔ 独立档 ⇒ ⛔ 不污染判据 1/2 的靶例跑（`15x`／`1x`）。</summary>
     [MenuItem("Valley/验证/HH319 F1长局观察_豁免列(威胁注入)")]
@@ -522,7 +523,7 @@ public static class Valley_HH319_F1LongRun
         int adHit = 0;
         float nextDiag = 0f, nextSuppress = 0f, nextAdv = 0f;
         float nextInv = 0f;                     // ⭐ 判据 3：每秒一条"在册数 vs 置位数"不变量
-        float nextThreatLog = 0f;               // ⭐ 判据 4：威胁注入后逐秒读数
+        float nextThreatLog = 0f;               // ⭐ **豁免列-威胁注入**（`D838` §D-2 改名）：注入后逐秒读数
         float nextFarm = 0f;                    // ⭐ `U-16b` 判据 1：农场仓水位逐秒读数（卸货到账）
         bool completed = false;
         float start = Time.realtimeSinceStartup;
@@ -628,10 +629,14 @@ public static class Valley_HH319_F1LongRun
                         if (dW < 0)
                         {
                             _pairTotal++;
+                            // ⭐⭐ `D838` §D-1 **主依据**：逐帧 `Δ背包 ≈ −Δ井仓`（容差 20% ⇒ `Δ背包 ≥ 0.8×|Δ井仓|`）
+                            //   ⛔ 不再以"背包存量 > 0"当主依据（存量可能来自更早的装载 ⇒ 无鉴别力）。
+                            if (dB > 0 && dB * 5 >= (-dW) * 4) _alignOk++;
+                            else { _alignFail++; _alignDeficit += (-dW) - dB; }
                             if (matchedNow) { _pairMatched++; _pendDrop = false; }
                             else { _pendDrop = true; _pendAmt = -dW; }     // 留待下一帧再判（±1）
                             if (_dropLog.Count < 40)
-                                _dropLog.Add($"f{_u16Frames} 井仓={wellN}(Δ{dW}) 背包载水={bagN}(Δ{dB}) 在册WaterHaul={haulInMapNow} 井边Working装载={wellSideLoader}");
+                                _dropLog.Add($"f{_u16Frames} 井仓={wellN}(Δ{dW}) 背包载水={bagN}(Δ{dB}) 对齐={dB > 0 && dB * 5 >= (-dW) * 4} 在册WaterHaul={haulInMapNow} 井边Working装载={wellSideLoader}");
                         }
                     }
                     _pairPrevWell = wellN; _pairPrevBag = bagN; _pairPrevValid = true;
@@ -815,6 +820,9 @@ public static class Valley_HH319_F1LongRun
     //   压制帧**自动出局**（无需硬条件）。⇒ 实现＝**一帧延迟评估**（本帧未配上 ⇒ 留待下一帧再看一次）。
     private static bool _pendDrop;
     private static int _pendAmt;
+    // ⭐⭐ `D838` §D-1：**主依据改为「逐帧 `Δ背包 ≈ −Δ井仓` 对齐」**（⛔ 不再以"背包存量>0"当主依据）
+    private static int _alignOk, _alignFail;                 // 对齐（合法装载 ⇒ 水进了背包）／未对齐
+    private static int _alignDeficit;                        // 未对齐帧的缺口合计（|Δ井仓| − Δ背包）
     private static int _suppressSum;                         // ⭐ 探针靶例维持的压水总量（＝合法右手项 · ⛔ 非旁路）
     // ⭐ `D837` §D-2：原 `_suppressAtWinStart`（窗口口径遗留）**已删**（5 处 `CS0414` 全清）。
     // ---- ⭐⭐ `D836` §A：**载体再改**（策划端裁定 · 比"窄口径"更干净）----
@@ -880,6 +888,7 @@ public static class Valley_HH319_F1LongRun
         _pendDrop = false; _pendAmt = 0;
         _pairTotal = 0; _pairMatched = 0; _pairUnmatched = 0; _pairDeficit = 0;
         _suppressSum = 0; _bagGainTotal = 0; _consSuppPrev = 0;   // ⭐ `D837` §A-1 后 `_suppressSum` 应恒 0
+        _alignOk = 0; _alignFail = 0; _alignDeficit = 0;          // ⭐ `D838` §D-1 主依据
         _pairLog.Clear(); _dropLog.Clear();
         // ⭐ `F-1` 收尾批新增面
         _dispatchTypeN.Clear(); _farmConcN.Clear();
@@ -1462,6 +1471,12 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4（`D836` §A 载体）**：`Δ井仓<0` 的帧 ⇒ 配对「该帧井边有 `WaterHaul`·`Working` ∧ 距井≤3.5 ∧（本帧无探针压制）」"
                       + $"｜依据＝井仓水只能经背包出去（耗水扣**农场仓** `ProducerComponent:119-131`；井仓只自产 `:105-116`）"
                       + $" ⇒ **下降帧总数={_pairTotal}** ｜**配得上={_pairMatched}** ｜**未配对={_pairUnmatched}**（缺口合计={_pairDeficit}）");
+        // ⭐⭐ `D838` §D-1 **主依据行**（逐帧 `Δ背包 ≈ −Δ井仓` 对齐）
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4 主依据（`D838` §D-1）**：逐帧「`Δ背包 ≈ −Δ井仓`」（容差 20%）"
+                      + $" ⇒ **对齐帧={_alignOk}** ／ **未对齐帧={_alignFail}**（缺口合计={_alignDeficit}）"
+                      + $"｜⛔ 不再以「背包存量>0」当主依据（存量可来自更早装载 ⇒ 无鉴别力）");
+        sb.AppendLine($"{U16Tag}·summary] ⚠️ **计数口径（`D838` §D-3）**：本判据内两个「计数」**不同口径、⛔ 不可互比** ——"
+                      + $" ①`下降帧总数`={_pairTotal}＝**逐帧**采样；②诊断行 `井仓 Δ<0 总帧`={_wellDropFrames}＝**每秒**采样（`·farm]` 节律）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ `L-82` **测量污染比值**：生产合法量（`ΣΔ背包载水⁺`）={_bagGainTotal} ／ 探针注入量（`Σ压制`）={_suppressSum}"
                       + $" ⇒ 比值={(_suppressSum > 0 ? (_bagGainTotal * 1.0f / _suppressSum).ToString("F3") : "∞")}"
                       + $"（⚠️ 比值 <1 ⇒ 场景中「探针干预」占主导 ⇒ 报策划端 · ⛔ 不自改场景）");
