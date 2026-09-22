@@ -293,6 +293,7 @@ public static class Valley_HH319_F1LongRun
         }
         var wellStore = well.GetComponent<StorageComponent>();
         var farmStore = farm.GetComponent<StorageComponent>();
+        _wellStore = wellStore; _wellWaterPrev = -1; _farmWellMin = wellStore.GetAmount(ResourceType.Water); _wellDropNoHaulFrames = 0;   // ⭐ `D832` 判据 4
         _targetFarm = farm;   // ⭐ `O-15` 列 A/B：**靶例农场**锚（⛔ 全库其它农场不计入两列）
         TestFixtureApi.AddWaterToKingdomWells(0, 50);                      // 井仓给 50 水（< cap×0.8 ⇒ ⛔ 不触发井的 Transport 广告）
         farmStore.TakeOut(ResourceType.Water, farmStore.GetAmount(ResourceType.Water));   // 农场缺水 ⇒ 广告 WaterHaul
@@ -516,6 +517,11 @@ public static class Valley_HH319_F1LongRun
     private static readonly Dictionary<int, float> _workDurLast = new Dictionary<int, float>();     // 每 npc 最近一次 `GetTaskDuration(task)`
     private static readonly Dictionary<string, int> _abandonTypeReason = new Dictionary<string, int>();  // `type/reason` 分桶
     private static readonly Dictionary<int, int> _unreachByNpc = new Dictionary<int, int>();     // ⭐ `U-20` 收口件2：`Unreachable` 按 npc 分桶
+    // ---- ⭐⭐ `D832` 判据 4：`·farm]` 增「井仓水量」列（在役链路口径 · ⛔ 不用历史复现档读数）----
+    private static StorageComponent _wellStore;              // 靶例水井仓（`·farm]` 逐帧并记）
+    private static int _wellWaterPrev = -1;                  // 上一秒井仓水量（算 Δ）
+    private static int _farmWellMin = int.MaxValue;          // 井仓水量最低值（判据 4 下限）
+    private static int _wellDropNoHaulFrames;                // ⭐ 判别力：井仓**下降**却「无在册 `WaterHaul` ∧ 载水背包=0」的秒数（>0 ⇒ 疑旁路取走）
     private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
@@ -561,6 +567,8 @@ public static class Valley_HH319_F1LongRun
         _workStartLast.Clear(); _workDurLast.Clear(); _abandonTypeReason.Clear();
         _unreachByNpc.Clear();
         _unknownSrcN = 0; _srcTotalN = 0;
+        // ⭐ `D832` 判据 4 新增面
+        _wellStore = null; _wellWaterPrev = -1; _farmWellMin = int.MaxValue; _wellDropNoHaulFrames = 0;
         // ⭐ `F-1` 收尾批新增面
         _dispatchTypeN.Clear(); _farmConcN.Clear();
         _farmWorkFrames = _farmIdleFrames = _farmThirstFrames = _farmOkFrames = 0;
@@ -864,9 +872,32 @@ public static class Valley_HH319_F1LongRun
                 float dFarm = tuc != null ? Vector2.Distance(tuc.transform.position, _targetFarm.transform.position) : -1f;
                 _farmProdLastState = $"npc={kv.Key} state={stP} 在册=True 距农场={dFarm:F2} | {PfDesc(tuc, false)} @+{rt:F2}s";
             }
+        // ⭐⭐ `D832` 判据 4（**换读数源**：⛔ 不再用历史复现档 `WaterAccount`）：**井仓水量逐帧列**。
+        //   口径（策划端钉死）：**井仓水不得被「写死国库的收取动作（`HarvestCarry`／`Harvest` 旁路）」取走**；
+        //   ⭐ **合法搬运（`WaterHaul` 装载 ⇒ 背包 ⇒ 农场仓）导致的减少 ＝ 正常、⛔ 不算回归**。
+        //   ⇒ ⭐ **鉴别力**：**井仓 Δ<0 且本帧「在册 `WaterHaul`＝0 ∧ 载水背包合计＝0」** ⇒ 水**不知去向**
+        //     （既无合法搬运在途、又无背包承载）⇒ 疑被旁路取走（回归）；反之 Δ<0 有 Haul/背包 ⇒ 合法装载。
+        int wellNow = _wellStore != null ? _wellStore.GetAmount(ResourceType.Water) : -1;
+        int wellDelta = (_wellWaterPrev >= 0 && wellNow >= 0) ? wellNow - _wellWaterPrev : 0;
+        if (wellNow >= 0) { _wellWaterPrev = wellNow; if (wellNow < _farmWellMin) _farmWellMin = wellNow; }
+        int haulInMap = 0, bagWaterSum = 0;
+        if (tm != null)
+            foreach (var kvW in tm)
+            {
+                var tW = kvW.Value;
+                if (tW == null || tW.type != KingdomTaskType.WaterHaul) continue;
+                haulInMap++;
+                var uW = FindUnit(kvW.Key);
+                var ivW = uW != null ? uW.GetComponent<WorkerInventory>() : null;
+                if (ivW != null) bagWaterSum += ivW.carriedAmount;
+            }
+        if (wellDelta < 0 && haulInMap == 0 && bagWaterSum == 0) _wellDropNoHaulFrames++;
         U16Write($"{U16Tag}·farm] {Stamp()} +{rt:F2}s 农场仓水={now} 峰值={_farmWaterPeak2}"
                  + $" 首次见水时刻={(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
-                 + $" ⭐农场工人Working={farmWorking} ⭐缺水产={thirst} ⭐同农场在途WaterHaul={conc}");
+                 + $" ⭐农场工人Working={farmWorking} ⭐缺水产={thirst} ⭐同农场在途WaterHaul={conc}"
+                 + $" ⭐⭐井仓水量={wellNow}(Δ{wellDelta}) 最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
+                 + $" ⭐本帧在册WaterHaul={haulInMap} 载水背包合计={bagWaterSum}"
+                 + $" ⭐无Haul却井仓下降帧={_wellDropNoHaulFrames}");
     }
 
     /// <summary>⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false**。
@@ -1103,6 +1134,11 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 3 · Abandon 按 `type/reason` 分桶：{TypeReasonLine()}");
         // ⭐ `U-20` 收口件2：`Unreachable` 前二名 npc 占比（期望 ≥99% ⇒ 自证 `甲′-a` 独占 · `L-67`）
         sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
+        // ⭐⭐ `D832` 判据 4（口径钉死）：井仓水量**不得被写死国库的收取动作取走**；合法 `WaterHaul` 装载导致减少 ＝ 正常。
+        //   鉴别力＝「井仓 Δ<0 ∧ 在册 `WaterHaul`＝0 ∧ 载水背包＝0」的秒数 ⇒ **应恒为 0**（>0 ⇒ 疑旁路取走 ⇒ 报红）。
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ 判据 4（`D832` · 在役链路口径）：井仓水量最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
+                      + $"（布置时基准见 `·place]`）｜⭐ **无 `WaterHaul` 却井仓下降的帧数={_wellDropNoHaulFrames}**（期望 **0**）"
+                      + $" ⇒ {(_wellDropNoHaulFrames == 0 ? "无旁路取水迹象 ✓" : "⚠️ 疑被旁路取走 ⇒ 判否")}");
         // ⭐⭐ `F-1` 收尾批（`D820` §三）判据 2：**同农场在途 WaterHaul 并发数**分布（`D-1` 修后应 `=1` 为主 · ⛔ 基线无此列）
         {
             var l2 = new List<KeyValuePair<int, int>>(_farmConcN);
