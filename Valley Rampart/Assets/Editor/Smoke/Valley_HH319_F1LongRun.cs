@@ -588,37 +588,39 @@ public static class Valley_HH319_F1LongRun
                     }
                     _consPrevWell = wellN; _consPrevFarm = fwNow; _consPrevBag = bagN; _consPrevValid = true;
 
-                    // ⭐⭐ `D835` §A-定案：**每帧**配对（⛔ 不 15 游戏秒/帧 —— 单帧含多次装卸必错配）
+                    // ⭐⭐ `D836` §A 载体：**「井边有 `WaterHaul·Working` 工人」配对**（⛔ 不再用窗口配对/守恒总式）
                     int haulInMapNow = 0;
-                    {
-                        var tmx = TaskMap();
-                        if (tmx != null) foreach (var kvx in tmx) { var tx = kvx.Value; if (tx != null && tx.type == KingdomTaskType.WaterHaul) haulInMapNow++; }
-                    }
+                    var tmNow = TaskMap();
+                    if (tmNow != null) foreach (var kvx in tmNow) { var tx = kvx.Value; if (tx != null && tx.type == KingdomTaskType.WaterHaul) haulInMapNow++; }
+                    bool wellSideLoader = false;
+                    if (TaskScheduler.HasInstance && _wellStore != null)
+                        foreach (var ucL in PlayerWorkers())
+                        {
+                            if (ucL == null) continue;
+                            if (TaskScheduler.Instance.GetWorkerState(ucL.npcId) != TaskState.Working) continue;
+                            KingdomTask tL;
+                            if (tmNow == null || !tmNow.TryGetValue(ucL.npcId, out tL) || tL == null || tL.type != KingdomTaskType.WaterHaul) continue;
+                            if (Vector2.Distance(ucL.transform.position, _wellStore.transform.position) <= 3.5f) { wellSideLoader = true; break; }
+                        }
+                    int suppDelta = _suppressSum - _consSuppPrev; _consSuppPrev = _suppressSum;   // 本帧是否发生探针压制
                     if (_pairPrevValid)
                     {
                         int dW = wellN - _pairPrevWell, dB = bagN - _pairPrevBag;
+                        if (dB > 0) _bagGainTotal += dB;                  // ⭐ `L-82` 生产合法量（ΣΔ背包载水⁺）
                         if (dW < 0)
                         {
-                            _pairDropSum += -dW;
-                            // ⭐ 交付物要求：`Δ井仓<0` **逐帧明细**（井仓／Σ背包载水／在册 `WaterHaul`）
-                            if (_dropLog.Count < 40)
-                                _dropLog.Add($"f{_u16Frames} 井仓={wellN}(Δ{dW}) 背包载水={bagN}(Δ{dB}) 在册WaterHaul={haulInMapNow}");
-                            if (!_pairActive) { _pairActive = true; _pairWin = PairN; _bagGainInWin = 0; }
-                        }
-                        if (_pairActive && dB > 0) _bagGainInWin += dB;
-                        if (_pairActive && --_pairWin <= 0)
-                        {
                             _pairTotal++;
-                            // ⭐ `D835` §A 补正：右手项 ＝ `ΣΔ背包⁺ + 本窗口内探针压制量`（压制＝合法动作）
-                            int suppInWin = _suppressSum - _suppressAtWinStart;
-                            if ((_bagGainInWin + suppInWin) >= _pairDropSum) _pairMatched++;
+                            // ⭐⭐ `D836` §A：**该帧井边是否有 `WaterHaul·Working` 工人** ⇒ 有＝合法装载；无＝未配对。
+                            //   ⚠️ 另叠加「本帧压制量 = 0」条件 ⇒ 双保险排除探针注入帧。
+                            if (wellSideLoader && suppDelta == 0) _pairMatched++;
                             else
                             {
-                                _pairUnmatched++; _pairDeficit += (_pairDropSum - _bagGainInWin - suppInWin);
+                                _pairUnmatched++; _pairDeficit += -dW;
                                 if (_pairLog.Count < 12)
-                                    _pairLog.Add($"win@end f{_u16Frames} 井降={_pairDropSum} 背包增={_bagGainInWin} 压制={suppInWin} 缺口={_pairDropSum - _bagGainInWin - suppInWin}");
+                                    _pairLog.Add($"f{_u16Frames} 井降={-dW} 井边Working装载={wellSideLoader} 本帧压制={suppDelta} 在册WaterHaul={haulInMapNow} 背包={bagN}");
                             }
-                            _pairActive = false; _pairDropSum = 0; _bagGainInWin = 0; _suppressAtWinStart = _suppressSum;
+                            if (_dropLog.Count < 40)
+                                _dropLog.Add($"f{_u16Frames} 井仓={wellN}(Δ{dW}) 背包载水={bagN}(Δ{dB}) 在册WaterHaul={haulInMapNow} 井边Working装载={wellSideLoader} 本帧压制={suppDelta}");
                         }
                     }
                     _pairPrevWell = wellN; _pairPrevBag = bagN; _pairPrevValid = true;
@@ -801,6 +803,12 @@ public static class Valley_HH319_F1LongRun
     private static int _pairTotal, _pairMatched, _pairUnmatched, _pairDeficit;
     private static int _suppressSum;                         // ⭐ 探针靶例维持的压水总量（＝合法右手项 · ⛔ 非旁路）
     private static int _suppressAtWinStart;                  // 本窗口起点时的压制累计（算窗口内压制量）
+    // ---- ⭐⭐ `D836` §A：**载体再改**（策划端裁定 · 比"窄口径"更干净）----
+    //   口径：**每个 `Δ井仓<0` 的帧 ⇒ 须能配对到「该帧有玩家国工人处于 `WaterHaul` ∧ `TaskState.Working`
+    //    ∧ 距井 ≤3.5」**；⭐ 依据＝**探针压制发生在"井边无工人"时** ⇒ **该口径天然排除压制帧**。
+    //   判据：`Δ井仓<0` ∧ **该帧井边无 `WaterHaul·Working` 工人** ⇒ 未配对（疑旁路取走）；有 ⇒ 合法装载 ✓。
+    private static int _bagGainTotal;                        // ⭐ `L-82`：**生产合法量** ＝ `ΣΔ背包载水⁺`
+    private static int _consSuppPrev;                        // 上一帧的压制累计（算"本帧是否发生压制"）
     private static readonly List<string> _pairLog = new List<string>();   // 判红窗口明细
     private static readonly List<string> _dropLog = new List<string>();   // `Δ井仓<0` 逐帧明细
     private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
@@ -856,7 +864,7 @@ public static class Valley_HH319_F1LongRun
         _pairPrevWell = -1; _pairPrevBag = 0; _pairPrevValid = false; _pairActive = false;
         _pairWin = 0; _pairDropSum = 0; _bagGainInWin = 0;
         _pairTotal = 0; _pairMatched = 0; _pairUnmatched = 0; _pairDeficit = 0;
-        _suppressSum = 0; _suppressAtWinStart = 0;
+        _suppressSum = 0; _suppressAtWinStart = 0; _bagGainTotal = 0; _consSuppPrev = 0;
         _pairLog.Clear(); _dropLog.Clear();
         // ⭐ `F-1` 收尾批新增面
         _dispatchTypeN.Clear(); _farmConcN.Clear();
@@ -1434,13 +1442,17 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
         // ⭐⭐ `D832` 判据 4（口径钉死）：井仓水量**不得被写死国库的收取动作取走**；合法 `WaterHaul` 装载导致减少 ＝ 正常。
         //   鉴别力＝「井仓 Δ<0 ∧ 在册 `WaterHaul`＝0 ∧ 载水背包＝0」的秒数 ⇒ **应恒为 0**（>0 ⇒ 疑旁路取走 ⇒ 报红）。
-        // ⭐⭐ `D835` §A：**判据 4 定案载体 ＝ 「井仓下降帧」±N 帧配对**（⛔ 不再用守恒总式负值帧数）
-        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4（`D835` §A 定案口径）**：载体 ＝ **`Δ井仓<0` 的帧** ⇒ ±{PairN} 帧窗口内配对"
-                      + $"「`Σ|Δ井仓⁻| ≤ ΣΔ背包载水⁺`」｜依据＝**井仓的水只能经背包出去**（耗水扣**农场仓** `ProducerComponent:119-131`；井仓只自产 `:105-116`）"
-                      + $" ⇒ 窗口总数={_pairTotal} ｜合法（配得上·**已计入探针压制量**）={_pairMatched} ｜**未配对={_pairUnmatched}**（缺口合计={_pairDeficit}）"
-                      + $" ｜探针靶例维持压制总量={_suppressSum}（**合法右手项** · 出处 `Valley_HH319_F1LongRun.cs:519-526` `TakeOut(ww2-20)`）"
-                      + $" ⇒ ⚠️ **判定须人工裁定**：⛔ 本串**不自行写「判绿/判红」**（`D835` §B：落盘串的判定须按最终人工结论生成）；"
-                      + $"⭐ 人工口径＝「**未配对＝0** 且 缺口＝0」⇒ 判绿；⛔ 缺口>0 且**已扣压制项**才可作可疑信号");
+        // ⚠️⚠️ `D836` §B（**红线**）：本串**只报读数 ＋ 一句「判定须人工裁定」** ——
+        //   ⛔ **一个判定字样都不许写**（连"人工口径 ⇒ X"这类条件式也删）⇒ ⭐ 人工结论**只写在报告里**（`L-70` 补条②）。
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4（`D836` §A 载体）**：`Δ井仓<0` 的帧 ⇒ 配对「该帧井边有 `WaterHaul`·`Working` ∧ 距井≤3.5 ∧（本帧无探针压制）」"
+                      + $"｜依据＝井仓水只能经背包出去（耗水扣**农场仓** `ProducerComponent:119-131`；井仓只自产 `:105-116`）"
+                      + $" ⇒ **下降帧总数={_pairTotal}** ｜**配得上={_pairMatched}** ｜**未配对={_pairUnmatched}**（缺口合计={_pairDeficit}）");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ `L-82` **测量污染比值**：生产合法量（`ΣΔ背包载水⁺`）={_bagGainTotal} ／ 探针注入量（`Σ压制`）={_suppressSum}"
+                      + $" ⇒ 比值={(_suppressSum > 0 ? (_bagGainTotal * 1.0f / _suppressSum).ToString("F3") : "∞")}"
+                      + $"（⚠️ 比值 <1 ⇒ 场景中「探针干预」占主导 ⇒ 报策划端 · ⛔ 不自改场景）");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 未配对明细（期望空）：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 `Δ井仓<0` 逐帧明细（前 {Mathf.Min(_dropLog.Count, 40)} 条）：{(_dropLog.Count == 0 ? "（无）" : string.Join(" ／ ", _dropLog))}");
+        sb.AppendLine($"{U16Tag}·summary] ⚠️ **判定须人工裁定**（本串只报读数 · ⛔ 不含任何判定字样 · `D836` §B）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 配对窗口明细（判红才列 · 期望空）：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 `Δ井仓<0` **逐帧明细**（前 {Mathf.Min(_dropLog.Count, 40)} 条 · 交付物要求）：{(_dropLog.Count == 0 ? "（无）" : string.Join(" ／ ", _dropLog))}");
         // ⚠️ `D835` §B（`D833` 纪律）：**守恒总式 ⛔ 不构成判据** —— 缺「耗项／收水侧／产项」⇒ 恒假负。
