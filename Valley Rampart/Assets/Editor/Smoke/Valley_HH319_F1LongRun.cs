@@ -66,6 +66,19 @@ using UnityEditor;
 //        c) **件3 分桶**：summary 新增「Abandon 按 `type/reason` 分桶」—— 用于区分「两段位移任务
 //           （应受 (f) 影响）」vs「路程短但另有卡死源」。
 //        ⛔ 判据 1/2/5/6 既有语义**一字未改**（本项属**只增不改**）。
+//     ⑧ 【⭐ `M1-G-1c` 收口 · 第十五笔 · `D841`】：
+//        a) **`A2` 一次定位**（`O-18` 档新增 `·a2b]` 行）：① `Tick` 口径 idle 池**按国度分布**（照抄
+//           `TaskScheduler.Tick:266-281` 全筛选）② **收集面复演**（反射读私有 `_sources` 逐个
+//           `TryAdvertiseTask` ⇒ 收集数，⚠️ **复演口径**）③ **若 k0 空闲＝0 ⇒ 补 1 名 k0 工人重试点击**
+//           （判据＝差集是否出现 `Build`）⇒ 一次跑即定性「同国筛（探针场景特有）」vs「未预期拦截」。
+//        b) **可用工人池口径**（`L-83` 补条②）：summary 新增「剔除恒困死者（派发>0 ∧ 完成=0）」前后两列。
+//        c) **判据 5 `#42`**：订阅 `UnitOccupationChangedEvent` ⇒ `·occ]` 逐条 ＋ summary 按 `from→to` 分桶；
+//           ⭐ **反向列** ＝ 在 `Q2` 档**构造法**直呼同值 `SetOccupation`（期望事件计数**不增**）。
+//        d) **判据 2 异常明细**：`·complete]` 中 `type=WaterHaul ∧ 来源≠MovingToDest` 者原文存入
+//           `_anomalyLog` ⇒ summary 逐条列出（`L-83` 补条③：载体是少数派）。
+//        e) **判据 10 `Q2` 新档**（菜单「判据10 Q2 留背包先卸空时序」· ⚠️ **构造法**）：
+//           背包预置旧货 ⇒ 派 `Transport` ⇒ 逐帧验「非0 → **0（先卸空）** → >0（该趟装上）」。
+//        ⚠️ 本项**只增不改**：判据 1/2/4 既有语义与观测窗一字未改。
 // ============================================================================
 public static class Valley_HH319_F1LongRun
 {
@@ -92,6 +105,16 @@ public static class Valley_HH319_F1LongRun
     {
         if (!EditorApplication.isPlaying) { Debug.LogError("[HH319长局] 须先进入 Play 后调用本菜单。"); return; }
         new GameObject("HH319_LongRunHost").AddComponent<RunHost>().Host(RunCoroutine(15f, "15x"));
+    }
+
+    /// <summary>⭐ `D841`（第十五笔）：**长窗 15× 档**（100 真实秒 ≈ 25 游戏天）—— 用于
+    ///  ① 判据 5 `#42` 多类转职的**自然触发覆盖**（45s 窗本批只触发 1 条）② 判据 4 下降帧样本增强。
+    ///  ⚠️ 与 45s 档**不同窗口 ⇒ ⛔ 不可直接对拍**（报告须同报观测窗）；⛔ 独立档（tag=15xL）。</summary>
+    [MenuItem("Valley/验证/HH319 F1长局观察_15x长窗(100s)")]
+    public static void Run15xLong()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[HH319长局] 须先进入 Play 后调用本菜单。"); return; }
+        new GameObject("HH319_LongRunHost").AddComponent<RunHost>().Host(RunCoroutine(15f, "15xL", false, 100f));
     }
 
     // ================================================================================
@@ -290,6 +313,41 @@ public static class Valley_HH319_F1LongRun
         }
         else U16Write($"{U16Tag}·a2] {Stamp()} 跳过：well2={well2 != null} ws2={ws2 != null} CanDemolish={(well2 != null ? well2.CanDemolish.ToString() : "-")}");
 
+        // ---- ⭐⭐⭐ `D841` §二：**`A2` 一次定位**（三读数：① idle 按国度 ② 收集面复演 ③ 可控补人重试）----
+        {
+            string idleDist = TickIdleByKingdom(out int idleTotal);
+            int approxIdle = TickIdleCount();
+            int well2K = well2 != null ? well2.kingdomId : -1;
+            int needK = well2K >= 0 ? well2K : 0;
+            int needIdle = CountTickIdleOfKingdom(needK);
+            U16Write($"{U16Tag}·a2b] {Stamp()} ⭐① Tick 口径 idle 池**按国度**：{idleDist}（合计 {idleTotal}）"
+                     + $" ｜ 仅〔存活∧空闲∧未在册〕（不含职业/国度筛）={approxIdle}"
+                     + $" ｜ 靶例 well2.kingdomId={well2K} ⇒ 需 k{needK} 空闲 ⇒ 实际 k{needK} 空闲={needIdle}");
+            int col; string fdesc;
+            string colDesc = CollectRehearsal(well2, out col, out fdesc);
+            U16Write($"{U16Tag}·a2b] {Stamp()} ⭐② 本 tick 收集面复演（**探针口径**·只读）：{colDesc} ｜ {fdesc}"
+                     + $" ｜ ⚠️ 派发面实读＝上行 `·a2]` 的差集（本行不重复）");
+            // ⚠️ 补人须等其真正进入 `Tick` 口径 idle 池（首帧 `npcId`/`IsIdleForTask` 可能未就绪 ⇒ 轮询至多 45 帧）
+            U16Write($"{U16Tag}·a2b] {Stamp()} ⭐ 补人前 k0 工人普查：{PlayerWorkerCensus()}");
+            if (well2 != null && ws2 != null && needIdle == 0)
+            {
+                var newUc = SpawnWorker(anchor + new Vector2(0f, 3.4f), needK);
+                int waited = 0;
+                for (int w = 0; w < 45; w++) { yield return null; waited = w + 1; if (CountTickIdleOfKingdom(needK) > 0) break; }
+                int needIdle2 = CountTickIdleOfKingdom(needK);
+                U16Write($"{U16Tag}·a2b] {Stamp()} ⭐ 补人诊断：新工人 npc={(newUc != null ? newUc.npcId : -1)} 等待帧数={waited}"
+                         + $" ⇒ k{needK} 空闲={needIdle2}（补前 0）");
+                var snap5 = TaskSnapshot();
+                TaskScheduler.Instance.RequestHaulNow(ws2);
+                yield return null;
+                yield return null;
+                U16Write($"{U16Tag}·a2b] {Stamp()} ⭐③ 补人后重试点击 ⇒ 点击前后差集（源=well2）{TaskDiffOf(snap5, well2)}"
+                         + $" ｜ 靶例位身份={BuildingAtName(well2.transform.position)}"
+                         + $" ｜ 触发后 k{needK} 空闲={CountTickIdleOfKingdom(needK)}");
+            }
+            else U16Write($"{U16Tag}·a2b] {Stamp()} ⭐③ 未补人（k{needK} 空闲={needIdle} ≠ 0 ⇒ 「无同国空闲」不成立；`·a2]` 差集即已定性）");
+        }
+
         // ---- ⭐⭐ `D839` §A：**`A2` 段已整段移到本行之前**（⛔ 上批误为"插占满块" ⇒ 顺序未变）----
         int occupied = -1;
         int idleNow = IdleWorkerCount();
@@ -436,6 +494,115 @@ public static class Valley_HH319_F1LongRun
         yield return Finish(tag, null);
     }
 
+    /// <summary>⭐⭐ `D841` §二-e／**判据 10 `Q2`**：「**留背包 → 先卸空 → 该趟装上**」时序。
+    /// 机制实读（`TaskScheduler.LoadInventoryFromSource:878`）：`if (!inv.IsEmpty) UnloadInventory(brain, task);`
+    ///   ⇒ 装载前**先卸空旧货**（件6 出口）⇒ 本档逐帧验「背包 非0 → **0** → >0」。
+    /// ⚠️⚠️ **构造法声明（`L-51`）**：① 旧货由**探针直呼 `WorkerInventory.TryStore`** 预置（⛔ 非生产路径；
+    ///   生产路径 ＝ 上一趟卸货失败（`DestFull`／无仓）留下的旧货）② 任务由 `DispatchExternal` 直派（⛔ 非 `Tick` 广告）。
+    /// ⚠️ 卸载落点 ＝ `WarehouseRegistry.FindNearestAvailable` ⇒ 探针预置**空农场仓**作可收水落点。
+    /// ⛔ 独立档 ⇒ 不污染判据 1/2/4 的靶例跑。</summary>
+    [MenuItem("Valley/验证/HH319 判据10 Q2 留背包先卸空时序")]
+    public static void RunQ2()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[HH319长局] 须先进入 Play 后调用本菜单。"); return; }
+        new GameObject("HH319_Q2Host").AddComponent<RunHost>().Host(RunQ2Co());
+    }
+
+    private static IEnumerator RunQ2Co()
+    {
+        const string tag = "q2";
+        U16Begin(tag);
+        Debug.Log($"[HH319长局·{tag}] ── 起（判据 10 `Q2` 时序 · ⚠️ 构造法 · `L-51` 声明见落盘）");
+        var cfg = new NewGameConfig
+        {
+            worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = 2,
+            worldSize = WorldSize.Small, selectedSlotId = "smoke_w319" + tag, kingdomName = "河谷王国"
+        };
+        yield return TestHarnessApi.EnterTestRun(cfg, 15f);
+        float t0 = Time.realtimeSinceStartup;
+        while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
+               || KingdomRegistry.Instance == null || KingdomRegistry.Instance.Count < 2)
+        {
+            yield return null;
+            if (Time.realtimeSinceStartup - t0 > 120f)
+            { Debug.LogError($"[HH319长局·{tag}] 等世界就绪超时。"); yield return Finish(tag, null); yield break; }
+        }
+        yield return new WaitForSeconds(0.5f);
+
+        Vector2 anchor = WorldManager.Instance.GetKingdomAnchorWorld();
+        var well = Place("Buildings/Well", anchor + new Vector2(-6f, 0f), 0);
+        var farm = Place("Buildings/farm", anchor + new Vector2(6f, 0f), 0);
+        if (well == null || farm == null)
+        { Debug.LogError($"[HH319长局·{tag}] 布置失败 well={well != null} farm={farm != null} ⇒ 中止。"); yield return Finish(tag, null); yield break; }
+        var ws = well.GetComponent<StorageComponent>();
+        var fs = farm.GetComponent<StorageComponent>();
+        SpawnWorker(anchor + new Vector2(-1f, 1.6f), 0);
+        TestFixtureApi.AddWaterToKingdomWells(0, 50);
+        fs.TakeOut(ResourceType.Water, fs.GetAmount(ResourceType.Water));   // 农场仓清空 ⇒ 可收水（卸载落点）
+        yield return new WaitForSeconds(3f);
+
+        UnitController uc = null;
+        foreach (var u in PlayerWorkers()) { if (u != null && u.EffectiveOccupation != Occupation.Ruler) { uc = u; break; } }
+        var inv = uc != null ? uc.GetComponent<WorkerInventory>() : null;
+        var brain = uc != null ? uc.GetComponent<NPCBrain>() : null;
+        if (uc == null || inv == null || brain == null)
+        { Debug.LogError($"[HH319长局·{tag}] 靶例工人缺失 ⇒ 中止。"); yield return Finish(tag, null); yield break; }
+        int id = uc.npcId;
+        U16Write($"{U16Tag}·q2] {Stamp()} 布置 well@{well.transform.position} farm@{farm.transform.position}"
+                 + $" ｜ 井仓水={ws.GetAmount(ResourceType.Water)} 农场仓水={fs.GetAmount(ResourceType.Water)}"
+                 + $" ｜ 靶例 npc={id} 背包={inv.carriedAmount}（类型={inv.carriedType}）");
+
+        int seeded = inv.TryStore(ResourceType.Water, 3);
+        U16Write($"{U16Tag}·q2] {Stamp()} ⚠️ 构造①（`L-51`·非生产路径）：直呼 `WorkerInventory.TryStore(Water,3)`"
+                 + $" ⇒ 实际存入={seeded} ⇒ 背包={inv.carriedAmount}（生产路径 ＝ 上一趟卸货失败留下的旧货）");
+
+        // ⭐ `D841` §二-c **反向列**（构造法）：同值 `SetOccupation` ⇒ 期望事件计数**不增**（`SetOccupation:91` 幂等）
+        int occBefore = _occTotal;
+        var curOcc = uc.EffectiveOccupation;
+        uc.SetOccupation(curOcc);
+        U16Write($"{U16Tag}·q2] {Stamp()} ⚠️ 反向列（`L-51`·构造法）：直呼 `SetOccupation({curOcc})`（**同值**）"
+                 + $" ⇒ 转职事件计数 {occBefore} → {_occTotal}（期望不增）");
+
+        var task = new KingdomTask(KingdomTaskType.Transport, well);
+        task.destType = KingdomDestType.NearestWarehouse;
+        U16Write($"{U16Tag}·q2] {Stamp()} ⚠️ 构造②（`L-51`·非生产路径）：`DispatchExternal` 直派 `Transport`（源=well）"
+                 + $" ⇒ 到达后 `LoadInventoryFromSource` ＝ 先卸空（`!inv.IsEmpty ⇒ UnloadInventory`）→ 本趟装上");
+        TaskScheduler.Instance.DispatchExternal(brain, task);
+
+        int prevBag = inv.carriedAmount;
+        int unloadFrame = -1, reloadFrame = -1, fwAtUnload = -1, fwAtReload = -1, bagAtReload = -1;
+        int lastLog = -99;
+        for (int f = 0; f < 1200; f++)
+        {
+            yield return null;
+            int bag = inv.carriedAmount;
+            int fw = fs.GetAmount(ResourceType.Water);
+            var st = TaskScheduler.Instance != null ? TaskScheduler.Instance.GetWorkerState(id) : TaskState.None;
+            if (bag != prevBag || f - lastLog >= 60)
+            {
+                lastLog = f;
+                U16Write($"{U16Tag}·q2] {Stamp()} +f{f} 背包={bag} 农场仓水={fw} state={st}");
+            }
+            if (unloadFrame < 0 && prevBag > 0 && bag == 0) { unloadFrame = f; fwAtUnload = fw; }
+            if (unloadFrame >= 0 && reloadFrame < 0 && bag > 0 && prevBag == 0)
+            { reloadFrame = f; fwAtReload = fw; bagAtReload = bag; }
+            prevBag = bag;
+            if (reloadFrame >= 0) break;
+        }
+        U16Write($"{U16Tag}·q2] {Stamp()} ⭐ 时序读数：背包 非0（构造=3）→ **0**（卸载帧=f{unloadFrame} · 该帧农场仓水={fwAtUnload}）"
+                 + $" → **>0**（装上帧=f{reloadFrame} · 背包={bagAtReload} · 该帧农场仓水={fwAtReload}）"
+                 + $" ｜ 三段齐备={unloadFrame >= 0 && reloadFrame >= 0}");
+        // ⭐ `D841` §二-c **正向对照**（构造法 · 主流程读数已取毕 ⇒ 改职业无碍）：异值 `SetOccupation` ⇒ 期望事件**+2**
+        {
+            int b0 = _occTotal;
+            uc.SetOccupation(Occupation.Resident);
+            uc.SetOccupation(Occupation.Worker);
+            U16Write($"{U16Tag}·q2] {Stamp()} ⚠️ 正向对照（`L-51`·构造法）：异值 `Resident` → 复原 `Worker`（两次）"
+                     + $" ⇒ 转职事件计数 {b0} → {_occTotal}（期望 +2 ⇒ 与反向列的 0 增量构成鉴别）");
+        }
+        yield return Finish(tag, null);
+    }
+
     /// <summary>取一个「玩家国 ∧ 在册」的 npcId（0＝无）。</summary>
     private static int FirstAssignedPlayerNpc()
     {
@@ -493,10 +660,10 @@ public static class Valley_HH319_F1LongRun
 
     private static UnitController _w;
 
-    private static IEnumerator RunCoroutine(float speed, string tag, bool threatStage = false)
+    private static IEnumerator RunCoroutine(float speed, string tag, bool threatStage = false, float durationOverride = 0f)
     {
         // ⚠️ `U-16` 案① 批：豁免列档延长观测窗（威胁注入在 +15s ⇒ 需更长的注入后窗口）
-        float duration = speed <= 1f ? 180f : (threatStage ? 70f : 45f);    // 1× ⇒ ≥180 真实秒（任务书 §件1）；15× 对照 ⇒ 45s（足够多轮）
+        float duration = durationOverride > 0f ? durationOverride : (speed <= 1f ? 180f : (threatStage ? 70f : 45f));    // 1× ⇒ ≥180 真实秒（任务书 §件1）；15× 对照 ⇒ 45s（足够多轮）
         _obsDuration = duration;   // ⭐ `D840` §C：落盘供「观测窗时长 ＋ 下降帧数 ＋ 成因」三数同报
         U16Begin(tag);                                // ⭐ P3：先挂钩（⛔ 早于 EnterTestRun，防漏世界创建期日志）
         Debug.Log($"[HH319长局·{tag}] ── 起（speed={speed} · 观测 {duration}s 真实时间 · 生产路径 · ⛔ 不干预搬水链）");
@@ -904,6 +1071,11 @@ public static class Valley_HH319_F1LongRun
     private static int _threatNpcId;
     private static readonly List<string> _threatSeq = new List<string>();   // 判据 4：注入后逐秒读数
     private static readonly List<UnitController> _threatEnemies = new List<UnitController>();  // 判据 4：注入的威胁源
+    // ---- ⭐ `D841`（第十五笔）新增面 ----
+    private static readonly Dictionary<string, int> _occByFromTo = new Dictionary<string, int>();  // 判据 5 `#42`：`from→to` 分桶
+    private static int _occTotal;                                   // 判据 5：转职事件总条数
+    private static readonly List<string> _anomalyLog = new List<string>();   // 判据 2 异常明细（逐条原文）
+    private static readonly List<string> _occLog = new List<string>();       // 判据 5：逐条明细（前 N 条）
 
     private static void U16Begin(string tag)
     {
@@ -947,8 +1119,11 @@ public static class Valley_HH319_F1LongRun
         _targetFarm = null; _farmProdDispatchN = 0; _farmProdInMapFrames = 0;
         _farmProdLastState = "(未观测到)"; _postWatchUntil = -1f;
         _farmWaterPeak2 = 0; _farmGained = false; _farmFirstGainRt = -1f;
+        // ⭐ `D841`（第十五笔）：判据 5 `#42` 面
+        _occByFromTo.Clear(); _occTotal = 0; _anomalyLog.Clear(); _occLog.Clear();
         Application.logMessageReceived += OnLog;             // P3：console 镜像（⭐ 本批第一优先）
         EventBus.Subscribe<PathFailedEvent>(OnPathFailedEvt); // P3：PathFailedEvent 只读计数（按 npcId 分桶）
+        EventBus.Subscribe<UnitOccupationChangedEvent>(OnOccupationChanged);   // ⭐ `D841`：判据 5 `#42` 只读计数
         _u16Hooked = true;
     }
 
@@ -958,6 +1133,7 @@ public static class Valley_HH319_F1LongRun
         {
             Application.logMessageReceived -= OnLog;
             EventBus.Unsubscribe<PathFailedEvent>(OnPathFailedEvt);
+            EventBus.Unsubscribe<UnitOccupationChangedEvent>(OnOccupationChanged);   // ⭐ `D841`
             _u16Hooked = false;
         }
         if (_u16w != null)
@@ -1131,7 +1307,12 @@ public static class Valley_HH319_F1LongRun
         if (type == "WaterHaul")
         {
             if (src == TaskState.MovingToDest.ToString()) _completeWaterHaulFromDest++;
-            else _completeAnomalyN++;
+            else
+            {
+                _completeAnomalyN++;
+                // ⭐ `D841` §二-d：**异常明细逐条留存**（`L-83` 补条③：载体是少数派 ⇒ ⛔ 不得只给计数）
+                _anomalyLog.Add($"npc={id} 第{_completeN[id]}次 来源分支={src} Working计时已到={workDone}（有工时戳={hasWork}）@{Stamp()}");
+            }
         }
         // ⭐ 判据 3：完成时刻应为**已复位**（`Complete:602` 写 false）⇒ `Istask=False` 即配对成立。
         bool flag = FlagOf(id);   // ⚠️ `Complete` 的日志在 `ClearNpc` 之后 ⇒ 此处读到的就是复位后值
@@ -1152,6 +1333,92 @@ public static class Valley_HH319_F1LongRun
         int n; _pathFailN.TryGetValue(id, out n); _pathFailN[id] = n + 1;
         U16Write($"{U16Tag}·pathfail] {Stamp()} npc={id} 第{_pathFailN[id]}次 dest=({evt.Destination.x:F2},{evt.Destination.y:F2})"
                  + $" 在册(taskMap)={InMap(id)} 在态(stateMap)={InState(id)} | {PfDesc(uc, withAstar: false)}");
+    }
+
+    /// <summary>⭐⭐ `D841` §二-c：判据 5 `#42` 转职事件（**只读计数** · 发布点＝`UnitController.SetOccupation` 单点）。
+    /// ⚠️ 事件语义＝「职业字段变更」（⛔ 不含"来源"）⇒ 本行只报 `from→to`（9 处调用点的映射见 summary）。</summary>
+    private static void OnOccupationChanged(UnitOccupationChangedEvent e)
+    {
+        if (_u16w == null) return;
+        _occTotal++;
+        string k = $"{e.from}→{e.to}";
+        int n; _occByFromTo.TryGetValue(k, out n); _occByFromTo[k] = n + 1;
+        var uc = e.unit;
+        int id = uc != null ? uc.npcId : 0;
+        int kd = uc != null ? uc.kingdomId : -1;
+        U16Write($"{U16Tag}·occ] {Stamp()} npc={id} 国={kd} {k} 第{_occByFromTo[k]}次");
+        if (_occLog.Count < 60) _occLog.Add($"npc{id}/k{kd} {k}@{Stamp()}");
+    }
+
+    /// <summary>⭐⭐ `D841` §二-a-①：**`Tick` 口径 idle 池按国度分布** —— 完全照抄
+    /// `TaskScheduler.Tick:266-281` 全筛选（`IsAlive ∧ IsIdleForTask ∧ npcId≠0 ∧ 职业∈{Worker,Civilian,Porter} ∧ !在册`）。
+    /// ⚠️ 派发面 `:331` 同国筛 ⇒ 只有 `idleKingdom == 源国` 者可被派 ⇒ 本读数是 `A2` 定性**第一读数**。</summary>
+    private static string TickIdleByKingdom(out int total)
+    {
+        total = 0;
+        var byK = new SortedDictionary<int, int>();
+        foreach (var b in Object.FindObjectsOfType<NPCBrain>())
+        {
+            if (b == null || !b.IsAlive || !b.IsIdleForTask) continue;
+            var uc = b.GetComponent<UnitController>();
+            if (uc == null || uc.npcId == 0) continue;
+            var occ = uc.EffectiveOccupation;
+            if (occ != Occupation.Worker && occ != Occupation.Civilian && occ != Occupation.Porter) continue;
+            if (InMap(uc.npcId)) continue;
+            int n; byK.TryGetValue(uc.kingdomId, out n); byK[uc.kingdomId] = n + 1;
+            total++;
+        }
+        var sb = new StringBuilder();
+        foreach (var kv in byK) sb.Append($"k{kv.Key}={kv.Value} ");
+        return sb.Length == 0 ? "（空）" : sb.ToString().Trim();
+    }
+
+    /// <summary>`Tick` 口径 idle 池中**某国**的数目（`D841` §二-a-③ 补人判据）。</summary>
+    private static int CountTickIdleOfKingdom(int kingdom)
+    {
+        int n = 0;
+        foreach (var b in Object.FindObjectsOfType<NPCBrain>())
+        {
+            if (b == null || !b.IsAlive || !b.IsIdleForTask) continue;
+            var uc = b.GetComponent<UnitController>();
+            if (uc == null || uc.npcId == 0) continue;
+            var occ = uc.EffectiveOccupation;
+            if (occ != Occupation.Worker && occ != Occupation.Civilian && occ != Occupation.Porter) continue;
+            if (InMap(uc.npcId)) continue;
+            if (uc.kingdomId == kingdom) n++;
+        }
+        return n;
+    }
+
+    /// <summary>⭐⭐ `D841` §二-a-②：**本 tick 收集面复演**（⚠️ **探针口径** · 只读）——
+    /// 反射读私有 `_sources` ⇒ 逐个 `TryAdvertiseTask` ⇒ 统计「广告为 true」的源数。
+    /// ⚠️ 等价性：与 `Tick:291-302` **同一状态、同帧**执行；⚠️ **不含** `Transport` 的 `RemainingSlots` 与
+    /// 非-`Transport` 的「广告者+类型」去重（两步非纯读 ⇒ ⛔ 不复演）⇒ 本数是 `jobs.Count` 的**上界口径**。
+    /// ⚠️ 副作用评估：各 `TryAdvertiseTask` 实现均无状态变更（`Building` 仅清 `_forceHaulOnce` —— 本段未置）。</summary>
+    private static string CollectRehearsal(Building focus, out int collected, out string focusDesc)
+    {
+        collected = 0; focusDesc = "焦点源=null";
+        var ts = TaskScheduler.Instance;
+        if (ts == null) return "（无 TaskScheduler）";
+        var f = typeof(TaskScheduler).GetField("_sources", BindingFlags.NonPublic | BindingFlags.Instance);
+        var set = f != null ? f.GetValue(ts) as System.Collections.IEnumerable : null;
+        if (set == null) return "（`_sources` 反射失败）";
+        int srcN = 0, focusHit = 0, focusOk = 0; string focusType = "-";
+        var list = new List<ITaskSource>();
+        foreach (var o in set) { var s = o as ITaskSource; if (s != null) list.Add(s); }
+        for (int i = 0; i < list.Count; i++)
+        {
+            var s = list[i];
+            if (s == null || !s.IsValid) continue;
+            srcN++;
+            KingdomTask t = null;
+            bool ok = false;
+            try { ok = s.TryAdvertiseTask(out t); } catch { ok = false; }
+            if (ok) collected++;
+            if (focus != null && ReferenceEquals(s, focus)) { focusHit = 1; focusOk = ok ? 1 : 0; focusType = (ok && t != null) ? t.type.ToString() : "-"; }
+        }
+        focusDesc = $"焦点源在场={focusHit == 1} 广告={focusOk == 1} 类型={focusType}";
+        return $"`_sources` 有效源={srcN} ⇒ 广告为 true＝{collected} 个";
     }
 
     /// <summary>P1：逐帧打点（一行一 npc）。</summary>
@@ -1526,6 +1793,28 @@ public static class Valley_HH319_F1LongRun
                       + $"｜⛔ 不再以「背包存量>0」当主依据（存量可来自更早装载 ⇒ 无鉴别力）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 样本三数（`D840` §C）：观测窗={_obsDuration:F0} 真实秒 ｜ 下降帧总数={_pairTotal}"
                       + $" ｜ ⚠️ 帧数偏少时须查成因（回合时长／工人池被恒困死者占用／靶例被 `Transport` 压倒）");
+        // ⭐⭐ `D841` §三-B（`L-83` 补条②）：**可用工人池**口径 —— 剔除「完成=0」的恒困死者后再判样本是否足够
+        {
+            int poolN = 0, dispAll = 0, compAll = 0, stuckN = 0, dispStuck = 0, hardN = 0, dispHard = 0;
+            var stuckList = new StringBuilder(); var hardList = new StringBuilder();
+            foreach (var kv in _dispatchN)
+            {
+                int id = kv.Key;
+                var uc = FindUnit(id);
+                if (uc == null || uc.kingdomId != 0 || uc.EffectiveOccupation == Occupation.Ruler) continue;   // 只看玩家国工人
+                int d = kv.Value; int c; _completeN.TryGetValue(id, out c);
+                poolN++; dispAll += d; compAll += c;
+                if (c == 0) { stuckN++; dispStuck += d; stuckList.Append($"npc{id}×{d} "); }
+                if (c == 0 && d >= 3) { hardN++; dispHard += d; hardList.Append($"npc{id}×{d} "); }
+            }
+            sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **可用工人池口径**（`D841` §三-B · `L-83` 补条②）：玩家国工人池（派发记录内）={poolN}"
+                          + $" ｜ 派发合计={dispAll} ／ 完成合计={compAll}"
+                          + $" ｜ ⓐ宽松档「完成=0」：{stuckN} 个（{(stuckList.Length > 0 ? stuckList.ToString().Trim() : "（无）")}）"
+                          + $"⇒ 剔除后 池={poolN - stuckN}／派发={dispAll - dispStuck}／完成={compAll}"
+                          + $" ｜ ⓑ严格档「完成=0 ∧ 派发≥3」：{hardN} 个（{(hardList.Length > 0 ? hardList.ToString().Trim() : "（无）")}）"
+                          + $"⇒ 剔除后 池={poolN - hardN}／派发={dispAll - dispHard}／完成={compAll}"
+                          + $" ｜ 池总派发占比：宽松剔除 {((dispAll > 0) ? (dispStuck * 100f / dispAll).ToString("F1") : "-")}% ／ 严格剔除 {((dispAll > 0) ? (dispHard * 100f / dispAll).ToString("F1") : "-")}%");
+        }
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 **未对齐帧完整明细**（`D839` §C-1）：{(_alignLog.Count == 0 ? "（无）" : string.Join(" ／ ", _alignLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⚠️ **计数口径（`D838` §D-3）**：本判据内两个「计数」**不同口径、⛔ 不可互比** ——"
                       + $" ①`下降帧总数`={_pairTotal}＝**逐帧**采样；②诊断行 `井仓 Δ<0 总帧`={_wellDropFrames}＝**每秒**采样（`·farm]` 节律）");
@@ -1534,6 +1823,15 @@ public static class Valley_HH319_F1LongRun
                       + $"（⚠️ 比值 <1 ⇒ 场景中「探针干预」占主导 ⇒ 报策划端 · ⛔ 不自改场景）");
         sb.AppendLine($"{U16Tag}·summary] （旧配对口径 · 已被 `D838` §D-1 取代 · ⛔ 不再判读）未配对明细：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 `Δ井仓<0` 逐帧明细（前 {Mathf.Min(_dropLog.Count, 40)} 条）：{(_dropLog.Count == 0 ? "（无）" : string.Join(" ／ ", _dropLog))}");
+        // ⭐⭐ `D841` §二-c：判据 5 `#42` 转职事件（只读计数 · 发布点＝`UnitController.SetOccupation` 单点）
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 5 `#42` · **转职事件总条数={_occTotal}** ｜ 按 `from→to` 分桶：{OccLine()}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 5 `#42` · 逐条明细（前 40 条）：{(_occLog.Count == 0 ? "（无）" : string.Join(" ／ ", _occLog))}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 5 `#42` · 9 处调用点（码面 · 各 1 条）：`TrainingSystem:100/:141` ／ `KingdomBrain:991/:1019` ／ "
+                      + $"`AbstractEconomySettlement:112` ／ `KingdomFoundry:396` ／ `PopulationSystem:506/:532` ／ `VagrantCampSystem:251`"
+                      + $"（语义分组：A 训练转职 2 ／ B 结算建制 4 ／ C 成长招募 3 ⇒ 均经 `SetOccupation` 单点发布）");
+        // ⭐⭐ `D841` §二-d：判据 2 异常明细（`type=WaterHaul ∧ 来源≠MovingToDest` · `L-83` 补条③载体是少数派）
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ 判据 2 **异常明细逐条**（筛法 `type=WaterHaul ∧ 来源≠MovingToDest`）："
+                      + $"{(_anomalyLog.Count == 0 ? "（无）" : $"共 {_anomalyLog.Count} 条 ⇒ " + string.Join(" ／ ", _anomalyLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⚠️ **判定须人工裁定**（本串只报读数 · ⛔ 不含任何判定字样 · `D836` §B）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 配对窗口明细（判红才列 · 期望空）：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 `Δ井仓<0` **逐帧明细**（前 {Mathf.Min(_dropLog.Count, 40)} 条 · 交付物要求）：{(_dropLog.Count == 0 ? "（无）" : string.Join(" ／ ", _dropLog))}");
@@ -1651,6 +1949,17 @@ public static class Valley_HH319_F1LongRun
         return sb.ToString().Trim();
     }
 
+    /// <summary>⭐ `D841` 判据 5 `#42`：转职事件按 `from→to` 分桶行（降序）。</summary>
+    private static string OccLine()
+    {
+        if (_occByFromTo.Count == 0) return "（无）";
+        var list = new List<KeyValuePair<string, int>>(_occByFromTo);
+        list.Sort((a, b) => b.Value.CompareTo(a.Value));
+        var sb = new StringBuilder();
+        foreach (var kv in list) sb.Append($"{kv.Key}×{kv.Value} ");
+        return sb.ToString().Trim();
+    }
+
     /// <summary>⭐ 判据 7：`Abandon` 按 reason 分桶（**日志契约取值域 7 值**；`Inert` ⛔ 不入枚举 ⇒ 不会出现）。</summary>
     private static string ReasonLine()
     {
@@ -1687,7 +1996,7 @@ public static class Valley_HH319_F1LongRun
         return null;
     }
 
-    private static void SpawnWorker(Vector2 pos, int kingdomId)
+    private static UnitController SpawnWorker(Vector2 pos, int kingdomId)
     {
         // ⭐ `U-16` 件3（`D815` 裁定 §二 件3）：落位前**可走吸附**（`HF-0`）—— 先例逐字＝`TestFixtureApi.cs:250`
         //   （`SpawnFixtureUnit`：`SpawnPosSnapper.SnapWorld(world, $"fixture_k…")`）。
@@ -1697,9 +2006,27 @@ public static class Valley_HH319_F1LongRun
         //   ⛔ 本批**只改探针侧**；⛔ 不动 `UnitFactory`（`U-18` 的"甲/乙"未裁）。
         pos = SpawnPosSnapper.SnapWorld(pos, "hh319_worker");
         var go = UnitFactory.Instance.SpawnUnit(Faction.PlayerCamp, Occupation.Worker, pos, kingdomId);
-        if (go == null) return;
+        if (go == null) return null;
         if (go.GetComponent<WorkerInventory>() == null) go.AddComponent<WorkerInventory>();
         if (_w == null) _w = go.GetComponent<UnitController>();
+        // ⭐ `D841`（第十五笔）：返回值供「补人后重试」段读诊断（⛔ 不改落位/吸附行为）
+        return go.GetComponent<UnitController>();
+    }
+
+    /// <summary>⭐ `D841` §二：**`k0` 工人普查**（逐条：职业／在册／空闲／state）—— 供「k0 空闲=0」成因说明。</summary>
+    private static string PlayerWorkerCensus()
+    {
+        var sb = new StringBuilder(); int n = 0;
+        foreach (var uc in PlayerWorkers())
+        {
+            if (uc == null) continue;
+            n++;
+            bool inMap = InMap(uc.npcId);
+            var st = TaskScheduler.HasInstance ? TaskScheduler.Instance.GetWorkerState(uc.npcId) : TaskState.None;
+            var br = uc.GetComponent<NPCBrain>();
+            sb.Append($"[npc{uc.npcId} {uc.EffectiveOccupation} 在册={inMap} 空闲={(br != null ? br.IsIdleForTask.ToString() : "无brain")} state={st}] ");
+        }
+        return n == 0 ? "（无）" : sb.ToString().Trim();
     }
 
     /// <summary>遍历玩家国（k0）全部工人（v2：⛔ 不只看一个 —— v1 只采样一个 ⇒ 派工给了另一个 ⇒ 假 `state=None`）。</summary>
