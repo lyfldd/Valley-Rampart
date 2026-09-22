@@ -13,12 +13,14 @@ using UnityEngine;
 /// <summary>
 /// 调度中心（§7 输入端一致性 + 3.3.5 资源流转）。
 /// 职责：
-///   ~~1. 搬运派发（3.3.5）：产能建筑 IsReadyToHarvest → 找空闲工人 → TaskStimulus 注入~~
-///       ⭐ `M1-G-1c` 件C-8（`D827`）：**第 1 条已随 `U-15` 根除项删除** —— 链 B（本中心自建"搬运刺激 ＋
-///       直通国库落点"）整段退役，搬运统一由**链 A**（`Building` ④ `Transport` 广告 · 有阈值 ⇒ `TaskScheduler` 两段式）承担。
-///   ~~2. 防重复：_transporting 标记（建筑存储清空后释放）~~ ⭐ 随件 F 一并删除（字段已无引用）。
-///   3. 昼夜节律：夜间停发户外任务（防"调度中心夜间刚派活、威胁层就撤退"两系统打架）
-/// 后续扩展：砍树/建造/随军任务统一走本中心派发（P1）。
+///   1. 昼夜节律：夜间停发户外任务（防"调度中心夜间刚派活、威胁层就撤退"两系统打架）
+/// ⚠️ 已退役职责（⭐ `M1-G-1c` 件A1 · `D828`：**旧句直接删除**，⛔ 不以 `~~` 形式保留 —— XML doc 不渲染删除线）：
+///   · 「搬运派发（3.3.5）：产能建筑 `IsReadyToHarvest` → 找空闲工人 → `TaskStimulus` 注入」
+///     ⇒ 随 `U-15` **根除项**删除（链 B 整段退役 ⇒ 搬运统一由**链 A**：`Building` ④ `Transport` 广告 ·
+///       有阈值 ⇒ `TaskScheduler` **两段式** `LoadInventoryFromSource` → `UnloadInventory` 承担）；
+///   · 「防重复：`_transporting` 标记（建筑存储清空后释放）」⇒ 随件 F-1 删除（字段 **0 引用**）。
+/// ⚠️ 原「后续扩展：砍树/建造/随军任务**统一走本中心派发**（P1）」承诺**已撤回**（件A4 · `L-63`）——
+///   本中心的自建派发职责已整段删除 ⇒ 优先级排序与派发**统一归 `TaskScheduler`**（`GetPriority` 同 SO 同回退）。
 /// </summary>
 public class ScheduleCenterStub : MonoBehaviour
 {
@@ -44,13 +46,11 @@ public class ScheduleCenterStub : MonoBehaviour
     private readonly Dictionary<object, List<NPCBrain>> _crewAssignments = new Dictionary<object, List<NPCBrain>>();
     private float _assignTimer;
 
-    // 3.5 §8.3：任务优先级映射 SO（修复S > 建造/生产A > 搬运B > 养殖/挑水/产金C），数据驱动
-    private TaskPriorityConfig _priorityConfig;
-
-    private void Awake()
-    {
-        _priorityConfig = Resources.Load<TaskPriorityConfig>("Config/TaskPriorityConfig");
-    }
+    // ⭐ `M1-G-1c` 件A4（`D828` §A4 **准删**）：原 `_priorityConfig` ＋ `Awake()` 读取（3.5 §8.3 优先级 SO）
+    //   已删 —— 依据：① 本类 `GetPriority` **0 调用** ② ⭐ **承接方在场且等价**：
+    //   `TaskScheduler.GetPriority` ＝ **同 SO**（`Config/TaskPriorityConfig`）＋ **同回退**（`TaskPriority.B`）
+    //   ③ 「备而未用」的依据**已被推翻**（原注承诺"本中心统一派发"⇒ 该职责已随 `U-15` 根除项整段删除 · `L-63`）。
+    // ⚠️ `using System.Collections.Generic` **保留**（`_crewAssignments` 仍需要）。
 
     private void Update()
     {
@@ -61,20 +61,18 @@ public class ScheduleCenterStub : MonoBehaviour
         // 昼夜节律：夜间停发 B/C 户外任务（§7 输入端一致性）
         if (IsNight()) return;
 
-        // 3.5 §8.3 优先级派发：空闲工人优先接高优先级任务（S>A>B>C，同优先级 FIFO）。
-        // 当前已落地搬运（B）；修复(S)/建造(A)/生产(A)/养殖/挑水/产金(C) 任务源在 P1 任务调度扩展中接入，
-        // 届时统一走 DispatchByPriority 派发，本中心只按优先级排序 + 空闲工人优先高优先级。
+        // ⭐ `M1-G-1c` 件A4（`D828`）：原「3.5 §8.3 优先级派发…届时**统一走 `DispatchByPriority`** 派发，
+        //   本中心只按优先级排序」**承诺已撤回** —— 本中心的自建派发职责已整段删除（链 B 退役），
+        //   ⭐ 优先级取值与派发**统一归 `TaskScheduler`**（`GetPriority` 同 SO `Config/TaskPriorityConfig` ＋
+        //   同回退 `TaskPriority.B`）⇒ ⛔ 本类**不再**承诺"统一派发"。
         // ⭐⭐ `M1-G-1` 件4（`U-15` 根除项 · `D824` §一-4）：**原 `DispatchTransport()` 调用已删** ——
         //   链 B（本中心自建"搬运刺激 ＋ `BehaviorExecutor:HarvestCarry` 直通国库"）随 `#40` 一并退役；
         //   ⭐ 搬运统一由**链 A**（`Building` ④ `Transport` 广告 · **有阈值** ⇒ `TaskScheduler` 两段式）承担。
         DispatchCrew();
     }
 
-    /// <summary>查任务类型优先级（TaskPriorityConfig SO；未配置回退 B）。供派发处统一取值，禁止硬编码优先级。</summary>
-    private TaskPriority GetPriority(KingdomTaskType type)
-    {
-        return _priorityConfig != null ? _priorityConfig.Get(type) : TaskPriority.B;
-    }
+    // ⭐ `M1-G-1c` 件A4（`D828` §A4 **准删**）：原 `GetPriority(KingdomTaskType)` **已删** —— 本类 0 调用
+    //   （全库仅 `TaskScheduler.GetPriority` 在役 · 同 SO ＋ 同回退）。
 
     /// <summary>夜间判定（TimeManager 未挂载=白天，行为不变）</summary>
     private bool IsNight()

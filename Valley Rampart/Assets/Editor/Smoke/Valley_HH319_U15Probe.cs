@@ -10,7 +10,9 @@ using UnityEditor;
 //
 //  判据覆盖：
 //   1 ⭐⭐ 箱子侧 A/B 对照（先"止血后"生产落点 ⇒ 再"止血前等效"路径 ⇒ 箱数/含水明细）
-//   4 面板布尔（`IsReadyToHarvest`）：纯水井仓 ⇒ false（灰）· 混合仓 ⇒ true（可点）
+//   4 面板布尔（`IsReadyToHarvest`）：纯水井仓 ⇒ false · 混合仓 ⇒ true（⭐ `M1-G-1c` 件A3/`D828` **口径勘正**：
+//     ⚠️ 该**布尔值列照旧**，但「⇒ **面板灰**」的**推论已失效** —— `BuildingPanel` 的启用/守卫判据已改
+//     `storage.TotalCount > 0`（G-1）⇒ ⭐ 纯水井仓**可点**（派一次搬运把水送去能收水的仓））
 //   5 `Harvest()` 不清不可收资源（混合仓：粮入国库 · 水留仓 · 逐值）
 //   8 仓内容物逐值（本批零 schema 改动 ⇒ 给"形状未变"读数）
 //  另：短局内观察是否出现「派发搬运任务 @ 水井格」（判据 2 的预证 · 长局另跑）。
@@ -89,12 +91,12 @@ public static class Valley_HH319_U15Probe
         Debug.Log($"[HH319U15] 布置：well@{well.transform.position} 声明={string.Join("|", st.DeclaredPaths)} 国库Accepts(Water)={vault?.Accepts(ResourceType.Water)}");
         yield return new WaitForSeconds(3f);   // 水井免工自产
 
-        // ── 判据 1 · 止血后（生产落点 `HarvestCarry`） + 判据 4（纯水 ⇒ 灰）──
+        // ── 判据 1 · 止血后（⭐ 在役落点 ＝ `Harvest()` 手动收取口 · 原直通国库口已随 `#40` 删） + 判据 4 ──
         int w0 = st.GetAmount(ResourceType.Water);
-        Debug.Log($"[HH319U15] §1-A 止血后（前置）：井仓 Water={w0} · IsReadyToHarvest={st.IsReadyToHarvest()}（期望 False ⇒ 面板灰）· {ChestDump()}");
+        Debug.Log($"[HH319U15] §1-A 止血后（前置）：井仓 Water={w0} · IsReadyToHarvest={st.IsReadyToHarvest()}（期望 False · ⚠️ 但**不再推导面板灰**：面板判据已改 TotalCount>0 ⇒ 水井仓可点）· {ChestDump()}");
         int carried = st.Harvest();                 // ⭐ `M1-G-1`：原链 B 落点（直通国库口）已删 ⇒ 改走 `Harvest()`
         yield return null;
-        Debug.Log($"[HH319U15] §1-A 止血后（结果）：HarvestCarry 返回={carried}（期望 0 ⇒ 完全不取）· 井仓 Water={st.GetAmount(ResourceType.Water)}（期望 {w0} · 留仓）· {ChestDump()}（期望 Count=0）");
+        Debug.Log($"[HH319U15] §1-A 止血后（结果）：Harvest() 返回={carried}（期望 0 ⇒ 完全不取 · ⭐ 标签勘正：原写 `HarvestCarry 返回=` 与调用不符）· 井仓 Water={st.GetAmount(ResourceType.Water)}（期望 {w0} · 留仓）· {ChestDump()}（期望 Count=0）");
 
         // ── 判据 1 · 止血前等效（旧路径落点＝直接 ModifyResource ⇒ 国库不收 ⇒ overflow 装箱）──
         int chestBefore = AllChests().Count;

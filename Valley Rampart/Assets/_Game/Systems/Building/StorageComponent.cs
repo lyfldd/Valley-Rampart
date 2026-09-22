@@ -270,7 +270,7 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     //   ⇒ **在役落点仅 `Harvest()`**（玩家手动收取路径）。
 
     /// <summary>是否有「**可入国库**」的内容（`IHarvestable`）。
-    /// ⭐ `M1-G-1c` 件C-10（`D827`）：**消费者清单已重写**（旧列 `ScheduleCenterStub:100/:118` 施已随
+    /// ⭐ `M1-G-1c` 件C-10（`D827`）：**消费者清单已重写**（旧列 `ScheduleCenterStub:100/:118` 已随
     ///   `U-15` 根除项删除；旧列 `BuildingPanel:187/:405` **已不再调用** —— 该面板判据已改 `TotalCount &gt; 0`）。
     /// ⇒ ⭐ **现役消费者 ＝ 仅 Editor 探针**（`Valley_HH319_U15Probe` 等止血取证档）；
     ///   ⚠️ 生产面**不再据此灰化按钮**（「水井仓可点 ⇒ 派搬运」）。
@@ -340,7 +340,8 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     /// <summary>本仓首个非空资源（资源表序 ⇒ 确定性；空仓 ⇒ 默认 Gold 占位）。
     /// ⏭️ 多资源仓下的**过渡读口**（搬运广告等单资源假设点的落点，归 `M1-G` 收口）。
     /// ⚠️ `M1-G-1c` 件C-4（`D827`）：原注「调用方 `HarvestCarry` 会先问国库能否收」**已作废** —— 该调用方**已随 `#40` 删除**；
-    ///   现役同族守卫在 `Harvest()`（逐资源问 `CanRulerAccept`／`TreasuryCanAccept`）与链 A 落点（见 `StorageComponent` 墓碑注）。</summary>
+    ///   现役同族守卫在 `Harvest()`（逐资源问 `CanRulerAccept`／`TreasuryCanAccept`）与链 A 落点
+    ///   （⭐ 墓碑注位置：**`StorageComponent.cs:351`** · 即原 `HarvestCarry()` 删除处）。</summary>
     public ResourceType PrimaryStoredType()
     {
         foreach (var type in ResourceCatalog.AllTypes)
