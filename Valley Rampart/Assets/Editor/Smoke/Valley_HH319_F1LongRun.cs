@@ -148,7 +148,7 @@ public static class Valley_HH319_F1LongRun
         return n;
     }
 
-    /// <summary>在册任务里 `source == 指定建筑` 的 `npc/type` 清单（判据 9 `Q1` 读类型用）。</summary>
+    /// <summary>在册任务里 `source == 指定建筑` 的 `npc/type` 清单（⚠️ 含历史残留 ⇒ ⛔ 单用会被污染）。</summary>
     private static string TaskTypesOf(Building b)
     {
         var sb = new StringBuilder();
@@ -158,9 +158,33 @@ public static class Valley_HH319_F1LongRun
         return sb.Length == 0 ? "（无）" : sb.ToString().Trim();
     }
 
+    /// <summary>⭐ `D834` §B-2：在册任务**快照**（`npc → type`）—— 供**点击前后差集**用
+    /// （⛔ 直接打"当前在册"会被**对照组遗留**污染 ⇒ 必须做差集）。</summary>
+    private static Dictionary<int, KingdomTaskType> TaskSnapshot()
+    {
+        var d = new Dictionary<int, KingdomTaskType>();
+        var tm = TaskMap();
+        if (tm != null) foreach (var kv in tm) { var t = kv.Value; if (t != null) d[kv.Key] = t.type; }
+        return d;
+    }
+
+    /// <summary>⭐ 差集：**本次点击后新增**的任务（`npc:type`）—— ⛔ 不返回点击前已存在者。</summary>
+    private static string TaskDiff(Dictionary<int, KingdomTaskType> before)
+    {
+        var tm = TaskMap(); var sb = new StringBuilder();
+        if (tm != null) foreach (var kv in tm)
+        {
+            var t = kv.Value;
+            if (t == null || (before != null && before.ContainsKey(kv.Key))) continue;
+            sb.Append($"npc{kv.Key}:{t.type} ");
+        }
+        return sb.Length == 0 ? "（无新增）" : sb.ToString().Trim();
+    }
+
     private static IEnumerator RunO18Co()
     {
         const string tag = "O18";
+        U16Begin(tag);   // ⭐ `D834` §A3：**判据类档一律落盘**（⛔ 不得只 `Debug.Log` ⇒ 否则读数不可复核）
         // ⭐⭐ `D833` 修：**必须走正门进局**（`TestHarnessApi.EnterTestRun`）—— ⚠️ 首版遗漏 ⇒ 世界永不就绪
         //   （实测：console 停在 bootstrap 期、探针在就绪循环里空转 ⇒ ⛔ "没进世界"）。
         var cfg = new NewGameConfig
@@ -194,18 +218,21 @@ public static class Valley_HH319_F1LongRun
         int tc = ws.TotalCount;
         bool ready = ws.IsReadyToHarvest();
         bool btnCan = tc > 0;                                      // `G-1`：面板启用判据（`BuildingPanel:191`）
-        Debug.Log($"[HH319O18] ⭐A1/`G-1` 鉴别力｜靶例仓（纯水井仓）：TotalCount={tc} ⇒ **面板可点={btnCan}**（G-1 判据 TotalCount>0）"
-                  + $" ｜ IsReadyToHarvest()={ready}（旧口径「可入国库」· 水不可入国库 ⇒ 应 False）"
-                  + $" ⇒ ⭐**两列差异={btnCan != ready}**（True＝G-1 生效·本档测到真判据）");
+        U16Write($"{U16Tag}·a1] {Stamp()} ⭐A1/`G-1` 鉴别力｜靶例仓（纯水井仓）：TotalCount={tc} ⇒ **面板可点={btnCan}**（G-1 判据 `TotalCount>0`）"
+                 + $" ｜ IsReadyToHarvest()={ready}（旧口径「可入国库」· 水不可入国库 ⇒ 应 False）"
+                 + $" ⇒ ⭐**两列差异={btnCan != ready}**（True＝G-1 生效·本档测到真判据）");
 
         // ---- ⭐ 件B-2／判据 9：**对照组（有空闲工人）** —— 证明本档确实点到 `Q1` 接线 ----
-        bool f0 = ForceHaulOf(well); int tr0 = CountTransport(); int id0 = IdleWorkerCount();
+        // ⭐ `D834` §A1：**「标记」列已删**（`consumed = f2 && !f3` 结构性恒 false：`f2` 是点击**前**读数 ⇒ 必假）
+        //   ⇒ 「标记被消费」⛔ 不由探针证（已由码面定案）⇒ 本档**只留「任务数增/不增」＋「类型差集」**两面。
+        int tr0 = CountTransport(); int id0 = IdleWorkerCount();
+        var snap0 = TaskSnapshot();                                // ⭐ 点击前快照（差集基线）
         TaskScheduler.Instance.RequestHaulNow(ws);                 // ＝ 面板「派搬运」按钮的接线
         yield return null;
-        bool f1 = ForceHaulOf(well); int tr1 = CountTransport();
-        Debug.Log($"[HH319O18] ⭐对照组（空闲工人={id0}）：点击前 标记={f0} 在册Transport={tr0}"
-                  + $" ⇒ 点击后 标记={f1}（期望 False＝已被消费）在册Transport={tr1}（期望 +1）"
-                  + $" ⇒ **派到任务={tr1 > tr0}** ｜ ⭐`Q1` 派出类型＝{TaskTypesOf(well)}（期望含 Transport）");
+        int tr1 = CountTransport();
+        U16Write($"{U16Tag}·ctrl] {Stamp()} ⭐对照组（**探针口径**空闲工人={id0}）：点击前 在册Transport={tr0}"
+                 + $" ⇒ 点击后 在册Transport={tr1}（期望 +1）⇒ **派到任务={tr1 > tr0}**"
+                 + $" ｜ ⭐`Q1` **点击前后差集**＝{TaskDiff(snap0)}（期望含 `Transport`）");
 
         // ---- ⭐⭐ 件B-1：`O-18`「无空闲工人」组 —— 先占满全部玩家国工人 ----
         int occupied = 0;
@@ -219,33 +246,46 @@ public static class Valley_HH319_F1LongRun
         }
         for (int i = 0; i < 90; i++) { if (IdleWorkerCount() == 0) break; yield return null; }
         int idleNow = IdleWorkerCount();
-        bool f2 = ForceHaulOf(well); int tr2 = CountTransport();
+        int tr2 = CountTransport();
+        var snap2 = TaskSnapshot();                                // ⭐ 差集基线
         TaskScheduler.Instance.RequestHaulNow(ws);                 // 同一点击（无空闲工人场景）
         yield return null;
-        bool f3 = ForceHaulOf(well); int tr3 = CountTransport();
-        bool consumed = f2 && !f3;                                 // 标记被消费（置位→清除）
+        int tr3 = CountTransport();
         bool notDispatched = tr3 <= tr2;                           // 未新增 Transport 任务
-        Debug.Log($"[HH319O18] ⭐⭐⭐**无空闲工人组**（占用尝试={occupied} · 空闲工人={idleNow}）：点击前 标记={f2} 在册Transport={tr2}"
-                  + $" ⇒ 点击后 标记={f3} 在册Transport={tr3}"
-                  + $" ⇒ ⭐**标记被静默消费={consumed}**（True＝置位后无新任务也被清）｜**任务未派={notDispatched}**"
-                  + $" ⇒ ⭐⭐`O-18` 判定＝**{(consumed && notDispatched ? "成立（标记被静默消费 · 玩家手点在无空闲工人时形同无效）" : "不成立")}**");
+        string diff2 = TaskDiff(snap2);
+        // ⭐ `D834` §E-3 **场景前提口径声明**：本档「无空闲工人」用的是**探针口径**（`PlayerWorkers() ∧ !InMap`），
+        //   ⚠️ 与 `Tick.idle`（`TaskScheduler.cs:266-281`：`+IsIdleForTask` ＋ 职业 ∈{Worker,Civilian,Porter} ＋ ⛔ 不限国度）
+        //   **既非充分也非必要** ⇒ 故本行**同帧并报两列** ＋ 只把「任务数增/不增」当判据面（`A2` 口径要求）。
+        U16Write($"{U16Tag}·o18] {Stamp()} ⭐⭐⭐**无空闲工人组**（占用尝试={occupied} · **探针口径**空闲工人={idleNow}）：点击前 在册Transport={tr2}"
+                 + $" ⇒ 点击后 在册Transport={tr3} ⇒ **任务未派={notDispatched}**"
+                 + $" ｜ ⭐**点击前后差集＝{diff2}**（期望（无新增））"
+                 + $" ⇒ ⭐⭐`O-18` 判定＝**{(notDispatched ? "成立（无空闲工人时手点「派搬运」不产生任务 · ⭐ 「标记被静默消费」已由码面定案 · ⛔ 非本探针所证）" : "不成立")}**");
 
         // ---- ⭐ 件B-6／`A2`：**拆除中点击**（`_demolishing` ⇒ 广告分支改为 `Build`）----
-        if (well.CanDemolish)
+        // ⭐ `D834` §B-3：**换未被污染的靶例建筑**（⛔ 不得复用已点击过的 `well` —— 其 `_forceHaulOnce` 已消费、
+        //   `TaskTypesOf` 含对照组遗留 ⇒ 差集基线脏）⇒ 另 `Place` 一口新井。
+        var well2 = Place("Buildings/Well", anchor + new Vector2(-6f, -4f), 0);
+        var ws2 = well2 != null ? well2.GetComponent<StorageComponent>() : null;
+        if (well2 != null && ws2 != null && well2.CanDemolish)
         {
-            well.Demolish();
+            yield return new WaitForSeconds(3f);                   // 新井自产（保证 `TotalCount > 0`）
+            well2.Demolish();                                      // ⭐ 进入 `_demolishing`
             yield return null;
-            bool f4 = ForceHaulOf(well); int tr4 = CountTransport();
-            TaskScheduler.Instance.RequestHaulNow(ws);
+            var snap4 = TaskSnapshot();                            // ⭐ 差集基线（拆除后、点击前）
+            int tr4 = CountTransport();
+            TaskScheduler.Instance.RequestHaulNow(ws2);            // 同一点击
             yield return null;
-            bool f5 = ForceHaulOf(well); int tr5 = CountTransport();
-            Debug.Log($"[HH319O18] ⭐A2 拆除中点击（_demolishing=True · CanDemolish=True）：点击前 标记={f4} 在册Transport={tr4}"
-                      + $" ⇒ 点击后 标记={f5}（期望 False＝同样被入口清）在册Transport={tr5}（期望**不增** ⇒ 广告走拆除分支）"
-                      + $" ⇒ ⭐标记被消费={f4 && !f5}｜该建筑在册类型＝{TaskTypesOf(well)}（期望 Build 拆除任务·⛔ 非 Transport）");
+            int tr5 = CountTransport();
+            string diff4 = TaskDiff(snap4);
+            bool noTransport = diff4 == "（无新增）" || !diff4.Contains("Transport");
+            U16Write($"{U16Tag}·a2] {Stamp()} ⭐A2 拆除中点击（**新靶例** `well2` · _demolishing=True）：点击前 在册Transport={tr4}"
+                     + $" ⇒ 点击后={tr5} ｜ ⭐**点击前后差集＝{diff4}**（期望 **Build 拆除任务** · ⛔ 非 Transport）"
+                     + $" ⇒ 判据：**差集无 Transport={noTransport}**"
+                     + $"（⚠️ 本档**删「标记」列** —— 原式 `f4 && !f5` 结构性恒 false · `D834` §A1）");
         }
-        else Debug.LogWarning("[HH319O18] ⚠️A2 跳过：靶例水井 `CanDemolish=False`（⛔ 不得改判据）");
+        else U16Write($"{U16Tag}·a2] {Stamp()} ⚠️A2 跳过：新靶例不可用（well2={well2 != null} ws2={ws2 != null} CanDemolish={(well2 != null ? well2.CanDemolish.ToString() : "-")}）");
 
-        Debug.Log($"[HH319O18] ★ 收尾：A1 两列差异 / 对照组派到任务 / O-18 标记静默消费 / A2 拆除中点击 —— 四项读数已落 console（L-70 自证标签）。");
+        U16Write($"{U16Tag}·summary] ★ 收尾：A1 两列差异 ／ 对照组派到任务＋差集 ／ O-18 任务未派 ／ A2 新靶例差集 —— 四项读数已**落盘**（`D834` §A3）。");
         yield break;
     }
 
@@ -524,6 +564,27 @@ public static class Valley_HH319_F1LongRun
             if (fwNow > farmWaterPeak) farmWaterPeak = fwNow;
             completed = e2 && e3 && e4 && e5 && e6;
 
+            // ⭐⭐ `D834` §C 判据 4：**逐帧三项守恒**（⛔ 非每秒 · 避免"同帧装载+卸货"的采样错位）
+            //   `Δ = Δ井仓 + Δ农场仓 + Δ(Σ背包载水)` ⇒ **应恒 ≥ 0**；`< 0` ⇒ 水凭空减少（旁路取走）。
+            {
+                int wellN = _wellStore != null ? _wellStore.GetAmount(ResourceType.Water) : -1;
+                if (wellN >= 0)
+                {
+                    int bagN = 0;
+                    foreach (var ucB in PlayerWorkers())
+                    {
+                        var ivB = ucB != null ? ucB.GetComponent<WorkerInventory>() : null;
+                        if (ivB != null && ivB.carriedType == ResourceType.Water) bagN += ivB.carriedAmount;
+                    }
+                    if (_consPrevValid)
+                    {
+                        int d = (wellN - _consPrevWell) + (fwNow - _consPrevFarm) + (bagN - _consPrevBag);
+                        if (d < 0) { _consNegFrames++; if (d < _consMinDelta) _consMinDelta = d; }
+                    }
+                    _consPrevWell = wellN; _consPrevFarm = fwNow; _consPrevBag = bagN; _consPrevValid = true;
+                }
+            }
+
             // ================================================================
             //  ⭐ `U-16` P1：**按「被派 npcId」逐帧打点**（⛔ 弃用"距井最近者"锚 · 见文件头口径演进登记）
             //  两路取锚：① 每帧扫 `_npcTaskMap` 的 WaterHaul 条目（抓得到"在册"的）
@@ -681,6 +742,14 @@ public static class Valley_HH319_F1LongRun
     private static int _farmWellMin = int.MaxValue;          // 井仓水量最低值（判据 4 下限）
     private static int _wellDropNoHaulFrames;                // ⭐ 判别力：井仓**下降**却「无在册 `WaterHaul` ∧ 载水背包=0」的秒数（>0 ⇒ 疑旁路取走）
     private static int _wellDropFrames;                      // ⭐ `D833` 仪表修正①：`Δ<0` 总帧（分母 · ⛔ 不含 `Δ=0`）
+    // ---- ⭐⭐ `D834` §C：**判据 4 正解 ＝ 逐帧三项守恒**（单位无关 · ⛔ 不依赖产水速率、⛔ 不用水位净差反推）----
+    //   式：`Δ = Δ井仓水量 + Δ农场仓水 + Δ(Σ背包中 carriedType==Water 的量)` ⇒ ⭐ **应恒 ≥ 0**
+    //   （产水只增；合法 `WaterHaul` 只让水在「井仓 → 背包 → 农场仓」间转移 ⇒ 三项合计不变）
+    //   ⇒ ⭐ **守恒 Δ<0 ＝ 水凭空减少（既不在井仓/农场仓、也不在任何背包）⇒ 被旁路取走 ⇒ 判红**。
+    private static int _consPrevWell = -1, _consPrevFarm, _consPrevBag;
+    private static bool _consPrevValid;
+    private static int _consNegFrames;                       // ⭐ 守恒 Δ<0 的帧数（**期望 0** ⇒ 判绿）
+    private static int _consMinDelta;                        // 最负的一次（诊断用）
     private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
@@ -727,7 +796,9 @@ public static class Valley_HH319_F1LongRun
         _unreachByNpc.Clear();
         _unknownSrcN = 0; _srcTotalN = 0;
         // ⭐ `D832` 判据 4 新增面
-        _wellStore = null; _wellWaterPrev = -1; _farmWellMin = int.MaxValue; _wellDropNoHaulFrames = 0;
+        _wellStore = null; _wellWaterPrev = -1; _farmWellMin = int.MaxValue; _wellDropNoHaulFrames = 0; _wellDropFrames = 0;
+        // ⭐ `D834` §C 守恒面
+        _consPrevWell = -1; _consPrevFarm = 0; _consPrevBag = 0; _consPrevValid = false; _consNegFrames = 0; _consMinDelta = 0;
         // ⭐ `F-1` 收尾批新增面
         _dispatchTypeN.Clear(); _farmConcN.Clear();
         _farmWorkFrames = _farmIdleFrames = _farmThirstFrames = _farmOkFrames = 0;
@@ -1064,7 +1135,8 @@ public static class Valley_HH319_F1LongRun
                  + $" ⭐农场工人Working={farmWorking} ⭐缺水产={thirst} ⭐同农场在途WaterHaul={conc}"
                  + $" ⭐⭐井仓水量={wellNow}(Δ{wellDelta})"
                  + $" ⭐本帧在册WaterHaul={haulInMap} 载水背包合计={bagWaterSum}"
-                 + $" ⭐井仓下降帧={_wellDropFrames}(其中无承载={_wellDropNoHaulFrames})");
+                 + $" ⭐井仓下降帧={_wellDropFrames}(其中无承载={_wellDropNoHaulFrames})"
+                 + $" ⭐⭐守恒Δ负值帧={_consNegFrames}(最负={_consMinDelta})");
     }
 
     /// <summary>⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false**。
@@ -1303,11 +1375,13 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
         // ⭐⭐ `D832` 判据 4（口径钉死）：井仓水量**不得被写死国库的收取动作取走**；合法 `WaterHaul` 装载导致减少 ＝ 正常。
         //   鉴别力＝「井仓 Δ<0 ∧ 在册 `WaterHaul`＝0 ∧ 载水背包＝0」的秒数 ⇒ **应恒为 0**（>0 ⇒ 疑旁路取走 ⇒ 报红）。
-        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ 判据 4（在役链路口径 · `D833` 仪表修正后）：井仓水量最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
-                      + $"（基准＝位后 `AddWaterToKingdomWells` 后取 ⇒ 可用）｜井仓 `Δ<0` 总帧={_wellDropFrames}（分母）"
-                      + $"｜其中「无在册 `WaterHaul` ∧ 无载水背包」={_wellDropNoHaulFrames}"
-                      + $" ⇒ ⚠️ **本列只作现象记录**：`Δ` ＝ **「产 − 搬」净额**（井仓自产）⇒ `Δ<0 ≠ 被取走`"
-                      + $" ⇒ ⛔ **不得据此判绿/判红**（`D833` §三：代理口径错）；⛔ **判据 4 待「源头记账」或「本帧产水量」并记后判**");
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4（`D834` `D834`-C 正解 · 逐帧三项守恒）**：式 ＝ `Δ井仓 + Δ农场仓 + Δ(Σ背包载水)`"
+                      + $" ⇒ **守恒 Δ<0 的帧数={_consNegFrames}**（**期望 0** · 最负={_consMinDelta}）"
+                      + $" ⇒ ⭐ **判定＝{(_consNegFrames == 0 ? "**判绿**（无任何一帧出现「水凭空减少」⇒ 井仓水未被写死国库的收取动作取走）" : "**判红**（存在水凭空减少的帧 ⇒ 疑被旁路取走）")}**"
+                      + $" ｜⚠️ 口径：**不依赖产水速率、不用水位净差**（井仓自产 ⇒ `Δ` 是净额，`Δ<0` 本身不构成依据）");
+        sb.AppendLine($"{U16Tag}·summary] （诊断·非判据）井仓水量最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
+                      + $" ｜井仓 `Δ<0` 总帧={_wellDropFrames}（其中无承载={_wellDropNoHaulFrames}）"
+                      + $" ⇒ ⚠️ 仅现象记录（净额含自产 ⇒ ⛔ 不得据此判绿/判红）");
         // ⭐⭐ `F-1` 收尾批（`D820` §三）判据 2：**同农场在途 WaterHaul 并发数**分布（`D-1` 修后应 `=1` 为主 · ⛔ 基线无此列）
         {
             var l2 = new List<KeyValuePair<int, int>>(_farmConcN);
