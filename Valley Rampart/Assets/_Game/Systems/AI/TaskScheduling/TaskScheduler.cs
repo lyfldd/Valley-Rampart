@@ -379,7 +379,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         var b = st.GetComponentInParent<Building>();
         if (b == null)
         {
-            st.Harvest();   // ⛔ 无父建筑（异常态）⇒ 退回旧口径（保底不丢）
+            // ⭐ `M1-G-1c` 件G-2（`D826` §五）：⛔ **不落国库**（`Harvest()` 是"写死玩家国库"的旧旁路，与 `#40` 同族）
+            //   ⇒ 只告警并返回（该仓无父 `Building` ⇒ 广告面不可达 ⇒ 无事可做）。
+            Debug.LogWarning($"[TaskScheduler] RequestHaulNow：储物「{st.name}」无父 `Building` ⇒ 无法立案搬运（⛔ 不落国库）");
             return;
         }
         b.RequestForceHaulOnce();

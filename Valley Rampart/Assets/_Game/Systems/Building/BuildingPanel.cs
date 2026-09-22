@@ -186,7 +186,9 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
                 _harvestButton.text = transporting
                     ? $"搬运中 {storage.UsedSpace}/{storage.capacity}"
                     : $"派搬运 {storage.UsedSpace}/{storage.capacity}";   // ⭐ `M1-G-1b` 件5：文案「收取」⇒「派搬运」（手点＝调用搬运任务 · `09` §9.8 `:390`）
-                _harvestButton.SetEnabled(storage.IsReadyToHarvest());
+                // ⭐ `M1-G-1c` 件G-1（`D826` §五）：启用判据改 **`TotalCount > 0`**（⛔ 不再用 `IsReadyToHarvest`
+                //   —— 它是「**可入国库**」的旧口径，与「派搬运」新落点不符）。
+                _harvestButton.SetEnabled(storage.TotalCount > 0);
             }
         }
 
@@ -406,7 +408,10 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
         var storage = _target.GetComponent<StorageComponent>();
         // ⭐ `U-15`（`D809`/`D810`）：启用（:187）与守卫（本行）同用 `IsReadyToHarvest` ⇒ 其语义已改为
         //   「有**可入国库**的内容」⇒ **纯水井仓自动变灰**（正确处理 —— 收了会转箱空转）。
-        if (storage == null || !storage.IsReadyToHarvest()) return;
+        // ⭐ `M1-G-1c` 件G-1（`D826` §五）：守卫同样改 `TotalCount > 0`。
+        //   ⚠️ 旧注「纯水井仓自动变灰（正确处理）」**已作废** —— 水井仓现在**应该**可点（派一次搬运把水送去能收水的仓）；
+        //   ⭐「**无任何可用仓**」的失败由**任务层**承担（本批已有 `Abandon` 出口 ＋ 日志 ⇒ ⛔ UI 不加"可用仓"前置）。
+        if (storage == null || storage.TotalCount <= 0) return;
         // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**玩家手点 ＝ 调用搬运任务的一种形式**（`09` §9.8 `:390`）
         //   ⇒ 按钮由「瞬间入国库」改为**派一次搬运**（`TaskScheduler` 立案 ＋ 立即调度；工人到场即搬）。
         //   ⛔ 不再直调 `Harvest()`（那是写死玩家国库的旁路，与 `#40` 同族）。

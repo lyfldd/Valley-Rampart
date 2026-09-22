@@ -1470,8 +1470,20 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     public bool IsValid => this != null
         && (state == BuildingState.Active || _awaitingMaterials || _demolishing);
 
+    // ⭐⭐ `M1-G-1c` 件G-4（`D826` §五）：本标记 ＋ set 口**移到 `TryAdvertiseTask` 的 `/// <summary>` 之前**
+    //   （⛔ 恢复 doc 归属 —— 原来夹在 doc 与方法之间，XML doc 会被挂到标记/方法上）。
+    /// <summary>⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**一次性强制搬运广告**标记 ＋ 内部 set 口。
+    /// 置位者：`TaskScheduler.RequestHaulNow(StorageComponent)`（＝ `Q1` 玩家手点「派搬运」的接线）。
+    /// ⚠️ 标记在 `TryAdvertiseTask` **入口读后即清**（见该处注释）。</summary>
+    private bool _forceHaulOnce;
+    /// <summary>置位「一次性强制搬运广告」（见上）。</summary>
+    public void RequestForceHaulOnce() { _forceHaulOnce = true; }
+
     /// <summary>
     /// 按建筑类型声明任务（QQQ.2 §10.3 / DR-16）：
+    ///   ⭐ **⓪ 一次性强制搬运**（`M1-G-1b` 件5 · 玩家手点「派搬运」· `09` §9.8 `:390`）——
+    ///      标记真时**先判 ④**（跳 ② 生产 / ③ 搬运的分支竞争）＋ ⭐ **跳 `transportThreshold`**
+    ///      （手点是显式意图，⛔ 不受"存量 ≥ capacity×0.8"节流；仍受 `capacity>0 && TotalCount>0` 前置）。
     ///   ⭐ `HH.319` `D-2` 乙案（`D820` §二 件2）后**次序**（⭐ 缺水优先补水）：
     ///   ② **搬水（前置）** 农场缺水（**农场仓** Water < waterThreshold）→ WaterHaul（源＝最近**同国**有水**水井** ·
     ///      destType=SpecificBuilding 终点＝本农场 · `M1-F` 件4 真搬运 · `advertiser = this` ＝ `D-1` 甲案）
@@ -1482,12 +1494,6 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// 【HH.294 片 6-2·6-D】原「①一次性资源点被确认采集 → Gather」分支**随实体退役已删**
     ///   —— 采集任务改由 `WorldGatherSource` 广告（数据寻址·唯一天然资源采集源）。
     /// </summary>
-    // ⭐⭐ `M1-G-1b` 件5（`D824` §一-1 案 (c)）：**一次性强制搬运广告**标记 ＋ 内部 set 口。
-    private bool _forceHaulOnce;
-    /// <summary>置位「一次性强制搬运广告」—— 由 `TaskScheduler.RequestHaulNow(StorageComponent)` 调用
-    /// （＝ `Q1` 玩家手点「派搬运」的接线）。⚠️ 标记在 `TryAdvertiseTask` **入口读后即清**（见该处注释）。</summary>
-    public void RequestForceHaulOnce() { _forceHaulOnce = true; }
-
     public bool TryAdvertiseTask(out KingdomTask task)
     {
         task = null;

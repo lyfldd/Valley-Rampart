@@ -85,9 +85,10 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     public void SetOccupation(Occupation occ)
     {
         // ⭐ `M1-G-1b` 件1（`#42`）：**转职补一条写入**（单点发布 ⇒ 覆盖全库 9 处调用面）。
+        // ⭐ M1-G-1c 件G-3：**写入无条件**（⛔ 保留原副作用 ⇒ 与原行为逐位一致）＋仅**事件幂等**
         var from = EffectiveOccupation;
-        if (from == occ) return;                 // 幂等：⛔ 不变不发（防事件风暴）
         _runtimeOccupation = (int)occ;
+        if (from == occ) return;                 // 仅事件幂等：⛔ 不变不发（防事件风暴）
         EventBus.Publish(new UnitOccupationChangedEvent(this, from, occ));
     }
 
