@@ -94,6 +94,161 @@ public static class Valley_HH319_F1LongRun
         new GameObject("HH319_LongRunHost").AddComponent<RunHost>().Host(RunCoroutine(15f, "15x"));
     }
 
+    // ================================================================================
+    //  ⭐⭐ `D833` 件B（**唯一闸门项**）：`O-18`（积压 6 批）＋ `Q1`（判据 9）＋ `A1`（`G-1` 鉴别力）
+    //     ＋ `A2`（`O-18` 家族：拆除中点击）—— 四者**同一接线**，故合为**一档**（⛔ 独立档·不污染判据 1/2）。
+    //
+    //  ⭐ **机制实读（接线链）**：`BuildingPanel.OnHarvestClicked`（面板「派搬运」按钮）
+    //     ⇒ 启用/守卫判据 ＝ `storage.TotalCount > 0`（`G-1`）
+    //     ⇒ `TaskScheduler.RequestHaulNow(StorageComponent st)`
+    //        ＝ `b.RequestForceHaulOnce()`（置 `Building._forceHaulOnce`）＋ `RequestHaulNow((ITaskSource)b)` ⇒ `Tick()`。
+    //     ⚠️ `Building.TryAdvertiseTask` **入口读后即清**（`Building.cs:1503-1504` · ⛔ 在任何 `return` 之前）
+    //        ⇒ ⭐ **「标记的消费」与「是否派到工人」在代码上无耦合** ⇒ 这正是 `O-18` 的疑点所在。
+    //
+    //  ⭐⭐ **鉴别力声明（被测实现反向/缺失时本列应变成什么）**：
+    //    · `O-18`：若**无空闲工人**时「标记 True→False（被消费）」且「在册 `Transport` 数**不增**」
+    //      ⇒ ⭐ **O-18 成立 ＝ 标记被静默消费**（玩家手点只在**那一 tick** 有效；工人持续忙时形同无效）。
+    //      ⚠️ 反之：标记**未被清（残留）** ⇒ 标记留待下 tick ⇒ O-18 **不成立**（点一次可延后生效）。
+    //    · `Q1`：玩家手点派出的任务类型**必须是 `Transport`**（`Building.cs:1534`）。
+    //      ⚠️ 若为 `Production`／`WaterHaul` ⇒ ⛔ 接线走错分支（`D-2` 乙案前置抢走 / 未跳阈值）。
+    //    · `A1`（`G-1`）：面板**启用判据 ＝ `TotalCount > 0`** ⇒ 纯水井仓**可点**；
+    //      ⚠️ 而 `IsReadyToHarvest()`（旧口径「可入国库」）应为 `False` ⇒ ⭐ **两列必须读出差异**
+    //      （若两列同值 ⇒ `G-1` 未生效 / 本档没测到真判据）。
+    //    · `A2`：`_demolishing` 时点击 ⇒ `TryAdvertiseTask` 走**拆除分支**（广告 `Build`）⇒
+    //      标记**同样被清**（仍在入口）而**无 `Transport` 任务** ⇒ 读「标记消费 ＋ 类型 ≠ Transport」。
+    // ================================================================================
+    [MenuItem("Valley/验证/HH319 O18 面板派搬运(无空闲工人对照)")]
+    public static void RunO18()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[HH319长局] 须先进入 Play 后调用本菜单。"); return; }
+        new GameObject("HH319_O18Host").AddComponent<RunHost>().Host(RunO18Co());
+    }
+
+    /// <summary>反射只读 `Building._forceHaulOnce`（一期强制搬运标记 · ⛔ 只读不写）。</summary>
+    private static bool ForceHaulOf(Building b)
+    {
+        if (b == null) return false;
+        var f = typeof(Building).GetField("_forceHaulOnce", BindingFlags.NonPublic | BindingFlags.Instance);
+        return f != null && (bool)f.GetValue(b);
+    }
+
+    /// <summary>在册 `Transport` 任务数（判据 9 `Q1` 的正列）。</summary>
+    private static int CountTransport()
+    {
+        int n = 0; var tm = TaskMap();
+        if (tm != null) foreach (var kv in tm) { var t = kv.Value; if (t != null && t.type == KingdomTaskType.Transport) n++; }
+        return n;
+    }
+
+    /// <summary>玩家国**空闲**工人数（＝ 不在 `_npcTaskMap` 者 · `O-18` 场景构造的判据）。</summary>
+    private static int IdleWorkerCount()
+    {
+        int n = 0;
+        foreach (var uc in PlayerWorkers()) if (uc != null && !InMap(uc.npcId)) n++;
+        return n;
+    }
+
+    /// <summary>在册任务里 `source == 指定建筑` 的 `npc/type` 清单（判据 9 `Q1` 读类型用）。</summary>
+    private static string TaskTypesOf(Building b)
+    {
+        var sb = new StringBuilder();
+        var tm = TaskMap();
+        if (tm == null || b == null) return "（无）";
+        foreach (var kv in tm) { var t = kv.Value; if (t == null || !ReferenceEquals(t.source, b)) continue; sb.Append($"npc{kv.Key}:{t.type} "); }
+        return sb.Length == 0 ? "（无）" : sb.ToString().Trim();
+    }
+
+    private static IEnumerator RunO18Co()
+    {
+        const string tag = "O18";
+        // ⭐⭐ `D833` 修：**必须走正门进局**（`TestHarnessApi.EnterTestRun`）—— ⚠️ 首版遗漏 ⇒ 世界永不就绪
+        //   （实测：console 停在 bootstrap 期、探针在就绪循环里空转 ⇒ ⛔ "没进世界"）。
+        var cfg = new NewGameConfig
+        {
+            worldSeed = SEED, mapSeed = SEED, raceId = 0, difficulty = 2,
+            worldSize = WorldSize.Small, selectedSlotId = "smoke_w319O18", kingdomName = "河谷王国"
+        };
+        yield return TestHarnessApi.EnterTestRun(cfg, 15f);
+        float t0 = Time.realtimeSinceStartup;
+        while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
+               || KingdomRegistry.Instance == null || KingdomRegistry.Instance.Count < 2)
+        {
+            yield return null;
+            if (Time.realtimeSinceStartup - t0 > 120f) { Debug.LogError("[HH319O18] 等世界就绪超时。"); yield break; }
+        }
+        yield return new WaitForSeconds(0.5f);
+        var anchor = WorldManager.Instance.GetKingdomAnchorWorld();
+        var well = Place("Buildings/Well", anchor + new Vector2(-6f, 0f), 0);
+        var farm = Place("Buildings/farm", anchor + new Vector2(6f, 0f), 0);
+        SpawnWorker(anchor + new Vector2(-1f, 1.6f), 0);
+        SpawnWorker(anchor + new Vector2(1f, -1.6f), 0);
+        if (well == null || farm == null) { Debug.LogError("[HH319O18] 布置失败 ⇒ 中止。"); yield break; }
+        var ws = well.GetComponent<StorageComponent>();
+        var fs = farm.GetComponent<StorageComponent>();
+        TestFixtureApi.AddWaterToKingdomWells(0, 50);
+        fs.TakeOut(ResourceType.Water, fs.GetAmount(ResourceType.Water));
+        yield return new WaitForSeconds(3f);                       // 水井免工自产（同 U15 探针口径）
+        if (TaskScheduler.Instance == null) { Debug.LogError("[HH319O18] TaskScheduler 缺失 ⇒ 中止。"); yield break; }
+
+        // ---- ⭐ 件B-5／`A1`：`G-1` 鉴别力**两列**（面板启用判据 vs `IsReadyToHarvest`）----
+        int tc = ws.TotalCount;
+        bool ready = ws.IsReadyToHarvest();
+        bool btnCan = tc > 0;                                      // `G-1`：面板启用判据（`BuildingPanel:191`）
+        Debug.Log($"[HH319O18] ⭐A1/`G-1` 鉴别力｜靶例仓（纯水井仓）：TotalCount={tc} ⇒ **面板可点={btnCan}**（G-1 判据 TotalCount>0）"
+                  + $" ｜ IsReadyToHarvest()={ready}（旧口径「可入国库」· 水不可入国库 ⇒ 应 False）"
+                  + $" ⇒ ⭐**两列差异={btnCan != ready}**（True＝G-1 生效·本档测到真判据）");
+
+        // ---- ⭐ 件B-2／判据 9：**对照组（有空闲工人）** —— 证明本档确实点到 `Q1` 接线 ----
+        bool f0 = ForceHaulOf(well); int tr0 = CountTransport(); int id0 = IdleWorkerCount();
+        TaskScheduler.Instance.RequestHaulNow(ws);                 // ＝ 面板「派搬运」按钮的接线
+        yield return null;
+        bool f1 = ForceHaulOf(well); int tr1 = CountTransport();
+        Debug.Log($"[HH319O18] ⭐对照组（空闲工人={id0}）：点击前 标记={f0} 在册Transport={tr0}"
+                  + $" ⇒ 点击后 标记={f1}（期望 False＝已被消费）在册Transport={tr1}（期望 +1）"
+                  + $" ⇒ **派到任务={tr1 > tr0}** ｜ ⭐`Q1` 派出类型＝{TaskTypesOf(well)}（期望含 Transport）");
+
+        // ---- ⭐⭐ 件B-1：`O-18`「无空闲工人」组 —— 先占满全部玩家国工人 ----
+        int occupied = 0;
+        foreach (var uc in PlayerWorkers())
+        {
+            if (uc == null || InMap(uc.npcId)) continue;
+            var br = uc.GetComponent<NPCBrain>();
+            if (br == null) continue;
+            TaskScheduler.Instance.DispatchExternal(br, new KingdomTask(KingdomTaskType.WaterHaul, well));
+            occupied++;
+        }
+        for (int i = 0; i < 90; i++) { if (IdleWorkerCount() == 0) break; yield return null; }
+        int idleNow = IdleWorkerCount();
+        bool f2 = ForceHaulOf(well); int tr2 = CountTransport();
+        TaskScheduler.Instance.RequestHaulNow(ws);                 // 同一点击（无空闲工人场景）
+        yield return null;
+        bool f3 = ForceHaulOf(well); int tr3 = CountTransport();
+        bool consumed = f2 && !f3;                                 // 标记被消费（置位→清除）
+        bool notDispatched = tr3 <= tr2;                           // 未新增 Transport 任务
+        Debug.Log($"[HH319O18] ⭐⭐⭐**无空闲工人组**（占用尝试={occupied} · 空闲工人={idleNow}）：点击前 标记={f2} 在册Transport={tr2}"
+                  + $" ⇒ 点击后 标记={f3} 在册Transport={tr3}"
+                  + $" ⇒ ⭐**标记被静默消费={consumed}**（True＝置位后无新任务也被清）｜**任务未派={notDispatched}**"
+                  + $" ⇒ ⭐⭐`O-18` 判定＝**{(consumed && notDispatched ? "成立（标记被静默消费 · 玩家手点在无空闲工人时形同无效）" : "不成立")}**");
+
+        // ---- ⭐ 件B-6／`A2`：**拆除中点击**（`_demolishing` ⇒ 广告分支改为 `Build`）----
+        if (well.CanDemolish)
+        {
+            well.Demolish();
+            yield return null;
+            bool f4 = ForceHaulOf(well); int tr4 = CountTransport();
+            TaskScheduler.Instance.RequestHaulNow(ws);
+            yield return null;
+            bool f5 = ForceHaulOf(well); int tr5 = CountTransport();
+            Debug.Log($"[HH319O18] ⭐A2 拆除中点击（_demolishing=True · CanDemolish=True）：点击前 标记={f4} 在册Transport={tr4}"
+                      + $" ⇒ 点击后 标记={f5}（期望 False＝同样被入口清）在册Transport={tr5}（期望**不增** ⇒ 广告走拆除分支）"
+                      + $" ⇒ ⭐标记被消费={f4 && !f5}｜该建筑在册类型＝{TaskTypesOf(well)}（期望 Build 拆除任务·⛔ 非 Transport）");
+        }
+        else Debug.LogWarning("[HH319O18] ⚠️A2 跳过：靶例水井 `CanDemolish=False`（⛔ 不得改判据）");
+
+        Debug.Log($"[HH319O18] ★ 收尾：A1 两列差异 / 对照组派到任务 / O-18 标记静默消费 / A2 拆除中点击 —— 四项读数已落 console（L-70 自证标签）。");
+        yield break;
+    }
+
     /// <summary>⭐ `U-16` 案① 批件4（`D815` 判据 4）：**豁免列**档 —— 在册任务期注入威胁，
     /// 验"工人能逃／挂起"（4a）与"`Cautious` 未越阈时继续干活"（4b）。
     /// ⛔ 独立档 ⇒ ⛔ 不污染判据 1/2 的靶例跑（`15x`／`1x`）。</summary>
@@ -293,9 +448,12 @@ public static class Valley_HH319_F1LongRun
         }
         var wellStore = well.GetComponent<StorageComponent>();
         var farmStore = farm.GetComponent<StorageComponent>();
-        _wellStore = wellStore; _wellWaterPrev = -1; _farmWellMin = wellStore.GetAmount(ResourceType.Water); _wellDropNoHaulFrames = 0;   // ⭐ `D832` 判据 4
+        _wellStore = wellStore;   // ⭐ `D832` 判据 4（⚠️ `D833` 仪表修正②：`_farmWellMin`／`_wellWaterPrev` **移到位后**采样
+                                  //   —— 原先取在 `AddWaterToKingdomWells` **之前** ⇒ 「最低」恒 0 不可用）
         _targetFarm = farm;   // ⭐ `O-15` 列 A/B：**靶例农场**锚（⛔ 全库其它农场不计入两列）
         TestFixtureApi.AddWaterToKingdomWells(0, 50);                      // 井仓给 50 水（< cap×0.8 ⇒ ⛔ 不触发井的 Transport 广告）
+        _wellWaterPrev = -1; _farmWellMin = wellStore.GetAmount(ResourceType.Water);   // ⭐ `D833` 仪表修正②：**位后**取基准（＝50 ⇒ 「最低」可用）
+        _wellDropFrames = 0; _wellDropNoHaulFrames = 0;
         farmStore.TakeOut(ResourceType.Water, farmStore.GetAmount(ResourceType.Water));   // 农场缺水 ⇒ 广告 WaterHaul
         Debug.Log($"[HH319长局·{tag}] 布置：well@{well.transform.position} farm@{farm.transform.position} "
                   + $"井仓={wellStore.GetAmount(ResourceType.Water)}/{wellStore.capacity} 农场仓水={farmStore.GetAmount(ResourceType.Water)} "
@@ -522,6 +680,7 @@ public static class Valley_HH319_F1LongRun
     private static int _wellWaterPrev = -1;                  // 上一秒井仓水量（算 Δ）
     private static int _farmWellMin = int.MaxValue;          // 井仓水量最低值（判据 4 下限）
     private static int _wellDropNoHaulFrames;                // ⭐ 判别力：井仓**下降**却「无在册 `WaterHaul` ∧ 载水背包=0」的秒数（>0 ⇒ 疑旁路取走）
+    private static int _wellDropFrames;                      // ⭐ `D833` 仪表修正①：`Δ<0` 总帧（分母 · ⛔ 不含 `Δ=0`）
     private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
@@ -891,13 +1050,21 @@ public static class Valley_HH319_F1LongRun
                 var ivW = uW != null ? uW.GetComponent<WorkerInventory>() : null;
                 if (ivW != null) bagWaterSum += ivW.carriedAmount;
             }
-        if (wellDelta < 0 && haulInMap == 0 && bagWaterSum == 0) _wellDropNoHaulFrames++;
+        // ⭐ `D833` §C 仪表修正①：**分开计** —— `Δ<0` 总帧 ／ 其中「无承载」帧（⛔ 不再把 `Δ=0` 计入"下降"）。
+        // ⚠️ `Δ` ＝ **「产 − 搬」净额**（井仓会自产）⇒ `Δ<0 ≠ 被取走` ⇒ 本列**只作现象记录**，
+        //   ⛔ **不得据此判「被旁路取走」**（`D833` §三 裁定：代理口径错）。最终判据 4 须待
+        //   「源头记账（装载取水处）」或「本帧产水量」并记 ⇒ `Δ = 产 − 搬` 可**验算**后方可判绿。
+        if (wellDelta < 0)
+        {
+            _wellDropFrames++;
+            if (haulInMap == 0 && bagWaterSum == 0) _wellDropNoHaulFrames++;
+        }
         U16Write($"{U16Tag}·farm] {Stamp()} +{rt:F2}s 农场仓水={now} 峰值={_farmWaterPeak2}"
                  + $" 首次见水时刻={(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
                  + $" ⭐农场工人Working={farmWorking} ⭐缺水产={thirst} ⭐同农场在途WaterHaul={conc}"
-                 + $" ⭐⭐井仓水量={wellNow}(Δ{wellDelta}) 最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
+                 + $" ⭐⭐井仓水量={wellNow}(Δ{wellDelta})"
                  + $" ⭐本帧在册WaterHaul={haulInMap} 载水背包合计={bagWaterSum}"
-                 + $" ⭐无Haul却井仓下降帧={_wellDropNoHaulFrames}");
+                 + $" ⭐井仓下降帧={_wellDropFrames}(其中无承载={_wellDropNoHaulFrames})");
     }
 
     /// <summary>⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false**。
@@ -1136,9 +1303,11 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
         // ⭐⭐ `D832` 判据 4（口径钉死）：井仓水量**不得被写死国库的收取动作取走**；合法 `WaterHaul` 装载导致减少 ＝ 正常。
         //   鉴别力＝「井仓 Δ<0 ∧ 在册 `WaterHaul`＝0 ∧ 载水背包＝0」的秒数 ⇒ **应恒为 0**（>0 ⇒ 疑旁路取走 ⇒ 报红）。
-        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ 判据 4（`D832` · 在役链路口径）：井仓水量最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
-                      + $"（布置时基准见 `·place]`）｜⭐ **无 `WaterHaul` 却井仓下降的帧数={_wellDropNoHaulFrames}**（期望 **0**）"
-                      + $" ⇒ {(_wellDropNoHaulFrames == 0 ? "无旁路取水迹象 ✓" : "⚠️ 疑被旁路取走 ⇒ 判否")}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ 判据 4（在役链路口径 · `D833` 仪表修正后）：井仓水量最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
+                      + $"（基准＝位后 `AddWaterToKingdomWells` 后取 ⇒ 可用）｜井仓 `Δ<0` 总帧={_wellDropFrames}（分母）"
+                      + $"｜其中「无在册 `WaterHaul` ∧ 无载水背包」={_wellDropNoHaulFrames}"
+                      + $" ⇒ ⚠️ **本列只作现象记录**：`Δ` ＝ **「产 − 搬」净额**（井仓自产）⇒ `Δ<0 ≠ 被取走`"
+                      + $" ⇒ ⛔ **不得据此判绿/判红**（`D833` §三：代理口径错）；⛔ **判据 4 待「源头记账」或「本帧产水量」并记后判**");
         // ⭐⭐ `F-1` 收尾批（`D820` §三）判据 2：**同农场在途 WaterHaul 并发数**分布（`D-1` 修后应 `=1` 为主 · ⛔ 基线无此列）
         {
             var l2 = new List<KeyValuePair<int, int>>(_farmConcN);
