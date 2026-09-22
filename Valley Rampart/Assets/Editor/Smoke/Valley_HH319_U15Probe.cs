@@ -92,7 +92,7 @@ public static class Valley_HH319_U15Probe
         // ── 判据 1 · 止血后（生产落点 `HarvestCarry`） + 判据 4（纯水 ⇒ 灰）──
         int w0 = st.GetAmount(ResourceType.Water);
         Debug.Log($"[HH319U15] §1-A 止血后（前置）：井仓 Water={w0} · IsReadyToHarvest={st.IsReadyToHarvest()}（期望 False ⇒ 面板灰）· {ChestDump()}");
-        int carried = st.HarvestCarry();                 // ⭐ 生产落点动作（ScheduleCenterStub 链的终点）
+        int carried = st.Harvest();                 // ⭐ `M1-G-1`：原链 B 落点（直通国库口）已删 ⇒ 改走 `Harvest()`
         yield return null;
         Debug.Log($"[HH319U15] §1-A 止血后（结果）：HarvestCarry 返回={carried}（期望 0 ⇒ 完全不取）· 井仓 Water={st.GetAmount(ResourceType.Water)}（期望 {w0} · 留仓）· {ChestDump()}（期望 Count=0）");
 

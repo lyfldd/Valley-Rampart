@@ -77,7 +77,7 @@ public static class Valley_HH319_WaterAccount
         // ⭐ 前后**同帧**读（⛔ 不插 yield ⇒ 无产水增量干扰）；只算**玩家国**（隔离 AI 国）
         int ownBefore = st.GetAmount(ResourceType.Water);
         int allBefore = PlayerWater();
-        int carried = ownBefore > 0 ? st.HarvestCarry() : 0;   // ⭐ 复现 ScheduleCenterStub 搬运链的落点动作
+        int carried = ownBefore > 0 ? st.Harvest() : 0;   // ⭐ `M1-G-1`：原链 B 落点（直通国库口）已删 ⇒ 改走 `Harvest()`
         int ownAfter = st.GetAmount(ResourceType.Water);
         int allAfter = PlayerWater();
 

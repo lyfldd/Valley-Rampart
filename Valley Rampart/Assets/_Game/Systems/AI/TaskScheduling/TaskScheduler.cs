@@ -65,7 +65,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private ResourceBiasConfig _biasConfig;   // 2_23 资源 P0 批B/R-B1（D529）：资源偏向活权重（SO 可配）
 
     // ===== 放弃原因（⭐ `U-16` 件2 · `D815` 裁定 §2.4／§四）=====
-    /// <summary>任务放弃原因 —— **日志契约取值域（7 值）**，`private`（`Abandon` 亦 private ⇒ 零跨文件面；
+    /// <summary>任务放弃原因 —— **日志契约取值域（⭐ `M1-G-1` 起 8 值：新增 `DestFull`）**，`private`（`Abandon` 亦 private ⇒ 零跨文件面；
     /// 判据只从日志读，⛔ 不为此把枚举公开）。
     /// ⛔ `Inert`（`Complete` 之后那 6 处惰性 `stale.Add`）**不入本枚举** —— 它们本该**永不到达** `Abandon`。
     /// ⭐ 分流依据：`甲′-a`（困死/路径失败）落 `Unreachable`；`甲′-b`（30 s 到不了）落 `Timeout`。</summary>
@@ -77,6 +77,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         SourceInvalid,   // 源失效（建筑死亡 / 源 IsValid=false）
         Timeout,         // 超时未到达（MovingToSource / MovingToDest）
         BrainLost,       // brain 引用丢失
+        DestFull,        // ⭐ `M1-G-1`（`D824` §一-3）：落点仓满/不收 ⇒ 卸不掉（**留背包**待自愈）
         Unknown          // 未分类（default 态 / 惰性 stale 兜底）
     }
 
@@ -601,7 +602,16 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             else if (task.type == KingdomTaskType.WaterHaul && task.args is HaulWaterArgs wa)
                                 DepositWaterToFarm(brain, task, wa); // ⭐ `M1-F` 件5 搬水卸货段：卸水入农场仓
                             else
-                                UnloadInventory(brain, task);        // 搬运：背包资源入仓库/国库
+                            {
+                                // ⭐ `M1-G-1` `#41`（`D824` §一-3）：卸货**失败**（无仓/仓满 ⇒ **留背包**）⇒
+                                //   ⛔ **不 Complete**（否则＝"货物滞留背包 ＋ 任务假成功"）⇒ `Abandon(DestFull)` 释放工人；
+                                //   ⭐ 旧货由下次装载前的「先卸空旧货」出口自愈（件 6）。
+                                if (!UnloadInventory(brain, task))
+                                {
+                                    stale.Add((id, AbandonReason.DestFull));
+                                    continue;
+                                }
+                            }
                             Complete(id, task, brain);
                             stale.Add((id, AbandonReason.Unknown));   // ⚠️ Inert（惰性）：同上
                         }
@@ -709,14 +719,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
 
             case KingdomTaskType.Transport:
                 // QQQ.4 T11：正常路径已完成（Working→LoadInventoryFromSource→MovingToDest→UnloadInventory）。
-                // 此处兜底：无背包组件（非工人）→ 保持旧行为直接入国库，资源不丢。
-                var st = comp != null ? comp.GetComponent<StorageComponent>() : null;
+                // ⭐ `M1-G-1` `#40`（`D824` §一-4／件3）：原「无背包组件（非工人）⇒ `st.HarvestCarry()` 直接入国库」
+                //   兜底**已删** —— 它正是 `09` §八「源仓**直通国库·跳过背包**」要清的旁路；⭐ 删后可达性论证见交付报告
+                //   （门控：`Tick` 只派 `Worker/Civilian/Porter` 且要求 `uc.npcId != 0` ⇒ **非工人拿不到 Transport 任务**）。
                 var carryInv = GetInventory(brain);
-                if (st != null && carryInv == null)
-                    st.HarvestCarry();
                 // DZ-072a（HH.107）：满背包工人取货失败兜底卸货——旧路径背包满→取货失败→Complete 不卸→
-                // 重派再失败=死循环；就地 UnloadInventory（就近同国仓/台账兜底）根除循环，资源不丢。
-                else if (carryInv != null && !carryInv.IsEmpty)
+                // 重派再失败=死循环；就地 UnloadInventory（就近同国仓）根除循环，资源不丢。
+                if (carryInv != null && !carryInv.IsEmpty)
                     UnloadInventory(brain, task);
                 break;
 
@@ -843,8 +852,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         if (inv == null) return false;
         // ⭐ HH.316 件2（箱源混装防护 · 照 M1-C `LoadSiteMaterials` 先例）：箱内容物**任意资源**，工人可能
         //   带着上一趟其它资源（背包单资源不可混装 ⇒ `TryStore` 恒拒 ⇒ 装载恒失败 ⇒ Complete ⇒ 重派）。
-        //   ⇒ 箱源先就地卸空（走 `UnloadInventory` · 就近同国仓/归属国分流兜底 · 资源不丢），再取货。
-        if (task.source is ChestEntity && !inv.IsEmpty) UnloadInventory(brain, task);
+        //   ⇒ 先就地卸空（走 `UnloadInventory` · 就近同国仓；⛔ 本批**已删入国库兜底** ⇒ 无仓/仓满时**留背包**），再取货。
+        // ⭐ `M1-G-1` 件6（`D824` §一-2 出口）：**去掉 `is ChestEntity` 限定** ⇒ **对全部源**先卸空旧货
+        //   ⇒ 「留背包」的旧货**有仓可收即自愈**（下一趟装载前自动清空 ⇒ 不再整趟空转）。
+        if (!inv.IsEmpty) UnloadInventory(brain, task);
         var comp = task.source as Component;
         if (comp == null) return false;
         var st = comp.GetComponent<StorageComponent>();   // ⭐ 箱＝仓：箱容器挂本体 ⇒ 此处直接命中（件1 附益）
@@ -867,13 +878,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         return true;
     }
 
-    /// <summary>搬运第二段：背包 → 最近同类型仓库（StorageComponent.Add；满则入国库兜底），资源不丢。</summary>
-    private void UnloadInventory(NPCBrain brain, KingdomTask task)
+    /// <summary>搬运第二段：背包 → 最近同类型仓库（⭐ `M1-G-1` `#41`：**先问后拿** ⇒ 装满为止，
+    /// ⛔ **已删「满则入国库兜底」**（`D824` §一-2）；溢出部分**留在背包**，资源不丢）。</summary>
+    private bool UnloadInventory(NPCBrain brain, KingdomTask task)
     {
-        if (brain == null) return;
+        if (brain == null) return false;
         var inv = GetInventory(brain);
-        if (inv == null || inv.IsEmpty) return;
-        int amount = inv.UnloadAll();
+        if (inv == null || inv.IsEmpty) return true;   // 空背包＝无事可做（⛔ 不算失败）
 
         // 步骤11：切注册表（WarehouseRegistry.FindNearestAvailable 替 FindObjectsOfType 全场景扫描，D51 就近卸货）
         // 2_17 修复卡γ：第 3 参带工人归属国——玩家工人卸玩家库(0)、AI 工人卸 AI 库，跨王国绝不互卸。
@@ -886,27 +897,34 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // DZ-072a（HH.107 件2）：副产两资源按归属国路由——玩家(0)卸国库 Vault（TreasureVault.Managed 扩面）；
         // AI(>0) 直走台账 AddGatherOverflow（AI 经济=台账制 2_17 §追记②；AI 主城 Vault 系 CastleCore 无守卫
         // 误挂的玩家国库结构=消费黑洞，AI 消费面读台账不读 Vault，卸进去即黑洞——照 AddWater 桶路由先例语义）。
-        if (wkingdom > 0 && (inv.carriedType == ResourceType.Crystal || inv.carriedType == ResourceType.FireOil))
+        var type = inv.carriedType;
+        // DZ-072a（HH.107 件2）：副产两资源按归属国路由 —— AI(>0) 直走台账（AI 经济＝台账制 2_17 §追记②；
+        // AI 主城 Vault 系 CastleCore 无守卫误挂的玩家国库结构＝消费黑洞）。
+        // ⭐ `M1-G-1`：本支亦改**先问后拿**（`inv.Take` 实取量入账）—— ⛔ 不再先清空。
+        if (wkingdom > 0 && (type == ResourceType.Crystal || type == ResourceType.FireOil))
         {
-            // ⚠️ 连带修复（`HH.316`）：原此处复调 `inv.UnloadAll()`（顶部已清空 ⇒ 恒返 0 ⇒ 该批**静默丢**）
-            //   —— 箱内容物含副产（任意资源）时 AI 工人搬走即丢 ⇒ 与 U-2「内容物到账」硬冲突 ⇒ 改用已取出的 `amount`。
-            AddGatherOverflow(uc, inv.carriedType, amount);
-            return;
+            int taken0 = inv.Take(type, inv.carriedAmount);
+            if (taken0 > 0) AddGatherOverflow(uc, type, taken0);
+            return taken0 > 0;
         }
-        StorageComponent best = WarehouseRegistry.FindNearestAvailable(inv.carriedType, brain.transform.position, wkingdom);
-        if (best != null)
+        // ⭐⭐ `M1-G-1` `#41`（`D824` §一-2）：**先问后拿** —— ① 问可入量 ② 只取可入量 ③ 入仓。
+        //   ⛔ 本批**已删**「满则入国库兜底」两处（旧 `:902-903` 溢出 / `:908` 无仓）；
+        //   ⇒ ⭐ **溢出部分从未离开背包**（`inv.Take` 只减量 ⇒ ⛔ 无"已出包未入仓"中间态）⇒ **不丢**（判据 1）。
+        //   ⇒ 无仓 / 仓满 ⇒ **留背包**（`return`）—— 由 `LoadInventoryFromSource` 的「先卸空旧货」出口自愈（件 6）。
+        StorageComponent best = WarehouseRegistry.FindNearestAvailable(type, brain.transform.position, wkingdom);
+        if (best == null) return false;                            // ⭐ 无仓 ⇒ 留背包（⛔ 不再入国库）
+        int can = best.CanAccept(type);
+        if (can <= 0) return false;                                // ⭐ 仓满 / 标签不收 ⇒ 留背包
+        int moved = inv.Take(type, Mathf.Min(can, inv.carriedAmount));   // ② 只取可入量
+        if (moved <= 0) return false;
+        int added = best.Add(type, moved);                         // ③ 入仓
+        if (added < moved)
         {
-            int added = best.Add(inv.carriedType, amount);
-            int overflow = amount - added;
-            // DZ-073（HH.107 件2）：溢出兜底改归属国分流——旧硬编码 RulerController=AI 溢出资玩家库；=0 玩家逐位零回归。
-            if (overflow > 0)
-                AddGatherOverflow(uc, inv.carriedType, overflow);
+            // ⚠️ 理论不可达（`CanAccept` 已拦）⇒ 极小概率竞态：余量**退回背包**（⛔ 不丢 · ⛔ 不入国库）
+            inv.TryStore(type, moved - added);
+            Debug.LogWarning($"[TaskScheduler] 卸货余量退回背包（`M1-G-1`）：{type}×{moved - added}");
         }
-        else
-        {
-            // DZ-073：无仓兜底同病同修（旧硬编码玩家国库→归属国分流）。
-            AddGatherOverflow(uc, inv.carriedType, amount);
-        }
+        return added > 0;
     }
 
     /// <summary>

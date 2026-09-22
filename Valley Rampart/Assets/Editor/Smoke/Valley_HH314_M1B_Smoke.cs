@@ -188,9 +188,9 @@ public static class HH314M1BSmoke
         if (st != null)
         {
             int before2 = st.TotalCount;
-            int carried = st.HarvestCarry();          // 真搬运口（09#40 待删路径·仍在役）
-            Log("§G HarvestCarry 真搬运口：TotalCount " + before2 + "→" + st.TotalCount
-                + "（搬走 " + carried + "，≤ 携带量 " + st.GetCarryAmount() + "）");
+            int carried = st.Harvest();          // ⭐ `M1-G-1`：原直通国库口已删 ⇒ 本探针改走 `Harvest()`（手动收取口径）
+            Log("§G 手动收取口（原直通国库口 · `M1-G-1` 已删）：TotalCount " + before2 + "→" + st.TotalCount
+                + "（搬走 " + carried + "，≤ 携带量 " + st.GetCarryAmount(st.PrimaryStoredType()) + "）");
         }
 
         // ================= §E 存读档复查 =================

@@ -324,12 +324,9 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
 
     private static ResourceCarryConfig _carryConfig;
 
-    /// <summary>
-    /// ⏭️ **过渡实现**（多资源仓下的单值查询）：取本仓**首个非空资源**（按资源表序＝确定性）的携带量。
-    /// ⚠️ 本方法与 <see cref="HarvestCarry"/> 同为 `09#40`「删 `HarvestCarry` 直通国库」的**待删对象**（归 `M1-G`）；
-    /// 本片（`M1-A`）**只改结构不动行为** ⇒ 保留签名以免牵动 `TaskScheduler:707`／`ScheduleCenterStub:130`。
-    /// </summary>
-    public int GetCarryAmount() => GetCarryAmount(PrimaryStoredType());
+    // ⭐⭐ `M1-G-1` `#40`（`D824` §一-4／件 3）：**原无参 `GetCarryAmount()` 已删** ——
+    //   其唯一调用面（`ScheduleCenterStub` 链 B）随 `U-15` 根除项一并删除 ⇒ 本无参版**零调用**。
+    //   ⚠️ 有参版 `GetCarryAmount(ResourceType)` 保留（生产在用）。
 
     /// <summary>按类型取携带量（`ResourceCarryConfig` SO 数据驱动）。</summary>
     public int GetCarryAmount(ResourceType type)
@@ -349,26 +346,15 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
         return ResourceType.Gold;
     }
 
-    /// <summary>
-    /// ⏭️ **过渡实现**（`M1-G` 删）：搬一次（≤携带量）入国库，返回实际搬走量；剩余留待下轮。
-    /// 多资源仓下取**首个非空资源**（资源表序 ⇒ 确定性）；行为与旧单资源仓逐个搬运等价。
-    /// ⭐ `U-15`（`D809`/`D810` 止血）：现多一层**可收性守卫** ——
-    ///   国库不接受 ⇒ 完全不取（⛔ 防「先取后丢 / 转箱空转」）；国库容量不足 ⇒ 按剩余可收量收窄
-    ///   ⇒ 不制造 `Deposit` overflow（防 `SpillToChest` 装箱 ⇒ 箱被 `U-2` 链搬回 ⇒ 成环）。
-    ///   ⚠️ `TakeOut` 必须在「确定能入国库」**之后**（`L-60`）；⛔ 不得靠 `Deposit` 的 overflow 兜底。
-    /// </summary>
-    public int HarvestCarry()
-    {
-        var type = PrimaryStoredType();
-        if (!CanRulerAccept(type)) return 0;                 // ⭐ ① 标签不收 ⇒ 完全不取
-        int can = TreasuryCanAccept(type);                   // ⭐ ② 容量上限
-        if (can <= 0) return 0;                              // ⚠️ 国库满 ⇒ 不取（防 `Mathf.Max(1,…)` 强取 1 ⇒ overflow 装箱）
-        int amount = Mathf.Min(GetAmount(type), Mathf.Max(1, Mathf.Min(GetCarryAmount(type), can)));
-        if (amount <= 0) return 0;
-        int taken = TakeOut(type, amount);                   // ⚠️ 在"确定能入国库"之后（`L-60`）
-        if (taken > 0) RulerController.Instance?.ModifyResource(type, true, taken);
-        return taken;
-    }
+    // ⭐⭐ `M1-G-1` `#40`（`09` §八「转移是分形的」· `D824` §一-4／件 3）：**原 `HarvestCarry()` 已删** ——
+    //   它是「源仓 **直通国库·跳过背包**」的旁路；两段式（`TaskScheduler.LoadInventoryFromSource`
+    //   源仓→背包 ＋ `UnloadInventory` 背包→仓）由同一任务驱动，**已在役** ⇒ 本项＝**删旁路**。
+    //   ⭐ 两道守卫语义的**迁移落点**（⛔ 不得无声消失）：
+    //     ① `CanRulerAccept`（**标签面**·国库收不收）⇒ 迁至**新落点判据** `WarehouseRegistry.FindNearestAvailable`
+    //        的 `Accepts(type)`（`UnloadInventory` 内）＋ `Harvest()`（玩家手动收取）自留；
+    //     ② `TreasuryCanAccept`（**容量面**）⇒ 迁至 `FindNearestAvailable` 的 `CanAccept(type) <= 0` 判据
+    //        ＋ `Harvest()` 自留 —— 即「**先问后拿**」（`L-60`）在同一处承载。
+    //   ⚠️ 且本批**同时删掉**「满则入国库兜底」（`UnloadInventory`）⇒ ⛔ 不再存在"绕过可收性写死国库"的支路。
 
     // ===== 存档（仓内容 ＋ 容量线 · 判据 6）=====
 

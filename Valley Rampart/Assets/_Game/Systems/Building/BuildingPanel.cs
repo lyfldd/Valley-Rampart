@@ -180,7 +180,9 @@ public class BuildingPanel : MonoBehaviour, IUIPanel
             _harvestButton.style.display = hasStorage ? DisplayStyle.Flex : DisplayStyle.None;
             if (hasStorage)
             {
-                bool transporting = FindObjectOfType<ScheduleCenterStub>()?.IsTransporting(storage) ?? false;
+                // ⭐ `M1-G-1` 件4（`D824` §一-4）：链 B 已删（`IsTransporting` 随之一并删）⇒ 改读**链 A 的在册面**
+                //   （`TaskScheduler.HasWorkerAssigned(源)` ＝ 该建筑有工人处于 `Working`）。
+                bool transporting = TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(_target);
                 _harvestButton.text = transporting
                     ? $"搬运中 {storage.UsedSpace}/{storage.capacity}"
                     : $"收取 {storage.UsedSpace}/{storage.capacity}";

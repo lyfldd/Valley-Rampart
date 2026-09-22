@@ -78,9 +78,12 @@ public class WorkerInventory : MonoBehaviour, IWarehouse
 
     public bool CanTake(ResourceType t, int amt) => !IsEmpty && carriedType == t && carriedAmount >= amt;
 
+    /// <summary>取出资源（⭐ `M1-G-1` `D824` §一-2：修为 `IWarehouse.Take` 契约的**尽力档**语义 ——
+    /// 「同类型 ⇒ 尽力取（≤ 存量）」，⛔ **无 `CanTake` 前置**（旧实现 `amt > 存量` 时整笔返 0 ⇒
+    /// 无法"取可入量"）。⚠️ 全库零调用（裁定已核）⇒ 改动零回归面。</summary>
     public int Take(ResourceType t, int amt)
     {
-        if (!CanTake(t, amt)) return 0;
+        if (amt <= 0 || IsEmpty || carriedType != t) return 0;
         int taken = Mathf.Min(amt, carriedAmount);
         carriedAmount -= taken;
         return taken;

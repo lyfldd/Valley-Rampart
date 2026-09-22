@@ -63,7 +63,9 @@ public class ScheduleCenterStub : MonoBehaviour
         // 3.5 §8.3 优先级派发：空闲工人优先接高优先级任务（S>A>B>C，同优先级 FIFO）。
         // 当前已落地搬运（B）；修复(S)/建造(A)/生产(A)/养殖/挑水/产金(C) 任务源在 P1 任务调度扩展中接入，
         // 届时统一走 DispatchByPriority 派发，本中心只按优先级排序 + 空闲工人优先高优先级。
-        DispatchTransport();
+        // ⭐⭐ `M1-G-1` 件4（`U-15` 根除项 · `D824` §一-4）：**原 `DispatchTransport()` 调用已删** ——
+        //   链 B（本中心自建"搬运刺激 ＋ `BehaviorExecutor:HarvestCarry` 直通国库"）随 `#40` 一并退役；
+        //   ⭐ 搬运统一由**链 A**（`Building` ④ `Transport` 广告 · **有阈值** ⇒ `TaskScheduler` 两段式）承担。
         DispatchCrew();
     }
 
@@ -81,81 +83,16 @@ public class ScheduleCenterStub : MonoBehaviour
                 || TimeManager.Instance.CurrentPhase == TimePhase.Dusk);
     }
 
-    /// <summary>
-    /// 搬运派发（3.3.5 + 3.5 P1-8 分批）。遍历产能建筑，存储达标且未满配 → 派空闲工人。
-    /// 分批：源建筑产出 &gt; 携带量时，按 ceil(stored/carry) 补派多个工人，每趟各搬一次携带量
-    /// （BehaviorExecutor 到达调 HarvestCarry 限量搬，剩余留待下轮）。优先级查 TaskPriorityConfig（B）。
-    /// </summary>
-    private void DispatchTransport()
-    {
-        // 清理已无效搬运记录（建筑销毁 / 无产出 / 已派工人全失效）
-        if (_transporting.Count > 0)
-        {
-            var stale = new List<StorageComponent>();
-            foreach (var kv in _transporting)
-            {
-                var s = kv.Key;
-                // QQQ.3 B8-8 / LC-N5：用 !IsAlive 而非 == null（池化下死单位引用非 null，== null 永不释放 ⇒ 搬运永久卡死）
-                kv.Value.RemoveWhere(w => w == null || !w.IsAlive);
-                if (s == null || !s.IsReadyToHarvest() || kv.Value.Count == 0)
-                    stale.Add(s);
-            }
-            for (int i = 0; i < stale.Count; i++) _transporting.Remove(stale[i]);
-        }
-
-        var storages = FindObjectsOfType<StorageComponent>();
-        if (storages.Length == 0) return;
-
-        // 一次收集空闲工人（避免每建筑重复 FindObjectsOfType）
-        var npcs = FindObjectsOfType<NPCBrain>();
-        if (npcs.Length == 0) return;
-
-        TaskPriority transportPriority = GetPriority(KingdomTaskType.Transport);
-
-        foreach (var storage in storages)
-        {
-            if (storage == null) continue;
-            if (!storage.IsReadyToHarvest()) continue;      // 无产出不搬
-            if (storage.TotalCount <= 0) continue;
-
-            if (!_transporting.TryGetValue(storage, out var assigned))
-            {
-                assigned = new HashSet<NPCBrain>();
-                _transporting[storage] = assigned;
-            }
-            // QQQ.3 B8-8 / LC-N5：用 !IsAlive 而非 == null（池化下死单位引用非 null）
-            assigned.RemoveWhere(w => w == null || !w.IsAlive);
-
-            // 分批：需要搬运批次数 = ceil(存量 / 携带量)；已派数不足则补派
-            // ⏭️ 单资源语义假设点（M1-G 收口）：件数用 TotalCount、携带量/日志用首个非空资源。
-            int carry = storage.GetCarryAmount();
-            int batches = Mathf.Max(1, Mathf.CeilToInt(storage.TotalCount / (float)carry));
-            int need = batches - assigned.Count;
-            if (need <= 0) continue;
-
-            var building = storage.GetComponent<Building>();
-            Vector2 pos = building != null ? (Vector2)building.transform.position : (Vector2)storage.transform.position;
-
-            for (int i = 0; i < npcs.Length && need > 0; i++)
-            {
-                var worker = npcs[i];
-                if (worker == null || !worker.IsIdleForTask || assigned.Contains(worker)) continue;
-                worker.AddTaskStimulus(new TaskStimulus(
-                    transportPriority, Vector2XUnity.FromUnity(pos), transportIntensity,
-                    expiry: Time.time + transportExpiry, issuer: storage));
-                assigned.Add(worker);
-                need--;
-            }
-            if (assigned.Count > 0)
-                Debug.Log($"[调度中心] 派发搬运任务 → {assigned.Count} 工人 @ {pos}（{storage.PrimaryStoredType()} 存量 {storage.TotalCount}，分批{batches}）");
-        }
-    }
-
-    /// <summary>是否搬运中（BuildingPanel 显示收取状态用）</summary>
-    public bool IsTransporting(StorageComponent storage)
-    {
-        return storage != null && _transporting.ContainsKey(storage);
-    }
+    // ⭐⭐ `M1-G-1` 件4（`U-15` **根除项** · 双链合一 · `D824` §一-4）：**原 `DispatchTransport()`
+    //   与 `IsTransporting()` 整段已删**（链 B ＝ 阈值-less 的"清理派发 ＋ 直通国库落点"）。
+    //   ⭐ 依据（本端派工前实读 · 已验收）：两链的差异**只在阈值** ——
+    //     · **链 A**（在役）＝ `Building.TryAdvertiseTask` ④ ⇒ `new KingdomTask(Transport, this)`，
+    //       判据 `stored >= capacity * transportThreshold` ⇒ 走 `TaskScheduler` **两段式**（`LoadInventoryFromSource`
+    //       → `EnterMovingToDest` → `UnloadInventory`）；
+    //     · **链 B**（本段删除）＝ 本类判据 `!IsReadyToHarvest()`（**无阈值**）⇒ `AddTaskStimulus(issuer: storage)`
+    //       ⇒ `BehaviorExecutor` 到达即 `HarvestCarry()`（**源仓直通国库**）。
+    //   ⚠️ 连带已改：`BuildingPanel:183-187`（原读 `IsTransporting` ⇒ 改读 `TaskScheduler.HasWorkerAssigned(源)`）。
+    //   ⚠️ 本类**未整删**：`DispatchCrew`（`:167` 级）／`AssignFollow`（`:263` 级）等仍在役。
 
     /// <summary>
     /// 战争机器乘员派发（改动② 工人操作战争机器，方式 A：工人主动去操控）。

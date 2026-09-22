@@ -167,15 +167,13 @@ public class BehaviorExecutor
             {
                 _arrivedAtFocus = true;
                 Brake();  // 已到 → 停车（停 PathFollower）
-                // 3.3.5 资源流转：搬运任务到达 → Harvest 入国库（原占位"原地待机"扩展）
-                // 3.5 P1-8 搬运携带量：源建筑产出 > 携带量时分批多次搬运（每次 HarvestCarry ≤ 携带量，剩余留待下轮）。
+                // ⭐ `M1-G-1` `Q3` 甲案（`D824` §一-4）：**落点统一为 `Harvest()`**。
+                //   原「`is StorageComponent ⇒ HarvestCarry()`（源仓直通国库）」旁路随 `#40` 删除 ⇒ 本处不再分区；
+                //   ⚠️ 且链 B（`ScheduleCenterStub.DispatchTransport`）随 `U-15` 根除项删除 ⇒ `HarvestTarget`
+                //   的写入方 `L3CommandComputer:82` 只剩 `TaskStimulus.Source is IHarvestable` 一支 ⇒
+                //   ⭐ 生产路径上本块**已不可达**（`Inert`）⇒ `AI.Core` 透传**保留**（⛔ 本批不动 `AI.Core`）。
                 if (cmd.HarvestTarget != null)
-                {
-                    if (cmd.HarvestTarget is StorageComponent sc)
-                        sc.HarvestCarry();   // 限量搬运（按资源类型携带量，ResourceCarryConfig SO）
-                    else
-                        cmd.HarvestTarget.Harvest();
-                }
+                    cmd.HarvestTarget.Harvest();
             }
         }
         else
