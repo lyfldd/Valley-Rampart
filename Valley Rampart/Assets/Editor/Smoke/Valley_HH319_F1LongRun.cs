@@ -164,6 +164,39 @@ public static class Valley_HH319_F1LongRun
         return d;
     }
 
+    /// <summary>⭐⭐ `D840` §A：差集**加源过滤** —— 只统计 `source == 被点击建筑` 的新增任务
+    /// （⚠️ 不过滤 ⇒ 同帧内**其它建筑**的广告也会落入差集 ⇒ 差集内容不可用于下结论 · `L-84`）。</summary>
+    private static string TaskDiffOf(Dictionary<int, KingdomTaskType> before, Building src)
+    {
+        var tm = TaskMap();
+        if (tm == null) return "（无新增）";
+        var sb = new StringBuilder(); int n = 0;
+        foreach (var kv in tm)
+        {
+            var t = kv.Value;
+            if (t == null || (before != null && before.ContainsKey(kv.Key))) continue;
+            if (src != null && !ReferenceEquals(t.source, src)) continue;   // ⭐ 源过滤
+            sb.Append($"npc{kv.Key}:{t.type} ");
+            n++;
+        }
+        return sb.Length == 0 ? "（无新增·源过滤后）" : $"{n} 个（源=被点击建筑）：{sb.ToString().Trim()}";
+    }
+
+    /// <summary>⭐ `D840` §B：**`Tick` 口径空闲工人数**（近似 —— `IsAlive ∧ IsIdleForTask ∧ !在册`；
+    /// ⚠️ 未含 `TaskScheduler.cs:331` 的**国度筛** ⇒ 与 `Tick` 实际用的 `idle` 仍可能差少量）。</summary>
+    private static int TickIdleCount()
+    {
+        int n = 0;
+        foreach (var b in Object.FindObjectsOfType<NPCBrain>())
+        {
+            if (b == null || !b.IsAlive || !b.IsIdleForTask) continue;
+            var uc = b.GetComponent<UnitController>();
+            if (uc == null || InMap(uc.npcId)) continue;
+            n++;
+        }
+        return n;
+    }
+
     /// <summary>⭐ 差集：**本次点击后新增**的任务（`npc:type`）—— ⛔ 不返回点击前已存在者。</summary>
     private static string TaskDiff(Dictionary<int, KingdomTaskType> before)
     {
@@ -229,7 +262,8 @@ public static class Valley_HH319_F1LongRun
         int tr1 = CountTransport();
         U16Write($"{U16Tag}·ctrl] {Stamp()} ⭐对照组（**探针口径**空闲工人={id0}）：点击前 在册Transport={tr0}"
                  + $" ⇒ 点击后 在册Transport={tr1}（期望 +1）⇒ **派到任务={tr1 > tr0}**"
-                 + $" ｜ 点击前后差集 {TaskDiff(snap0)}");
+                 + $" ｜ 点击前后差集 {TaskDiffOf(snap0, well)}"
+                 + $" ｜ Tick口径空闲 {TickIdleCount()}");
 
         // ---- ⭐⭐ `D839` §A：**`A2`（拆除中点击）段 —— 位置在「占满工人」之前**（工人仍空闲）----
         //   ⭐ 自证判据：落盘 `·a2]` 的时间戳须**先于** `·o18]`（⛔ 若仍在其后 ⇒ 未移到位）。
@@ -246,8 +280,13 @@ public static class Valley_HH319_F1LongRun
             TaskScheduler.Instance.RequestHaulNow(ws2);
             yield return null;
             int tr5 = CountTransport();
-            string diff4 = TaskDiff(snap4);
-            U16Write($"{U16Tag}·a2] {Stamp()} 新靶例 well2 · _demolishing=True ｜ 在册Transport {tr4} → {tr5} ｜ 点击前后差集 {diff4}");
+            string diff4 = TaskDiffOf(snap4, well2);      // ⭐ `D840` §A：源过滤（源=well2）
+            // ⭐ `D840` §B **直读法**：区分「未广告」vs「广告了未派」（⛔ 不经调度器）
+            bool advB = well2.TryAdvertiseTask(out var advTask);
+            U16Write($"{U16Tag}·a2] {Stamp()} 新靶例 well2 · _demolishing=True ｜ 在册Transport {tr4} → {tr5}"
+                     + $" ｜ 点击前后差集（源=well2）{diff4}"
+                     + $" ｜ ⭐直读 TryAdvertiseTask 返回={advB} 任务类型={(advTask != null ? advTask.type.ToString() : "null")}"
+                     + $" ｜ Tick口径空闲 {TickIdleCount()}");
         }
         else U16Write($"{U16Tag}·a2] {Stamp()} 跳过：well2={well2 != null} ws2={ws2 != null} CanDemolish={(well2 != null ? well2.CanDemolish.ToString() : "-")}");
 
@@ -276,7 +315,8 @@ public static class Valley_HH319_F1LongRun
         // ⭐ `D834` §E-3 **场景前提口径声明**：本档「无空闲工人」用的是**探针口径**（`PlayerWorkers() ∧ !InMap`），
         //   ⚠️ 与 `Tick.idle`（`TaskScheduler.cs:266-281`：`+IsIdleForTask` ＋ 职业 ∈{Worker,Civilian,Porter} ＋ ⛔ 不限国度）
         //   **既非充分也非必要** ⇒ 故本行**同帧并报两列** ＋ 只把「任务数增/不增」当判据面（`A2` 口径要求）。
-        U16Write($"{U16Tag}·o18] {Stamp()} 在册Transport {tr2} → {tr3} ｜ 点击前后差集 {diff2} ｜ 占用尝试 {occupied} ｜ 探针口径空闲工人 {idleNow}");
+        U16Write($"{U16Tag}·o18] {Stamp()} 在册Transport {tr2} → {tr3} ｜ 点击前后差集（源=well）{TaskDiffOf(snap2, well)}"
+                 + $" ｜ 占用尝试 {occupied} ｜ 探针口径空闲工人 {idleNow} ｜ Tick口径空闲 {TickIdleCount()}");
         U16Write($"{U16Tag}·summary] ⚠️ 判定须人工裁定");
 
         U16Write($"{U16Tag}·summary] ★ 收尾：`·a1]`／`·ctrl]`／`·a2]`／`·o18]` 四行读数见上（`D834` §A3 落盘）。");
@@ -457,6 +497,7 @@ public static class Valley_HH319_F1LongRun
     {
         // ⚠️ `U-16` 案① 批：豁免列档延长观测窗（威胁注入在 +15s ⇒ 需更长的注入后窗口）
         float duration = speed <= 1f ? 180f : (threatStage ? 70f : 45f);    // 1× ⇒ ≥180 真实秒（任务书 §件1）；15× 对照 ⇒ 45s（足够多轮）
+        _obsDuration = duration;   // ⭐ `D840` §C：落盘供「观测窗时长 ＋ 下降帧数 ＋ 成因」三数同报
         U16Begin(tag);                                // ⭐ P3：先挂钩（⛔ 早于 EnterTestRun，防漏世界创建期日志）
         Debug.Log($"[HH319长局·{tag}] ── 起（speed={speed} · 观测 {duration}s 真实时间 · 生产路径 · ⛔ 不干预搬水链）");
         var cfg = new NewGameConfig
@@ -826,6 +867,7 @@ public static class Valley_HH319_F1LongRun
     private static bool _pendDrop;
     private static int _pendAmt;
     // ⭐⭐ `D838` §D-1：**主依据改为「逐帧 `Δ背包 ≈ −Δ井仓` 对齐」**（⛔ 不再以"背包存量>0"当主依据）
+    private static float _obsDuration;                       // ⭐ `D840` §C：**观测窗时长**（真实秒 · 供判据 4 样本成因说明）
     private static int _alignOk, _alignFail;                 // 对齐（合法装载 ⇒ 水进了背包）／未对齐
     private static int _alignDeficit;                        // 未对齐帧的缺口合计（|Δ井仓| − Δ背包）
     private static readonly List<string> _alignLog = new List<string>();   // ⭐ `D839` §C-1：未对齐帧**完整明细**
@@ -1482,6 +1524,8 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4 主依据（`D838` §D-1）**：逐帧「`Δ背包 ≈ −Δ井仓`」（容差 20%）"
                       + $" ⇒ **对齐帧={_alignOk}** ／ **未对齐帧={_alignFail}**（缺口合计={_alignDeficit}）"
                       + $"｜⛔ 不再以「背包存量>0」当主依据（存量可来自更早装载 ⇒ 无鉴别力）");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 样本三数（`D840` §C）：观测窗={_obsDuration:F0} 真实秒 ｜ 下降帧总数={_pairTotal}"
+                      + $" ｜ ⚠️ 帧数偏少时须查成因（回合时长／工人池被恒困死者占用／靶例被 `Transport` 压倒）");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 **未对齐帧完整明细**（`D839` §C-1）：{(_alignLog.Count == 0 ? "（无）" : string.Join(" ／ ", _alignLog))}");
         sb.AppendLine($"{U16Tag}·summary] ⚠️ **计数口径（`D838` §D-3）**：本判据内两个「计数」**不同口径、⛔ 不可互比** ——"
                       + $" ①`下降帧总数`={_pairTotal}＝**逐帧**采样；②诊断行 `井仓 Δ<0 总帧`={_wellDropFrames}＝**每秒**采样（`·farm]` 节律）");
