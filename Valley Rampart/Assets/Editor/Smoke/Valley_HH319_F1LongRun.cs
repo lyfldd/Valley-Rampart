@@ -384,7 +384,7 @@ public static class Valley_HH319_F1LongRun
             // ⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false** ⇒ 玩家国「在册任务数」应＝「置位工人数」。
             if (rt >= nextInv) { nextInv = rt + 1f; U16InvariantLine(rt); }
             // ⭐ `U-16b` 判据 1（`D816` §八）：**卸货到账**读数 —— 农场仓水位逐秒（增量 ＝ 真卸货；E6 为事件式补充）。
-            if (rt >= nextFarm) { nextFarm = rt + 1f; U16FarmLine(rt, farmStore); }
+            if (rt >= nextFarm) { nextFarm = rt + 1f; U16FarmLine(rt, farmStore, farm); }
 
             // ⭐ 判据 4（豁免列档专有）：在册任务期**注入威胁** ⇒ 工人应"能逃/挂起"，⛔ 不被任务锁死。
             //   ⚠️ 注入口勘正：`AIDebugSpawnController` 的 `Enemy*` 条目走 `Faction.Monster` +
@@ -511,6 +511,12 @@ public static class Valley_HH319_F1LongRun
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
     private static bool _farmGained;
+    // ---- ⭐ `F-1` 收尾批（`D820` §三）：判据 1 两新列 ＋ 判据 2 同农场并发数 ＋ 判据 4 两侧派发数 ----
+    private static readonly Dictionary<string, int> _dispatchTypeN = new Dictionary<string, int>();  // 判据 4：派发按类型计数
+    private static readonly Dictionary<int, int> _farmConcN = new Dictionary<int, int>();            // 判据 2：同农场在途 WaterHaul 并发数分布
+    private static int _farmWorkFrames, _farmIdleFrames;     // 判据 1 新列：本秒是否有农场工人 Working
+    private static int _farmThirstFrames, _farmOkFrames;     // 判据 1 新列：本秒 TryConsumeFarmWater 是否失败（缺水停产）
+    private static int _farmWaterPeakInThirst;               // 缺水期水位峰值（对照）
     private static bool _threatInjected;                        // 判据 4：威胁已注入（第①段 · 远）
     private static bool _threatInjected2;                       // 判据 4：威胁已注入（第②段 · 近）
     private static int _stage1DispatchN = -1;                   // 判据 4a：第①段时的派发计数基线（等新派发窗口）
@@ -540,6 +546,10 @@ public static class Valley_HH319_F1LongRun
         _workStartLast.Clear(); _workDurLast.Clear(); _abandonTypeReason.Clear();
         _unreachByNpc.Clear();
         _unknownSrcN = 0; _srcTotalN = 0;
+        // ⭐ `F-1` 收尾批新增面
+        _dispatchTypeN.Clear(); _farmConcN.Clear();
+        _farmWorkFrames = _farmIdleFrames = _farmThirstFrames = _farmOkFrames = 0;
+        _farmWaterPeakInThirst = 0;
         _farmWaterPeak2 = 0; _farmGained = false; _farmFirstGainRt = -1f;
         Application.logMessageReceived += OnLog;             // P3：console 镜像（⭐ 本批第一优先）
         EventBus.Subscribe<PathFailedEvent>(OnPathFailedEvt); // P3：PathFailedEvent 只读计数（按 npcId 分桶）
@@ -599,6 +609,8 @@ public static class Valley_HH319_F1LongRun
         int id = ParseNpcId(line);
         if (id == 0) return;
         int n; _dispatchN.TryGetValue(id, out n); _dispatchN[id] = n + 1;
+        // ⭐ `F-1` 收尾批 判据 4：**派发按类型计数**（缺水期 `WaterHaul` 应 ↑、`Production` 应 ↓ —— 两侧都给读数）。
+        int tn; _dispatchTypeN.TryGetValue(type, out tn); _dispatchTypeN[type] = tn + 1;
         var uc = FindUnit(id);
         // ⭐ 判据 3：**派发时刻**的 `IsKingdomTaskWorker` 读数（`D815` §件1 置位后应为 True；
         //   若同帧被 OnPathFailed 清 ⇒ 读 False ⇒ 与 `在册(False)` 同时出现＝甲′-a 铁证）。
@@ -787,14 +799,35 @@ public static class Valley_HH319_F1LongRun
 
     /// <summary>⭐ `U-16b` 判据 1（`D816` §八）：**卸货到账**逐秒读数（农场仓 `Water` 水位 ＋ 峰值 ＋ 首次增量时刻）。
     /// 与 `E6` 互补：`E6` 是"背包转空 ∧ 农场水>0"的**事件式**判定；本行是**水位式** ⇒ "增量 > 0"即到账硬证。</summary>
-    private static void U16FarmLine(float rt, StorageComponent farmStore)
+    private static void U16FarmLine(float rt, StorageComponent farmStore, Building farm)
     {
         if (farmStore == null) return;
         int now = farmStore.GetAmount(ResourceType.Water);
         if (now > _farmWaterPeak2) _farmWaterPeak2 = now;
         if (now > 0 && !_farmGained) { _farmGained = true; _farmFirstGainRt = rt; }
+        // ⭐ 判据 1 新列①：**本秒是否有农场工人处于 `Working`**（＝ `HasWorkerAssigned(农场)` · **公开口零反射**）。
+        //   ⚠️ 这是 `D-2` 修前 ④ `WaterHaul` 可达窗口的**必要条件之一**（另一＝`Food < 0.8×cap`）。
+        bool farmWorking = farm != null && TaskScheduler.HasInstance && TaskScheduler.Instance.HasWorkerAssigned(farm);
+        // ⭐ 判据 1 新列②：**本秒 `TryConsumeFarmWater` 是否失败** —— 判据式与 `ProducerComponent.cs:124`
+        //   **同源**（`!storage.CanTake(Water, 2)`），⛔ **不依赖日志关键词**、⛔ **无副作用**（不真扣水）。
+        bool thirst = !farmStore.CanTake(ResourceType.Water, 2);
+        if (farmWorking) _farmWorkFrames++; else _farmIdleFrames++;
+        if (thirst) { _farmThirstFrames++; if (now > _farmWaterPeakInThirst) _farmWaterPeakInThirst = now; }
+        else _farmOkFrames++;
+        // ⭐ 判据 2：**同农场在途 `WaterHaul` 并发数**（按 `HaulWaterArgs.target == 本农场仓` 计 —— `D-1` 修后应恒 ≤1）。
+        int conc = 0;
+        var tm = TaskMap();
+        if (tm != null)
+            foreach (var kv in tm)
+            {
+                var t = kv.Value;
+                if (t == null || t.type != KingdomTaskType.WaterHaul) continue;
+                if (t.args is HaulWaterArgs hw && ReferenceEquals(hw.target, farmStore)) conc++;
+            }
+        int cn; _farmConcN.TryGetValue(conc, out cn); _farmConcN[conc] = cn + 1;
         U16Write($"{U16Tag}·farm] {Stamp()} +{rt:F2}s 农场仓水={now} 峰值={_farmWaterPeak2}"
-                 + $" 首次见水时刻={(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}");
+                 + $" 首次见水时刻={(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
+                 + $" ⭐农场工人Working={farmWorking} ⭐缺水产={thirst} ⭐同农场在途WaterHaul={conc}");
     }
 
     /// <summary>⭐ 判据 3 不变量（每秒一条）：**未在册者恒 false**。
@@ -1031,6 +1064,27 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 3 · Abandon 按 `type/reason` 分桶：{TypeReasonLine()}");
         // ⭐ `U-20` 收口件2：`Unreachable` 前二名 npc 占比（期望 ≥99% ⇒ 自证 `甲′-a` 独占 · `L-67`）
         sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
+        // ⭐⭐ `F-1` 收尾批（`D820` §三）判据 2：**同农场在途 WaterHaul 并发数**分布（`D-1` 修后应 `=1` 为主 · ⛔ 基线无此列）
+        {
+            var l2 = new List<KeyValuePair<int, int>>(_farmConcN);
+            l2.Sort((a, b) => a.Key.CompareTo(b.Key));
+            var s2 = new StringBuilder();
+            foreach (var kv in l2) s2.Append($"并发{kv.Key}×{kv.Value}秒 ");
+            sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 2（`D-1`）· **同农场在途 WaterHaul 并发数**分布（按秒）：{(s2.Length > 0 ? s2.ToString().Trim() : "（无读数）")}"
+                          + " ⇒ ⭐ `=1` 为主＝去重生效（>1 的秒数即「该拦没拦」残留）；基线此列**不存在**（恒不生效 ⇒ 应见 2+ 秒数）");
+        }
+        // ⭐⭐ 判据 1 两新列 ＋ 判据 4 两侧读数
+        {
+            var l3 = new List<KeyValuePair<string, int>>(_dispatchTypeN);
+            l3.Sort((a, b) => b.Value.CompareTo(a.Value));
+            var s3 = new StringBuilder();
+            foreach (var kv in l3) s3.Append($"{kv.Key}×{kv.Value} ");
+            sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4（`D-2`）· **派发按类型计数**：{(s3.Length > 0 ? s3.ToString().Trim() : "（无）")}"
+                          + " ⇒ `WaterHaul` 应 ↑（前置生效）、`Production` 应 ↓（缺水期让位 · 可接受）");
+            sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 1 新列汇总 · 农场「有工人 Working」秒数={_farmWorkFrames} ／ 无={_farmIdleFrames}"
+                          + $" ｜ 「缺水产」秒数={_farmThirstFrames}（其水位峰值={_farmWaterPeakInThirst}）／ 不缺水={_farmOkFrames}"
+                          + " ⇒ ⭐ 缺水秒数应显著下降（基线 34/37 条 `·farm]` 水位=0 —— `D-2` 饥饿）");
+        }
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 1 · 卸货到账（水位式）：农场仓水峰值＝{_farmWaterPeak2}"
                       + $" 首次见水＝{(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
                       + $" ⇒ 到账={(_farmWaterPeak2 > 0)}");

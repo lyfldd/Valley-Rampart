@@ -30,6 +30,17 @@ public class KingdomTask
     public object args;               // 任务参数（产出量、目标物等）
     public float intensity;           // 刺激强度
 
+    /// <summary>⭐ `HH.319` `M1-F` `D-1` 甲案（`D820` §二 件1）：**广告者**（＝ `TryAdvertiseTask` 的宿主）。
+    /// ⚠️ 存在之因：`M1-F` 件4 后出现「**广告源 ≠ `task.source`**」的新结构 —— `WaterHaul` 由**农场**广告，
+    ///   但其 `source` ＝ **水井**（第一段位移需要）⇒ 以"广告源"为键的去重谓词若比 `source` 则**恒不匹配**。
+    /// 约定：**默认 `null` ⇒ 视为等于 `source`**（其余 6 类任务「广告者＝source」⇒ ⛔ 无需置值 · 零行为变化）；
+    ///   仅 `Building.TryAdvertiseTask` 的 `WaterHaul` 分支置 `= this`（`D820` §二 件1 钉死）。
+    /// ⚠️ 消费点：`TaskScheduler.HasAssignedTaskForSourceType`（去重键）。
+    /// ⛔ 本字段**无任何序列化引用**（`KingdomTask` 为普通 class · 无 `[Serializable]` · 非 `MonoBehaviour`/
+    ///   `ScriptableObject` ⇒ Unity 不序列化；且全库**无任何类以字段/集合持有 `KingdomTask`** ⇒ 不入档）。
+    /// </summary>
+    public ITaskSource advertiser;
+
     public KingdomTask(KingdomTaskType type, ITaskSource source, float intensity = 1f)
     {
         this.type = type;

@@ -280,9 +280,12 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         }
 
         // ③ 收集可派任务（QQQ.4 T1：按"源+任务类型"去重，允许同一源并发不同类型任务——
-        //    农场可派 Production（耕作）＋搬水任务（⭐ `M1-F` 件4 起源＝**水井** ⇒ 去重键＝「水井+WaterHaul」
-        //    ⚠️ 同 tick 内同一水井只服务一个农场（串行）· 完成后再广告下一个）
-        //    2_8 步骤3（D95）：Transport 去重放宽为按容量（同源可多工人搬运）；其余独占任务按源+类型去重
+        //    农场可派 Production（耕作）＋搬水任务
+        //    ⭐ `HH.319` `D-1` 甲案（`D820` §二 件1）**勘正**：去重键 ＝ **「广告者 ＋ 类型」**
+        //      （`advertiser ?? source`）—— `WaterHaul` 由**农场**广告、`source`＝**水井**
+        //      ⇒ 键取**农场** ⇒ 「**同一农场同时只一个在途搬水**」（改前因比 `source` 而**恒不匹配 ⇒ 该拦没拦**）。
+        //    ⚠️ 旧注「去重键＝水井+WaterHaul · 同 tick 内同一水井只服务一个农场（串行）」**与码不符**，本行据实勘正。）
+        //    2_8 步骤3（D95）：Transport 去重放宽为按容量（同源可多工人搬运）；其余独占任务按「广告者+类型」去重
         var jobs = new List<KingdomTask>();
         foreach (var s in _sources)
         {
@@ -788,7 +791,35 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                 k.AddResources(ResourceList.Of(new ResourceAmount(type, amount)));
                 return;
             default:
-                Debug.Log($"[TaskScheduler] 采集溢出丢弃：{type} 非国库五资源/副产桶（AI 台账无此桶），×{amount}");
+                // ⭐⭐ `U-21`（`D820` §六 报选 · 本端取**丙案：逐级兜底**）——
+                //  ⚠️ 改前：**直接丢弃** ⇒ 现场实测 `采集溢出丢弃：Water` 3~70 条/局（`M1-F` 水入普通仓的连带面 ·
+                //    `09:229-235` `L-59` 家族）⇒ **真丢资源**（水从井仓扣出后消失）。
+                //  ⭐ 逐级兜底（**论证不丢**）：
+                //    ① 「**归属国 ＋ `Accepts` ＋ 有余量**」的就近仓（`WarehouseRegistry.FindNearestAvailable`
+                //       —— 水 ⇒ 命中**接水仓＝农场仓**（标签 `res_fluid.water`）⇒ 水**回到可被农场消耗的面**）；
+                //    ② ① 不可用／被拒收的余量 ⇒ 入该国**台账 `resources`**
+                //       （`AddToLedger` 的 `default` 分支本收该资源 ⇒ 资源在账，⛔ 不消失）；
+                //    ⇒ 唯一仍「丢」的情形 ＝ **国已注销**（上方 `k == null` 分支 · **既有资敌防线语义**，⛔ 保留）。
+                //  ⚠️ 口径演进：本分支**不再打印**「采集溢出丢弃」（判据 3 ＝ 该条数 → 0），改打「落点=仓/台账」一行。
+                if (uc != null)
+                {
+                    var w = WarehouseRegistry.FindNearestAvailable(type, uc.transform.position, uc.kingdomId);
+                    if (w != null)
+                    {
+                        int added = w.Add(type, amount);
+                        int left = amount - added;
+                        if (left > 0) k.AddResources(ResourceList.Of(new ResourceAmount(type, left)));   // ② 余量入台账
+                        Debug.Log($"[TaskScheduler] 溢出转存（`U-21`）：{type}×{amount} ⇒ 仓「{w.name}」入{added}"
+                                  + (left > 0 ? $" ＋ 台账入{left}" : "（全部入仓）"));
+                        return;
+                    }
+                    k.AddResources(ResourceList.Of(new ResourceAmount(type, amount)));
+                    Debug.Log($"[TaskScheduler] 溢出转存（`U-21`）：{type}×{amount} ⇒ 无接该资源的同国仓 ⇒ 入该国台账（resource 面）");
+                    return;
+                }
+                // `uc == null`（调用方无工人上下文）⇒ 无位置可解析 ⇒ 台账兜底（⛔ 不再丢弃）
+                k.AddResources(ResourceList.Of(new ResourceAmount(type, amount)));
+                Debug.Log($"[TaskScheduler] 溢出转存（`U-21`）：{type}×{amount} ⇒ 无工人上下文 ⇒ 入该国台账");
                 return;
         }
     }
@@ -1192,11 +1223,18 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private static bool IsChestStore(StorageComponent s)
         => s != null && s.GetComponent<ChestEntity>() != null;
 
-    /// <summary>该源当前是否已有同类型任务在派（QQQ.4 T1：按源+任务类型去重，允许同一源并发不同类型任务）。</summary>
+    /// <summary>该源当前是否已有同类型任务在派（QQQ.4 T1：按源+任务类型去重，允许同一源并发不同类型任务）。
+    /// ⭐ `HH.319` `D-1` 甲案（`D820` §二 件1）：键改按 **`kv.Value.advertiser ?? kv.Value.source`**。
+    /// ⚠️ 存在之因：`M1-F` 件4 后出现「**广告源 ≠ `task.source`**」结构 —— `WaterHaul` 由**农场**广告、
+    ///   其 `source` ＝ **水井** ⇒ 改前 `ReferenceEquals(水井, 农场)` **恒 false ⇒ 该拦没拦**（去重失效 · `D-1`）。
+    /// ⭐ 兼容：其余 6 类任务「广告者＝source」（`advertiser` 保持 `null`）⇒ ⛔ **零行为变化**。</summary>
     private bool HasAssignedTaskForSourceType(ITaskSource source, KingdomTaskType type)
     {
         foreach (var kv in _npcTaskMap)
-            if (ReferenceEquals(kv.Value.source, source) && kv.Value.type == type) return true;
+        {
+            var adv = kv.Value.advertiser ?? kv.Value.source;   // ⭐ `D-1`：缺省视为等于 `source`（向后兼容）
+            if (ReferenceEquals(adv, source) && kv.Value.type == type) return true;
+        }
         return false;
     }
 

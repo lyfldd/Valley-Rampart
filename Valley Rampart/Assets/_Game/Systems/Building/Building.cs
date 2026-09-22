@@ -1472,10 +1472,12 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
     /// <summary>
     /// 按建筑类型声明任务（QQQ.2 §10.3 / DR-16）：
-    ///   ① 生产建筑无工人在场且未满 → Production（destType=None）
-    ///   ② 有存储且存量 ≥ capacity×transportThreshold → Transport（destType=NearestWarehouse）
-    ///   ③ 农场缺水（**农场仓** Water < waterThreshold）→ WaterHaul（源＝最近**同国**有水**水井** ·
-    ///      destType=SpecificBuilding 终点＝本农场 · `M1-F` 件4 真搬运）
+    ///   ⭐ `HH.319` `D-2` 乙案（`D820` §二 件2）后**次序**（⭐ 缺水优先补水）：
+    ///   ② **搬水（前置）** 农场缺水（**农场仓** Water < waterThreshold）→ WaterHaul（源＝最近**同国**有水**水井** ·
+    ///      destType=SpecificBuilding 终点＝本农场 · `M1-F` 件4 真搬运 · `advertiser = this` ＝ `D-1` 甲案）
+    ///   ③ 生产建筑无工人在场且未满 → Production（destType=None）
+    ///   ④ 有存储且存量 ≥ capacity×transportThreshold → Transport（destType=NearestWarehouse）
+    /// ⚠️ 改前次序为 ② 生产／③ 搬运／④ 搬水 ⇒ 搬水被 ② `return true` **同 tick 结构性挤掉**（`D-2`）。
     /// 军事/其他不在此扩。无条件返回 false。
     /// 【HH.294 片 6-2·6-D】原「①一次性资源点被确认采集 → Gather」分支**随实体退役已删**
     ///   —— 采集任务改由 `WorldGatherSource` 广告（数据寻址·唯一天然资源采集源）。
@@ -1508,7 +1510,44 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
 
         // ① 采集：一次性资源点（isConsumable）被玩家确认采集 → Gather 任务 —— 【片 6-2·6-D】已删（见方法头注）
 
-        // ② 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：⭐ `M1-F` 起免工自产入**本仓**，不派生产任务）
+        // ⭐⭐ ② **搬水（前置）** —— `D-2` 乙案（`D820` §二 件2 · §6-3 契约已裁准）：
+        //  ⚠️ 改前本分支排在 `Production` 之后 ⇒ 被 ② `return true` **同 tick 结构性挤掉**
+        //    （`!HasWorkerAssigned(农场)` 对 `WaterHaul` 恒真 —— 其 `source` 是水井 ⇒ `D-2` 饥饿）。
+        //  ⭐ 前置依据（**玩法前提已定**）：**水是农场生产前提** —— `ProducerComponent.TryConsumeFarmWater`
+        //    产粮每次**耗 2 点水**，不足 ⇒ **停产 ＋ 头顶冒「缺水」**（`09` §4.3 D 组）⇒ 缺水应先补水。
+        //  ⚠️ 已知后果（`D820` §二 件2 要求报读数）：**缺水期 `Production` 广告数 ↓**（可接受 · 判据 4 两侧读数）。
+        //  仅农场（产粮耗水）在**自己仓**水不足时发搬水任务（采石/矿洞不耗水，不派）。
+        //  ⭐ `M1-F` 件4（`09#44` · `09` §4.3 D 组 · `D807`）：**真搬运** ——
+        //    源＝**最近同国有水水井**（`SourcePos` ⇒ 第一段位移＝去水井取水）、
+        //    终点＝本农场（第二段位移＝卸水入农场仓）；args 携带卸水落点。
+        //  ⚠️ **国别过滤必带**（`D807` §二-1）：⛔ 只选**同国**且 `Water > 0` 的 Active 水井
+        //    —— 退役的 `ResolveWaterSource` 不过滤国别（半假搬运掩盖）；真搬运下 AI 农场会挑玩家井水（历史同族缺陷）。
+        //  ⭐ 无候选（同国无水井/井全空）⇒ 不发布（避免下发即失败的空跑；此时落到下方生产/搬运算正常）。
+        if (producer != null && producer.OutputResource == ResourceType.Food && storage != null)
+        {
+            int waterHave = storage.GetAmount(ResourceType.Water);
+            if (waterHave < waterThreshold)
+            {
+                var well = FindNearestSameKingdomWellWithWater();
+                if (well != null)
+                {
+                    task = new KingdomTask(KingdomTaskType.WaterHaul, well);   // ⭐ 源＝水井（第一段位移）
+                    // ⭐ `D-1` 甲案（`D820` §二 件1）：**显式声明广告者**（＝本农场）——
+                    //   去重键须按「广告者＋类型」，否则 `HasAssignedTaskForSourceType` 比 `source`（水井）恒不匹配。
+                    task.advertiser = this;
+                    task.destType = KingdomDestType.SpecificBuilding;
+                    task.destPos = transform.position;                          // 终点＝本农场（第二段位移）
+                    task.args = new HaulWaterArgs
+                    {
+                        target = storage   // 卸水落点＝农场仓（⭐ `D809` 件3：水不需要 `need` —— 与 Transport 同构）
+                    };
+                    return true;
+                }
+            }
+        }
+
+        // ③ 生产：无工人在场（Working）且存储未满 → 生产任务（水井除外：⭐ `M1-F` 起免工自产入**本仓**，不派生产任务）
+        //  ⚠️ `D-2` 乙案后本分支**不再挤掉搬水**（搬水已前置）；缺水农场若已发搬水 ⇒ 本 tick 不广告生产（缺水期停产本就成立）。
         if (producer != null
             && !producer.IsWell
             && (storage == null || !storage.IsFullFor(producer.OutputResource))
@@ -1519,7 +1558,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
             return true;
         }
 
-        // ③ 搬运：存储达标且存量>0 → 搬运任务（2_8 步骤3 / D95：把资源总需求附带进 task.args，调度器据此规模派工）
+        // ④ 搬运：存储达标且存量>0 → 搬运任务（2_8 步骤3 / D95：把资源总需求附带进 task.args，调度器据此规模派工）
         // ⭐ M1-A：多资源仓 ⇒ 按「首个非空资源」（资源表序·确定性）判达标并附其类型/量（对齐 StorageComponent 过渡读口）
         if (storage != null && storage.capacity > 0 && storage.TotalCount > 0)
         {
@@ -1535,33 +1574,6 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
                     totalResourceDemand = stored
                 };
                 return true;
-            }
-        }
-
-        // ④ 搬水：仅农场（产粮耗水）在**自己仓**水不足时发搬水任务（采石/矿洞不耗水，不派）。
-        //  ⭐ `M1-F` 件4（`09#44` · `09` §4.3 D 组 · `D807`）：改**真搬运** ——
-        //    源＝**最近同国有水水井**（`SourcePos` ⇒ 第一段位移＝去水井取水）、
-        //    终点＝本农场（第二段位移＝卸水入农场仓）；args 携带卸水落点与缺口量。
-        //  ⚠️ **国别过滤必带**（`D807` §二-1）：⛔ 只选**同国**且 `Water > 0` 的 Active 水井
-        //    —— 退役的 `ResolveWaterSource` 不过滤国别（半假搬运掩盖）；真搬运下 AI 农场会挑玩家井水（历史同族缺陷）。
-        //  ⭐ 无候选（同国无水井/井全空）⇒ 不发布（避免下发即失败的空跑）。
-        if (producer != null && producer.OutputResource == ResourceType.Food && storage != null)
-        {
-            int waterHave = storage.GetAmount(ResourceType.Water);
-            if (waterHave < waterThreshold)
-            {
-                var well = FindNearestSameKingdomWellWithWater();
-                if (well != null)
-                {
-                    task = new KingdomTask(KingdomTaskType.WaterHaul, well);   // ⭐ 源＝水井（第一段位移）
-                    task.destType = KingdomDestType.SpecificBuilding;
-                    task.destPos = transform.position;                          // 终点＝本农场（第二段位移）
-                    task.args = new HaulWaterArgs
-                    {
-                        target = storage   // 卸水落点＝农场仓（⭐ `D809` 件3：水不需要 `need` —— 与 Transport 同构）
-                    };
-                    return true;
-                }
             }
         }
 
