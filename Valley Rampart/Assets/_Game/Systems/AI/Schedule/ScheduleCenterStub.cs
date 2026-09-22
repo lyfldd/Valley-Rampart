@@ -2,11 +2,15 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // ============================================================================
-//  3.0.1_2 输入输出决定层 - 调度中心（3.3.5 补全：资源流转搬运派发）
+//  3.0.1_2 输入输出决定层 - 调度中心（⭐ `M1-G-1c` 件A-N1 · `D829` 勘正：原注「3.3.5 补全：资源流转**搬运派发**」
+//   已不成立 ⇒ 本类现职 ＝ **昼夜节律 ＋ 战争机器乘员派发 ＋ 随军派遣**）
 //  详见 3.0.1_2_输入输出决定层设计.md §7 / §11 + 3.3.5_资源流转与搬运系统.md
-//  类名保留 ScheduleCenterStub（兼容场景引用），功能已补全为正式调度中心（搬运方向）。
+//  类名保留 ScheduleCenterStub（兼容场景引用），功能为**战争机器乘员 ＋ 随军派遣**方向
+//  （⛔ 原文「功能已补全为正式调度中心（**搬运方向**）」已删 —— 搬运已统一归 `TaskScheduler` 链 A）。
 //  昼夜节律：夜间停发 B/C 户外任务（输入端一致性要求）
-//  搬运：检测产能建筑存储达标 → 派空闲工人 AddTaskStimulus（issuer=StorageComponent）
+//  ⚠️ 原注「搬运：检测产能建筑存储达标 → 派空闲工人 AddTaskStimulus（issuer=StorageComponent）」
+//     **已随 `U-15` 根除项删除**（该行为今已不存在 —— 见下方 `<summary>` 已退役职责段）。
+//     ⚠️ 本句为**自然语言旧述、不含任何退役符号** ⇒ 机械符号扫描**必漏**（`L-78`：清零判据须**双轨**）。
 //  任务生命周期：刺激带 expiry（工人被打断没去 → 过期自然消失 → 下 tick 重派）
 // ============================================================================
 
@@ -20,7 +24,13 @@ using UnityEngine;
 ///       有阈值 ⇒ `TaskScheduler` **两段式** `LoadInventoryFromSource` → `UnloadInventory` 承担）；
 ///   · 「防重复：`_transporting` 标记（建筑存储清空后释放）」⇒ 随件 F-1 删除（字段 **0 引用**）。
 /// ⚠️ 原「后续扩展：砍树/建造/随军任务**统一走本中心派发**（P1）」承诺**已撤回**（件A4 · `L-63`）——
-///   本中心的自建派发职责已整段删除 ⇒ 优先级排序与派发**统一归 `TaskScheduler`**（`GetPriority` 同 SO 同回退）。
+///   ⭐ **措辞收窄（件A-N2 · `D829`）**：**搬运／`KingdomTask` 派发**统一归 `TaskScheduler`（`GetPriority`
+///   同 SO 同回退）；⚠️ 但**本类并未整删派发** —— **在役派发口 ＝ `DispatchCrew()`**（战争机器乘员 ·
+///   `:79` `Update` 内调用；邻文件 `Building.cs:349`／`UnitController.cs:1220` 的 docstring 亦明写
+///   「供调度中心（`ScheduleCenterStub.DispatchCrew`）按缺口派工人」）。
+///   ⚠️ **本端勘正（`D829` A-N2 收窄）**：`AssignFollow`（`:207`）**不是**在役派发口 —— 其实读为
+///   **空体占位存根**（**0 调用** 全库 ＋ 方法体为空 ＋ 自注「旧测试占位，P1 统一派发随军任务时实现」）
+///   ⇒ ⛔ 不得与 `DispatchCrew` 并列称"在役"（`L-76`：概括句射程须与实际职责**逐条**对齐）。
 /// </summary>
 public class ScheduleCenterStub : MonoBehaviour
 {
@@ -63,8 +73,9 @@ public class ScheduleCenterStub : MonoBehaviour
 
         // ⭐ `M1-G-1c` 件A4（`D828`）：原「3.5 §8.3 优先级派发…届时**统一走 `DispatchByPriority`** 派发，
         //   本中心只按优先级排序」**承诺已撤回** —— 本中心的自建派发职责已整段删除（链 B 退役），
-        //   ⭐ 优先级取值与派发**统一归 `TaskScheduler`**（`GetPriority` 同 SO `Config/TaskPriorityConfig` ＋
-        //   同回退 `TaskPriority.B`）⇒ ⛔ 本类**不再**承诺"统一派发"。
+        //   ⭐ **措辞收窄（件A-N2 · `D829`）**：**搬运／`KingdomTask` 派发**统一归 `TaskScheduler`
+        //   （`GetPriority` 同 SO `Config/TaskPriorityConfig` ＋ 同回退 `TaskPriority.B`）⇒ ⛔ 本类**不再**承诺
+        //   "统一派发"；⚠️ 但**本类并未整删派发** —— 下一行 `DispatchCrew()` **仍在役**（`AssignFollow` 为**空体占位**）。
         // ⭐⭐ `M1-G-1` 件4（`U-15` 根除项 · `D824` §一-4）：**原 `DispatchTransport()` 调用已删** ——
         //   链 B（本中心自建"搬运刺激 ＋ `BehaviorExecutor:HarvestCarry` 直通国库"）随 `#40` 一并退役；
         //   ⭐ 搬运统一由**链 A**（`Building` ④ `Transport` 广告 · **有阈值** ⇒ `TaskScheduler` 两段式）承担。
@@ -91,7 +102,8 @@ public class ScheduleCenterStub : MonoBehaviour
     //     · **链 B**（本段删除）＝ 本类判据 `!IsReadyToHarvest()`（**无阈值**）⇒ `AddTaskStimulus(issuer: storage)`
     //       ⇒ `BehaviorExecutor` 到达即 `HarvestCarry()`（**源仓直通国库**）。
     //   ⚠️ 连带已改：`BuildingPanel:183-187`（原读 `IsTransporting` ⇒ 改读 `TaskScheduler.HasWorkerAssigned(源)`）。
-    //   ⚠️ 本类**未整删**：`DispatchCrew`（`:167` 级）／`AssignFollow`（`:263` 级）等仍在役。
+    //   ⚠️ 本类**未整删**：`DispatchCrew`（在役 · `Update` 调用 ＋ 邻文件 docstring 引用）**仍在役**；
+    //      ⚠️ 但 `AssignFollow` **不在役**（`:207` 空体占位 · 0 调用）—— 本行原并列写法已由 `D829` A-N2 收窄勘正。
 
     /// <summary>
     /// 战争机器乘员派发（改动② 工人操作战争机器，方式 A：工人主动去操控）。
@@ -195,9 +207,13 @@ public class ScheduleCenterStub : MonoBehaviour
         }
     }
 
-    /// <summary>设置跟随锚点（旧测试占位，P1 统一派发随军任务时实现）</summary>
+    /// <summary>设置跟随锚点（⭐ **空体占位存根** · 全库 **0 调用** · P1 随军任务实现时补）。
+    /// ⚠️ `M1-G-1c` 件A-N1（`D829`）：原方法内注「3.3.5 本轮**只做搬运方向**；跟随/砍树等任务统一派发留 P1」
+    ///   **旧句已删** ——「只做搬运方向」**已不成立**（搬运已统一归 `TaskScheduler` 链 A；本类现职 ＝
+    ///   昼夜节律 ＋ 战争机器乘员派发）⇒ ⚠️ 该句为**自然语言旧述、不含任何退役符号** ⇒ **机械符号扫描必漏**，
+    ///   由 `L-78` **双轨②（退役职责清单 × 承载文件全文过）** 命中本处。</summary>
     public void AssignFollow(NPCBrain npc, UnitController anchor, TaskPriority priority, float intensity)
     {
-        // 3.3.5 本轮只做搬运方向；跟随/砍树等任务统一派发留 P1
+        // （空体：占位存根 ⇒ ⛔ 本方法**不是**在役派发口 · 勿与 `DispatchCrew()` 并列称"在役"）
     }
 }
