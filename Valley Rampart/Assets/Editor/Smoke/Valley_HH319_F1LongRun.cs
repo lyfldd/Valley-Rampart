@@ -124,13 +124,9 @@ public static class Valley_HH319_F1LongRun
         new GameObject("HH319_O18Host").AddComponent<RunHost>().Host(RunO18Co());
     }
 
-    /// <summary>反射只读 `Building._forceHaulOnce`（一期强制搬运标记 · ⛔ 只读不写）。</summary>
-    private static bool ForceHaulOf(Building b)
-    {
-        if (b == null) return false;
-        var f = typeof(Building).GetField("_forceHaulOnce", BindingFlags.NonPublic | BindingFlags.Instance);
-        return f != null && (bool)f.GetValue(b);
-    }
+    // ⭐ `D835` §E：原 `ForceHaulOf()`（反射只读 `Building._forceHaulOnce`）**已删** —— 实读**调用面 ＝ 0**
+    //   （`git grep ForceHaulOf` 仅剩声明本身）。⚠️ 其原用途（判"标记是否被消费"）**已在 `D834` §A1 全面撤除**：
+    //   `RequestHaulNow` 内部即 `Tick()` ⇒ 置位与消费**同一次调用内** ⇒ 探针侧**结构性不可观测**。
 
     /// <summary>在册 `Transport` 任务数（判据 9 `Q1` 的正列）。</summary>
     private static int CountTransport()
@@ -526,7 +522,16 @@ public static class Valley_HH319_F1LongRun
             {
                 nextSuppress = rt + 0.25f;   // ⚠️ `U-15` 轮次教训：15× 下 3s 周期压不住（3s≈45 游戏秒·产水 180 ⇒ 井仓常满 ⇒ Transport 抢先）
                 int ww2 = wellStore.GetAmount(ResourceType.Water);
-                if (ww2 > 30) wellStore.TakeOut(ResourceType.Water, ww2 - 20);
+                if (ww2 > 30)
+                {
+                    int cut = ww2 - 20;
+                    wellStore.TakeOut(ResourceType.Water, cut);
+                    // ⭐⭐ `D835` §A 补正：**探针自身压水必须计入右手项** —— 它不是"旁路取走"，
+                    //   而是本档为保靶例（井仓须 <80% `Transport` 阈值）**主动** `TakeOut`（无背包承载）
+                    //   ⇒ ⛔ 不计入 ⇒ 每一处下降都会被配不上的判定误判为"判红"（本批实测 93/97 全属此类：
+                    //   所有下降**终值恒 = 20** 即铁证）。⇒ 右手项改为 `ΣΔ背包⁺ + Σ压制量`。
+                    _suppressSum += cut;
+                }
             }
             // ① 广告读数（只读探针 · 每 5 真实秒一次）
             if (rt >= nextAdv)
@@ -582,6 +587,41 @@ public static class Valley_HH319_F1LongRun
                         if (d < 0) { _consNegFrames++; if (d < _consMinDelta) _consMinDelta = d; }
                     }
                     _consPrevWell = wellN; _consPrevFarm = fwNow; _consPrevBag = bagN; _consPrevValid = true;
+
+                    // ⭐⭐ `D835` §A-定案：**每帧**配对（⛔ 不 15 游戏秒/帧 —— 单帧含多次装卸必错配）
+                    int haulInMapNow = 0;
+                    {
+                        var tmx = TaskMap();
+                        if (tmx != null) foreach (var kvx in tmx) { var tx = kvx.Value; if (tx != null && tx.type == KingdomTaskType.WaterHaul) haulInMapNow++; }
+                    }
+                    if (_pairPrevValid)
+                    {
+                        int dW = wellN - _pairPrevWell, dB = bagN - _pairPrevBag;
+                        if (dW < 0)
+                        {
+                            _pairDropSum += -dW;
+                            // ⭐ 交付物要求：`Δ井仓<0` **逐帧明细**（井仓／Σ背包载水／在册 `WaterHaul`）
+                            if (_dropLog.Count < 40)
+                                _dropLog.Add($"f{_u16Frames} 井仓={wellN}(Δ{dW}) 背包载水={bagN}(Δ{dB}) 在册WaterHaul={haulInMapNow}");
+                            if (!_pairActive) { _pairActive = true; _pairWin = PairN; _bagGainInWin = 0; }
+                        }
+                        if (_pairActive && dB > 0) _bagGainInWin += dB;
+                        if (_pairActive && --_pairWin <= 0)
+                        {
+                            _pairTotal++;
+                            // ⭐ `D835` §A 补正：右手项 ＝ `ΣΔ背包⁺ + 本窗口内探针压制量`（压制＝合法动作）
+                            int suppInWin = _suppressSum - _suppressAtWinStart;
+                            if ((_bagGainInWin + suppInWin) >= _pairDropSum) _pairMatched++;
+                            else
+                            {
+                                _pairUnmatched++; _pairDeficit += (_pairDropSum - _bagGainInWin - suppInWin);
+                                if (_pairLog.Count < 12)
+                                    _pairLog.Add($"win@end f{_u16Frames} 井降={_pairDropSum} 背包增={_bagGainInWin} 压制={suppInWin} 缺口={_pairDropSum - _bagGainInWin - suppInWin}");
+                            }
+                            _pairActive = false; _pairDropSum = 0; _bagGainInWin = 0; _suppressAtWinStart = _suppressSum;
+                        }
+                    }
+                    _pairPrevWell = wellN; _pairPrevBag = bagN; _pairPrevValid = true;
                 }
             }
 
@@ -748,8 +788,21 @@ public static class Valley_HH319_F1LongRun
     //   ⇒ ⭐ **守恒 Δ<0 ＝ 水凭空减少（既不在井仓/农场仓、也不在任何背包）⇒ 被旁路取走 ⇒ 判红**。
     private static int _consPrevWell = -1, _consPrevFarm, _consPrevBag;
     private static bool _consPrevValid;
-    private static int _consNegFrames;                       // ⭐ 守恒 Δ<0 的帧数（**期望 0** ⇒ 判绿）
+    private static int _consNegFrames;                       // ⚠️ **不构成判据**（缺耗项/收水侧/产项 ⇒ 恒假负）· 仅现象记录
     private static int _consMinDelta;                        // 最负的一次（诊断用）
+    // ---- ⭐⭐ `D835` §A：**判据 4 定案口径 ＝ 「井仓下降帧」±N 帧配对**（载体重换）----
+    //   依据（策划端实读）：井仓的水**只能经背包出去**（耗水扣的是**农场仓** `ProducerComponent:119-131`；
+    //   井仓只自产 `:105-116`）⇒ 每个 `Δ井仓<0` 的帧，须在 **±N 帧窗口**内配到 `ΔΣ背包载水>0`
+    //   且累计 `Σ|Δ井仓⁻| ≤ ΣΔ背包⁺` ⇒ 合法（链 A 装载）；配不上 ⇒ **判红**（疑 `#40` 家族旁路取走）。
+    private const int PairN = 3;                             // 窗口帧数（N=3）
+    private static int _pairPrevWell = -1, _pairPrevBag;
+    private static bool _pairPrevValid, _pairActive;
+    private static int _pairWin, _pairDropSum, _bagGainInWin;
+    private static int _pairTotal, _pairMatched, _pairUnmatched, _pairDeficit;
+    private static int _suppressSum;                         // ⭐ 探针靶例维持的压水总量（＝合法右手项 · ⛔ 非旁路）
+    private static int _suppressAtWinStart;                  // 本窗口起点时的压制累计（算窗口内压制量）
+    private static readonly List<string> _pairLog = new List<string>();   // 判红窗口明细
+    private static readonly List<string> _dropLog = new List<string>();   // `Δ井仓<0` 逐帧明细
     private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
@@ -799,6 +852,12 @@ public static class Valley_HH319_F1LongRun
         _wellStore = null; _wellWaterPrev = -1; _farmWellMin = int.MaxValue; _wellDropNoHaulFrames = 0; _wellDropFrames = 0;
         // ⭐ `D834` §C 守恒面
         _consPrevWell = -1; _consPrevFarm = 0; _consPrevBag = 0; _consPrevValid = false; _consNegFrames = 0; _consMinDelta = 0;
+        // ⭐ `D835` §A 配对面
+        _pairPrevWell = -1; _pairPrevBag = 0; _pairPrevValid = false; _pairActive = false;
+        _pairWin = 0; _pairDropSum = 0; _bagGainInWin = 0;
+        _pairTotal = 0; _pairMatched = 0; _pairUnmatched = 0; _pairDeficit = 0;
+        _suppressSum = 0; _suppressAtWinStart = 0;
+        _pairLog.Clear(); _dropLog.Clear();
         // ⭐ `F-1` 收尾批新增面
         _dispatchTypeN.Clear(); _farmConcN.Clear();
         _farmWorkFrames = _farmIdleFrames = _farmThirstFrames = _farmOkFrames = 0;
@@ -1375,13 +1434,20 @@ public static class Valley_HH319_F1LongRun
         sb.AppendLine($"{U16Tag}·summary] ⭐ 收口件2 · `Unreachable` 前二名 npc 占比：{UnreachTop2Line()}");
         // ⭐⭐ `D832` 判据 4（口径钉死）：井仓水量**不得被写死国库的收取动作取走**；合法 `WaterHaul` 装载导致减少 ＝ 正常。
         //   鉴别力＝「井仓 Δ<0 ∧ 在册 `WaterHaul`＝0 ∧ 载水背包＝0」的秒数 ⇒ **应恒为 0**（>0 ⇒ 疑旁路取走 ⇒ 报红）。
-        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4（`D834` `D834`-C 正解 · 逐帧三项守恒）**：式 ＝ `Δ井仓 + Δ农场仓 + Δ(Σ背包载水)`"
-                      + $" ⇒ **守恒 Δ<0 的帧数={_consNegFrames}**（**期望 0** · 最负={_consMinDelta}）"
-                      + $" ⇒ ⭐ **判定＝{(_consNegFrames == 0 ? "**判绿**（无任何一帧出现「水凭空减少」⇒ 井仓水未被写死国库的收取动作取走）" : "**判红**（存在水凭空减少的帧 ⇒ 疑被旁路取走）")}**"
-                      + $" ｜⚠️ 口径：**不依赖产水速率、不用水位净差**（井仓自产 ⇒ `Δ` 是净额，`Δ<0` 本身不构成依据）");
+        // ⭐⭐ `D835` §A：**判据 4 定案载体 ＝ 「井仓下降帧」±N 帧配对**（⛔ 不再用守恒总式负值帧数）
+        sb.AppendLine($"{U16Tag}·summary] ⭐⭐ **判据 4（`D835` §A 定案口径）**：载体 ＝ **`Δ井仓<0` 的帧** ⇒ ±{PairN} 帧窗口内配对"
+                      + $"「`Σ|Δ井仓⁻| ≤ ΣΔ背包载水⁺`」｜依据＝**井仓的水只能经背包出去**（耗水扣**农场仓** `ProducerComponent:119-131`；井仓只自产 `:105-116`）"
+                      + $" ⇒ 窗口总数={_pairTotal} ｜合法（配得上·**已计入探针压制量**）={_pairMatched} ｜**未配对={_pairUnmatched}**（缺口合计={_pairDeficit}）"
+                      + $" ｜探针靶例维持压制总量={_suppressSum}（**合法右手项** · 出处 `Valley_HH319_F1LongRun.cs:519-526` `TakeOut(ww2-20)`）"
+                      + $" ⇒ ⚠️ **判定须人工裁定**：⛔ 本串**不自行写「判绿/判红」**（`D835` §B：落盘串的判定须按最终人工结论生成）；"
+                      + $"⭐ 人工口径＝「**未配对＝0** 且 缺口＝0」⇒ 判绿；⛔ 缺口>0 且**已扣压制项**才可作可疑信号");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 配对窗口明细（判红才列 · 期望空）：{(_pairLog.Count == 0 ? "（无）" : string.Join(" ／ ", _pairLog))}");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 4 `Δ井仓<0` **逐帧明细**（前 {Mathf.Min(_dropLog.Count, 40)} 条 · 交付物要求）：{(_dropLog.Count == 0 ? "（无）" : string.Join(" ／ ", _dropLog))}");
+        // ⚠️ `D835` §B（`D833` 纪律）：**守恒总式 ⛔ 不构成判据** —— 缺「耗项／收水侧／产项」⇒ 恒假负。
+        sb.AppendLine($"{U16Tag}·summary] ⚠️ （**不构成判据**·仅现象记录）守恒总式 `Δ井仓+Δ农场仓+ΔΣ背包` 的负值帧={_consNegFrames}（最负={_consMinDelta}）"
+                      + $" ⇒ **本式不构成判据（缺耗项/收水侧/产项 ⇒ 恒假负）**；⛔ 不得据此判绿/判红（`D833` §三 ＋ `D835` §B）");
         sb.AppendLine($"{U16Tag}·summary] （诊断·非判据）井仓水量最低={(_farmWellMin == int.MaxValue ? -1 : _farmWellMin)}"
-                      + $" ｜井仓 `Δ<0` 总帧={_wellDropFrames}（其中无承载={_wellDropNoHaulFrames}）"
-                      + $" ⇒ ⚠️ 仅现象记录（净额含自产 ⇒ ⛔ 不得据此判绿/判红）");
+                      + $" ｜井仓 `Δ<0` 总帧={_wellDropFrames}（其中无承载={_wellDropNoHaulFrames}）");
         // ⭐⭐ `F-1` 收尾批（`D820` §三）判据 2：**同农场在途 WaterHaul 并发数**分布（`D-1` 修后应 `=1` 为主 · ⛔ 基线无此列）
         {
             var l2 = new List<KeyValuePair<int, int>>(_farmConcN);
