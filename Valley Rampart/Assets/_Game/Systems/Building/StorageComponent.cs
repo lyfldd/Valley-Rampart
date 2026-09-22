@@ -341,7 +341,7 @@ public class StorageComponent : MonoBehaviour, IBuildingComponent, IHarvestable,
     /// ⏭️ 多资源仓下的**过渡读口**（搬运广告等单资源假设点的落点，归 `M1-G` 收口）。
     /// ⚠️ `M1-G-1c` 件C-4（`D827`）：原注「调用方 `HarvestCarry` 会先问国库能否收」**已作废** —— 该调用方**已随 `#40` 删除**；
     ///   现役同族守卫在 `Harvest()`（逐资源问 `CanRulerAccept`／`TreasuryCanAccept`）与链 A 落点
-    ///   （⭐ 墓碑注位置：**`StorageComponent.cs:351`** · 即原 `HarvestCarry()` 删除处）。</summary>
+    ///   （⭐ 墓碑注位置：**`StorageComponent.cs:352`** ＝ 原 `HarvestCarry()` 删除处 · 本锚点经 `D830` **当场复读**确认）。</summary>
     public ResourceType PrimaryStoredType()
     {
         foreach (var type in ResourceCatalog.AllTypes)

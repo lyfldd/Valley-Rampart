@@ -26,9 +26,9 @@ using UnityEngine;
 /// ⚠️ 原「后续扩展：砍树/建造/随军任务**统一走本中心派发**（P1）」承诺**已撤回**（件A4 · `L-63`）——
 ///   ⭐ **措辞收窄（件A-N2 · `D829`）**：**搬运／`KingdomTask` 派发**统一归 `TaskScheduler`（`GetPriority`
 ///   同 SO 同回退）；⚠️ 但**本类并未整删派发** —— **在役派发口 ＝ `DispatchCrew()`**（战争机器乘员 ·
-///   `:79` `Update` 内调用；邻文件 `Building.cs:349`／`UnitController.cs:1220` 的 docstring 亦明写
+///   `:82` `Update` 内调用；邻文件 `Building.cs:349`／`UnitController.cs:1220` 的 docstring 亦明写
 ///   「供调度中心（`ScheduleCenterStub.DispatchCrew`）按缺口派工人」）。
-///   ⚠️ **本端勘正（`D829` A-N2 收窄）**：`AssignFollow`（`:207`）**不是**在役派发口 —— 其实读为
+///   ⚠️ **本端勘正（`D829` A-N2 收窄）**：`AssignFollow`（`:215`）**不是**在役派发口 —— 其实读为
 ///   **空体占位存根**（**0 调用** 全库 ＋ 方法体为空 ＋ 自注「旧测试占位，P1 统一派发随军任务时实现」）
 ///   ⇒ ⛔ 不得与 `DispatchCrew` 并列称"在役"（`L-76`：概括句射程须与实际职责**逐条**对齐）。
 /// </summary>
@@ -103,7 +103,7 @@ public class ScheduleCenterStub : MonoBehaviour
     //       ⇒ `BehaviorExecutor` 到达即 `HarvestCarry()`（**源仓直通国库**）。
     //   ⚠️ 连带已改：`BuildingPanel:183-187`（原读 `IsTransporting` ⇒ 改读 `TaskScheduler.HasWorkerAssigned(源)`）。
     //   ⚠️ 本类**未整删**：`DispatchCrew`（在役 · `Update` 调用 ＋ 邻文件 docstring 引用）**仍在役**；
-    //      ⚠️ 但 `AssignFollow` **不在役**（`:207` 空体占位 · 0 调用）—— 本行原并列写法已由 `D829` A-N2 收窄勘正。
+    //      ⚠️ 但 `AssignFollow` **不在役**（`:215` 空体占位 · 0 调用）—— 本行原并列写法已由 `D829` A-N2 收窄勘正。
 
     /// <summary>
     /// 战争机器乘员派发（改动② 工人操作战争机器，方式 A：工人主动去操控）。
