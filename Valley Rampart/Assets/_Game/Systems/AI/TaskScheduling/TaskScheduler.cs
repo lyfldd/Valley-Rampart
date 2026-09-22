@@ -523,8 +523,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             if (LoadInventoryFromSource(brain, task))
                             {
                                 ResolveChestDest(brain, task);   // ⭐ HH.316 件4：箱源第二段落点（装载后即时解析）
-                                _npcStateMap[id] = TaskState.MovingToDest;
-                                InjectCarryStimulus(brain, task);
+                                EnterMovingToDest(id, brain, task);   // ⭐ `U-20`(f)：转段 ＝ 状态 ＋ **重置段预算** ＋ 刺激/路径
                             }
                             else
                             {
@@ -538,8 +537,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             // 源=装填目标单位（SourcePos=单位），故取货不走 Building StorageComponent，改走弹药仓库。
                             if (LoadAmmoToBackpack(brain, task))
                             {
-                                _npcStateMap[id] = TaskState.MovingToDest;
-                                InjectCarryStimulus(brain, task);
+                                EnterMovingToDest(id, brain, task);   // ⭐ `U-20`(f)
                             }
                             else
                             {
@@ -553,8 +551,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             //   上限＝**工地仓当前缺口量**（⭐ 阈值拦截：够阈值即停 ⇒ ⛔ 不多搬）。
                             if (LoadSiteMaterials(brain, task))
                             {
-                                _npcStateMap[id] = TaskState.MovingToDest;
-                                InjectCarryStimulus(brain, task);
+                                EnterMovingToDest(id, brain, task);   // ⭐ `U-20`(f)
                             }
                             else
                             {
@@ -571,8 +568,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             //   ⚠️ 退役前本任务落 `else ⇒ Complete`（半假搬运：水凭空入桶）⇒ 本分支是修复核心。
                             if (LoadInventoryFromSource(brain, task))
                             {
-                                _npcStateMap[id] = TaskState.MovingToDest;
-                                InjectCarryStimulus(brain, task);
+                                EnterMovingToDest(id, brain, task);   // ⭐ `U-20`(f)
                             }
                             else
                             {
@@ -1098,6 +1094,24 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             issuer: task.source));
         // ⭐ 位移驱动（与刺激同源同点 ⇒ 语义一致）：`destPos` 已由 `ResolveChestDest` 等解析完毕（调用序保证）。
         EnsurePfAndSetDest(brain, task.destPos);
+    }
+
+    /// <summary>⭐ `U-20` 件1（`D817` §四 · 修法 (f) · 形态钉死）：**进入 `MovingToDest` 段**（状态 ＋ **重置段预算** ＋ 刺激/路径）。
+    /// 四个转段点（Transport／AmmoReload／Build／WaterHaul）共用本口 ⇒ 单点维护。
+    /// ⭐ **`_taskStartTime[id] = Time.time` ＝ 「每段独立预算」**：改前该值只在 `Dispatch` 设置，而
+    ///   `MovingToSource`（`:450`）与 `MovingToDest`（`:571`）**共用**同一 `_taskStartTime` ⇒ `taskTimeout=30f`
+    ///   实为「**派发 → 完成**」总预算 ⇒ 两段位移任务（`WaterHaul` 去 ≈18s ＋ 回 ≈12s ／ `Transport` 箱→仓）
+    ///   **结构性必然超时**（`D817` §二 铁证：7 组 Δt 全 ≈30 游戏秒）。补上重置后与 `Working` 段的既有形制
+    ///   （`GetTaskDuration` 独立参数）统一为「**每段一预算**」。
+    /// ⛔⛔ **禁止把重置搬进 `InjectCarryStimulus`** —— 它被 `MovingToDest` 的 else 续命分支**每 tick** 调用
+    ///   ⇒ 每帧重置 ⇒ **永不超时**（真卡死不再被回收，与 `U-16`「无自愈」叠加，比改前更糟）。本口只在
+    ///   **装载成功的那一次**调用（4 处转段点）⇒ 频率正确。
+    /// ⚠️ 最坏回收时长 30s → **60s**（两段各 30）＝ 已知代价（`D817` 已列观察项）。</summary>
+    private void EnterMovingToDest(int id, NPCBrain brain, KingdomTask task)
+    {
+        _npcStateMap[id] = TaskState.MovingToDest;
+        _taskStartTime[id] = Time.time;
+        InjectCarryStimulus(brain, task);
     }
 
     // ===== 终点解析（QQQ.2 §10.3：派发时动态解析 destPos，不硬编码）=====

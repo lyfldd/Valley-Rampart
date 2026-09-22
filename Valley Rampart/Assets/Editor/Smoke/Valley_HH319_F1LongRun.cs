@@ -58,6 +58,14 @@ using UnityEditor;
 //        d) 新增第 4 菜单「U16b reason覆盖列(构造法)」：定向触发 `External`／`SourceInvalid`／`BrainLost`
 //           （⚠️ **构造法** ＋ 单列「生产路径可达性」，`L-51`）；⛔ 独立档。
 //        ⭐ `·trans]` **保留**（本轮判据救星）。
+//     ⑦ 【⭐ `U-20` 批 · `D817` §六】：
+//        a) **件2 补强**：`[HH319U16·complete]` 增 `⭐Working计时已到=`（＝`Time.time - _workStartTime[id]
+//           >= GetTaskDuration(task)`，逐帧由 `·seq]` 缓存 ⇒ **仅反射只读**）—— ⛔ **不依赖"回看最近非 None"**；
+//           ⛔ **回看列保留**（`⭐来源分支=`）以做**交叉验证**（两列不一致即报）。
+//        b) **件2 盲区率**：summary 显式输出「未知 <N> ／ 总 <M> ＝ x%」（上批实测 131/158 ＝ 83%）。
+//        c) **件3 分桶**：summary 新增「Abandon 按 `type/reason` 分桶」—— 用于区分「两段位移任务
+//           （应受 (f) 影响）」vs「路程短但另有卡死源」。
+//        ⛔ 判据 1/2/5/6 既有语义**一字未改**（本项属**只增不改**）。
 // ============================================================================
 public static class Valley_HH319_F1LongRun
 {
@@ -212,6 +220,27 @@ public static class Valley_HH319_F1LongRun
         var m = TaskMap();
         KingdomTask t;
         return (m != null && m.TryGetValue(id, out t)) ? t : null;
+    }
+
+    /// <summary>⭐ `U-20` 件2：反射只读 `TaskScheduler._workStartTime[id]`（0 ＝ 无记录）。</summary>
+    private static float WorkStartOf(int id)
+    {
+        var ts = TaskScheduler.Instance;
+        if (ts == null) return 0f;
+        var f = typeof(TaskScheduler).GetField("_workStartTime", BindingFlags.NonPublic | BindingFlags.Instance);
+        var m = f != null ? f.GetValue(ts) as Dictionary<int, float> : null;
+        float v;
+        return (m != null && m.TryGetValue(id, out v)) ? v : 0f;
+    }
+
+    /// <summary>⭐ `U-20` 件2：反射只读 `TaskScheduler.GetTaskDuration(KingdomTask)`（`Working` 段的独立预算）。</summary>
+    private static float DurationOf(KingdomTask task)
+    {
+        if (task == null) return 0f;
+        var mi = typeof(TaskScheduler).GetMethod("GetTaskDuration", BindingFlags.NonPublic | BindingFlags.Instance);
+        if (mi == null) return 0f;
+        try { return (float)mi.Invoke(TaskScheduler.Instance, new object[] { task }); }
+        catch { return 0f; }
     }
 
     /// <summary>⭐ 构造法（`L-51`）：反射删 `_npcBrainMap[id]` ⇒ 触发 `BrainLost` 支（⛔ 非 public API）。</summary>
@@ -473,6 +502,11 @@ public static class Valley_HH319_F1LongRun
     private static int _completeWaterHaulFromDest;   // ⭐ 判据 2：来源分支 ＝ `MovingToDest` 到达（**唯一计入**）
     private static readonly Dictionary<string, int> _completeSourceN = new Dictionary<string, int>(); // 来源分支分布
     private static int _completeAnomalyN;            // ⭐ 判据 5：来源**非** `MovingToDest` 的 WaterHaul 完成（＝异常分支）
+    // ---- `U-20` 件2／件3（`D817` §六）：Working 计时布尔 ＋ 盲区率 ＋ Timeout 按类型分桶 ----
+    private static readonly Dictionary<int, float> _workStartLast = new Dictionary<int, float>();   // 每 npc 最近一次 `_workStartTime`
+    private static readonly Dictionary<int, float> _workDurLast = new Dictionary<int, float>();     // 每 npc 最近一次 `GetTaskDuration(task)`
+    private static readonly Dictionary<string, int> _abandonTypeReason = new Dictionary<string, int>();  // `type/reason` 分桶
+    private static int _unknownSrcN, _srcTotalN;     // ⭐ 盲区率：来源＝未知 ／ 完成总数
     private static int _farmWaterPeak2;              // ⭐ 判据 1：农场仓水量增量（卸货到账）
     private static float _farmFirstGainRt = -1f;     // 首次增量时刻
     private static bool _farmGained;
@@ -501,6 +535,9 @@ public static class Valley_HH319_F1LongRun
         // `U-16b` 件B 新增面
         _lastKnownState.Clear(); _completeSourceN.Clear();
         _completeWaterHaulFromDest = 0; _completeAnomalyN = 0;
+        // `U-20` 件2／件3 新增面
+        _workStartLast.Clear(); _workDurLast.Clear(); _abandonTypeReason.Clear();
+        _unknownSrcN = 0; _srcTotalN = 0;
         _farmWaterPeak2 = 0; _farmGained = false; _farmFirstGainRt = -1f;
         Application.logMessageReceived += OnLog;             // P3：console 镜像（⭐ 本批第一优先）
         EventBus.Subscribe<PathFailedEvent>(OnPathFailedEvt); // P3：PathFailedEvent 只读计数（按 npcId 分桶）
@@ -591,6 +628,10 @@ public static class Valley_HH319_F1LongRun
         if (reason == "\u0000" || reason.Length == 0) reason = "?";
         int n; _abandonN.TryGetValue(id, out n); _abandonN[id] = n + 1;
         int r; _abandonReasonN.TryGetValue(reason, out r); _abandonReasonN[reason] = r + 1;
+        // ⭐ `U-20` 件3：**按 `type/reason` 分桶** —— 用于区分「两段位移任务（应受 (f) 影响）」vs
+        //   「路程短但另有卡死源」（如 `Production`）⇒ 单有总数无法定性。
+        string tr = type + "/" + reason;
+        int trn; _abandonTypeReason.TryGetValue(tr, out trn); _abandonTypeReason[tr] = trn + 1;
         bool flag = FlagOf(id);
         FlagTrace(id);
         U16Write($"{U16Tag}·abandon] {Stamp()} type={type} npc={id} reason={reason} 第{_abandonN[id]}次"
@@ -656,6 +697,15 @@ public static class Valley_HH319_F1LongRun
         string src;
         if (!_lastKnownState.TryGetValue(id, out src) || src == null) src = "未知";
         int sn; _completeSourceN.TryGetValue(type + "/" + src, out sn); _completeSourceN[type + "/" + src] = sn + 1;
+        _srcTotalN++;
+        if (src == "未知") _unknownSrcN++;
+        // ⭐ `U-20` 件2：**`Working` 计时是否已到**（`Time.time - _workStartTime[id] >= GetTaskDuration(task)`）
+        //   ⇒ 可直接区分 `Working` **正常完工**（已到）vs **装载失败分支**（未到）—— ⛔ 不依赖回看列；
+        //   两列**不一致即报**（交叉验证）。
+        float ws, dur;
+        bool workDone = false, hasWork = false;
+        if (_workStartLast.TryGetValue(id, out ws) && _workDurLast.TryGetValue(id, out dur) && dur > 0f)
+        { hasWork = true; workDone = (Time.time - ws) >= dur; }
         if (type == "WaterHaul")
         {
             if (src == TaskState.MovingToDest.ToString()) _completeWaterHaulFromDest++;
@@ -667,6 +717,7 @@ public static class Valley_HH319_F1LongRun
         FlagTrace(id);
         U16Write($"{U16Tag}·complete] {Stamp()} type={type} npc={id} 第{_completeN[id]}次"
                  + $" 在册(taskMap)={InMap(id)} Istask={flag} ⭐来源分支={src}"
+                 + $" ⭐Working计时已到={workDone}（有工时戳={hasWork}）"
                  + $" 计入真完成={(type == "WaterHaul" && src == TaskState.MovingToDest.ToString())}");
     }
 
@@ -687,6 +738,14 @@ public static class Valley_HH319_F1LongRun
         var uc = FindUnit(id);
         string st = TaskScheduler.HasInstance ? TaskScheduler.Instance.GetWorkerState(id).ToString() : "noSched";
         if (st != TaskState.None.ToString()) _lastKnownState[id] = st;   // ⭐ 判据 2 配对用（只记非 None）
+        // ⭐ `U-20` 件2：逐帧缓存 `_workStartTime` ＋ `GetTaskDuration(task)`（**在册时**）——
+        //   供 `·complete]` 判「`Working` 计时是否已到」（⛔ 不依赖"回看最近非 None"，两列交叉验证）。
+        var tk2 = TaskOf(id);
+        if (tk2 != null)
+        {
+            float ws2 = WorkStartOf(id);
+            if (ws2 > 0f) { _workStartLast[id] = ws2; _workDurLast[id] = DurationOf(tk2); }
+        }
         U16Write($"{U16Tag}·seq] {Stamp()} +{rt:F2}s npc={id} state={st} 在册={InMap(id)} Istask={FlagOf(id)}"
                  + $" {TaskSrcDesc(id)}"
                  + (uc == null ? " uc=null（已亡/被回收）" : $" | {PfDesc(uc, withAstar: false)}"));
@@ -958,6 +1017,11 @@ public static class Valley_HH319_F1LongRun
                       + $" ／ ⭐ **来源＝`MovingToDest` 到达 ＝ {_completeWaterHaulFromDest} 条（唯一计入）**"
                       + $" ／ 异常分支 ＝ {_completeAnomalyN} 条（`Working` 装载失败等）");
         sb.AppendLine($"{U16Tag}·summary]     完成来源分支分布：{SrcLine()}");
+        // ⭐ `U-20` 件2：**盲区率**（来源＝未知 ／ 完成总数）—— ⛔ 本批（`4de46407`/`4259f2fc`）实测 131/158 ＝ 83%。
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 2 补强 · 来源**盲区率**：未知 {_unknownSrcN} ／ 总 {_srcTotalN}"
+                      + $" ＝ {(_srcTotalN > 0 ? (_unknownSrcN * 100f / _srcTotalN).ToString("F1") : "0")}%"
+                      + $"（盲区＝`ClearNpc` 先于日志发 ⇒ 只能回看；⛔ 由下一行的 `Working计时已到` 布尔补强，两列不一致即报）");
+        sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 3 · Abandon 按 `type/reason` 分桶：{TypeReasonLine()}");
         sb.AppendLine($"{U16Tag}·summary] ⭐ 判据 1 · 卸货到账（水位式）：农场仓水峰值＝{_farmWaterPeak2}"
                       + $" 首次见水＝{(_farmGained ? _farmFirstGainRt.ToString("F2") + "s" : "未见")}"
                       + $" ⇒ 到账={(_farmWaterPeak2 > 0)}");
@@ -994,6 +1058,17 @@ public static class Valley_HH319_F1LongRun
         if (d.Count == 0) return "（无）";
         var sb = new StringBuilder();
         foreach (var kv in d) sb.Append($"npc{kv.Key}×{kv.Value} ");
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>⭐ `U-20` 件3：Abandon 的 `type/reason` 分桶行（长列表 ⇒ 按计数降序，便于定性两段任务 vs 短程任务）。</summary>
+    private static string TypeReasonLine()
+    {
+        if (_abandonTypeReason.Count == 0) return "（无）";
+        var list = new List<KeyValuePair<string, int>>(_abandonTypeReason);
+        list.Sort((a, b) => b.Value.CompareTo(a.Value));
+        var sb = new StringBuilder();
+        for (int i = 0; i < list.Count; i++) sb.Append($"{list[i].Key}×{list[i].Value} ");
         return sb.ToString().Trim();
     }
 
