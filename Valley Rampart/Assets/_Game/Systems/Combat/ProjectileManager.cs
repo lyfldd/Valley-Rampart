@@ -94,10 +94,12 @@ public class ProjectileManager : Singleton<ProjectileManager>
         Vector2 targetPos = target.GetPosition();
 
         // 弹道误差圆：以目标位置为中心，在误差半径内随机偏移落点
+        // 【HH.320 件7 · R4】散布**保留**，随机源改「种子派生的 System.Random」（唯一口 CombatRules.NextSpreadOffset）
+        //   —— 原 `Random.insideUnitCircle`（UnityEngine.Random 全局流）已退役：破「同 seed 复跑逐字一致」。
         float errorRadius = _config.projectileErrorRadius;
         if (errorRadius > 0f)
         {
-            targetPos += Random.insideUnitCircle * errorRadius;
+            targetPos += CombatRules.NextSpreadOffset(errorRadius);
         }
 
         float distance = Vector2.Distance(startPos, targetPos);
@@ -229,13 +231,19 @@ public class ProjectileManager : Singleton<ProjectileManager>
                 if (unit.GetFaction() == Faction.None) continue;    // 无阵营跳过
             }
 
-            float dist = GridMath.DistCells(p.targetPos, unit.GetPosition());
+            // 【HH.320 件2】命中距离改**视觉格域**（`DistVisual`）：与射程/索敌同口径（⛔ 非格单位椭圆）
+            float dist = GridMath.DistVisual(p.targetPos, unit.GetPosition());
             if (dist <= hitRadiusCells && dist < bestDist)
             {
                 bestDist = dist;
                 bestTarget = unit;
             }
         }
+
+        // ⭐【件 6】命中兜底：落点落在**多格建筑菱形底座**内 ⇒ 命中该建筑
+        //   （⛔ 非「到 pivot 圆心距」；单位命中优先 ⇒ 既有语义零回归）
+        if (bestTarget == null)
+            bestTarget = FindBuildingAtLanding(p.targetPos, attackerFaction);
 
         // 命中 -> 走伤害计算（委托 DamageSystem）
         if (bestTarget != null)
@@ -252,7 +260,7 @@ public class ProjectileManager : Singleton<ProjectileManager>
                 {
                     if (unit == null || unit == bestTarget || unit.CurrentHp <= 0) continue;
                     if (unit.GetFaction() == attackerFaction || unit.GetFaction() == Faction.None) continue;
-                    float dist = GridMath.DistCells(p.targetPos, unit.GetPosition());
+                    float dist = GridMath.DistVisual(p.targetPos, unit.GetPosition());   // 【HH.320 件2】视觉格域
                     if (dist <= hitRadiusCells && dist < throughDist) { throughDist = dist; throughTarget = unit; }
                 }
                 if (throughTarget != null)
@@ -294,40 +302,45 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return false;
         if (UnitRegistry.Instance == null) return false;
 
-        Vector2 a = p.startPos;
-        Vector2 b = p.targetPos;
-        Vector2 ab = b - a;
-        float abLenSq = ab.sqrMagnitude;
-        if (abLenSq <= 0.0001f) return false;                    // 起终点重合：无弹道区间
-
-        float bandHalf = GridSystem.Instance.Config.cellSize.x * 0.5f;   // 带半宽 ≈ 半格
-        float abSq = bandHalf * bandHalf;
-
-        UnitController blocker = null;
-        float blockerT = float.MaxValue;
-        foreach (var unit in UnitRegistry.Instance.GetAllUnits())
-        {
-            var uc = unit as UnitController;
-            if (uc == null || uc.fortification == null) continue;
-            if (p.arcHeightCells > uc.fortification.heightCells) continue; // 弧高够 → 越过该工事（继续找后续）
-
-            Vector2 pos = uc.transform.position;
-            if (Vector2.SqrMagnitude(pos - a) <= abSq) continue;    // 起点格不计（原循环 cx 从 startCell+dir 起）
-            if (Vector2.SqrMagnitude(pos - b) <= abSq) continue;    // 终点格不计（原循环 cx != endCell）
-            float t = Vector2.Dot(pos - a, ab) / abLenSq;
-            if (t <= 0f || t >= 1f) continue;                       // 只算弹道区间内
-            Vector2 closest = a + ab * t;
-            if (Vector2.SqrMagnitude(pos - closest) > abSq) continue; // 不在带内
-            if (t >= blockerT) continue;                            // 只认最靠射手的那一枚
-            blocker = uc;
-            blockerT = t;
-        }
+        float bandHalf = GridMath.PathBandHalf;   // 【HH.320 件2】带半宽收口为单一世界量（＝屏幕横向半格 · 0.64）
+        // ⭐【HH.320 件4 · D846 P4 同源铁律】阻挡者选取改走**唯一口**（与视线链 `CombatRules.HasLineOfSight` 同一函数）——
+        //   两链各写一套 ⇒「选得到／打不到」必然复现（本批要除的病）。弧高豁免逐字保留（applyArcHeight=true）。
+        UnitController blocker = CombatRules.FindFortificationBlocker(
+            p.startPos, p.targetPos, bandHalf, applyArcHeight: true, arcHeightCells: p.arcHeightCells);
 
         if (blocker == null) return false;
-        // 被挡：穿透等级决定对墙伤害（3.6 §5.1）
+        // 被挡：穿透等级决定对墙伤害（3.6 §5.1）—— ⛔ 本语义不得丢（件 3/件 4 红线）
         if (p.pierceLevel >= blocker.fortification.defenseLevel)
             DamageSystem.Instance?.ApplyDamage(p.attacker, blocker, p.attack, 0f, true);
         return true;
+    }
+
+    /// <summary>⭐【HH.320 件 6】**落点所在建筑**（多格建筑**菱形底座**命中）：
+    /// 判据唯一口 ＝ <see cref="CombatRules.InDiamondBase"/>（格坐标下的轴对齐矩形 ≡ 世界空间等轴菱形底座，
+    /// ⛔ 非「到 pivot 的圆心距」）。
+    /// 查法：落点地块格 ±1 的 **3×3** `BuildingRegistry.GetAt`（`O(1)`×9 · **零分配**）——
+    /// 底座按 sprite 居中张成（半宽 `footprint/2` 格）⇒ 落点格最多比 footprint 外扩 1 格 ⇒ 3×3 必覆盖候选。
+    /// 过滤：同阵营／`None` 不计（与单位命中同一阵营口径）；非 `Active`／无 `def` 跳过。</summary>
+    private Building FindBuildingAtLanding(Vector2 landing, Faction attackerFaction)
+    {
+        var grid = GridSystem.Instance;
+        var reg = BuildingRegistry.Instance;
+        if (grid == null || grid.Config == null || reg == null) return null;
+        var cOpt = grid.WorldToCoord(landing);
+        if (!cOpt.HasValue) return null;
+        GridCoord c = cOpt.Value;
+        Vector2 cellSize = grid.Config.cellSize;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                var b = reg.GetAt(new GridCoord(c.x + dx, c.y + dy));
+                if (b == null || b.def == null || !b.IsActive || b.CurrentHp <= 0) continue;
+                var f = b.GetFaction();
+                if (f == attackerFaction || f == Faction.None) continue;
+                if (!CombatRules.InDiamondBase(landing, b.transform.position, b.footprint, cellSize)) continue;
+                return b;
+            }
+        return null;
     }
 
     /// <summary>查目标位置附近微格内的单位（doc1 微格主表 D70，2_5 步骤3）。</summary>
@@ -340,7 +353,9 @@ public class ProjectileManager : Singleton<ProjectileManager>
         var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
         if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
         GridCoord center = centerOpt.Value;
-        int subRange = Mathf.Max(0, Mathf.CeilToInt(radiusCells * subDiv));
+        // 【HH.320 件18】**微格候选窗收口为单一口**（超集）：原 `radiusCells × subDiv` 非超集（R_vis=0.25 时须 2 而取 1
+        //   ⇒ 判定圈内却不进候选 ＝ 漏命中）⇒ 改走 GridMath.SubWindowForVisualRadius（现配置 ⌈5·R_vis⌉ ⇒ 2）。
+        int subRange = GridMath.SubWindowForVisualRadius(radiusCells, subDiv);
 
         for (int dy = -subRange; dy <= subRange; dy++)
         {

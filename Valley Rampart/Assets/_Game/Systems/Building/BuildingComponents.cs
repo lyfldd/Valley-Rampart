@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -53,6 +54,10 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
     /// <summary>是否可开火（工人操作解锁：Catapult 等 crewRequired>0 建筑需工人操作才可发射，改动②）。</summary>
     public bool IsOperational => _building != null && _building.HasEnoughCrew();
 
+    // 【HH.320 件2】单遍查表缓冲（**成员持有** ⇒ 稳态零分配 · ⛔ 禁每次查询 new List）
+    private readonly List<UnitController> _queryBuf = new List<UnitController>(64);
+    private RectInt _queryRect;
+
     public void Init(Building building)
     {
         _building = building;
@@ -72,8 +77,8 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
         if (_cooldown > 0f) _cooldown -= Time.deltaTime;
 
         // 2_5 射程圆：圈内最近目标按欧氏距离（360° 无朝向限制）
-        float rangeWorld = def.combat.range * GridSystem.Instance.Config.cellSize.x;
-        IDamageable target = FindNearestEnemyInRange(rangeWorld);
+        // 【HH.320 件2 · D843】射程改**视觉格域**：`def.combat.range` 本身就表「格」（⛔ 不再 ×cellSize 标量 · R5）
+        IDamageable target = FindNearestEnemyInRange(def.combat.range);
         HasTarget = target != null;
         if (target == null) return;
 
@@ -94,33 +99,41 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
         }
     }
 
-    /// <summary>射程圆内最近敌对单位（GridSystem 邻近格扫描，y 地面+飞行两层，欧氏距离）。</summary>
-    private IDamageable FindNearestEnemyInRange(float rangeWorld)
+    /// <summary>射程圆内最近敌对单位（2_5 射程圆 · **视觉格域** ＋ 件 3′ 视线过滤）。
+    /// 【HH.320 件2/件18】改「**微格超集窗 ＋ 单遍过滤**」：
+    ///   ① 窗 ＝ <see cref="GridMath.SubWindowForVisualRadius"/>（**超集**：覆盖视觉格圆所需的子格索引差上界；
+    ///      ⛔ 原 `⌈rangeWorld/cellSize⌉` 地块窗**不是**视觉圆的超集 ⇒ 圈内目标可能不进扫描 ⇒ 漏索敌）；
+    ///   ② 查 ＝ `GridSystem.FillUnitsInRect`（**单遍** `O(N)` · 无分配；⛔ 原逐格 `GetUnitsInCell` 为 `O(N)/格`
+    ///      （121~225 格 × 每次全表枚举）属 D485 已判「不可接受」的同族残留）；
+    ///   ③ 过滤 ＝ `DistVisual ≤ range`（与判定/命中同口径）＋ **建筑炮塔全远程** ⇒ **逐个候选**视线过滤
+    ///      （件 3′：⛔ 非「任一无效即整体放弃」，须跳过无视线者继续找次近）。</summary>
+    private IDamageable FindNearestEnemyInRange(float rangeVisual)
     {
-        float cellSize = GridSystem.Instance.Config.cellSize.x;
-        var centerOpt = GridSystem.Instance.WorldToCoord(_building.transform.position);
+        var grid = GridSystem.Instance;
+        if (grid == null || grid.Config == null) return null;
+        var centerOpt = grid.WorldToSubCoord(_building.transform.position);
         if (!centerOpt.HasValue) return null;
-        GridCoord center = centerOpt.Value;
-        int cellRange = Mathf.Max(1, Mathf.CeilToInt(rangeWorld / cellSize));
+        GridCoord c = centerOpt.Value;
+        int n = GridMath.SubWindowForVisualRadius(rangeVisual, grid.Config.subCellDivisor);
+        _queryRect = new RectInt(c.x - n, c.y - n, 2 * n + 1, 2 * n + 1);   // RectInt＝值类型 ⇒ 无分配
+        _queryBuf.Clear();
+        grid.FillUnitsInRect(_queryRect, _queryBuf);
 
+        Vector2 myPos = _building.transform.position;
         IDamageable nearest = null;
         float nearestDist = float.MaxValue;
-        // 2_5 射程圆：以建筑为中心的方形邻格扫描（dx、dy 全向），再用欧氏距离做圆形半径过滤（360° 无朝向限制）。
-        for (int dx = -cellRange; dx <= cellRange; dx++)
+        for (int i = 0; i < _queryBuf.Count; i++)
         {
-            for (int dy = -cellRange; dy <= cellRange; dy++)
-            {
-                var units = GridSystem.Instance.GetUnitsInCell(new GridCoord(center.x + dx, center.y + dy));
-                foreach (var unit in units)
-                {
-                    var uc = unit as UnitController;
-                    if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
-                    var f = uc.GetFaction();
-                    if (f == _building.GetFaction() || f == Faction.None) continue;
-                    float d = Vector2.Distance((Vector2)_building.transform.position, uc.transform.position);
-                    if (d <= rangeWorld && d < nearestDist) { nearestDist = d; nearest = uc; }
-                }
-            }
+            var uc = _queryBuf[i];
+            if (uc == null || !uc.IsAlive || uc.CurrentHp <= 0) continue;
+            var f = uc.GetFaction();
+            if (f == _building.GetFaction() || f == Faction.None) continue;
+            Vector2 p = uc.transform.position;
+            float d = GridMath.DistVisual(myPos, p);
+            if (d > rangeVisual || d >= nearestDist) continue;
+            if (!CombatRules.HasLineOfSight(myPos, p)) continue;   // 件 3′：无视线 ⇒ 跳过该候选（继续找次近）
+            nearestDist = d;
+            nearest = uc;
         }
         return nearest;
     }

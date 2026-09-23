@@ -1703,7 +1703,8 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
             CombatRules.ComputeKnockback(_profession.chargeDamage, uc.Toughness,
                 out float distWorld, out float dur);
             Vector2 kbDir = _chargeDir;
-            if (Random.value > 0.8f) kbDir = -_chargeDir;   // 80% 沿冲击 / 20% 反向
+            // 80% 沿冲击 / 20% 反向 —— 【HH.320 件7/R4】改伤害链确定性随机流（⛔ 原 UnityEngine.Random.value 全局流）
+            if (CombatRules.RollChance(0.2f)) kbDir = -_chargeDir;
             DamageSystem.Instance?.TryKnockback(uc, kbDir, distWorld, dur);
 
             // 3.6 §5.3 穿透冲锋：路径上所有敌对单位都吃冲锋伤害（穿透群伤）

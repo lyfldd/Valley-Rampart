@@ -126,6 +126,8 @@ public class DamageSystem : Singleton<DamageSystem>
         _pendingAttacks.Clear();
         _kingdomAtkPub.Clear();   // 处方 A（D556）：节流/补发状态随轮清——否则上局 pending 在新局乱发（A 验证轮实测串局）
         _tickTimer = 0f;
+        // 【HH.320 件7 · R4】伤害链随机流（种子派生 System.Random）随轮重播 ⇒ 同 seed 同局复跑逐字一致
+        CombatRules.ResetCombatRandom();
     }
 
     private void Update()
@@ -296,9 +298,11 @@ public class DamageSystem : Singleton<DamageSystem>
             return;
         }
 
-        // 检查距离（2_5 射程圆，格单位各向同性判定）：target 是否仍在范围内
-        // 旧：Vector2.Distance(world) > range×cellSize（标量）；新：GridMath.DistCells > range（格单位）
-        if (GridMath.DistCells(attacker.GetPosition(), target.GetPosition()) > profile.range)
+        // 检查距离（2_5 射程圆）：target 是否仍在范围内
+        // 【HH.320 件2 · D843】改**视觉格域**（世界欧氏圆 · 屏幕上呈正圆）：DistVisual ≤ range ⇒ 沿格轴向射程恰为 range 格。
+        //   演变：① 旧＝Vector2.Distance > range×cellSize（标量 · R5 违规）② 中间＝DistCells > range（格单位椭圆）
+        //   ③ 本批＝GridMath.DistVisual > profile.range（世界圆 · 与索敌/命中同口径）。
+        if (GridMath.DistVisual(attacker.GetPosition(), target.GetPosition()) > profile.range)
         {
             // 目标超出范围，不攻击（等 NPCBrain 换目标或靠近）
             return;
@@ -433,7 +437,8 @@ public class DamageSystem : Singleton<DamageSystem>
             if (c == null || c == victim || !c.IsAlive) continue;
             if (c.GetFaction() != victim.GetFaction()) continue;
             if (!(c.Data is NpcProfessionDef nd) || nd.shelterChance <= 0f) continue;
-            float dist = GridMath.DistCells(victim.GetPosition(), c.GetPosition());
+            // 【HH.320 件2】庇护半径改视觉格域（与射程/命中同口径）
+            float dist = GridMath.DistVisual(victim.GetPosition(), c.GetPosition());
             if (dist > nd.shelterRadiusCells) continue;
             if (dist < bestDist) { bestDist = dist; best = c; }
         }
@@ -468,7 +473,8 @@ public class DamageSystem : Singleton<DamageSystem>
             if (unit == null || unit.CurrentHp <= 0) continue;
             if (unit.GetFaction() == attackerFaction || unit.GetFaction() == Faction.None) continue;
 
-            float dist = GridMath.DistCells(worldPos, unit.GetPosition());
+            // 【HH.320 件2】溅射半径改视觉格域（否则「命中按世界圆、溅射按格椭圆」分裂）
+            float dist = GridMath.DistVisual(worldPos, unit.GetPosition());
             if (dist > aoeRadiusCells) continue;
 
             float falloff = 1f - aoeFalloff * (dist / aoeRadiusCells);
@@ -487,7 +493,8 @@ public class DamageSystem : Singleton<DamageSystem>
         var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
         if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
         GridCoord center = centerOpt.Value;
-        int subRange = Mathf.Max(0, Mathf.CeilToInt(radiusCells * subDiv));
+        // 【HH.320 件18】微格候选窗收口为单一口（超集 · 原 `radiusCells × subDiv` 非超集）
+        int subRange = GridMath.SubWindowForVisualRadius(radiusCells, subDiv);
 
         for (int dy = -subRange; dy <= subRange; dy++)
         {

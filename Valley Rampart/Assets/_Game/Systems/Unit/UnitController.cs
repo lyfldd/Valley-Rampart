@@ -1106,10 +1106,11 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
             ? GridSystem.Instance.Config.cellSize.x : 1f;
     }
 
-    /// <summary>静态单位射程内最近敌对单位（D485 单遍过滤法）。</summary>
+    /// <summary>静态单位射程内最近敌对单位（D485 单遍过滤法 ＋ HH.320 件3′ 视线过滤）。</summary>
     private IDamageable FindNearestEnemyInRange()
     {
-        return FindNearestEnemy(_professionSnapshot.attackRange * GetCellSize());
+        // 【HH.320 件2】射程改**视觉格域**（唯一换算口 GridMath.VisualToWorld；⛔ 不再把射程按旧「屏幕横向格」标量放大）
+        return FindNearestEnemy(GridMath.VisualToWorld(_professionSnapshot.attackRange), _professionSnapshot.isRanged);
     }
 
     /// <summary>
@@ -1117,23 +1118,28 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// HH.243（DZ-149/D693）：旧实现 `for(y=0;y<=1;y++)` 把 `GridCoord.y`（2.5D 已是**地图行号**）
     /// 当"地面+飞行两层"，只扫最南两行 ⇒ 其余行敌人不可被索敌（D485 同款残留，全库清点见 D693）。
     /// 修法照抄 D485：UnitRegistry 全量单遍 → 阵营过滤 → 欧氏圆（禁方格遍历：GetUnitsInCell O(N)/格）。
+    /// 【HH.320 件3′】**仅远程**逐个候选过滤视线（`isRanged` ＋ 弹型非 `HighArc`）：
+    ///   ⛔ 无视线 ⇒ **跳过该候选、继续找次近的有视线者**（⛔ 非「任一无效即整体放弃」）；
+    ///   ⛔ 近战（`isRanged == false`）不查视线；高抛（`HighArc`）豁免（`07` §七 判据 11）。
+    ///   半径入参仍为**世界量**（射程/感知两域由各自调用点经唯一换算口喂入 ⇒ 不混域）。
     /// </summary>
-    private IDamageable FindNearestEnemy(float rangeWorld)
+    private IDamageable FindNearestEnemy(float rangeWorld, bool isRanged)
     {
         if (UnitRegistry.Instance == null) return null;
         PerceptionSystem.QueryNearby(_rb.position, rangeWorld, GetFaction(), true, _queryResults);
         IDamageable nearest = null;
         float nearestDist = float.MaxValue;
+        bool needSight = isRanged && _professionSnapshot.ballisticType != BallisticType.HighArc;
         for (int i = 0; i < _queryResults.Count; i++)
         {
             var uc = _queryResults[i] as UnitController;
             if (uc == null) continue;
-            float d = Vector2.Distance(_rb.position, uc.transform.position);
-            if (d < nearestDist)
-            {
-                nearestDist = d;
-                nearest = uc;
-            }
+            Vector2 p = uc.transform.position;
+            float d = GridMath.DistVisual(_rb.position, p);   // 距离排序同口径（视觉格 · 与射程/命中一致）
+            if (d >= nearestDist) continue;
+            if (needSight && !CombatRules.HasLineOfSight(_rb.position, p)) continue;   // 件 3′：跳过无视线候选
+            nearestDist = d;
+            nearest = uc;
         }
         return nearest;
     }
@@ -1151,15 +1157,19 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         bool crewed = crew >= _professionSnapshot.crewRequired;
 
         // 开火目标：射程内最近敌；reposition 目标：感知内最近敌（射程外也朝其推进，进射程再开火）
-        IDamageable fireTarget = FindNearestEnemy(_professionSnapshot.attackRange * GetCellSize());
-        IDamageable moveTarget = FindNearestEnemy(_professionSnapshot.perceptionRadius * GetCellSize());
+        // 【HH.320 件2/件3′】开火索敌：射程转视觉格入参 ＋ 远程逐个候选视线过滤
+        IDamageable fireTarget = FindNearestEnemy(GridMath.VisualToWorld(_professionSnapshot.attackRange), _professionSnapshot.isRanged);
+        // ⚠️ 感知半径属「同族待治（感知面）」⇒ 本批**不改其口径**（仍按旧世界半径换算），仅补 `isRanged=false`
+        //    （reposition 目标不查视线）；口径统一归后续挂账批。
+        IDamageable moveTarget = FindNearestEnemy(_professionSnapshot.perceptionRadius * GetCellSize(), false);
 
         // 机器当作特殊建筑：必须有工人操作才可开火（改动②：工人门控发射）
         bool canFire = false;
         if (crewed && fireTarget != null && _professionSnapshot.attack > 0)
         {
-            float d = Vector2.Distance(_rb.position, fireTarget.GetPosition());
-            if (d <= _professionSnapshot.attackRange * GetCellSize() && SelectAmmo(fireTarget, out var ammoType))
+            // 【HH.320 件2】开火前距离复核改视觉格域（与索敌/判定/命中同口径）
+            float d = GridMath.DistVisual(_rb.position, fireTarget.GetPosition());
+            if (d <= _professionSnapshot.attackRange && SelectAmmo(fireTarget, out var ammoType))
             {
                 canFire = true;
                 if (!ReferenceEquals(fireTarget, _staticTarget))
@@ -1225,7 +1235,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     }
 
     /// <summary>附近是否有敌（有敌情才派工人操作，供调度中心做敌情门控，避免锁死工人）。</summary>
-    public bool HasNearbyEnemy(float rangeWorld) => FindNearestEnemy(rangeWorld) != null;
+    public bool HasNearbyEnemy(float rangeWorld) => FindNearestEnemy(rangeWorld, false) != null;   // 敌情门控（感知面 · 不查视线）
 
     /// <summary>机器感知范围内是否有敌（敌情门控默认用感知半径）。</summary>
     public bool HasNearbyEnemy() => HasNearbyEnemy(_professionSnapshot.perceptionRadius * GetCellSize());

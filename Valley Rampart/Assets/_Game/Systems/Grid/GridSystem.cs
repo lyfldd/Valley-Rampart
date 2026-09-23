@@ -47,6 +47,12 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
         base.Awake();
         if (config == null)
             config = Resources.Load<GridConfig>("Grid/GridConfig");
+        // ⭐【HH.320 件1 · 排雷 M1】把格尺寸**真源**（资产）注入 GridMath（消除「硬编码常量 vs 资产」双源）。
+        // 未绑定 ⇒ GridMath 用编译期回退值（＝现值 ⇒ 行为不变）；绑定值漂移 ⇒ 记一条 Log 可见。
+        if (config != null) GridMath.Bind(config.cellSize);
+#if UNITY_EDITOR
+        VerifySightBlockingFeatureSet();   // ⭐ 山壁判据一致性哨兵（P1 · 仅编辑器）
+#endif
     }
 
     // ===== 索引与界（片3-B：地块级 / 小格子级**两套**，别混用）=====
@@ -124,6 +130,36 @@ public class GridSystem : Singleton<GridSystem>, IPathGrid
             default: return WalkFlags.None;
         }
     }
+
+    /// <summary>⭐【`HH.320` 件 3′/件 4 · `D846` `P1`】**地形硬阻挡（挡视线）**判据 —— **显式枚举**，
+    /// ⛔ 不靠 `default` 兜底语义（防「未知值静默算阻挡」）。
+    /// 取值实读（`GridTypes.cs:77-86`）：非可走且非水者恰为 **`Mountain` / `SnowMountain`** 两值 ——
+    /// `Plain`/`Tree`/`Mine`/`OreVein`/`StonePile`/`WoodPile` 可走 ⇒ 不挡；
+    /// `River`/`Ocean` ＝ **水** ⇒ `D844` 明文**不挡视线**（桥/工地同理，见 `CombatRules.HasLineOfSight`）。
+    /// ⚠️ 日后新增地形阻挡物 ⇒ **必须显式入列**，并由 <see cref="VerifySightBlockingFeatureSet"/> 哨兵
+    /// 校验「显式集合」与「派生位」两式一致。</summary>
+    public static bool IsSightBlockingFeature(FeatureType f)
+        => f == FeatureType.Mountain || f == FeatureType.SnowMountain;
+
+#if UNITY_EDITOR
+    /// <summary>⭐【一致性哨兵】全枚举对比「显式枚举判据」与「派生位判据」两种山壁口径：
+    /// 显式集合 `{Mountain, SnowMountain}` ⟺ 派生「无 `TerrainWalkable` 且非 `Water`」。
+    /// 任一不符 ⇒ `LogError` 并指名取值（防「新增阻挡地形只改了一处」的静默分裂）。
+    /// **仅编辑器编译** ⇒ 运行时零开销。</summary>
+    static void VerifySightBlockingFeatureSet()
+    {
+        foreach (FeatureType f in System.Enum.GetValues(typeof(FeatureType)))
+        {
+            bool explicitBlock = IsSightBlockingFeature(f);
+            WalkFlags wf = FeatureToWalkFlags(f);
+            bool derivedBlock = (wf & WalkFlags.TerrainWalkable) == 0 && (wf & WalkFlags.Water) == 0;
+            if (explicitBlock != derivedBlock)
+                Debug.LogError($"[GridSystem] 山壁一致性哨兵失败：FeatureType.{f} 显式判据={explicitBlock}"
+                               + $" 派生判据={derivedBlock}（flags={wf}）⇒ 显式集合与 FeatureToWalkFlags 已分裂，"
+                               + "须同步（HH.320/P1）。");
+        }
+    }
+#endif
 
     public void ClearAll()
     {

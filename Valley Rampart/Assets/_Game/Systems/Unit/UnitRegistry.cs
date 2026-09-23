@@ -49,6 +49,13 @@ public class UnitRegistry : Singleton<UnitRegistry>
         return _aliveUnits;
     }
 
+    /// <summary>⭐【HH.320 件3′/件4】**零分配枚举口**：直接交出 `HashSet` 的**结构枚举器**。
+    /// ⚠️ 为什么需要它：<see cref="GetAllUnits"/> 的返回类型是 `IEnumerable&lt;UnitController&gt;`，
+    ///   对 `HashSet&lt;T&gt;` 走接口 `foreach` 会把结构枚举器**装箱** ⇒ **每次调用 1 次堆分配**
+    ///   （`P2` 硬约束①：「视线检查单次零堆分配」⇒ 不得走该路径）。
+    /// 语义与 `GetAllUnits()` **完全同源同集合**（同一 `_aliveUnits`）；⛔ 不要在枚举过程中增删（调用方只读）。</summary>
+    public HashSet<UnitController>.Enumerator GetUnitsEnumerator() => _aliveUnits.GetEnumerator();
+
     /// <summary>
     /// 按阵营获取单位。
     /// </summary>

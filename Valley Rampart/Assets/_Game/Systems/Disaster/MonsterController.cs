@@ -82,13 +82,15 @@ public class MonsterController : UnitController
     /// 当"地面+飞行两层"⇒ 只扫最南两行，其余行玩家单位对怪不可见。
     /// 修法照抄 D485（复用 PerceptionSystem.QueryNearby），**kingdomId==0 守卫原样保留**。
     /// </summary>
-    public IDamageable FindNearestHuman(float rangeWorld)
+    public IDamageable FindNearestHuman(float rangeVisual)
     {
         if (UnitRegistry.Instance == null) return null;
         // D695 返工：此处须传 GetFaction()（＝Faction.Monster），不可传 Faction.PlayerCamp。
         // QueryNearby 的 findEnemies=true 语义＝收「f != myFaction && f != None」（PerceptionSystem.cs:38-43），
         // 传 PlayerCamp 会把玩家整个排除、返回非玩家阵营 ⇒ 本方法永远返回不了"人"（功能回归）。
-        PerceptionSystem.QueryNearby(_rb.position, rangeWorld, GetFaction(), true, _queryResults);
+        // 【HH.320 件2】入参语义改**视觉格**（唯一换算口 GridMath.VisualToWorld 转世界半径喂 QueryNearby）
+        //   —— ⛔ 调用方不再自行 `× cellSize.x` 标量（R5）。
+        PerceptionSystem.QueryNearby(_rb.position, GridMath.VisualToWorld(rangeVisual), GetFaction(), true, _queryResults);
         IDamageable nearest = null;
         float nearestDist = float.MaxValue;
         for (int i = 0; i < _queryResults.Count; i++)

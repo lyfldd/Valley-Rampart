@@ -199,7 +199,8 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
         var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
         if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
         GridCoord center = centerOpt.Value;
-        int subRange = Mathf.Max(0, Mathf.CeilToInt(radiusCells * subDiv));
+        // 【HH.320 件18】微格候选窗收口为单一口（超集 · 原 `radiusCells × subDiv` 非超集）
+        int subRange = GridMath.SubWindowForVisualRadius(radiusCells, subDiv);
 
         for (int dy = -subRange; dy <= subRange; dy++)
         {
@@ -209,7 +210,8 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
                 foreach (var unit in list)
                 {
                     if (unit == null) continue;
-                    if (GridMath.DistCells(worldPos, unit.GetPosition()) > radiusCells) continue;
+                    // 【HH.320 件2】地面效果半径改视觉格域（与命中/溅射同口径）
+                    if (GridMath.DistVisual(worldPos, unit.GetPosition()) > radiusCells) continue;
                     result.Add(unit);
                 }
             }

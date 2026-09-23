@@ -82,7 +82,7 @@ public class MonsterAI : MonoBehaviour
         var prof = _mc.BuildAttackProfile();
         if (!prof.isRanged)
         {
-            var contact = _mc.FindNearestHuman(prof.range * CellSize());
+            var contact = _mc.FindNearestHuman(prof.range);   // 【HH.320 件2】入参＝视觉格（⛔ 不再 ×cellSize）
             if (contact != null && DistCells(contact.GetPosition()) <= prof.range)
             {
                 DamageSystem.Instance.RegisterAttack(_mc, contact, prof);
@@ -91,7 +91,7 @@ public class MonsterAI : MonoBehaviour
         }
 
         // 价值×距离选高价值建筑（D83，CombatRules.TargetScore 首次接线）
-        IDamageable t = PickBuildingTarget();
+        IDamageable t = PickBuildingTarget(prof.isRanged);
         if (t == null) { _pf.Stop(); return; }
 
         if (!ReferenceEquals(t, _raidTarget))
@@ -112,7 +112,7 @@ public class MonsterAI : MonoBehaviour
     {
         _pf.SetDestination(_mc.HomePortalPos);
 
-        var guard = _mc.FindNearestHuman(_mc.VisionRadiusCells * CellSize());
+        var guard = _mc.FindNearestHuman(_mc.VisionRadiusCells);   // 【HH.320 件2】视觉格
         var prof = _mc.BuildAttackProfile();
         if (guard != null && DistCells(guard.GetPosition()) <= prof.range)
             DamageSystem.Instance.RegisterAttack(_mc, guard, prof);
@@ -125,7 +125,7 @@ public class MonsterAI : MonoBehaviour
     // ===== Retreating：HP 低 → 退回传送门；被拦截/未脱战 → 继续战斗（无逃脱）=====
     private void UpdateRetreating()
     {
-        var foe = _mc.FindNearestHuman(_mc.VisionRadiusCells * CellSize());
+        var foe = _mc.FindNearestHuman(_mc.VisionRadiusCells);   // 【HH.320 件2】视觉格
         var prof = _mc.BuildAttackProfile();
         // 近战被贴脸 → 继续战斗；远程仍朝门撤（远程无逃脱但可边撤边射的取舍归段②）
         if (!prof.isRanged && foe != null && DistCells(foe.GetPosition()) <= prof.range)
@@ -177,14 +177,18 @@ public class MonsterAI : MonoBehaviour
 
     // ===== 目标选择 / 距离 / 哈希 工具 =====
 
-    /// <summary>价值×距离选目标：遍历玩家建筑（跳过工事/墙/门），CombatRules.TargetScore(D83) 取最高。</summary>
-    private IDamageable PickBuildingTarget()
+    /// <summary>价值×距离选目标：遍历玩家建筑（跳过工事/墙/门），CombatRules.TargetScore(D83) 取最高。
+    /// 【HH.320 件 3′】**仅远程**加视线过滤（`isRanged == true`）：⛔ 近战不查视线（用户口径）；
+    /// ⛔ 逐个候选过滤（无视线 ⇒ 跳过该候选、继续选次高者），⛔ 非「任一无效即整体放弃」。
+    /// 终点实体自身占格豁免（`ignoreOccupant = b`）—— 否则弹道终点落在**大建筑自己身上** ⇒ 假阴性（打不到）。</summary>
+    private IDamageable PickBuildingTarget(bool isRanged)
     {
         if (BuildingRegistry.Instance == null) return null;
         float best = float.NegativeInfinity;
         IDamageable bestB = null;
         var w = _mc.def != null ? _mc.def.valueWeight : 1f;
         var d = _mc.def != null ? _mc.def.targetDistWeight : 1f;
+        Vector2 myPos = _mc.transform.position;
 
         foreach (var b in BuildingRegistry.Instance.All)
         {
@@ -192,6 +196,7 @@ public class MonsterAI : MonoBehaviour
             if (b.kingdomId != 0) continue;   // 2_16 步骤7 补丁C P0 收窄：怪物只袭玩家王国(0)。AI 无防御单位（人口=台账），避免单向拆 AI；2_17 引入 AI Faction 防御后放开
             if (b.def == null || b.def.monsterTargetValue <= 0f) continue;
             if (b.IsFortification) continue;   // 不打工事（墙/门），掠夺功能建筑
+            if (isRanged && !CombatRules.HasLineOfSight(myPos, b.GetPosition(), b)) continue;   // 件 3′
             float val = b.def.monsterTargetValue;
             float score = CombatRules.TargetScore(val, DistCells(b.GetPosition()), w, d);
             if (score > best) { best = score; bestB = b; }
@@ -199,17 +204,10 @@ public class MonsterAI : MonoBehaviour
         return bestB;
     }
 
-    /// <summary>与目标的世界距离换算成格距离。</summary>
-    private float DistCells(Vector2 b)
-    {
-        return Vector2.Distance(_mc.transform.position, b) / Mathf.Max(0.001f, CellSize());
-    }
-
-    private float CellSize()
-    {
-        return (GridSystem.Instance != null && GridSystem.Instance.Config != null)
-            ? GridSystem.Instance.Config.cellSize.x : 1.28f;
-    }
+    /// <summary>与目标的世界距离换算成**视觉格**（HH.320 件2：口径统一到 <see cref="GridMath.DistVisual"/>）。
+    /// 本方法保留为薄转调口 ⇒ 本类全部距离判定（`:86/:103/:117/:131/:196`）**同口径**，
+    /// ⛔ 不再自建「世界距离 ÷ cellSize.x 标量」（R5）。</summary>
+    private float DistCells(Vector2 b) => GridMath.DistVisual(_mc.transform.position, b);
 
     /// <summary>确定性 [0,1) 哈希（R4：回援选取比例用，禁 UnityEngine.Random）。</summary>
     private static float Deterministic01(int seed)
