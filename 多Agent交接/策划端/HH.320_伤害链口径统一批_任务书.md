@@ -210,7 +210,7 @@
 2. **判据函数 ＝ 唯一口** `CombatRules.HasLineOfSight(from, to)`（**改造后**）
    - **阻挡集**（`D844` 裁定）：**山壁** ＋ **建筑占格（`WalkFlags.BuildingBlocked`）** ＋ **工事单位**
    - ⛔ **不挡**：水（`Water`）／`Locked`（工地）／桥（`Bridge`）
-   - ⚠️ **工事单位的查法（性能硬约束）**：⭐ **沿 Bresenham 逐微格查**（`GridSystem.GetUnitsInSubCell`）⇒ ⛔ **不得全库遍历 `UnitRegistry`**（`O(N)` × 候选数 = 不可接受）
+    - ⚠️ **工事单位的查法（性能硬约束 · ⭐ `D846` 令式撤回）**：⛔ **原令式「沿 Bresenham 逐微格查 `GetUnitsInSubCell`」＋「禁全库遍历 `UnitRegistry`」已撤回** —— 实测 `GridSystem.GetUnitsInSubCell`（`:500-506`）＝ **全表枚举 ＋ 每次 `new List`**（`O(N)` **＋分配**）⇒ 照令 ＝ `O(N)×L`，**比被禁项差 L 倍**；而 `UnitRegistry.GetAllUnits()`（`:47-50`）**返回内部 `List` 引用 ⇒ 零分配**（⚠️ 遍历期禁增删 · `HH.76/D539` 雷区纪律）⇒ ⭐ **改为目标导向约束**：① 单次视线检查 **零堆分配**（⛔ 禁 `new List`／LINQ）② 稳态 **零 GC** ③ **每次索敌的视线检查总耗时 ＋ 候选数**须入报告 ④ ⭐ **须给对照读数**：「**带测法**（复用 `CheckWallBlock:308-324` 同构：遍历 `GetAllUnits()` ＋ 点到线段距离 ≤ 半带宽 ＋ 早退）」**vs**「逐微格法」**vs**「增量反查索引」⇒ ⛔ **不得照抄旧令式**
    - ⚠️ **山壁的判据来源**：须实读 `FeatureType` 中属"地形硬阻挡"的取值（⛔ 不得凭猜 ⇒ 先报清单）
 3. **高抛豁免**：调用方按 `ballisticType == HighArc` **跳过**视线检查
 4. **成本**：候选数受 `PerceptionSystem.QueryNearby` 限制 ＋ 工事沿路径查 ⇒ ⭐ **须给"单次索敌的视线检查耗时 ＋ 候选数"读数**
@@ -227,3 +227,54 @@
 8. **成本读数**：单次索敌耗时 ＋ 候选数
 
 ⚠️ **平衡影响须对照**：接线后**远程实际变弱**（打不到墙后）⇒ ⭐ 交付须给「接线前 / 后」的**有效交战距离**对照读数，⛔ 不得称"无影响"。
+
+---
+
+## 十、`D846` 方案报裁裁定（批 1 第一段 · 2026-09-23）
+
+> 被裁：执行端第一段交付 **`3526c3e3`**（仅 1 文件 · `+232/−0` · ⛔ `Assets/**` 零写 · 未 push · 未进 Play）⇒ ⭐ **停手待裁正确**。
+> 本端**逐项独立复算**（`git grep` ／ `file:line` 实读 ／ GUID 反查），⛔ **未采信转述**。
+
+### 10.1 `S1` 山壁取值清单 ⇒ ✅ **采**（附强化）
+
+- ✅ **核实成立**：`FeatureType` 9 值（`GridTypes.cs:77-86`）中**非可走且非水**者仅 **`Mountain`／`SnowMountain`**。
+- ✅ **两处派生映射同集合**（本端实读）：`GridSystem.FeatureToWalkFlags:112-126`（`default: return WalkFlags.None`）／`MapGenRules.IsWalkableFeature:88-97`（`default: return false`）⇒ ⚠️ 二者皆走 **`default` ⇒ 「未知即挡」** ⇒ ⭐ **采「显式枚举 ＋ 一致性哨兵」**（已采纳执行端建议）。
+- ✅ **唯一创建点** `MapGenRules.StampMountain:759`（声明）／`:764`（`MapGate.GenesisWrite` 写入行 · 执行端报 `:764` 指向**写入点** ⇒ ⭐ 更精确，**属读法不同 · 非错**）；`PlaceMountainRidges:747`／`PruneMountainSpecks:769`。⚠️ 只减不增（`PlaceRiver` 不覆盖山体）。
+- ✅ **判据 4「拆山壁」走正门** `MapGate.SetFeature`（⛔ 不照抄探针裸写）—— 采纳。
+- ⛔ **明确排除**：`River`／`Ocean`（水 · `D844` 不挡）／`Mine`（可走可建）。
+
+### 10.2 `S2` 工事沿路径查 ⇒ ⭐⭐ **撤回本端令式 · 改目标导向约束**
+
+- ⛔ **本端认账（双错）**：§9.4 第 2 条我写死「⭐ **沿 Bresenham 逐微格查** `GetUnitsInSubCell`」＋「⛔ **不得全库遍历** `UnitRegistry`」：
+  1. ✅ **执行端「令式前提与实盘不符」成立**（本端复算）：`GridSystem.GetUnitsInSubCell:500-506` ＝ **全表枚举 `_unitSubCells` ＋ 每次 `new List`** ⇒ 照令 ＝ `O(N)×L` **且每微格一次分配**。
+  2. ⛔ **我的禁令方向错**：`UnitRegistry.GetAllUnits():47-50` **返回内部 `List` 引用 ⇒ 零分配 O(N) 单遍** —— ⭐ 我凭「结构直觉」把**最优解**禁掉了。
+- ⭐ **裁定 ＝ 撤回令式，改目标导向**：① **零堆分配** ② 稳态**零 GC** ③ 报告须给**每次索敌视线检查耗时 ＋ 候选数** ④ ⭐ **须给对照**：**带测法**（复用 `CheckWallBlock:308-324` 同构）**vs 逐微格法** **vs 增量反查索引**。
+- ⭐ **本端倾向**：**带测法** —— 与现役 `CheckWallBlock` **同构**、**零新基建**、零分配；⚠️ 增量反查索引（改 `GridSystem` 加镜像索引）**新引入漂移面** ⇒ ⭐ **除实测证明带测法不可接受外，⛔ 不采**。
+- ✅ **三项待确认，本端裁定**：
+  1. **`fortification != null` 全含** ⇒ ✅ **是**（含 `blocksMovement=0` 的三塔 —— `heightCells=3` 的结构；且与 `CheckWallBlock:311` 同口径，它只滤 `fortification == null`）。
+  2. **城门 `passable=1` 照挡** ⇒ ✅ **是**（与 `CheckWallBlock` 同口径；⚠️ 城门昼夜开关 `FortificationPassableOverride` **不参与视线**）。
+  3. ⭐⭐ **新立铁律（两链共用）**：**视线阻挡判据必须与弹道阻挡判据同源** —— ⛔ 否则「选得到／打不到」不对称**必然复现**（即本次要除的病）。
+- ⚠️ **附本端增量取证（执行端未报）**：工事在役载体 ＝ **单位** —— `Resources/UnitData/{Wall,Gate,ArrowTower,CrossbowTower,MagicTower}.asset:50` 各引 `Resources/Fortifications/*.asset`（`FortificationDef`）⇒ ⭐ `CheckWallBlock` **今天确实生效**。实读五资产参数：
+
+  | 资产 | `defenseLevel` | `blocksMovement` | `passable` | `heightCells` |
+  |---|---|---|---|---|
+  | `Wall` | 2 | 1 | 0 | 2 |
+  | `Gate` | 1 | 1 | **1** | 2 |
+  | `ArrowTower`／`CrossbowTower`／`MagicTower` | 1 | **0** | 0 | **3** |
+
+### 10.3 `S3` 微格候选超集换算 ⇒ ✅ **采**
+
+- ✅ **闭式成立**（本端独立复算）：`n = ⌈R_vis × subDiv × (cellW²+cellH²)/(2·cellW·cellH)⌉ = ⌈5·R_vis⌉` ⇒ `R_vis=0.25` ⇒ **`subRange` 1 → 2** ✓。
+- ✅ **三份拷贝（本端机械扫描 · 恰 3 处）**：`ProjectileManager.cs:343`／`DamageSystem.cs:490`／`GroundEffectManager.cs:202` ⇒ ⭐ **收口为单一口 ＋ `subW`/`subH` 现算** 采纳。
+- ⭐ **本端附带发现（同族第 4 处 · 语义不同 ⇒ ⛔ 登记不施工）**：`VisionSystem.cs:28  int range = Mathf.CeilToInt(radiusWorld / cs)` ＝ **world → 格** 换算（⛔ 非 `cells × subDiv`）⇒ 计入「同族待治」，本批不动。
+
+### 10.4 `DistCells` 计数差（−3 vs −6）⇒ ⭐ **裁 `−6`（执行端正确）**
+
+- ✅ **本端独立复算**：`git grep GridMath.DistCells` ⇒ **伤害链域恰 6 处** ＝ `DamageSystem.cs:301`／`:436`／`:471` ＋ `ProjectileManager.cs:232`／`:255` ＋ `GroundEffectManager.cs:212`。
+- ⚠️ **不计入者（本端分类）**：`Building.cs:1635`（**仓库/井定位** ＝ 资源域）／`TaskScheduler.cs:332/1088/1137/1238`（**派工域** · 不动）／`MonsterAI.cs:86/103/117/131/196`（调**私有** `MonsterAI.DistCells:203` ⇒ ⛔ 非 `GridMath` ⇒ 不进本计数，但**自身须统一** ⇒ 见件 2）。
+- ⇒ ⭐ **判据 3 最终措辞**：「`GridMath.DistCells` 在**寻路/派工域**调用面与读数**不变**；**伤害链 −6 属预期**」。
+- ⚠️ **微瑕（不阻断）**：执行端报 `ProjectileManager 232/256` ⇒ 实读 **`:255`**（差 1 行）。
+
+### 10.5 放行范围
+
+⭐ **放行第二段 ＝ 件 1 ／ 2（13 处）／ 3′（判据 8 条单列）／ 4 ／ 6 ／ 7**。⛔ **不放行**「照令逐微格」；视线检查**形状由执行端按 §10.2 自选并报对照读数**。
