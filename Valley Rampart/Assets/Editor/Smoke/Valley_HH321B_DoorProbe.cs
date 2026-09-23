@@ -152,7 +152,7 @@ public static class Valley_HH321B_DoorProbe
 
         var anchor = grid.WorldToCoord(WorldManager.Instance.GetKingdomAnchorWorld());
         GridCoord band;
-        if (!anchor.HasValue || !FindSite(anchor.Value, 16, out band))
+        if (!anchor.HasValue || !FindSite(anchor.Value, 20, out band))
         { Debug.LogError("[HH321C] 找不到场址"); TestHarnessApi.ExitTestRun(); yield break; }
         var site = new GridCoord(band.x + 6, band.y);          // 建筑带起点（左侧 6 格留给射手/单位试区）
 
@@ -168,6 +168,7 @@ public static class Valley_HH321B_DoorProbe
         var cT = new GridCoord(site.x, site.y);
         var cF = new GridCoord(site.x + 3, site.y);
         var cT2 = new GridCoord(site.x + 6, site.y);
+        var cT3 = new GridCoord(site.x + 10, site.y);          // 判据3 用：工地态塔（含工地仓内容）
 
         bool b1 = BuildingFactory.Instance.CreateBuildingInstance(towerDef, towerDef.sourceType, cT, fpT,
             GridSystem.FootprintCenterWorld(cT, fpT, Vector3.zero), false, ResourceGrade.Normal, false, BuildingState.Active, 1);
@@ -175,11 +176,15 @@ public static class Valley_HH321B_DoorProbe
             GridSystem.FootprintCenterWorld(cF, fpF, Vector3.zero), false, ResourceGrade.Normal, false, BuildingState.Active, 1);
         bool b3 = BuildingFactory.Instance.CreateBuildingInstance(towerDef, towerDef.sourceType, cT2, fpT,
             GridSystem.FootprintCenterWorld(cT2, fpT, Vector3.zero), false, ResourceGrade.Normal, false, BuildingState.Active, 1);
+        // 判据3 用：**工地态**塔（`Constructing` ⇒ `Die` 路径会走三路掉箱中的工地仓路）
+        bool b4 = BuildingFactory.Instance.CreateBuildingInstance(towerDef, towerDef.sourceType, cT3, fpT,
+            GridSystem.FootprintCenterWorld(cT3, fpT, Vector3.zero), false, ResourceGrade.Normal, false, BuildingState.Constructing, 1);
         yield return null;
         var tower = grid.GetOccupant(cT) as Building;
         var farm = grid.GetOccupant(cF) as Building;
         var tower2 = grid.GetOccupant(cT2) as Building;
-        if (!b1 || !b2 || !b3 || tower == null || farm == null || tower2 == null)
+        var tower3 = grid.GetOccupant(cT3) as Building;
+        if (!b1 || !b2 || !b3 || !b4 || tower == null || farm == null || tower2 == null || tower3 == null)
         { Debug.LogError("[HH321C] 建筑落成失败"); TestHarnessApi.ExitTestRun(); yield break; }
         L($"[布置] 塔@({cT.x},{cT.y}) 工事={tower.IsFortification} HP={tower.CurrentHp} ｜ farm@({cF.x},{cF.y}) 工事={farm.IsFortification} HP={farm.CurrentHp}"
           + $" ｜ 幂等塔@({cT2.x},{cT2.y}) 工事={tower2.IsFortification}");
@@ -232,6 +237,49 @@ public static class Valley_HH321B_DoorProbe
           + $" ｜ 已销毁引用第3次 ⇒ 无异常（`b == null` 早退）");
         L($"[J3·边界登记] 门 ⛔ 不改 `state`（状态归调用方）⇒ 契约外用（对 Active 建筑直调两次）第 2 次会重跑回收 ⇒ 登记观察项（⛔ 本批不加机制）");
         Object.DestroyImmediate(tower2.gameObject);   // 提前销毁（防其炮塔继续开火污染 J4 的 HP 读数）
+
+        // ══ 判据3（`D852` §4.2）· `Die()` 二次调 ⇒ 零副作用 ══
+        var chestMgr = ChestManager.Instance;
+        var siteStore = typeof(Building).GetMethod("EnsureSiteStore", BF)?.Invoke(tower3, null) as ConstructionSiteStore;   // ⛔ 构造法：私有口（探针侧）
+        bool awaiting = tower3.IsSiteAwaitingMaterials;
+        ResourceType seedTy = ResourceType.Wood; int seedNeed = -1;
+        foreach (var ty in new[] { ResourceType.Wood, ResourceType.Stone, ResourceType.Gold, ResourceType.Food })
+            if (siteStore != null && siteStore.NeedOf(ty) > 0) { seedTy = ty; seedNeed = siteStore.NeedOf(ty); break; }
+        int dep = (siteStore != null && seedNeed > 0) ? siteStore.Deposit(seedTy, seedNeed) : -1;
+        int seedHave = siteStore != null ? siteStore.GetAmount(seedTy) : -1;   // ⭐ 注入后**实测**（⛔ 不用字面量）
+        yield return null;
+        int chestCnt0 = chestMgr != null ? chestMgr.Count : -1;
+        int chestAt0 = chestMgr != null ? chestMgr.CountAt(cT3) : -1;
+        int excBeforeJ5 = _excCount;
+        int diedJ5 = 0;
+        System.Action<UnitDiedEvent> onDied5 = evt => { if (ReferenceEquals(evt.Unit, tower3)) diedJ5++; };
+        EventBus.Subscribe(onDied5);
+        tower3.Die(DeathCause.Killed);                                  // 第 1 次（生产入口直调）
+        int have1 = siteStore != null ? siteStore.GetAmount(seedTy) : -1;
+        int chestCnt1 = chestMgr != null ? chestMgr.Count : -1;
+        int chestAt1 = chestMgr != null ? chestMgr.CountAt(cT3) : -1;
+        int diedAfter1 = diedJ5;
+        bool regGone5a = reg.GetAt(cT3) == null, occGone5a = grid.GetOccupant(cT3) == null;
+        tower3.Die(DeathCause.Killed);                                  // 第 2 次（同帧 · 期望被入口守卫挡下）
+        int have2 = siteStore != null ? siteStore.GetAmount(seedTy) : -1;
+        int chestCnt2 = chestMgr != null ? chestMgr.Count : -1;
+        int chestAt2 = chestMgr != null ? chestMgr.CountAt(cT3) : -1;
+        int diedAfter2 = diedJ5;
+        bool regGone5b = reg.GetAt(cT3) == null, occGone5b = grid.GetOccupant(cT3) == null;
+        EventBus.Unsubscribe(onDied5);
+        L($"[J5·构造] 工地态塔@({cT3.x},{cT3.y}) state=Constructing · `IsSiteAwaitingMaterials`={awaiting} ｜ `EnsureSiteStore`={(siteStore != null)}"
+          + $" ｜ 注入尝试 type={seedTy} need={seedNeed} ⇒ `Deposit` 返回={dep} · 注入后 `GetAmount`={seedHave}"
+          + $"（⚠️ `Deposit` 阈值拦截 `ConstructionSiteStore.cs:135-137` ⇒ 返回 0 ＝ **未注入** · 读数照实）");
+        L($"[J5·第1次 `Die`] 工地仓 {seedTy} {seedHave}→{have1}｜ChestManager.Count {chestCnt0}→{chestCnt1}｜本格箱子 {chestAt0}→{chestAt1}"
+          + $"｜本塔 UnitDiedEvent={diedAfter1}（期望 1）｜注册表空={regGone5a} 占格空={occGone5a}（期望 True/True）");
+        L($"[J5·第2次 `Die`] 工地仓 {seedTy}={have2}｜ChestManager.Count {chestCnt1}→{chestCnt2}（期望不变）｜本格箱子 {chestAt1}→{chestAt2}（期望不变）"
+          + $"｜本塔 UnitDiedEvent={diedAfter2}（期望仍 1 ⇒ ⛔ 不重复广播）｜注册表空={regGone5b} 占格空={occGone5b}（期望不变）"
+          + $"｜异常新增={_excCount - excBeforeJ5}（期望 0）");
+        L($"[J5·结论读数列] 二次调零副作用 ⇒ ① 掉箱侧：`Die` 第 1 次后工地仓 {seedHave}→{have1} ／ 箱子 {chestCnt0}→{chestCnt1}、本格 {chestAt0}→{chestAt1}；"
+          + $"第 2 次后 **箱子/本格/工地仓三者全不变**（{chestCnt1}→{chestCnt2} ／ {chestAt1}→{chestAt2} ／ {have1}→{have2}）"
+          + $" ② 回收不重复（注册表/占格不变）③ 广播不重复（事件计数 {diedAfter2}）④ 无异常（{_excCount - excBeforeJ5}）");
+        L($"[L-51·声明] 本臂**直调** `Building.Die`（生产入口）；⚠️ 工地态建筑 `TakeDamage` 会因 `state != Active` 提前返回（`:1283`）⇒ 击毁链在该态**不可达** ⇒ 直调为唯一可判构造");
+        yield return null;   // 让第 1 次的 Destroy 生效
 
         // ══ 判据2 · EnterRuined 链回归（非工事被破）══
         int diedBeforeFarm = diedCount;

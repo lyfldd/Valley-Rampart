@@ -1365,9 +1365,17 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// 改发 UnitDiedEvent（BuildingDestroyedEvent 退役）。
     /// 3.5 P1-15：扫描 currentWorkers → 工人逃出存活（位置 +1 格偏移，变无任务状态，不死亡）。
     /// 3.5 P1-10：训练建筑摧毁 → 通知 TrainingSystem 释放训练中居民（回退无职业，资源不退）。
+    ///
+    /// ⭐【HH.321 批 2 · `D852` §4.2】入口幂等守卫：**生命周期只结束一次** ——
+    ///   门化后「数据回收」成为唯一入口（`BuildingFactory.RemoveBuilding`），但本入口原**无守卫**
+    ///   ⇒ 重复调用 ⇒ **重复三路掉箱 ＋ 重复回收 ＋ 重复广播**；⚠️「重复调」非假想：
+    ///   `U-8`/`E1`「**拆除中被打毁**」（`FinishDemolish`（`:921`）与 `TakeDamage→Die`（`:1289`）竞态）。
+    ///   ⚠️ 安全性：本守卫**只挡「已 `Dead`」**，⛔ 不挡 `Ruined`／`Abandoned`／`Constructing`
+    ///   ⇒ 现有调用面行为不变。
     /// </summary>
     public void Die(DeathCause cause = DeathCause.Killed)
     {
+        if (state == BuildingState.Dead) return;   // 生命周期只结束一次（`D852` §4.2）
         state = BuildingState.Dead;
 
         // 3.5 P1-15：在册工人逃出存活（先于 FreeFootprint/Destroy 执行，避免引用失效）
@@ -1388,14 +1396,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TrainingSystem.Instance != null)
             TrainingSystem.Instance.OnBuildingDestroyed(this);
 
-        // ⚠️【HH.321 批 2 · **停手待裁（停手条件 1）**】按令接线「数据回收必经门」的生产链读数 ⇒ **门恒早退、回收未跑**
-        //   （实测：广播时注册表空=False · 占格空=False；对照：直调门第 1 次回收生效）——
-        //   根因 ＝ 门体幂等判据 `b.state == BuildingState.Dead` 与**本节第 1 行** `state = BuildingState.Dead` **互斥**
-        //   ⇒ `RemoveBuilding` 在生产路径**永不进入回收体**（自相矛盾 · 非实现偏差）。
-        //   ⛔ **本端不对契约细节自行择一**（按停手条件 1 报裁）；为**免留已知回归**，本行暂回**开片前语义**：
-        //   本层注销仍走**唯一实现** `ReleaseLayerOwnedState`（语义零变），门本体 `BuildingFactory.RemoveBuilding`
-        //   已在位（直调可用 · 探针 J3 已验证 回收/幂等/不销毁）。
-        ReleaseLayerOwnedState(unregisterFromRegistry: true);
+        // ⭐【HH.321 批 2 · `D852` §4.1/§五-2】数据回收**必经门**（唯一入口 · 幂等）：
+        //   门体 ＝ 锚点返还 → 释放占格 → 注销（本层注销唯一实现 `ReleaseLayerOwnedState` · 已 `internal` 上提）。
+        //   ⛔ `Die()` 内不得自行做数据回收；⛔ **顺序锁死**：**回收（本行）→ 广播（下段）→ Destroy（末行）** ——
+        //     ① 广播 `UnitDiedEvent` 携 `transform.position` ⇒ 必须在 `Destroy` 之前；
+        //     ② 数据回收须在广播之前（订阅方 `06` 任务层／`2_4` 会**反查注册表**，须已干净）。
+        //   ⚠️ `BuildingFactory.Instance` 缺失（拆卸竞态）⇒ 与旧有 `BuildingRegistry.Instance?.Unregister` 同口径
+        //      用 `?.` 跳过（⛔ 不新增兜底机制）。
+        BuildingFactory.Instance?.RemoveBuilding(this, cause);
 
         // 3.4：改发 UnitDiedEvent（建筑也走此事件，BuildingDestroyedEvent 退役）
         EventBus.Publish(new UnitDiedEvent(

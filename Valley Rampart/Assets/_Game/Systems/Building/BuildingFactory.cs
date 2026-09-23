@@ -214,14 +214,23 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
     //   ⚠️ 门体 ＝ `Building.ReleaseLayerOwnedState`（`HH.294` 片4「本层注销唯一实现」· `private ⇒ internal` 上提）；
     //      ⛔ 不得留第二份实现。⚠️ `BuildingFactory.Instance` 缺失（拆卸竞态）⇒ 调用方用 `?.` 跳过
     //      （与旧有 `BuildingRegistry.Instance?.Unregister` 同口径 · ⛔ 不新增兜底机制）。
+    //   ⭐ 幂等判据（`D852` §4.1）＝ `03` §7.4 **本层存在性**（登记表 ∧ 占格「双空」⇒ 跳过）
+    //      ；⛔ **不再读高级层 `state`**（层次错配 · `D852` §三 已认账）。
     //   ⚠️ `cause` ＝ **调用契约**：`03` §7.5「本层不判「能不能删」；「为什么删」是调用者的语义」；
     //      死因统计／`Removed` 广播钩子为**未闭合项**（`D851` §四）⇒ 本批 ⛔ 不消费（仅为契约完整性保留入参）。
     // ========================================================================
     public void RemoveBuilding(Building b, DeathCause cause)
     {
-        // 幂等（`03` §7.4「删两次等于删一次」）：无实体 / 已回收 ⇒ 直接返回（第二次调用零副作用）
+        // 幂等（`03` §7.4「删两次等于删一次」）—— 判据 ＝ **本层存在性**（`D852` §4.1）：
+        //   ⛔ 不用「生命周期态」（`state == Dead` 属**高级层**；与本层存在性**层次不同**）。
+        //   ⭐ 判据用 **`&&`（两者皆空才跳过）** ＝ **方向安全**：宁可多执行一次回收（各步对同对象近似幂等）、**绝不漏回收**。
+        //   ⚠️ 已知边界（登记 · ⛔ 本批不处理）：`BuildingRegistry._byCoord` 与 `GridSystem._occupants` 均**单槽**
+        //      （`F-15` 实盘 9 座 footprint 重叠）⇒ 重叠场景下「按格查」不可靠 ⇒ 上述 `&&` 是**方向安全的近似**。
         if (b == null) return;
-        if (b.state == BuildingState.Dead) return;
+        var reg = BuildingRegistry.Instance;
+        if (reg != null && reg.GetAt(b.coord) == null
+            && GridSystem.Instance != null && GridSystem.Instance.GetOccupant(b.coord) == null)
+            return;
         b.ReleaseLayerOwnedState(unregisterFromRegistry: true);   // 门体（唯一实现）
     }
 
