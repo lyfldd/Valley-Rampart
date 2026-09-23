@@ -20,7 +20,7 @@ MonoBehaviour:
   hitRadiusCells: 0.25
   maxHits: 1
   arcHeight: 2
-  projectileErrorRadius: 1.5
+  projectileErrorRadius: 0.25
   hitFlashDuration: 0.1
   stickinessFactor: 1.15
   valueWeight: 1
