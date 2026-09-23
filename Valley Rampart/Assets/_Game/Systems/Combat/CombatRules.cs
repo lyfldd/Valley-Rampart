@@ -172,7 +172,12 @@ public static class CombatRules
     /// （点到线段距离 ≤ `bandHalf` · **排除起终点格** · `fortification != null` 全含）。
     /// `applyArcHeight=true` ⇒ **弧高 > 工事高度者跳过**（＝弹道链 `CheckWallBlock` 用法，逐字保留原语义）；
     /// `false` ⇒ 不按高度滤（＝视线链用法）。
-    /// 性能：单遍 `UnitRegistry.GetAllUnits()`（**返回内部 List 引用 ⇒ 零分配**），`O(N)`＋早退候选判定。
+    /// 性能：单遍 `UnitRegistry.GetUnitsEnumerator()`（`HashSet<T>` **结构枚举器** ⇒ 零装箱/零分配），`O(N)`＋早退候选判定。
+    ///   ⚠️ **勘正（`L-63` · `D847` §三-1）**：⛔ **不得**走 `UnitRegistry.GetAllUnits()` ——
+    ///   其**返回类型**为 `IEnumerable&lt;UnitController&gt;`，而 `UnitRegistry.cs:11` 内部实为
+    ///   **`HashSet&lt;UnitController&gt;`** ⇒ 接口 `foreach` 会把结构枚举器**装箱** ⇒ **每次 1 次堆分配**。
+    ///   （本行曾误写「返回内部 List 引用 ⇒ 零分配」＝ 类型名错 ＋ 忽略接口装箱 ⇒ 与下文 `:188-190` 自相矛盾，
+    ///   现按事实改写。）真零分配口 ＝ `UnitRegistry.GetUnitsEnumerator()`（`UnitRegistry.cs:57`）。
     /// 本函数**只选阻挡者，不做伤害/穿透结算**（对墙伤害仍归 `CheckWallBlock` · ⛔ 不丢语义）。</summary>
     public static UnitController FindFortificationBlocker(Vector2 a, Vector2 b, float bandHalf,
                                                           bool applyArcHeight, float arcHeightCells)

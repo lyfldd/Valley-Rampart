@@ -208,10 +208,18 @@ public class ProjectileManager : Singleton<ProjectileManager>
         // 查 GridSystem 附近微格的单位（doc1 微格主表 D70，2_5 步骤3）
         List<UnitController> candidates = QueryNearbyUnits(p.targetPos, hitRadiusCells);
 
-        if (candidates.Count == 0) return; // miss
+        // ⭐【HH.320 件 6 返工（`D847` §2-1）】⛔ **不得**在此因「候选为空」早退 —— 原因与优先序：
+        //   ① 本候选**只含 `UnitController`**（`QueryNearbyUnits` → `_unitSubCells`）；⚠️ **建筑不在候选内**
+        //      （建筑占格走 `_occupants`/`WalkFlags` 另一套）⇒ 对**非工事建筑**射箭（落点附近通常一个单位都没有）
+        //      会在这里被 return 掉 ⇒ 下方「建筑菱形底座兜底」**永不执行** ⇒ 远程对建筑**恒 miss（零伤害）**。
+        //   ② 优先序（本批口径 · ⛔ 不得改）：**单位命中优先** → 无单位命中 ⇒ **建筑底座命中** → 两者皆无 ⇒ miss。
+        //   ③ **唯一早退点**在下文「两者皆无 ⇒ miss」处（`bestTarget == null` 判定之后），⛔ 不在此处。
 
         // Faction 二元判定：过滤非己方单位
-        Faction attackerFaction = p.attacker.GetFaction();
+        // ⚠️ 本行现在**无条件执行**（不再被「候选为空」跳过）⇒ 须容忍攻击者已销毁（弹道飞行期 Unity 假 null）
+        Faction attackerFaction = Faction.None;
+        if (p.attacker is UnitController atkUnit && atkUnit != null) attackerFaction = atkUnit.GetFaction();
+        else if (p.attacker is Building atkBuilding && atkBuilding != null) attackerFaction = atkBuilding.GetFaction();
         IDamageable bestTarget = null;
         float bestDist = float.MaxValue;
 
@@ -240,10 +248,14 @@ public class ProjectileManager : Singleton<ProjectileManager>
             }
         }
 
-        // ⭐【件 6】命中兜底：落点落在**多格建筑菱形底座**内 ⇒ 命中该建筑
-        //   （⛔ 非「到 pivot 圆心距」；单位命中优先 ⇒ 既有语义零回归）
+        // ⭐【件 6 · `D847` §2-1 返工修复】② 建筑兜底：落点落在**多格建筑菱形底座**内 ⇒ 命中该建筑
+        //   （⛔ 非「到 pivot 圆心距」；① 单位命中优先 ⇒ 既有语义零回归）
         if (bestTarget == null)
             bestTarget = FindBuildingAtLanding(p.targetPos, attackerFaction);
+
+        // ⭐③ **唯一早退点**：单位与建筑**都没命中**才是 miss
+        //   （原「`candidates.Count == 0` 即 miss」已废 —— 它把建筑链一并挡在门外 ⇒ 件 6 在生产链上落空）
+        if (bestTarget == null) return;
 
         // 命中 -> 走伤害计算（委托 DamageSystem）
         if (bestTarget != null)

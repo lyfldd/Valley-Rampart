@@ -641,4 +641,289 @@ public static class Valley_HH320_DamageProbe
         var list = typeof(UnitController).GetField("_queryResults", BF).GetValue(shooter) as System.Collections.IList;
         return list != null ? list.Count : -1;
     }
+
+    // ========================================================================
+    //  B′ · 第三段 件 B · **件 6 生产链实测**（`D847` §2-1 返工验证）
+    //   ⭐ 载体 ＝ 生产链：`DamageSystem.RegisterAttack` → `ExecuteAttack` → `ProjectileManager.SpawnProjectile`
+    //      → `ProjectileManager.Update` → `OnProjectileArrived` → `FindBuildingAtLanding` → `DamageSystem.ApplyDamage`
+    //   ⚠️ 构造法：弹道档（`AttackProfile`）为探针构造；建筑/单位走生产生成口
+    //      （`BuildingFactory.CreateBuildingInstance` / `UnitFactory.SpawnUnit`）。
+    //   ⚠️ 速档 ＝ 1×（弹道推进靠 `Update`/`Time.deltaTime` ⇒ 需真实时间）；弹速取 60 世界单位/秒
+    //      ⇒ 飞行 ≈2 帧 ⇒ 单位漂移可忽略（B2/B3 的"靶仍在落点"前提成立）。
+    // ========================================================================
+
+    [MenuItem("Valley/验证/HH320 件6建筑命中_生产链(第三段B)")]
+    public static void RunBuildHit()
+    {
+        if (!EditorApplication.isPlaying) { Debug.LogError("[HH320B] 须先进入 Play 后调用本菜单。"); return; }
+        new GameObject("HH320B_Host").AddComponent<RunHost>().Host(RunBuildHitCo());
+    }
+
+    /// <summary>供 bridge `exec_runtime_script` 直接 return 执行；菜单路径走 <see cref="RunBuildHit"/>。</summary>
+    public static IEnumerator RunBuildHitCoroutine() => RunBuildHitCo();
+
+    static IEnumerator RunBuildHitCo()
+    {
+        var cfg = new NewGameConfig
+        {
+            worldSeed = 20321, mapSeed = 20321, raceId = 0, difficulty = 2,
+            worldSize = WorldSize.Small, selectedSlotId = "smoke_w320bh", kingdomName = "件6实测"
+        };
+        Debug.Log("[HH320B] 阶段：EnterTestRun（1× 速）");
+        yield return TestHarnessApi.EnterTestRun(cfg, 1f);
+        float t0 = Time.realtimeSinceStartup;
+        while (WorldManager.Instance == null || WorldManager.Instance.ActiveMap == null
+               || GridSystem.Instance == null || GridSystem.Instance.Config == null
+               || BuildingRegistry.Instance == null || UnitFactory.Instance == null)
+        {
+            yield return null;
+            if (Time.realtimeSinceStartup - t0 > 180f) { Debug.LogError("[HH320B] 等世界就绪超时。"); yield break; }
+        }
+        yield return new WaitForSeconds(0.5f);
+
+        var grid = GridSystem.Instance;
+        var dmgCfg = Resources.Load<DamageConfig>("Config/DamageConfig");
+        float hitR = dmgCfg != null ? dmgCfg.hitRadiusCells : 0.25f;
+        L("=== B′ · HH.320 件 6 生产链实测（`ProjectileManager.OnProjectileArrived`）===");
+        L($"[环境] seed={WorldManager.Instance.ActiveMap.seed} 单位在册={UnitRegistry.Instance.Count} 建筑在册={BuildingRegistry.Instance.Count}"
+          + $" timeScale={Time.timeScale} hitRadiusCells={hitR} cellSize={grid.Config.cellSize} 格步长={GridMath.CellStep.ToString("F6", CultureInfo.InvariantCulture)}");
+
+        var anchorCell = grid.WorldToCoord(WorldManager.Instance.GetKingdomAnchorWorld());
+        if (!anchorCell.HasValue) { Debug.LogError("[HH320B] 锚点格取不到。"); TestHarnessApi.ExitTestRun(); yield break; }
+
+        // ── 建筑选择：非工事建筑（farm / Warehouse 皆非 Wall/Gate/Bridge/Defense）──
+        var bDef = Resources.Load<BuildingDef>("Buildings/farm");
+        if (bDef == null) bDef = Resources.Load<BuildingDef>("Buildings/Warehouse");
+        if (bDef == null) { Debug.LogError("[HH320B] 找不到非工事建筑资产。"); TestHarnessApi.ExitTestRun(); yield break; }
+        var fp = new Vector2Int(Mathf.Max(1, bDef.footprint.x), Mathf.Max(1, bDef.footprint.y));
+
+        // ── 隔离选址：footprint 全域空 ＋ 副格可走 ＋ Plain ＋ 12 格内无单位 ──
+        GridCoord bCell = default; bool found = false; int tried = 0;
+        for (int ring = 24; ring <= 108 && !found; ring += 12)
+            for (int dx = -24; dx <= 24 && !found; dx += 12)
+                for (int dy = -24; dy <= 24 && !found; dy += 12)
+                {
+                    var c = new GridCoord(anchorCell.Value.x + dx, anchorCell.Value.y - ring + dy);
+                    tried++;
+                    bool ok = true;
+                    for (int fx = 0; fx < fp.x && ok; fx++)
+                        for (int fy = 0; fy < fp.y && ok; fy++)
+                        {
+                            var cc = new GridCoord(c.x + fx, c.y + fy);
+                            if (!grid.IsWalkable(cc) || grid.GetOccupant(cc) != null || grid.GetFeatureAt(cc) != FeatureType.Plain) ok = false;
+                        }
+                    if (!ok) continue;
+                    Vector2 w = CellCenterWorld(c);
+                    _scanBuf.Clear();
+                    PerceptionSystem.QueryNearby(w, GridMath.VisualToWorld(12f), Faction.PlayerCamp, true, _scanBuf);
+                    _scanBuf.Clear();
+                    PerceptionSystem.QueryNearby(w, GridMath.VisualToWorld(12f), Faction.AiKingdom, true, _scanBuf);
+                    if (_scanBuf.Count == 0) { bCell = c; found = true; }
+                }
+        if (!found) { Debug.LogError("[HH320B] 找不到隔离场址。"); TestHarnessApi.ExitTestRun(); yield break; }
+
+        // ── 落成建筑（归属 AI 国 ⇒ 对 PlayerCamp 射手的 `FindBuildingAtLanding` 是敌对 ✓）──
+        Vector2 bCenter = GridSystem.FootprintCenterWorld(bCell, fp, Vector3.zero);   // 静态重载（⛔ 不得经实例调用）
+        bool built = BuildingFactory.Instance.CreateBuildingInstance(
+            bDef, bDef.sourceType, bCell, fp, bCenter,
+            isPlayerBuilt: false, grade: ResourceGrade.Normal, isConsumable: false,
+            initialState: BuildingState.Active, kingdomId: 1);
+        yield return null;
+        var bld = grid.GetOccupant(bCell) as Building;
+        if (!built || bld == null) { Debug.LogError("[HH320B] 建筑落成失败。"); TestHarnessApi.ExitTestRun(); yield break; }
+        L($"[布置] 建筑={bDef.name} footprint=({fp.x},{fp.y}) 主格=({bCell.x},{bCell.y}) 位置={bCenter} 阵营={bld.GetFaction()}"
+          + $" HP={bld.CurrentHp}/{bld.MaxHp} IsActive={bld.IsActive} 工事?={(bld.IsFortification ? "是(⛔异常)" : "否")}"
+          + $"（场址扫描 tried={tried} · 12 格内无敌）");
+
+        // ── 射手：建筑中心沿 −gx 3 格（格轴 ⇒ DistVisual≈3 ≤ range6）──
+        Vector2 bc = GridSystem.WorldToCellF(bCenter, grid.Config.cellSize);
+        Vector2 sPos = GridSystem.CellToWorldF(bc.x - 3f, bc.y, grid.Config.cellSize);
+        var shooter = SpawnUnitOf(Faction.PlayerCamp, Occupation.Archer, sPos, 0);
+        if (shooter == null) { Debug.LogError("[HH320B] 造射手失败。"); TestHarnessApi.ExitTestRun(); yield break; }
+        yield return null;
+        L($"[布置] 射手@格轴偏移 -3 位置={sPos} 与建筑中心 DistVisual={GridMath.DistVisual(sPos, bCenter).ToString("F3", CultureInfo.InvariantCulture)}");
+
+        var profile = new AttackProfile
+        {
+            attack = 25, range = 6f, cd = 1f, isRanged = true, projectileSpeed = 60f,
+            projectileType = ProjectileType.Arrow, pierceLevel = 1,
+            ballisticType = BallisticType.Lob, arcHeightCells = 0f,
+            aoeRadiusCells = 0f, aoeFalloff = 0f,
+            effectType = GroundEffectType.None,
+        };
+
+        // ══ 诊断 0：链路在场性 ＋ 越墙路径是否误挡 ＋ **散布档实读** ══
+        float errR = ReadErrorRadius();
+        L($"[诊断0] PM.Instance={ProjectileManager.Instance != null} DS.Instance={DamageSystem.Instance != null}"
+          + $" PM.active={ActiveProjectiles()} 注册存在={RegExists(shooter)}"
+          + $" 该段工事阻挡(CheckWallBlock 同参)={BlockerNote(sPos, bCenter)}"
+          + $" 射手位置={shooter.GetPosition()} 射手IsAlive={shooter.IsAlive}");
+        L($"[诊断0·散布档] DamageConfig.projectileErrorRadius={errR}（世界单位 ⇒ ≈{ (errR / GridMath.CellStep).ToString("F2", CultureInfo.InvariantCulture) } 格轴）"
+          + $" · hitRadiusCells={hitR} · 建筑底座半宽={fp.x * 0.5f}/{fp.y * 0.5f} 格"
+          + $" ⇒ ⚠️ 单发落点散布(半径 {errR})**远大于** 2×2 底座半宽(1 格) ⇒ 生产档下「落点在底座内」不成立（下 B1′ 为照旧读数）");
+
+        // ══ B1′ · **散布照旧（生产值）** 连打 4 发 ⇒ 统计命中建筑次数（诚实读数 ＋ 正对照）══
+        int hpB0 = bld.CurrentHp;
+        int hitShots = 0;
+        var shotLog = new StringBuilder();
+        for (int i = 0; i < 4; i++)
+        {
+            int hA = bld.CurrentHp;
+            bool ok = DamageSystem.Instance.RegisterAttack(shooter, bld, profile);
+            yield return new WaitForSecondsRealtime(0.45f);
+            int hB = bld.CurrentHp;
+            if (hB < hA && ok) hitShots++;
+            shotLog.Append($"[{i}:{hA}→{hB}]");
+        }
+        L($"[B1′·散布照旧(1.5)] 连打 4 发 ⇒ 建筑 HP {hpB0} → {bld.CurrentHp} 命中发数={hitShots}/4 逐发={shotLog}"
+          + $"（⚠️ 落点被 1.5 世界单位散布甩出 2×2 底座是**常态** ⇒ 单发 miss 属散布后果，非件 6 失效）");
+
+        // ══ B1-正对照：**手工** `DamageSystem.ApplyDamage`（分离"弹道到位"与"伤害链"两段）══
+        int hpM0 = bld.CurrentHp;
+        int dealt = DamageSystem.Instance.ApplyDamage(shooter, bld, 25, 0f, true);
+        int hpM1 = bld.CurrentHp;
+        L($"[B1-正对照·手工ApplyDamage] 返回={dealt} 建筑 HP {hpM0} → {hpM1}（Δ={hpM0 - hpM1}）"
+          + $"｜Δ>0 ⇒ 伤害链对建筑有效（故障面只在弹道命中判定）");
+
+        // ══ ⭐ 关闭散布（**探针构造 · 运行期字段 · 收尾还原**）：使"落点＝瞄准点"确定 ⇒ 才可判"落点在底座内" ══
+        SetErrorRadius(0f);
+        yield return null;
+        L($"[构造] projectileErrorRadius 1.5 → {ReadErrorRadius()}（运行期改内存实例 · 收尾还原 1.5 · ⛔ 不改资产文件）");
+
+        // ══ B1 · 散布关 · 落点附近**无任何单位** ＋ 落点=建筑中心（底座内）⇒ 期望命中建筑 ══
+        int c1 = CandidatesAt(bCenter, hitR);
+        int hp0 = bld.CurrentHp;
+        bool fired1 = DamageSystem.Instance.RegisterAttack(shooter, bld, profile);
+        yield return new WaitForSecondsRealtime(0.6f);
+        int hp1 = bld.CurrentHp;
+        int c1b = CandidatesAt(bCenter, hitR);
+        L($"[B1] 散布关 · 落点=建筑中心{ bCenter }（底座内）· 生产候选数 发射时={c1} 到达后={c1b}（期望 0/0）"
+          + $" · RegisterAttack={fired1} PM.active={ActiveProjectiles()}"
+          + $" ⇒ 建筑 HP {hp0} → {hp1}（Δ={hp0 - hp1}）｜期望：Δ>0（命中建筑 · ⛔ 非 miss）");
+
+        // ══ B2 · 散布关 · 落点附近**有友方单位**（同阵营 ⇒ 被过滤）＋ 落点在底座内 ⇒ 期望建筑兜底生效 ══
+        var friend = SpawnUnitOf(Faction.PlayerCamp, Occupation.Civilian, bCenter, 0);
+        yield return null;
+        if (friend != null) MoveUnit(friend, bCenter);
+        yield return null;
+        int c2 = CandidatesAt(bCenter, hitR);
+        int hp2 = bld.CurrentHp;
+        bool fired2 = DamageSystem.Instance.RegisterAttack(shooter, bld, profile);
+        yield return new WaitForSecondsRealtime(0.6f);
+        int hp3 = bld.CurrentHp;
+        int c2b = CandidatesAt(bCenter, hitR);   // 到达后复核（证"友方确在命中半径内且被过滤"）
+        int friendHp = friend != null ? friend.CurrentHp : -1;
+        L($"[B2] 散布关 · 落点=建筑中心（底座内）· 友方单位(同阵营 PlayerCamp)@落点 生产候选数 发射时={c2} 到达后={c2b}（期望 ≥1）"
+          + $" · RegisterAttack={fired2}"
+          + $" ⇒ 建筑 HP {hp2} → {hp3}（Δ={hp2 - hp3}）｜友方 HP={friendHp}（期望不受伤）｜期望：建筑 Δ>0（兜底生效）");
+
+        // ══ B3 · 散布关 · 对照（鉴别力·核心）：落点**底座外**且落点上有**友方**单位（被阵营过滤）
+        //      ⇒ 建筑兜底**确实被求值**，但因底座判据为 False ⇒ 返回 null ⇒ 全 miss ⇒ 建筑 Δ=0 ══
+        Vector2 outPos = GridSystem.CellToWorldF(bc.x + 2f, bc.y, grid.Config.cellSize);   // farm 2×2 半宽 1 格 ⇒ +2 格轴在底座外
+        var allyAtOut = SpawnUnitOf(Faction.PlayerCamp, Occupation.Civilian, outPos, 0);   // 同阵营 ⇒ 到达时被过滤
+        yield return null;
+        if (allyAtOut != null) MoveUnit(allyAtOut, outPos);
+        yield return null;
+        int c3 = CandidatesAt(outPos, hitR);
+        bool insideBase = CombatRules.InDiamondBase(outPos, bCenter, fp, grid.Config.cellSize);
+        bool inRange = GridMath.DistVisual(sPos, outPos) <= profile.range;
+        int hp4 = bld.CurrentHp;
+        int allyHp0 = allyAtOut != null ? allyAtOut.CurrentHp : -1;
+        bool fired3 = allyAtOut != null
+            ? DamageSystem.Instance.RegisterAttack(shooter, allyAtOut, profile)          // 瞄友方（被过滤）⇒ 只可能走建筑兜底
+            : DamageSystem.Instance.RegisterAttack(shooter, bld, profile);
+        yield return new WaitForSecondsRealtime(0.6f);
+        int hp5 = bld.CurrentHp;
+        int allyHp1 = allyAtOut != null ? allyAtOut.CurrentHp : -1;
+        L($"[B3] 散布关 · 落点=建筑中心 +2 格轴 {outPos}（InDiamondBase={insideBase} 期望 False · 射程内={inRange}（发射前实读））"
+          + $" · 生产候选数={c3}（友方 1 ⇒ 到达时被阵营过滤） · RegisterAttack={fired3}"
+          + $" ⇒ 建筑 HP {hp4} → {hp5}（Δ={hp4 - hp5}）｜落点友方 HP {allyHp0} → {allyHp1}"
+          + $"｜期望：两者 Δ=0（底座外 ⇒ 建筑兜底被求值但返 null ⇒ 全 miss · 鉴别力自证）");
+
+        // ══ B3′ · 同点到达性对照：同一落点改放**敌对**单位 ⇒ 期望该单位 Δ>0（证弹道确已到达该落点）＋建筑仍 Δ=0 ══
+        var foe = SpawnUnitOf(Faction.PlayerCamp, Occupation.Warrior, outPos, 1);          // kingdomId=1 ⇒ AiKingdom（敌对）
+        yield return null;
+        if (foe != null) MoveUnit(foe, outPos);
+        yield return null;
+        int c4 = CandidatesAt(outPos, hitR);
+        int hp6 = bld.CurrentHp;
+        int foeHp0 = foe != null ? foe.CurrentHp : -1;
+        bool fired4 = foe != null ? DamageSystem.Instance.RegisterAttack(shooter, foe, profile) : false;
+        yield return new WaitForSecondsRealtime(0.6f);
+        int hp7 = bld.CurrentHp;
+        int foeHp1 = foe != null ? foe.CurrentHp : -1;
+        L($"[B3′] 散布关 · 同落点(底座外)改放敌对单位 · 生产候选数={c4} · RegisterAttack={fired4}"
+          + $" ⇒ 该单位 HP {foeHp0} → {foeHp1}（期望 Δ>0 ＝ 弹道到达该落点）｜建筑 HP {hp6} → {hp7}（期望 Δ=0）");
+
+        // ══ 还原散布档（探针收尾纪律）══
+        SetErrorRadius(1.5f);
+        L($"[还原] projectileErrorRadius 已还原为 {ReadErrorRadius()}（资产值 1.5 · 内存字段）");
+
+        L($"[复算] 生产链路径：DamageSystem.RegisterAttack → ExecuteAttack → ProjectileManager.SpawnProjectile"
+          + $" → Update → OnProjectileArrived(:202) → FindBuildingAtLanding(:336) → DamageSystem.ApplyDamage"
+          + $"（修复点：ProjectileManager.cs:258 唯一早退点 · ⛔ 原 :211 候选空即 return 已废）");
+        L($"[清理] 建筑={ (bld != null) } 射手={ (shooter != null) } 友方@{bCenter}={ (friend != null) } 友方@底座外={ (allyAtOut != null) } 敌单位@{outPos}={ (foe != null) }");
+
+        // 清理探针构造物
+        if (bld != null) { grid.Free(bCell); BuildingRegistry.Instance?.Unregister(bld); Object.DestroyImmediate(bld.gameObject); }
+        foreach (var u in new[] { friend, allyAtOut, foe, shooter })
+            if (u != null) { UnitRegistry.Instance?.Unregister(u); Object.DestroyImmediate(u.gameObject); }
+        yield return null;
+
+        TestHarnessApi.ExitTestRun();
+        L("[收尾] ExitTestRun 已执行（Play 由执行端外部 stop · ⛔ 不留余留世界）");
+        Flush("buildhit");
+    }
+
+    /// <summary>诊断/构造：读/写 `ProjectileManager._config.projectileErrorRadius`（**运行期内存实例** · ⛔ 不写资产）。</summary>
+    static float ReadErrorRadius()
+    {
+        var pm = ProjectileManager.Instance;
+        if (pm == null) return -1f;
+        var cfg = typeof(ProjectileManager).GetField("_config", BF).GetValue(pm) as DamageConfig;
+        return cfg != null ? cfg.projectileErrorRadius : -1f;
+    }
+
+    static void SetErrorRadius(float v)
+    {
+        var pm = ProjectileManager.Instance;
+        if (pm == null) return;
+        var cfg = typeof(ProjectileManager).GetField("_config", BF).GetValue(pm) as DamageConfig;
+        if (cfg != null) cfg.projectileErrorRadius = v;
+    }
+
+    /// <summary>诊断：在飞投射物数（`ProjectileManager._active`）。</summary>
+    static int ActiveProjectiles()
+    {
+        var pm = ProjectileManager.Instance;
+        if (pm == null) return -1;
+        var list = typeof(ProjectileManager).GetField("_active", BF).GetValue(pm) as System.Collections.IList;
+        return list != null ? list.Count : -1;
+    }
+
+    /// <summary>诊断：该攻方是否在 `DamageSystem` 注册表内。</summary>
+    static bool RegExists(UnitController u)
+    {
+        var ds = DamageSystem.Instance;
+        if (ds == null) return false;
+        var d = typeof(DamageSystem).GetField("_registrations", BF).GetValue(ds) as System.Collections.IDictionary;
+        return d != null && d.Contains(u);
+    }
+
+    /// <summary>诊断：该段是否会被越墙判定拦下（`CheckWallBlock` 同参：弧高豁免开）。</summary>
+    static string BlockerNote(Vector2 a, Vector2 b)
+    {
+        var blk = CombatRules.FindFortificationBlocker(a, b, GridMath.PathBandHalf, true, 0f);
+        return blk != null ? ("有工事阻挡:" + blk.name) : "null（不挡）";
+    }
+
+    /// <summary>生产口读数：落点处 `ProjectileManager.QueryNearbyUnits` 候选数（＝早退判据的实参）。</summary>
+    static int CandidatesAt(Vector2 pos, float hitRadiusCells)
+    {
+        var pm = ProjectileManager.Instance;
+        if (pm == null) return -1;
+        var m = typeof(ProjectileManager).GetMethod("QueryNearbyUnits", BF);
+        var list = m.Invoke(pm, new object[] { pos, hitRadiusCells }) as System.Collections.IList;
+        return list != null ? list.Count : -1;
+    }
 }
