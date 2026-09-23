@@ -63,7 +63,29 @@ public class DamageSystem : Singleton<DamageSystem>
 
     private float ArmorK => _config.armorK;
     private float TickInterval => _config.tickInterval;
-    private int MaxAttacksPerFrame => _config.maxAttacksPerFrame;
+    /// <summary>【HH.321 批 2 · `D851` §3.6】`cap ≤ 0` 告警一次性标志（⛔ 不每帧刷屏）。</summary>
+    private bool _maxAttacksCapWarned;
+
+    /// <summary>一帧判定数上限（`DamageConfig.maxAttacksPerFrame` · **SO 可调**）。
+    /// ⭐【HH.321 批 2 · `D851` §3.6】`≤ 0` ⇒ **非法值**：会造成「**零判定 ＋ `_pendingAttacks` 无界增长**」
+    ///   （`D851` 实测：`cap=0` ⇒ 5 靶 HP 全程不动、`pending` +3/帧；根因 ＝ `ProcessPendingAttacks:267-270`
+    ///   `RemoveRange(0, 0)` **不排空** ＋ `CollectPendingAttacks:247-254` 每 tick 全量追加 ⇒ 重复入列）
+    ///   ⇒ **`LogError`（一次性）＋ 兜底按 `1` 处理**（⛔ 不得用 `0` 作"关闭"；回退请置 ≥1 或 `100`）。</summary>
+    private int MaxAttacksPerFrame
+    {
+        get
+        {
+            int cap = _config.maxAttacksPerFrame;
+            if (cap > 0) return cap;
+            if (!_maxAttacksCapWarned)
+            {
+                _maxAttacksCapWarned = true;
+                Debug.LogError($"[DamageSystem] DamageConfig.maxAttacksPerFrame={cap} ≤ 0 非法" +
+                               "（会零判定 ＋ _pendingAttacks 无界增长）⇒ 本次按 1 处理，请改为 ≥ 1。");
+            }
+            return 1;
+        }
+    }
     private int OverkillLimit => _config.overkillLimit;
     private float EventThrottle => _config.eventThrottle;
 
@@ -174,7 +196,9 @@ public class DamageSystem : Singleton<DamageSystem>
     /// <returns>false=注册失败（过度杀伤已满），调用方应选别的目标。</returns>
     public bool RegisterAttack(IDamageable attacker, IDamageable target, AttackProfile profile)
     {
-        if (attacker == null || target == null) return false;
+        // 【HH.321 批 2 · DZ-4】接口静态类型补**假 null** 判定（`UnityEngine.Object` 重载不生效的漏网面）
+        if (attacker == null || target == null
+            || CombatRules.IsUnityNull(attacker) || CombatRules.IsUnityNull(target)) return false;
 
         // 过度杀伤检查（仅近战）
         if (!profile.isRanged && GetOverkillCount(target) >= OverkillLimit)
@@ -211,7 +235,7 @@ public class DamageSystem : Singleton<DamageSystem>
     {
         if (!_registrations.TryGetValue(attacker, out var reg)) return;
 
-        if (newTarget == null) return;
+        if (newTarget == null || CombatRules.IsUnityNull(newTarget)) return;   // 【HH.321 批 2 · DZ-4】假 null 守卫
 
         // 旧 target 过度杀伤-1（近战）
         if (!reg.profile.isRanged)
@@ -277,7 +301,10 @@ public class DamageSystem : Singleton<DamageSystem>
         // HH.92/T13 收尾：attacker 已销毁（Unity 假 null，如被拆的箭塔）防御——target 池化存活时
         // 下方 target 检查失效，attacker.GetPosition() 会 MissingReferenceException 且挂起攻击永清不掉
         // （THD R3 实测 4586 次/轮；玩家侧拆塔瞬间同样可触发）。
-        if (attacker == null)
+        // 【HH.321 批 2 · `DZ-4` 主现场】`attacker` 静态类型 ＝ `IDamageable`（**接口**）⇒ 上方 `== null`
+        //   **不触发** `UnityEngine.Object` 的 `op_Equality` ⇒ 「已销毁 MonoBehaviour 但接口引用非 null」漏网
+        //   （`D851` 实测：修前每 tick 复发 `MissingReferenceException`）⇒ 补**假 null** 判定（唯一口）。
+        if (attacker == null || CombatRules.IsUnityNull(attacker))
         {
             _registrations.Remove(attacker);
             return;
@@ -292,7 +319,7 @@ public class DamageSystem : Singleton<DamageSystem>
         var profile = reg.profile;
 
         // 检查 target 有效性
-        if (target == null || target.CurrentHp <= 0)
+        if (target == null || CombatRules.IsUnityNull(target) || target.CurrentHp <= 0)   // 【HH.321 批 2 · DZ-4】假 null 守卫
         {
             UnregisterInternal(attacker);
             return;
@@ -369,7 +396,7 @@ public class DamageSystem : Singleton<DamageSystem>
     /// </summary>
     public int ApplyDamage(IDamageable source, IDamageable target, int attack, float extraDamageReduce = 0f, bool isRanged = false)
     {
-        if (target == null || target.CurrentHp <= 0) return 0;
+        if (target == null || CombatRules.IsUnityNull(target) || target.CurrentHp <= 0) return 0;   // 【HH.321 批 2 · DZ-4】假 null 守卫
 
         // 伤害计算（float 内部运算，对外 int，决策 21）
         int finalDamage = CalculateDamage(attack, target.Defense);
@@ -587,7 +614,7 @@ public class DamageSystem : Singleton<DamageSystem>
     private void OnUnitDied(UnitDiedEvent evt)
     {
         var victim = evt.Unit;
-        if (victim == null) return;
+        if (victim == null || CombatRules.IsUnityNull(victim)) return;   // 【HH.321 批 2 · DZ-4】假 null 守卫（`evt.Unit` 为 IDamageable）
 
         // 1. victim 是 attacker -> 删除其注册项（含过度杀伤-1）
         if (_registrations.ContainsKey(victim))

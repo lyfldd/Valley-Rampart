@@ -88,7 +88,9 @@ public class ProjectileManager : Singleton<ProjectileManager>
     /// </summary>
     public void SpawnProjectile(IDamageable attacker, IDamageable target, AttackProfile profile)
     {
-        if (attacker == null || target == null) return;
+        // 【HH.321 批 2 · DZ-4】接口静态类型补假 null 判定（`IDamageable` 上的 `== null` 不触发 Unity 重载）
+        if (attacker == null || target == null
+            || CombatRules.IsUnityNull(attacker) || CombatRules.IsUnityNull(target)) return;
 
         Vector2 startPos = attacker.GetPosition();
         Vector2 targetPos = target.GetPosition();
@@ -167,7 +169,9 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (_active.Count == 0) return;
 
         float dt = Time.deltaTime;
-        float hitRadiusCells = HitRadiusCells; // 格单位（2_5 步骤6：命中半径不再 ×cellSize）
+        // 【HH.321 批 2 件4（`L-63` 同族勘正）】口径 ＝ **视觉格**：命中判定走 `GridMath.DistVisual`（见 `OnProjectileArrived`），
+        //   `hitRadiusCells` 与 `AttackProfile.range` 同域（⛔ 不再是"格单位"；旧注释"格单位"与实现不符已废）。
+        float hitRadiusCells = HitRadiusCells; // 视觉格（`DamageConfig.hitRadiusCells` · 默认 0.25）
 
         for (int i = _active.Count - 1; i >= 0; i--)
         {

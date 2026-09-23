@@ -58,7 +58,7 @@ public class BehaviorExecutor
     /// </summary>
     public void Execute(in BehaviorCommand cmd, float dt, float cellSize)
     {
-        if (_self == null || _self.CurrentHp <= 0) return;
+        if (_self == null || CombatRules.IsUnityNull(_self) || _self.CurrentHp <= 0) return;   // 【HH.321 批 2 · DZ-4】
 
         // 模块切换时重置跨模块状态（漫游随机点/战术短撤里程不跨模块续用）
         if (_hasCmd && cmd.Module != _currentCmd.Module)
@@ -344,7 +344,7 @@ public class BehaviorExecutor
     private void Brake()
     {
         EnsurePathFollower();
-        if (_self != null) _controller.MoveTowards(_self.GetPosition());
+        if (!CombatRules.IsUnityNull(_self)) _controller.MoveTowards(_self.GetPosition());   // 【HH.321 批 2 · DZ-4】
         _pathFollower?.Stop();
     }
 

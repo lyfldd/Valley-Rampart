@@ -831,7 +831,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return;
 
         IDamageable nearest = FindNearestEnemyInRange();
-        if (nearest != null)
+        if (nearest != null && !CombatRules.IsUnityNull(nearest))   // 【HH.321 批 2 · DZ-4】假 null 守卫
         {
             // B1：弹药评估——弹药耗尽停火等补给；惜用（弹药紧张且目标非高价值）省弹停火
             if (!SelectAmmo(nearest, out var ammoType)) return;
@@ -843,7 +843,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
                     ConsumeAmmo(ammoType);   // B1：发射扣弹（对齐 sim SimDamage.ConsumeAmmo）
             }
         }
-        else if (_staticTarget != null)
+        else if (_staticTarget != null && !CombatRules.IsUnityNull(_staticTarget))   // 【HH.321 批 2 · DZ-4】
         {
             _staticTarget = null;
             DamageSystem.Instance.Unregister(this);
@@ -1062,7 +1062,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// D3 清理轮：阈值读字段（NPCBrain 注入 tuning.hv*）；邻域密集用 GridSystem 邻近格扫描（对齐 sim AOE 溅射半径）。</summary>
     public bool IsHighValueTarget(IDamageable target)
     {
-        if (target == null || target.CurrentHp <= 0) return false;
+        if (target == null || CombatRules.IsUnityNull(target) || target.CurrentHp <= 0) return false;   // 【HH.321 批 2 · DZ-4】
         float hpRatio = target.MaxHp > 0 ? (float)target.CurrentHp / target.MaxHp : 0f;
         if (hpRatio < HvKillHpGate) return true;      // 残血
         if (target.Defense >= HvDefenseGate) return true; // 重甲
@@ -1085,7 +1085,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
     /// </summary>
     private int CountNearbyHostiles(IDamageable center, float aoeWorld)
     {
-        if (center == null) return 0;
+        if (center == null || CombatRules.IsUnityNull(center)) return 0;   // 【HH.321 批 2 · DZ-4】
         if (UnitRegistry.Instance == null) return 0;
         Vector2 centerPos = center.GetPosition();
         Faction myFaction = GetFaction();
@@ -1165,7 +1165,7 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
 
         // 机器当作特殊建筑：必须有工人操作才可开火（改动②：工人门控发射）
         bool canFire = false;
-        if (crewed && fireTarget != null && _professionSnapshot.attack > 0)
+        if (crewed && fireTarget != null && !CombatRules.IsUnityNull(fireTarget) && _professionSnapshot.attack > 0)   // 【HH.321 批 2 · DZ-4】
         {
             // 【HH.320 件2】开火前距离复核改视觉格域（与索敌/判定/命中同口径）
             float d = GridMath.DistVisual(_rb.position, fireTarget.GetPosition());
@@ -1184,14 +1184,14 @@ public class UnitController : MonoBehaviour, ISaveable, IDamageable, IUnitHandle
         if (!canFire)
         {
             // 工人不足或射程外/耗弹：停火（不移动走下方 Idle 判定）
-            if (_staticTarget != null)
+            if (_staticTarget != null && !CombatRules.IsUnityNull(_staticTarget))   // 【HH.321 批 2 · DZ-4】
             {
                 _staticTarget = null;
                 DamageSystem.Instance.Unregister(this);
             }
         }
         // 移动：有工人操作朝感知内最近敌缓慢推进（reposition，速度 = walkSpeed 缓慢，改动④）；工人不足则 Idle 停机
-        if (crewed && moveTarget != null)
+        if (crewed && moveTarget != null && !CombatRules.IsUnityNull(moveTarget))   // 【HH.321 批 2 · DZ-4】
             MoveTowards(moveTarget.GetPosition(), speedOverride: _professionSnapshot.walkSpeed);
     }
 

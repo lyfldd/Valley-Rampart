@@ -138,7 +138,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     private void TickBurn(Effect e)
     {
         var units = QueryUnitsInRadius(e.pos, e.radiusCells);
-        Faction sourceFaction = e.source != null ? e.source.GetFaction() : Faction.None;
+        Faction sourceFaction = !CombatRules.IsUnityNull(e.source) ? e.source.GetFaction() : Faction.None;   // 【HH.321 批 2 · DZ-4】
 
         foreach (var unit in units)
         {
@@ -153,7 +153,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     private void TickSlow(Effect e)
     {
         var units = QueryUnitsInRadius(e.pos, e.radiusCells);
-        Faction sourceFaction = e.source != null ? e.source.GetFaction() : Faction.None;
+        Faction sourceFaction = !CombatRules.IsUnityNull(e.source) ? e.source.GetFaction() : Faction.None;   // 【HH.321 批 2 · DZ-4】
 
         foreach (var unit in units)
         {
@@ -168,7 +168,7 @@ public class GroundEffectManager : Singleton<GroundEffectManager>
     private void TickHeal(Effect e)
     {
         var units = QueryUnitsInRadius(e.pos, e.radiusCells);
-        Faction sourceFaction = e.source != null ? e.source.GetFaction() : Faction.None;
+        Faction sourceFaction = !CombatRules.IsUnityNull(e.source) ? e.source.GetFaction() : Faction.None;   // 【HH.321 批 2 · DZ-4】
 
         // 友军按血量升序（低血优先）
         units.Sort((a, b) =>

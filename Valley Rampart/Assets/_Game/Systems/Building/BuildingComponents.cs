@@ -79,8 +79,8 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
         // 2_5 射程圆：圈内最近目标按欧氏距离（360° 无朝向限制）
         // 【HH.320 件2 · D843】射程改**视觉格域**：`def.combat.range` 本身就表「格」（⛔ 不再 ×cellSize 标量 · R5）
         IDamageable target = FindNearestEnemyInRange(def.combat.range);
-        HasTarget = target != null;
-        if (target == null) return;
+        HasTarget = target != null;                                   // 【HH.321 批 2 · DZ-4】真 null 判定（保留）
+        if (target == null || CombatRules.IsUnityNull(target)) return; // 假 null 判定（接口静态类型 ⇒ 须补）
 
         AimAt(target.GetPosition());
 

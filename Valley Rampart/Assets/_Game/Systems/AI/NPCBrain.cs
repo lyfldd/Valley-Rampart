@@ -155,7 +155,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
     // ===== IAIDebugInfoExtended 实现 =====
     public Vector2 DebugPosition => _controller != null ? (Vector2)_controller.transform.position : Vector2.zero;
-    public float DebugHPRatio => _self != null ? (float)_self.CurrentHp / Mathf.Max(1, _self.MaxHp) : 0f;
+    public float DebugHPRatio => !CombatRules.IsUnityNull(_self) ? (float)_self.CurrentHp / Mathf.Max(1, _self.MaxHp) : 0f;   // 【HH.321 批 2 · DZ-4】
 
     public void GetSwitchHistory(List<AISwitchRecord> output, int maxCount)
     {
@@ -451,7 +451,7 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
 
     private void Update()
     {
-        if (_self == null || _profession == null || _config == null) return;
+        if (_self == null || CombatRules.IsUnityNull(_self) || _profession == null || _config == null) return;   // 【HH.321 批 2 · DZ-4】
         if (_self.CurrentHp <= 0) return;
 
         // 2_17 步骤13 批B（D334）：Abstract 王国非军事单位休眠冻结——停 Think/停感知/停移动，实体常驻原地冻结
@@ -1773,8 +1773,9 @@ public class NPCBrain : MonoBehaviour, IAIDebugInfoExtended, IExecutorEventRecei
     /// </summary>
     private static bool IsDestroyed(IDamageable d)
     {
-        var uo = d as UnityEngine.Object;
-        return uo == null;  // UnityEngine.Object==null 触发销毁检测
+        // 【HH.321 批 2 · D851 §3.5】统一到公共口（唯一事实源）：本方法原体即该式的私有副本。
+        //   ⛔ 语义零改（调用面 6 处保持不动）；⛔ 不得再在本类重写该表达式。
+        return CombatRules.IsUnityNull(d);
     }
 
     /// <summary>判断当前是否夜晚（Night/Dusk 视为夜晚，威胁加重 + 归巢放大）</summary>

@@ -203,6 +203,28 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         return true;
     }
 
+    // ========================================================================
+    //  ⭐【HH.321 批 2 · `M3-C` · `D851` §3.1/§3.2】建筑实体**数据回收门**（唯一入口 · 幂等）
+    //   与放置口 `CreateBuildingInstance`（同族对称）：放置＝本层赋予，回收＝把本层赋予的收回。
+    //
+    //   职责（`03` §7.2/§7.3 步骤 2/4/5）：**锚点返还 → 释放占格 → 注销**（注册表／调度器／Saveable）。
+    //   ⛔ 不做：① 实体销毁（`Destroy` 属高级层 ⇒ 留在 `Building.Die()` 尾）
+    //            ② 广播（`03` §7.6「高级层自己订广播，本层不管」⇒ `UnitDiedEvent` 在 `Die()` 内）
+    //            ③ 高级层收尾（工人撑出／掉箱三路／训练中断 ⇒ 亦在 `Die()` 内）。
+    //   ⚠️ 门体 ＝ `Building.ReleaseLayerOwnedState`（`HH.294` 片4「本层注销唯一实现」· `private ⇒ internal` 上提）；
+    //      ⛔ 不得留第二份实现。⚠️ `BuildingFactory.Instance` 缺失（拆卸竞态）⇒ 调用方用 `?.` 跳过
+    //      （与旧有 `BuildingRegistry.Instance?.Unregister` 同口径 · ⛔ 不新增兜底机制）。
+    //   ⚠️ `cause` ＝ **调用契约**：`03` §7.5「本层不判「能不能删」；「为什么删」是调用者的语义」；
+    //      死因统计／`Removed` 广播钩子为**未闭合项**（`D851` §四）⇒ 本批 ⛔ 不消费（仅为契约完整性保留入参）。
+    // ========================================================================
+    public void RemoveBuilding(Building b, DeathCause cause)
+    {
+        // 幂等（`03` §7.4「删两次等于删一次」）：无实体 / 已回收 ⇒ 直接返回（第二次调用零副作用）
+        if (b == null) return;
+        if (b.state == BuildingState.Dead) return;
+        b.ReleaseLayerOwnedState(unregisterFromRegistry: true);   // 门体（唯一实现）
+    }
+
     /// <summary>按 BuildingDef 配置挂行为组件（Producer/Storage/Combat/Pickup/Rift/CastleCore）。供 BuildingFactory 和 BuildController 共用。</summary>
     public void AttachComponents(Building b, BuildingDef def)
     {

@@ -139,6 +139,25 @@ public static class CombatRules
         return FindFortificationBlocker(from, to, GridMath.PathBandHalf, applyArcHeight: false, arcHeightCells: 0f) == null;
     }
 
+    /// <summary>
+    /// ⭐【HH.321 批 2 · `D851` §3.5 修法 B】**接口类型上的 Unity 假 null · 唯一判据**。
+    ///
+    /// **病根**：`IDamageable` 等**接口静态类型**上的 `x == null` **不触发** `UnityEngine.Object` 的
+    ///   `op_Equality`（该重载只对**静态类型为 `UnityEngine.Object`** 者生效）⇒ 已销毁的 `MonoBehaviour`
+    ///   但接口引用仍非 null 者会**漏网** ⇒ 守卫失效（现场：`DamageSystem.cs:280` `ExecuteAttack`）。
+    ///
+    /// **本口**：`d is UnityEngine.Object uo && uo == null` ⇒ 仅"**是 Unity 对象且已销毁**"为 true。
+    ///   ⚠️ 用 `is`（而非裸 `as`）⇒ 将来若有**纯 C# 实现者**（非 Unity 对象）不会被误判为"已销毁"
+    ///   （裸 `as` 版本对非 Unity 实现者会返回 null ⇒ 误判 true）；`is`/`as` 为引用类型检查（**无装箱**），
+    ///   成本远低于一次伤害结算 ⇒ ⛔ 不得以性能为由省略。
+    ///   ⛔ `ReferenceEquals` **不适用**（托管引用对已销毁对象仍非 null ＝ 正是本 bug 的反面；仅用于"同一引用"比较）。
+    ///
+    /// **先例（本口即其上提统一）**：`NPCBrain.IsDestroyed:1774-1778`（同式 · 原为 `private static`）。
+    /// **调用形态**：`if (attacker == null || CombatRules.IsUnityNull(attacker)) …`
+    ///   （保留原 `== null` 判定 ⇒ 覆盖"真 null"；本口补"假 null"）。
+    /// </summary>
+    public static bool IsUnityNull(IDamageable d) => d is UnityEngine.Object uo && uo == null;
+
     /// <summary>逐微格 Bresenham（含起终点枚举；起终微格豁免）。**零分配**（内联循环，非迭代器）。
     /// 任一中间微格命中 ①山壁／②建筑占格 ⇒ 返回 true（被挡）。</summary>
     static bool SubLineBlockedByCell(GridSystem g, GridCoord a, GridCoord b, IGridOccupant ignore)

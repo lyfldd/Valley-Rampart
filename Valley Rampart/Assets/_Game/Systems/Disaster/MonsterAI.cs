@@ -92,7 +92,7 @@ public class MonsterAI : MonoBehaviour
 
         // 价值×距离选高价值建筑（D83，CombatRules.TargetScore 首次接线）
         IDamageable t = PickBuildingTarget(prof.isRanged);
-        if (t == null) { _pf.Stop(); return; }
+        if (t == null || CombatRules.IsUnityNull(t)) { _pf.Stop(); return; }   // 【HH.321 批 2 · DZ-4】假 null 守卫
 
         if (!ReferenceEquals(t, _raidTarget))
         {

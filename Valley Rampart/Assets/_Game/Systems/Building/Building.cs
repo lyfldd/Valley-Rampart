@@ -1319,7 +1319,7 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         //   ⚠️ 内容物 **留仓**（⛔ 不 `Clear()`）：`Ruined` ⛔ 不是生命周期结束（可重建 · D154「废墟不 Free 占格 · 可修复」）
         //   ⇒ 材料留在工地仓等重建 ⇒ 重建时 `BeginMaterialPhase → EnsureSiteStore` 复用同一实例（`:548`）
         //   ⇒ `SetNeed` 重置需求 ＋ 旧 `_items` 仍在 ⇒ 够则即时开工、差则继续搬（正是留仓的价值）。
-        //   ⛔ 不动 `DropSiteStoreToChest` / `Die` 路径（工地被打毁掉箱走 `Die:1259`）。
+        //   ⛔ 不动 `DropSiteStoreToChest` / `Die` 路径（工地被打毁掉箱走 `Die:1364` · 【HH.321 批 2 件1⑤】行号勘正）。
         UnregisterSiteStore();
 
         UpdateVisual();
@@ -1331,9 +1331,14 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
     /// ⭐【HH.294 片4·4-D】**本层注销 · 唯一实现**（`03` §7.2「本层删的**不是"那个东西"，是本层赋予它的那几样**」）。
     /// 改前 `Die()` 与 `OnGatherCompleted()` **各写一遍同样的 4~5 项注销**（抄两遍）——此处合一。
     /// 顺序照 `03` §7.3 删门七步：**锚点返还（第 2 步）→ 释放占格（第 4 步）→ 注销（第 5 步）**。
-    /// `footprintUnregister` ＝ 是否连注册表一起注销（采集路径自行处理，故由此开关区分）。
+    /// `unregisterFromRegistry` ＝ 是否连注册表一起注销（采集路径已随 `HH.294` 片 6-2 退役 ⇒ 现调用方恒传 true）。
+    ///
+    /// ⭐【HH.321 批 2 · `D851` §3.1/§3.2】**本方法即「建筑实体数据回收门」的门体** ——
+    ///   `private ⇒ **internal**` 上提，**唯一调用方 ＝ `BuildingFactory.RemoveBuilding(b, cause)`**。
+    ///   ⛔ 不得再从 `Building` 内部直调（否则门形同虚设）；⛔ 不得留第二份实现（`HH.294` 片4「唯一实现」结论维持）。
+    ///   保持 `internal`（⛔ 非 `public`）＝ 沿用「非 public」口径（`Valley_HH294_Slice4Probe.cs:142` 反射断言）。
     /// </summary>
-    private void ReleaseLayerOwnedState(bool unregisterFromRegistry)
+    internal void ReleaseLayerOwnedState(bool unregisterFromRegistry)
     {
         // 第 2 步 · 锚点返还（§7.8 通用，非仅矿山）：当初消费掉的锚点写回原位 ⇒ 可再被引用
         if (HasConsumedAnchor)
@@ -1383,7 +1388,13 @@ public class Building : MonoBehaviour, IInteractable, IDamageable, ISaveable, IT
         if (TrainingSystem.Instance != null)
             TrainingSystem.Instance.OnBuildingDestroyed(this);
 
-        // 【HH.294 片4·4-D】本层注销（锚点返还 ＋ 释放占格 ＋ 注销）＝ 唯一实现
+        // ⚠️【HH.321 批 2 · **停手待裁（停手条件 1）**】按令接线「数据回收必经门」的生产链读数 ⇒ **门恒早退、回收未跑**
+        //   （实测：广播时注册表空=False · 占格空=False；对照：直调门第 1 次回收生效）——
+        //   根因 ＝ 门体幂等判据 `b.state == BuildingState.Dead` 与**本节第 1 行** `state = BuildingState.Dead` **互斥**
+        //   ⇒ `RemoveBuilding` 在生产路径**永不进入回收体**（自相矛盾 · 非实现偏差）。
+        //   ⛔ **本端不对契约细节自行择一**（按停手条件 1 报裁）；为**免留已知回归**，本行暂回**开片前语义**：
+        //   本层注销仍走**唯一实现** `ReleaseLayerOwnedState`（语义零变），门本体 `BuildingFactory.RemoveBuilding`
+        //   已在位（直调可用 · 探针 J3 已验证 回收/幂等/不销毁）。
         ReleaseLayerOwnedState(unregisterFromRegistry: true);
 
         // 3.4：改发 UnitDiedEvent（建筑也走此事件，BuildingDestroyedEvent 退役）
