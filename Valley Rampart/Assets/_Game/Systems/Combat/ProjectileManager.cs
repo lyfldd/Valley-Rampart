@@ -209,8 +209,11 @@ public class ProjectileManager : Singleton<ProjectileManager>
         if (CheckWallBlock(p))
             return;
 
-        // 查 GridSystem 附近微格的单位（doc1 微格主表 D70，2_5 步骤3）
-        List<UnitController> candidates = QueryNearbyUnits(p.targetPos, hitRadiusCells);
+        // 查落点**命中半径内**的单位（doc1 微格主表 D70，2_5 步骤3）
+        // ⭐【HH.323 · `D858` 甲案】改**单遍精确集** ＋ **复用缓冲**（原 25 次微格窗全表扫 ＋ 25 次 `new List` 已删；
+        //   本调用点**零中间分配**）；⚠️ 缓冲仅本方法内同步使用，⛔ 不得跨帧持有／嵌套调用（见 `QueryNearbyUnitsInto` 注释）。
+        QueryNearbyUnitsInto(p.targetPos, hitRadiusCells, _hitQueryBuf);
+        List<UnitController> candidates = _hitQueryBuf;
 
         // ⭐【HH.320 件 6 返工（`D847` §2-1）】⛔ **不得**在此因「候选为空」早退 —— 原因与优先序：
         //   ① 本候选**只含 `UnitController`**（`QueryNearbyUnits` → `_unitSubCells`）；⚠️ **建筑不在候选内**
@@ -359,28 +362,55 @@ public class ProjectileManager : Singleton<ProjectileManager>
         return null;
     }
 
-    /// <summary>查目标位置附近微格内的单位（doc1 微格主表 D70，2_5 步骤3）。</summary>
+    /// 复用缓冲：命中查询结果容器。
+    /// ⚠️ **契约**：仅 `OnProjectileArrived` **单帧同步**使用（查询 → 两个消费循环读完即弃）⇒ ⛔ 不跨帧持有、
+    ///   ⛔ 不在同名查询之间穿插其它 `QueryNearbyUnits*` 调用（否则内容被后一次查询覆盖）。
+    /// 容量 32 取自实盘（单位在册 33 量级 ⇒ 命中半径内通常个位数）⇒ 稳定期**零扩容**。
+    private readonly List<UnitController> _hitQueryBuf = new List<UnitController>(32);
+
+    /// <summary>⚠️ **兼容口**（保留原签名：探针 `HH.320` 反射调用用；本路径**有 1 次 `List` 分配**）。
+    /// 生产调用点 ⛔ 不走本口（走 <see cref="QueryNearbyUnitsInto"/> ＋ 复用缓冲 ⇒ 零中间分配）。</summary>
     private List<UnitController> QueryNearbyUnits(Vector2 worldPos, float radiusCells)
     {
         var result = new List<UnitController>();
-        if (GridSystem.Instance == null || GridSystem.Instance.Config == null) return result;
-
-        int subDiv = GridSystem.Instance.Config.subCellDivisor;
-        var centerOpt = GridSystem.Instance.WorldToSubCoord(worldPos);
-        if (!centerOpt.HasValue) return result; // doc1 改造：越界返回 null，返回空列表
-        GridCoord center = centerOpt.Value;
-        // 【HH.320 件18】**微格候选窗收口为单一口**（超集）：原 `radiusCells × subDiv` 非超集（R_vis=0.25 时须 2 而取 1
-        //   ⇒ 判定圈内却不进候选 ＝ 漏命中）⇒ 改走 GridMath.SubWindowForVisualRadius（现配置 ⌈5·R_vis⌉ ⇒ 2）。
-        int subRange = GridMath.SubWindowForVisualRadius(radiusCells, subDiv);
-
-        for (int dy = -subRange; dy <= subRange; dy++)
-        {
-            for (int dx = -subRange; dx <= subRange; dx++)
-            {
-                result.AddRange(GridSystem.Instance.GetUnitsInSubCell(new GridCoord(center.x + dx, center.y + dy)));
-            }
-        }
+        QueryNearbyUnitsInto(worldPos, radiusCells, result);
         return result;
+    }
+
+    /// <summary>⭐【`HH.323` · `D858` 甲案】查落点**命中半径内**的单位，写入调用方缓冲（**查询过程零中间分配**）。
+    ///
+    /// <b>改前</b>（`HH.320` 件18 口径 · 超集）：微格窗 `(2·subRange+1)² = 25` 次 `GridSystem.GetUnitsInSubCell`
+    ///   ⇒ 每次 `new List` ＋ `foreach (_unitSubCells)` **全表扫**（每发 26 次分配 ＋ 26 次 O(N) 迭代）。
+    /// <b>改后</b>（单遍 ＋ 精确集）：`UnitRegistry.GetUnitsEnumerator()` **结构枚举器**（⛔ 不走 `GetAllUnits()`：
+    ///   其返回 `IEnumerable&lt;T&gt;` 的接口 foreach 会**装箱**）＋ `GridMath.DistVisual(worldPos, u.GetPosition()) &lt;= radiusCells`
+    ///   ⇒ **1 遍 `O(N)`**、**零中间分配**（结果写入调用方缓冲，稳定期不扩容）。
+    ///
+    /// <b>语义**更严**（非放宽）</b>：候选由「微格窗超集」变为「命中半径**精确集**」——
+    ///   ① 窗内但半径外的单位**不再进入**候选（⚠️ 两个消费点 `:248` / `:280` 本就再判 `dist ≤ hitRadiusCells` ⇒ **可见行为不变**）；
+    ///   ② 半径内**不再漏**（原超集以「单位微格登记」为界，位移快于登记刷新者会漏）⇒ 只会**多**命中真正在半径内的单位。
+    ///
+    /// 守卫：`UnitRegistry.Instance == null` 与 `GridSystem.Instance == null` 保留（无世界早退）；
+    ///   ⚠️ 原「`WorldToSubCoord` 越界 ⇒ 空集」改用 `WorldToCoord` 越界判定**保留同一语义**（越界 ⇒ 不写入 ⇒ 空集）；
+    ///   ⛔ 原 `Config.subCellDivisor` / `SubWindowForVisualRadius` 依赖已随微格窗一并删除（本函数不再读 `GridSystem.Config`）。
+    ///
+    /// `u == null` 判定为 **Unity 假 null 有效**（`u` 为**具体类型** `UnitController` ⇒ 走 Unity `==` 重载）——
+    ///   ⚠️ 与 `HH.322` 记的「**接口类型**下 `== null` 失效」相反，此处**不**需 `CombatRules.IsUnityNull`。</summary>
+    private void QueryNearbyUnitsInto(Vector2 worldPos, float radiusCells, List<UnitController> buffer)
+    {
+        buffer.Clear();
+        var reg = UnitRegistry.Instance;
+        if (reg == null || GridSystem.Instance == null) return;          // 无世界 ⇒ 空集（同改前早退口径）
+        var grid = GridSystem.Instance;
+        if (grid.Config == null) return;
+        if (!grid.WorldToCoord(worldPos).HasValue) return;                // 越界 ⇒ 空集（替原 WorldToSubCoord 越界判定）
+
+        var e = reg.GetUnitsEnumerator();                                 // HashSet<UnitController> 结构枚举器 · 零装箱
+        while (e.MoveNext())
+        {
+            var u = e.Current;
+            if (u == null) continue;                                      // Unity 假 null：具体类型 ⇒ 判定有效
+            if (GridMath.DistVisual(worldPos, u.GetPosition()) <= radiusCells) buffer.Add(u);
+        }
     }
 
     // ===== 对象池 =====
