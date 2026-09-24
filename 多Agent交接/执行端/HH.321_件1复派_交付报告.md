@@ -14,7 +14,7 @@
 |---|---|---|
 | **1 · 经门**（击毁 ⇒ (a) 回收在门内 (b) 顺序 回收→广播→Destroy） | ✅ **达成** | 广播时 **注册表空=True · 占格空=True**（上批态 A 为 **False/False** ⇒ 前后对照吻合 `D852` 预期）＋ 实体在广播时可用=True · 位对上=True · 帧后已销毁=True |
 | **2 · 门幂等（经门）** | ✅ **达成** | 门第 1 次 ⇒ 回收生效（注册表空/占格空=True）· 门不销毁；双空后重复调 ⇒ **跳过**；已销毁引用 ⇒ `b == null` 早退 · 无异常 |
-| **3 · `Die()` 二次调 ⇒ 零副作用** | ✅ **达成**（⚠️ 掉箱面鉴别力已声明） | 二次调后 **工地仓／箱子数／本格箱子／注册表／占格 五面全不变** ＋ 事件计数 **1（不重复广播）** ＋ 异常 **0** |
+| **3 · `Die()` 二次调 ⇒ 零副作用** | ✅ **达成（⚠️ 能力列不达 · 掉箱面空仓 · 见 §四）** | 二次调后 **工地仓／箱子数／本格箱子／注册表／占格 五面全不变** ＋ 事件计数 **1（不重复广播）** ＋ 异常 **0** |
 | **4 · `EnterRuined` 回归** | ✅ **达成** | `state=Ruined` ／ 占格仍在 ／ 注册表仍在 ／ 实体仍在 ／ 新增 `UnitDiedEvent`=0 |
 
 ---
@@ -23,15 +23,17 @@
 
 | # | 位置 | 改动 |
 |---|---|---|
-| **1** | `BuildingFactory.cs:220-232 RemoveBuilding` | 删 `if (b.state == BuildingState.Dead) return;` ⇒ 改 **本层存在性双空**判据：`var reg = BuildingRegistry.Instance; if (reg != null && reg.GetAt(b.coord) == null && GridSystem.Instance != null && GridSystem.Instance.GetOccupant(b.coord) == null) return;`（⛔ `&&` ＝ 方向安全：宁可多回收一次、**绝不漏回收**；⚠️ 单槽存储 ⇒ `F-15` 重叠面下的**已知边界**已随注释登记）＋ 头部注释加「⭐ 幂等判据（`D852` §4.1）＝ `03` §7.4 本层存在性；⛔ 不再读高级层 `state`」 |
+| **1** | `BuildingFactory.cs:222-235 RemoveBuilding`（**判据 :229-233**） | 删 `if (b.state == BuildingState.Dead) return;` ⇒ 改 **本层存在性双空**判据：`var reg = BuildingRegistry.Instance; if (reg != null && reg.GetAt(b.coord) == null && GridSystem.Instance != null && GridSystem.Instance.GetOccupant(b.coord) == null) return;`（⛔ `&&` ＝ 方向安全：宁可多回收一次、**绝不漏回收**；⚠️ 单槽存储 ⇒ `F-15` 重叠面下的**已知边界**已随注释登记）＋ 头部注释加「⭐ 幂等判据（`D852` §4.1）＝ `03` §7.4 本层存在性；⛔ 不再读高级层 `state`」 |
 | **2** | `Building.cs:1406`（原暂回旧路径那行） | 改**经门**：`BuildingFactory.Instance?.RemoveBuilding(this, cause);`（⛔ `?.` 兜底口径照门注释）；**停手待裁那 8 行临时注释整段删除**（`L-63` · ⛔ 不留过时口径） |
-| **3** | `Building.cs:1376-1379 Die()` 入口 | 新增守卫：`if (state == BuildingState.Dead) return;   // 生命周期只结束一次（D852 §4.2）`（＋ 文档注释写明理由与安全性：**只挡 `Dead`**，⛔ 不挡 `Ruined`/`Abandoned`/`Constructing`）｜守卫位于**三路掉箱之前**（`EscapeWorkers :1382` → 掉箱 `:1388`/`:1392`/`:1393`） |
+| **3** | `Building.cs:1376-1418 Die()`（**守卫 :1378**） | 新增守卫：`if (state == BuildingState.Dead) return;   // 生命周期只结束一次（D852 §4.2）`（＋ 文档注释写明理由与安全性：**只挡 `Dead`**，⛔ 不挡 `Ruined`/`Abandoned`/`Constructing`）｜守卫位于**三路掉箱之前**（`EscapeWorkers :1382` → 掉箱 `:1388`/`:1392`/`:1393`） |
 
 ℹ️ 门本体内核（`ReleaseLayerOwnedState` · `internal` 口径）／`Building.cs:1417 Destroy(gameObject)`（仍在 `Die()` 尾）／探针 J3＝**均未改** ✓
 
 ---
 
-## §二 · 判据 1（⭐ 生产链实测 · 与本批上一轮**同构造前后对照**）
+## §二 · 判据 1（⭐ 生产链实测 · **跨 commit 同构造对照 · 三臂**）
+
+> **三臂口径**：**态 A** `…202008.txt`（旧判据 `state==Dead` 经门）＝**False/False** ／ **态 B** `…202832.txt`（回旧路径）＝**True/True** ／ **本批** `…214655.txt`（新判据「本层存在性」经门）＝**True/True**。⛔ 三份产物同探针同名、**仅时间戳可区分**。
 
 **构造**（原样复用上轮 · 仅"态 A 换成新判据版本"）：test-run（seed 20321 · **1×** · 隔离场址）｜工事塔（`arrow_tower` · `IsFortification=True` · HP 135）｜击毁入口 ＝ `DamageSystem.ApplyDamage(射手, 塔, 999999)` ⇒ `Building.TakeDamage → hp≤0 → IsFortification ⇒ Die(Killed)`。
 
@@ -50,7 +52,7 @@
 | 调用 | 读数（产物原文） | 判 |
 |---|---|---|
 | 门**第 1 次**（对 `Active` 建筑直调） | `注册表空=True 占格空=True 门后实体仍在=True`（**门体回收生效** ＋ **门不销毁**） | ✅ |
-| **重复调**（双空 ⇒ 新判据） | `注册表空=True 占格空=True ｜ 注册表计数 23→22→22`（第二次**零副作用**） | ✅ |
+| **重复调**（双空 ⇒ 新判据） | `注册表空=True 占格空=True ｜ 注册表计数 24→23→23`（第二次**零副作用**） | ✅ |
 | 对**已销毁引用**再调 | 无异常（`b == null` 早退） | ✅ |
 
 ℹ️ 边界登记（不变）：门**不改** `state`（状态归调用方）⇒ 契约外用法（对 `Active` 建筑连调两次且期间未被回收）会重跑回收 ⇒ 登记观察项（⛔ 本批不加机制）。
@@ -90,10 +92,10 @@
 | # | 项 | 读数列（载体） | 能力列（生产链实测） |
 |---|---|---|---|
 | 1 | 判据 1（经门） | 态 A 旧判据 `False/False` ⇒ 新判据 `True/True`＋(b)(c)（本批 §二 表） | ✅ **数据回收在门内 ＋ 顺序 ＝ 回收→广播→Destroy** |
-| 2 | 门幂等（经门） | 第 1 次回收生效 · 门不销毁；重复调 `23→22→22`；已销毁引用早退（§三） | ✅ **幂等（零副作用）** |
+| 2 | 门幂等（经门） | 第 1 次回收生效 · 门不销毁；重复调 `24→23→23`；已销毁引用早退（§三） | ✅ **幂等（零副作用）** |
 | 3 | `Die()` 二次调 | 五面不变 ＋ 事件 1 ＋ 异常 0（§四 表）｜⚠️ 掉箱面＝空仓构造（鉴别力已声明） | ✅ **生命周期只结束一次**（不重复回收/广播/掉箱可见面） |
 | 4 | `EnterRuined` 回归 | Ruined／占格在／注册表在／未销毁／事件 0（§五） | ✅ **废墟链零扰动** |
-| — | 回归（件 2/3/4 未动） | `[J4·cap=0]` ⇒ `LogError` 累计 **1** ＋ 三靶 HP 逐帧下降 ＋ `pending 0/3/0/0/0/0`（有界） | ✅ 件 3 无回归 |
+| — | 回归（件 2/3/4 未动） | `[J4·cap=0]` ⇒ `LogError` 累计 **1** ＋ 三靶 HP 逐帧下降 ＋ `pending 0/3/0/1/0/0`（有界） | ✅ 件 3 无回归 |
 | — | 编译 / 红线 | `refresh ⇒ errors 0`｜⛔ 未动 `AI.Core`／训练仓／`GridMath.DistCells`／`GameScene.unity`／`Packages`／美术／`TaskScheduler.cs` | —— |
 
 ---
