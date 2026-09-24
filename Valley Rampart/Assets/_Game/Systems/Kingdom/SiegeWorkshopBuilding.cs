@@ -16,7 +16,7 @@ using UnityEngine;
 /// 退役（HH.19 裁决口径 2）：原本 SiegeProductionSystem._ammoStock 全局弹药账（ProjectileType 键）不再作为真源；
 ///   ProduceAmmo 改走本组件子仓；ResupplySiegeUnit 直填接口退役；旧档 ammoStock 读入时迁入本组件子仓（不丢档）。
 /// </summary>
-public class SiegeWorkshopBuilding : MonoBehaviour, IBuildingComponent, ITaskSource
+public class SiegeWorkshopBuilding : MonoBehaviour, ITickable, ITaskSource
 {
     /// <summary>厂内仓储的子物体前缀（仿 TreasureVault 的 Vault_ 命名）。</summary>
     const string SubStorePrefix = "Ammo_";

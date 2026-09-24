@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: portal
   m_EditorClassIdentifier: 
   id: portal
+  components:
+  - comp.rift
   displayName: "\u4F20\u9001\u95E8"
   description: "\u5A01\u80C1\u81C2\u5EFA\u7B51\uFF08HH.155/D613\uFF0Cfootprint 2\xD72\uFF09"
   faction: 4

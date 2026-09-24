@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: quarry
   m_EditorClassIdentifier: 
   id: quarry
+  components:
+  - comp.storage
+  - comp.producer
   displayName: "\u91C7\u77F3\u573A"
   description: "\u5728\u77FF\u6D1E\u4E0A\u5EFA\u9020\uFF0C\u4EA7\u51FA\u77F3\u6750"
   faction: 1

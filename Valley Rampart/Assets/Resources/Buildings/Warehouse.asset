@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: Warehouse
   m_EditorClassIdentifier: 
   id: Warehouse
+  components:
+  - comp.storage
   displayName: "\u4ED3\u5E93"
   description: "\u5B58\u50A8\u6728/\u77F3/\u77FF"
   faction: 1

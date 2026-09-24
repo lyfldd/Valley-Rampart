@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: magic_tower
   m_EditorClassIdentifier: 
   id: MagicTower
+  components:
+  - comp.combat
   displayName: "\u9B54\u6CD5\u5854"
   description: "AOE \u9B54\u6CD5\u4F24\u5BB3\u9632\u5FA1\u5EFA\u7B51"
   faction: 1

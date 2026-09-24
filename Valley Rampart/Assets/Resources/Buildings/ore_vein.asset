@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: ore_vein
   m_EditorClassIdentifier: 
   id: ore_vein
+  components:
+  - comp.pickup
   displayName: "\u77FF\u8109"
   description: 
   faction: 1

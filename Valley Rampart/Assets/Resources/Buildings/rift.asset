@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: rift
   m_EditorClassIdentifier: 
   id: rift
+  components:
+  - comp.rift
   displayName: "\u88C2\u9699"
   description: 
   faction: 2

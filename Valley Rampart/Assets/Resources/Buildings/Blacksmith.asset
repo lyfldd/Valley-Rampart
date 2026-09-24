@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: Blacksmith
   m_EditorClassIdentifier: 
   id: Blacksmith
+  components:
+  - comp.storage
+  - comp.blacksmith
   displayName: "\u94C1\u5320\u94FA"
   description: "\u77FF\u2192Metal"
   faction: 1

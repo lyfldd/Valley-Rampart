@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: SiegeWorkshop
   m_EditorClassIdentifier: 
   id: SiegeWorkshop
+  components:
+  - comp.siege_workshop
   displayName: "\u6218\u4E89\u673A\u5668\u5DE5\u574A"
   description: "\u751F\u4EA7\u5404\u65CF\u4E13\u5C5E\u6218\u4E89\u673A\u5668\u4E0E\u914D\u5957\u5F39\u836F"
   faction: 1

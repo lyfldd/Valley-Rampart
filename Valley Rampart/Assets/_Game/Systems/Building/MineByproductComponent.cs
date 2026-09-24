@@ -27,7 +27,7 @@ using UnityEngine;
 /// Building.SaveState/LoadState 经 SaveByproductState/RestoreByproductState 读写。
 /// ResetState：随建筑 GameObject 销毁自然清（组件随建筑域既有清场链），无需 WorldLifecycle 新编排（列报确认）。
 /// </summary>
-public class MineByproductComponent : MonoBehaviour, IBuildingComponent, ITaskSource
+public class MineByproductComponent : MonoBehaviour, ITickable, ITaskSource
 {
     const string SubStorePrefix = "Byproduct_";
 

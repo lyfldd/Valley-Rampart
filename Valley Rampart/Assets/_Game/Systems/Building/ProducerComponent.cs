@@ -5,7 +5,7 @@ using UnityEngine;
 /// 每秒按 rate × gradeScale 产出资源写入本地 StorageComponent。
 /// 由 ProductionSystem 集中调度（每秒遍历），不自己 Update。
 /// </summary>
-public class ProducerComponent : MonoBehaviour, IBuildingComponent
+public class ProducerComponent : MonoBehaviour, ITickable
 {
     private Building _building;
     private StorageComponent _storage;

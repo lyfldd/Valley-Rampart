@@ -63,6 +63,11 @@ public class BuildingDef : ScriptableObject
     public CombatConfig combat;        // 非空 = 防御建筑（攻击属性，交 3.5/3.4）
     public BuildingLevel[] levels;     // 升级档位
 
+    [Header("⭐ 组件绑定（`M4-A` · `08` §7.3：数据行显式列表）")]
+    [Tooltip("本栋挂哪些行为组件（键表＝`BuildingComponentRegistry`，形如 comp.storage／comp.producer／comp.combat…）。\n" +
+             "空数组 ⇒ 不挂任何行为组件。⭐ 挂什么由本栏决定，`BuildingFactory.AttachComponents` 只遍历本栏查表。")]
+    public string[] components;
+
     [Header("战争机器乘员（改动②：投掷机需工人操作；对齐 NpcProfessionDef.crewRequired）")]
     [Tooltip("需几名工人操作（0=不需工人，恒可工作）。Catapult=2")]
     public int crewRequired = 0;

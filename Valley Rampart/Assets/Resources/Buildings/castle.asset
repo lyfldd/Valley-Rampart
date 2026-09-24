@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: castle
   m_EditorClassIdentifier: 
   id: castle
+  components:
+  - comp.combat
+  - comp.castle_core
   displayName: "\u4E3B\u57CE"
   description: 
   faction: 1

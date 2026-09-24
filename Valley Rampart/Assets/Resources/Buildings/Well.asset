@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: Well
   m_EditorClassIdentifier: 
   id: Well
+  components:
+  - comp.storage
+  - comp.producer
   displayName: "\u6C34\u4E95"
   description: "\u9971\u98DF\u6062\u590D\u8F85\u52A9"
   faction: 1

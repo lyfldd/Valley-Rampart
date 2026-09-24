@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: arrow_tower
   m_EditorClassIdentifier: 
   id: arrow_tower
+  components:
+  - comp.combat
   displayName: "\u7BAD\u5854"
   description: 
   faction: 1

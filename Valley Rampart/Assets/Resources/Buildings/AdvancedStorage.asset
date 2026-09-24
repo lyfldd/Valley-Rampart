@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: AdvancedStorage
   m_EditorClassIdentifier: 
   id: AdvancedStorage
+  components:
+  - comp.storage
+  - comp.producer
   displayName: "\u9AD8\u7EA7\u4ED3\u50A8"
   description: "\u5927\u5BB9\u91CF\u5B58\u50A8\uFF0B\u81EA\u52A8\u642C\u8FD0\u6574\u5408"
   faction: 1

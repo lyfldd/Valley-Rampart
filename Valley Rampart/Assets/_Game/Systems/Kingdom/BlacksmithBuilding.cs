@@ -9,7 +9,7 @@ using UnityEngine;
 /// D704 A 批（OB1-2）：本组件自持 ITaskSource 广告 Production（source＝组件·原地劳作）；无在岗（Working）⇒ 停产。
 /// 在岗判定＝HasWorkerAssigned(本组件) ‖ HasWorkerAssigned(建筑)（后者对建筑 ③搬运广告 source＝建筑，D704 §三-3-②）。
 /// </summary>
-public class BlacksmithBuilding : MonoBehaviour, IBuildingComponent, ITaskSource
+public class BlacksmithBuilding : MonoBehaviour, ITickable, ITaskSource
 {
     private Building _building;
     private StorageComponent _storage;

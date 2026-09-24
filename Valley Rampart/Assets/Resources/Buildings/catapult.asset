@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: catapult
   m_EditorClassIdentifier: 
   id: catapult
+  components:
+  - comp.combat
   displayName: "\u6295\u77F3\u673A"
   description: "\u8303\u56F4\u4F24\u5BB3\u9632\u5FA1\u5EFA\u7B51"
   faction: 1

@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: treasure_box
   m_EditorClassIdentifier: 
   id: treasure_box
+  components:
+  - comp.pickup
   displayName: "\u5B9D\u7BB1"
   description: 
   faction: 1

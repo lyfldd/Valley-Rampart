@@ -13,6 +13,9 @@ MonoBehaviour:
   m_Name: farm
   m_EditorClassIdentifier: 
   id: farm
+  components:
+  - comp.storage
+  - comp.producer
   displayName: "\u519C\u573A"
   description: "\u5728\u519C\u7530\u4E0A\u5EFA\u9020\uFF0C\u4EA7\u51FA\u7CAE\u98DF"
   faction: 1

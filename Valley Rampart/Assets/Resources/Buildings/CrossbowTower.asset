@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: CrossbowTower
   m_EditorClassIdentifier: 
   id: CrossbowTower
+  components:
+  - comp.combat
   displayName: "\u5F29\u5854"
   description: "\u8FDC\u5C04\u7A0B\u5355\u4F53\u9AD8\u4F24"
   faction: 1

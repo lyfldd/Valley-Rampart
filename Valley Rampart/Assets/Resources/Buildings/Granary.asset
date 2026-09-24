@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: Granary
   m_EditorClassIdentifier: 
   id: Granary
+  components:
+  - comp.storage
   displayName: "\u7CAE\u4ED3"
   description: "\u5B58\u7CAE\uFF0B\u8FDB\u98DF\u70B9"
   faction: 1

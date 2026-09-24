@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: mine
   m_EditorClassIdentifier: 
   id: mine
+  components:
+  - comp.mine_byproduct
   displayName: "\u77FF\u6D1E"
   description: 
   faction: 1

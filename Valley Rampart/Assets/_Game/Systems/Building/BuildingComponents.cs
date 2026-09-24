@@ -15,6 +15,15 @@ public interface IBuildingComponent
     void Init(Building building);
 }
 
+/// <summary>⭐ `M4-A`（`08` §3.4）：**可被 `ProductionSystem` 每秒 tick 的建筑组件**。
+/// `ProductionSystem.TickAll` 只遍历本接口（⛔ 不再点名 4 个具体组件类）⇒ 新增带 `Tick` 的组件
+/// 只需实现本接口 ＋ 数据行填键，**不用回来改** `ProductionSystem`。</summary>
+public interface ITickable : IBuildingComponent
+{
+    /// <summary>每秒一次（由 `ProductionSystem` 统一驱动 · 节奏不变）。</summary>
+    void Tick();
+}
+
 // ===== 留接口空壳组件（3.3.4 批次4：定义类 + 挂载判断，具体逻辑后续阶段）=====
 
 /// <summary>一次性采集组件（宝箱/木头堆/石头堆）。依赖：无。后续阶段实现采集逻辑。</summary>
@@ -168,5 +177,82 @@ public class CastleCoreComponent : MonoBehaviour, IBuildingComponent
         // 2_12 步骤8.4：主城挂国库仓库（HH.16 裁决 B 多仓库聚合）——非金资源真源。
         if (building != null && building.gameObject.GetComponent<TreasureVault>() == null)
             building.gameObject.AddComponent<TreasureVault>()?.Init(building);
+    }
+}
+
+// ============================================================================
+//  ⭐ `M4-A`（`08` §3.3「组件注册表」／§7.3「数据行显式列表」）：
+//  **键 → 组件类的唯一映射表**。`BuildingFactory.AttachComponents` 只做
+//  「遍历 `BuildingDef.components` ＋ 查本表」，⛔ 不再由 9 处 `if` 决定挂什么。
+//  加一种内部行为 ＝ ① 写一个组件类 ② 在本表登记一个键 ③ 数据行填键。
+// ============================================================================
+public static class BuildingComponentRegistry
+{
+    /// <summary>绑定器：把该键对应的组件挂到建筑 Go 上（同类型已挂则跳过）并 `Init`。</summary>
+    public delegate bool Binder(GameObject go, Building b);
+
+    // ===== 键名（与 `08` §7.3 的 `comp.*` 命名一致）=====
+    public const string Storage       = "comp.storage";
+    public const string Producer      = "comp.producer";
+    public const string Blacksmith    = "comp.blacksmith";
+    public const string SiegeWorkshop = "comp.siege_workshop";
+    public const string MineByproduct = "comp.mine_byproduct";
+    public const string Combat        = "comp.combat";
+    public const string Pickup        = "comp.pickup";
+    public const string Rift          = "comp.rift";
+    public const string CastleCore    = "comp.castle_core";
+
+    private static readonly Dictionary<string, Binder> _byKey = new Dictionary<string, Binder>();
+
+    static BuildingComponentRegistry()
+    {
+        Register(Storage,       Add<StorageComponent>);
+        Register(Producer,      Add<ProducerComponent>);
+        Register(Blacksmith,    Add<BlacksmithBuilding>);
+        Register(SiegeWorkshop, Add<SiegeWorkshopBuilding>);
+        Register(MineByproduct, Add<MineByproductComponent>);
+        Register(Combat,        Add<CombatComponent>);
+        Register(Pickup,        Add<PickupComponent>);
+        // ⚠️ 以下两个键**保「来源守卫」**（`M4-A` 等价要求）：改前这两项的判定读的是 **`b.sourceType`**
+        //   （运行时来源），而玩家建造路径（`Building.Init` ⇒ `sourceType = BuildingType.None`）与
+        //   调试路径（`AIDebugSpawnController` 传 `BuildingType.None`）都不是 def 的 sourceType
+        //   ⇒ 若只看数据行，这两条路径会**多挂**组件（以 `castle` 为例）⇒ 守卫令其与改前零差异。
+        Register(Rift,          (go, b) => b != null && b.sourceType == BuildingType.Rift
+                                            ? Add<RiftComponent>(go, b) : true);
+        Register(CastleCore,    (go, b) => b != null && b.sourceType == BuildingType.CastleCore
+                                            ? Add<CastleCoreComponent>(go, b) : true);
+    }
+
+    /// <summary>登记／覆盖一个键（扩展口：Editor 探针可临时登记测试组件，⛔ 不写生产数据行）。</summary>
+    public static void Register(string key, Binder binder)
+    {
+        if (string.IsNullOrEmpty(key) || binder == null) return;
+        _byKey[key] = binder;
+    }
+
+    /// <summary>按数据行的键挂组件；返回 `false` ＝ **该键未登记**（调用方须告警·死数据可见）。</summary>
+    public static bool TryAttach(string key, Building b)
+    {
+        if (b == null || string.IsNullOrEmpty(key)) return true;
+        if (!_byKey.TryGetValue(key, out var binder) || binder == null) return false;
+        binder(b.gameObject, b);
+        return true;
+    }
+
+    /// <summary>已登记键数（自检/探针读口）。</summary>
+    public static int Count => _byKey.Count;
+
+    /// <summary>该键是否已登记（自检/探针读口）。</summary>
+    public static bool Has(string key) => !string.IsNullOrEmpty(key) && _byKey.ContainsKey(key);
+
+    /// <summary>挂组件：**同类型已挂 ⇒ 跳过**（⭐ 结构保「同一栋不许挂两个 `StorageComponent`」）。</summary>
+    private static bool Add<T>(GameObject go, Building b) where T : Component, IBuildingComponent
+    {
+        if (go == null) return true;
+        if (go.GetComponent<T>() != null) return true;
+        var c = go.AddComponent<T>();
+        if (c == null) return false;
+        c.Init(b);
+        return true;
     }
 }

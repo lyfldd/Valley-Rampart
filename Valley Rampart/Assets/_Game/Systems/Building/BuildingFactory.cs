@@ -234,54 +234,24 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         b.ReleaseLayerOwnedState(unregisterFromRegistry: true);   // 门体（唯一实现）
     }
 
-    /// <summary>按 BuildingDef 配置挂行为组件（Producer/Storage/Combat/Pickup/Rift/CastleCore）。供 BuildingFactory 和 BuildController 共用。</summary>
+    /// <summary>⭐ `M4-A`（`08` §7.3）：**遍历数据行 `BuildingDef.components`** 挂行为组件 ——
+    /// 逐个键查 <see cref="BuildingComponentRegistry"/> 取类（⛔ 原 9 处 `if` 已删）。
+    /// 等价口径（`HH.329` `D863`）：同一份 def「改前 9 处 `if` 会挂上的集合」＝「改后数据行填出的集合」
+    /// （逐栋对照读数见交付报告）；⭐ 同类型**不重复挂**（`Add<T>` 内已挂即跳过）。
+    /// 未登记的键 ⇒ 告警并跳过（死数据可见 · `L-01`）；空数组 ⇒ 不挂任何行为组件。
+    /// 供 `BuildingFactory.CreateBuildingInstance` 与 `BuildController.Place` 两条调用点共用。</summary>
     public void AttachComponents(Building b, BuildingDef def)
     {
         if (b == null || def == null) return;
-        // HH.86/DZ-041 件3a①：空壳仓储补挂——rate==0 但有容量且 role==Economy（Warehouse/Granary 类）照挂
-        // StorageComponent 入 WarehouseRegistry（旧=不挂→采集/搬运无落点→连轴建 79 座空壳）。
-        // DZ-078：排除 outputResource==Gold——market（rate=0+cap=100+role=Economy）曾误挂 Gold 死仓
-        //（金=货币直通不占仓，该仓无任何消费面）；金直通由 RulerController 承担。
-        bool econStorageOnly = def.producer.rate <= 0f && def.producer.capacity > 0
-            && def.role == BuildingRole.Economy
-            && def.outputResource != ResourceType.Gold;
-        if (econStorageOnly)
+        var keys = def.components;
+        if (keys == null || keys.Length == 0) return;
+        for (int i = 0; i < keys.Length; i++)
         {
-            b.gameObject.AddComponent<StorageComponent>()?.Init(b);
+            var key = keys[i];
+            if (string.IsNullOrEmpty(key)) continue;
+            if (!BuildingComponentRegistry.TryAttach(key, b))
+                Debug.LogWarning($"[BuildingFactory] 数据行组件键未登记：「{key}」（def={def.id}）⇒ 跳过（键表见 BuildingComponentRegistry）");
         }
-        if (def.producer.rate > 0f && def.producer.kind == ProduceKind.Resource && !def.isResourceNode)
-        {
-            // 投掷机厂（2_12 步骤9 D207~D212 / HH.19 A×4）：挂专属组件产出弹药（厂级 3 子仓），替代通用 ProducerComponent。
-            // 弹性逻辑：仍需本地无 StorageComponent（厂仓 3 子弹药不附建筑本体），故跳过通用 StorageComponent 挂载。
-            if (def.isSiegeWorkshop)
-            {
-                b.gameObject.AddComponent<SiegeWorkshopBuilding>()?.Init(b);
-            }
-            else
-            {
-                b.gameObject.AddComponent<StorageComponent>()?.Init(b);
-                // 铁匠铺（2_12 步骤8 D200）：挂 BlacksmithBuilding 替代通用 ProducerComponent（矿石→Metal 就地加工 D609）
-                if (def.isBlacksmith)
-                    b.gameObject.AddComponent<BlacksmithBuilding>()?.Init(b);
-                else
-                    b.gameObject.AddComponent<ProducerComponent>()?.Init(b);
-            }
-        }
-        // 矿洞副产（DZ-072a，D562 / HH.107 件1）：mine 双身份=A2 变体——isResourceNode 采集点身份不动
-        //（上面产能分支被 isResourceNode 排除，mine 本体无 StorageComponent/ProducerComponent），
-        // 另挂专属副产组件恒产水晶/火油入自管子仓（仿 isSiegeWorkshop 先例）。
-        if (def.isMineByproduct)
-        {
-            b.gameObject.AddComponent<MineByproductComponent>()?.Init(b);
-        }
-        if (def.combat.attack > 0)
-            b.gameObject.AddComponent<CombatComponent>()?.Init(b);
-        if (def.isConsumable)
-            b.gameObject.AddComponent<PickupComponent>()?.Init(b);
-        if (b.sourceType == BuildingType.Rift)
-            b.gameObject.AddComponent<RiftComponent>()?.Init(b);
-        if (b.sourceType == BuildingType.CastleCore)
-            b.gameObject.AddComponent<CastleCoreComponent>()?.Init(b);
     }
 
     // ===== ISaveableSpawner（3.5 步骤3：读档重建）=====

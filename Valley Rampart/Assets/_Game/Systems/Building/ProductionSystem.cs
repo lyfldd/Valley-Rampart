@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 产能调度系统（3.3.4 批次5）。单例，每秒统一遍历所有 ProducerComponent 调 Tick。
+/// 产能调度系统（3.3.4 批次5）。单例，每秒统一遍历所有建筑的 `ITickable` 组件调 Tick
+/// （⭐ `M4-A`／`HH.329`：⛔ 不再点名具体组件类 —— 加带 `Tick` 的组件只实现 `ITickable` ＋ 数据行填键）。
 /// 集中调度优势：支持暂停、易存档、性能好（O(n) 遍历无每帧 Update）。
 /// 暂停时（Time.timeScale=0）Update 自然停推；额外 SetPaused 供显式控制。
 /// </summary>
@@ -24,6 +26,9 @@ public class ProductionSystem : Singleton<ProductionSystem>
         }
     }
 
+    // 【HH.329 件2】`ITickable` 遍历缓冲（成员持有 ⇒ 稳态零分配 · ⛔ 禁每次 new List）
+    private readonly List<ITickable> _tickBuf = new List<ITickable>(8);
+
     private void TickAll()
     {
         if (BuildingRegistry.Instance == null) return;
@@ -32,17 +37,18 @@ public class ProductionSystem : Singleton<ProductionSystem>
         {
             var b = all[i];
             if (b == null) continue;
-            var producer = b.GetComponent<ProducerComponent>();
-            if (producer != null) producer.Tick();
-            // 2_12 步骤8：铁匠铺逐秒加工（矿石→Metal，D199~D201/D609）
-            var blacksmith = b.GetComponent<BlacksmithBuilding>();
-            if (blacksmith != null) blacksmith.Tick();
-            // 2_12 步骤9：投掷机厂逐秒产丹（D207~D212，HH.19 A×4；与铁匠铺并列专属组件）
-            var siege = b.GetComponent<SiegeWorkshopBuilding>();
-            if (siege != null) siege.Tick();
-            // 矿洞副产逐秒恒产水晶/火油（DZ-072a，D562 / HH.107 件1；与投掷机厂并列专属组件。漏挂=组件永不 Tick）
-            var byprod = b.GetComponent<MineByproductComponent>();
-            if (byprod != null) byprod.Tick();
+            // ⭐ `M4-A`：**遍历 `ITickable`**（⛔ 不再点名 4 个具体组件类）——
+            //   新增带 `Tick` 的组件 ⇒ 实现 `ITickable` ＋ 数据行填键即可，**不用改本文件**。
+            //   ⚠️ 先 `Clear()` 再 `GetComponents`：无论该重载是「清后填」还是「追加」，都只得到一份 ⇒ 不会双 tick。
+            _tickBuf.Clear();
+            b.GetComponents<ITickable>(_tickBuf);
+            for (int j = 0; j < _tickBuf.Count; j++)
+            {
+                var t = _tickBuf[j];
+                if (t == null) continue;
+                if (t is UnityEngine.Object uo && uo == null) continue;   // 假 null 兜底（接口静态类型）
+                t.Tick();
+            }
         }
     }
 
