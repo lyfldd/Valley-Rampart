@@ -372,7 +372,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     /// 传 `StorageComponent`（⛔ 非 `ITaskSource`）⇒ 取 `GetComponentInParent<Building>`（兼容「箱＝仓」：箱容器挂本体）。
     /// 语义：给该建筑置**一次性强制搬运标记**（`Building.RequestForceHaulOnce`）⇒ 广告侧**先判 ④ 并跳阈值** ⇒
     /// 再复用 `RequestHaulNow((ITaskSource)b)` 立即调度一次（⭐ 派出的任务类型**必须是 `Transport`**）。
-    /// ⚠️ 若该仓无父 `Building`（或已不在册）⇒ 退化为**直接 `Harvest()`**（旧口径兜底 · ⛔ 不静默失败）。</summary>
+    /// ⚠️ 无父 `Building` ⇒ `LogWarning` 后返回（`D826` 件 G-2，不落国库，不调用 `Harvest()`）。</summary>
     public void RequestHaulNow(StorageComponent st)
     {
         if (st == null) return;
