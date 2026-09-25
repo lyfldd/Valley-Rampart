@@ -10,8 +10,9 @@ using System;
 //    · ⛔ 不动旧调度器／旧任务对象／旧枚举（迁移归 `M5-B`／`M5-C`／`M5-D`）
 //    · ⛔ 不建能力目录（归 `M6`）；卡片只持**能力名字符串**（`05 §四` 交互 ID 口径）
 //    · `targetRef` ＝ **值数据**（格坐标 ＋ 类型键），⛔ 不持对象引用（`06 §三 :65`）
-//  暂定占位（⛔ **非政策裁定** · 见交付报告 §六）：`priority` 默认 `0` ／ `retryMax` 默认 `-1`（未配置）／
-//    `onFail` 默认 `Unspecified`。四类待裁政策（`06 §十-2~-5`）本片一律**不填最终值、不设默认行为**。
+//  本批并存接线政策：上层写 `basePriority`，运行时只读派生 `EffectivePriority`；
+//    新卡 retry 默认由 `TaskProtocolPolicyConfig` 提供；不可达冷却、王国分域、单卡统计
+//    均由 M5-C 新运行时控制。旧生产链仍保持不动。
 // ============================================================================
 
 // ───────────────────────────── ① 身份组（`06 §三 :63`）─────────────────────────────
@@ -213,6 +214,54 @@ public enum TaskSuspendReason : byte
     ThreatPreempted = 1, // 工人被抢（OnThreatSusp）
 }
 
+/// <summary>
+/// M5-C 按单张卡片汇总的生命周期计数。该值随卡片存活，不建立全局统计表。
+/// </summary>
+public struct TaskLifecycleStats
+{
+    public int stateTransitionCount;
+    public int createdCount;
+    public int pendingCount;
+    public int assignedCount;
+    public int executingCount;
+    public int resolvingCount;
+    public int completedCount;
+    public int abortedCount;
+    public int retryConsumedCount;
+    public int unreachableCount;
+    public int suspendCount;
+    public int resumeCount;
+
+    public void RecordStateEntry(TaskLifecycleState next)
+    {
+        stateTransitionCount++;
+        switch (next)
+        {
+            case TaskLifecycleState.Created:
+                createdCount++;
+                break;
+            case TaskLifecycleState.Pending:
+                pendingCount++;
+                break;
+            case TaskLifecycleState.Assigned:
+                assignedCount++;
+                break;
+            case TaskLifecycleState.Executing:
+                executingCount++;
+                break;
+            case TaskLifecycleState.Resolving:
+                resolvingCount++;
+                break;
+            case TaskLifecycleState.Done:
+                completedCount++;
+                break;
+            case TaskLifecycleState.Aborted:
+                abortedCount++;
+                break;
+        }
+    }
+}
+
 // ═════════════════════════════════ 任务卡片 ═════════════════════════════════
 
 /// <summary>
@@ -225,10 +274,16 @@ public enum TaskSuspendReason : byte
 /// </summary>
 public sealed class TaskCard
 {
+    public TaskCard()
+    {
+        state = TaskLifecycleState.Created;
+        lifecycleStats.createdCount = 1;
+    }
+
     // ── ① 身份（`06 §三 :63`）──
     public long taskId;            // 调度与去重键（编号分配口径归 `M5-C`，本片不裁）
     public TaskIssuerRef issuer;   // 谁派的
-    public int priority;           // ⚠️ **暂定占位**（默认 0）：数值口径与「由谁定」＝待裁 `06 §十-2`，本片⛔不算不读
+    public int basePriority;       // 上层给定的基础优先级；EffectivePriority 由运行时只读派生
 
     // ── ② 归属（`06 §三 :64`）──
     public int kingdomId;          // 0 ＝ 玩家；-1 ＝ 无国／中立（对齐现码口径）
@@ -255,15 +310,17 @@ public sealed class TaskCard
 
     // ── ⑦ 意外（`06 §三 :69`）──
     public int retryCount;         // 已用重试次数（现状 0）
-    public int retryMax = -1;      // ⚠️ **暂定占位**：-1 ＝ **未配置**（默认次数＝待裁 `06 §十-3`）；⛔ 本片不落默认次数
+    public int retryMax = -1;      // 新卡由 TaskProtocolPolicyConfig 写入 1
     public TaskFailPolicy onFail;  // 默认 Unspecified（⛔ 非政策裁定）
 
     // ── 生命周期辅助栏（非 `06 §三` 五组栏位 · 由状态机维护）──
     public TaskSuspendReason suspendReason;      // `⏸` 挂起标记（挂起不改变阶段）
     public TaskAbortReason abortReason;          // 终止原因（终态写入）
     public TaskUnassignReason lastUnassignReason;// 最近一次回待派原因
-    public int unreachableStreak;                // 「标记不可达」计数（`06 §五 :123`）；⚠️ 冷却／重置口径＝待裁 `06 §十-3`
+    public int unreachableStreak;                // 「标记不可达」计数（`06 §五 :123`）
+    public long unreachableBlockedUntilTick;    // 重新进入可派发集合的 tick 边界
     public TaskLifecycleState stateBeforeRestore;// 进入 Restore 前的阶段（`06 §四 [7]`）
+    public TaskLifecycleStats lifecycleStats;     // 单卡生命周期统计，不是全局聚合
 
     /// <summary>是否处于 `⏸` 挂起（不改变阶段，仅冻结本次执行）。</summary>
     public bool IsSuspended { get { return suspendReason != TaskSuspendReason.None; } }
@@ -363,7 +420,11 @@ public sealed class TaskCard
         workerId = 0;
         suspendReason = TaskSuspendReason.None;
         lastUnassignReason = reason;
-        if (reason == TaskUnassignReason.Unreachable) unreachableStreak++;
+        if (reason == TaskUnassignReason.Unreachable)
+        {
+            unreachableStreak++;
+            lifecycleStats.unreachableCount++;
+        }
         return TaskTransitionError.None;
     }
 
@@ -377,6 +438,7 @@ public sealed class TaskCard
         if (reason == TaskSuspendReason.None) return TaskTransitionError.ReasonRequired;
         if (IsSuspended) return TaskTransitionError.AlreadySuspended;
         suspendReason = reason;
+        lifecycleStats.suspendCount++;
         return TaskTransitionError.None;
     }
 
@@ -387,6 +449,7 @@ public sealed class TaskCard
         if (g != TaskTransitionError.None) return g;
         if (!IsSuspended) return TaskTransitionError.NotSuspended;
         suspendReason = TaskSuspendReason.None;
+        lifecycleStats.resumeCount++;
         return TaskTransitionError.None;
     }
 
@@ -430,8 +493,8 @@ public sealed class TaskCard
 
     /// <summary>
     /// `retry` 消费口（`06 §五 :123`「retry 用尽 ⇒ 终止」）。
-    /// ⚠️ **默认次数＝待裁 `06 §十-3`** ⇒ `retryMax &lt; 0` 时本口**拒绝消费**并返回
-    /// `RetryPolicyUnconfigured`（⛔ 不静默按 0 或不限处理）。
+    /// `retryMax` 由 `TaskProtocolPolicyConfig` 在造卡入口写入；未配置值仍拒绝消费，
+    /// 不静默按 0 或不限处理。
     /// ⚠️ 本口只改计数，**不**自动触发终止／重派（编排归 `M5-C`）。
     /// </summary>
     public TaskTransitionError TryConsumeRetry()
@@ -441,13 +504,15 @@ public sealed class TaskCard
         if (retryMax < 0) return TaskTransitionError.RetryPolicyUnconfigured;
         if (retryCount >= retryMax) return TaskTransitionError.RetryExhausted;
         retryCount++;
+        lifecycleStats.retryConsumedCount++;
         return TaskTransitionError.None;
     }
 
-    /// <summary>清「不可达」标记（`unreachableStreak`）。⚠️ 清标时机＝待裁 `06 §十-3`；本片只给口，⛔ 不自动调用。</summary>
+    /// <summary>清「不可达」标记（`unreachableStreak`）及其冷却边界。</summary>
     public void ClearUnreachableMark()
     {
         unreachableStreak = 0;
+        unreachableBlockedUntilTick = 0;
     }
 
     // ───────────────────────────── 内部：唯一改状态点 ─────────────────────────────
@@ -476,6 +541,7 @@ public sealed class TaskCard
         TaskTransitionError e = TaskLifecycleRules.Validate(state, to);
         if (e != TaskTransitionError.None) return e;
         state = to;
+        lifecycleStats.RecordStateEntry(to);
         if (to == TaskLifecycleState.Aborted)
         {
             this.abortReason = abortReason;

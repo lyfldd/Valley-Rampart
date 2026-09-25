@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:yousandi.cn,2023:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e3f4a9c8b174f2ab2a7f1d9c0e6b5a3, type: 3}
+  m_Name: TaskProtocolPolicyConfig
+  m_EditorClassIdentifier: 
+  defaultRetryMax: 1
+  tickIntervalSeconds: 1
+  unreachableCooldownTicks: 5
+  domain: 0
+  statistics: 0
