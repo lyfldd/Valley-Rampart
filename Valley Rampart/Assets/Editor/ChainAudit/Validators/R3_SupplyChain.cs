@@ -96,8 +96,9 @@ public static class R3_SupplyChain
             if (wellPlaceholder && def.producer.rate > 0f)
                 Add(res.Supply, null, path + " ProducerComponent(水→水井仓 · ResourceType.Water · ⭐ M1-F 落码)");
 
-            // MineByproductComponent（isMineByproduct：恒产 Crystal/FireOil/Ore）
-            if (def.isMineByproduct)
+            // MineByproductComponent（⭐ M4-B／D868：判定改读**数据行** `def.components` 含 `comp.mine_byproduct`
+            //   —— 原布尔字段（矿洞副产标记）已删；恒产 Crystal/FireOil/Ore 三条内容不变）
+            if (HasComponent(def, BuildingComponentRegistry.MineByproduct))
             {
                 Add(res.Supply, ResourceType.Crystal, path + " MineByproductComponent(L62)");
                 Add(res.Supply, ResourceType.FireOil, path + " MineByproductComponent(L63)");
@@ -340,6 +341,15 @@ public static class R3_SupplyChain
         sb.AppendLine("  ── 自证（DZ-072 类复现）──");
         sb.AppendLine("   " + (self ? "✅ " : "❌ ") + d);
         sb.AppendLine();
+    }
+
+    /// <summary>⭐ `M4-B`／`D868`：数据行 `def.components` 是否含某组件键（替代已删的布尔判定）。</summary>
+    private static bool HasComponent(BuildingDef def, string key)
+    {
+        if (def == null || def.components == null || string.IsNullOrEmpty(key)) return false;
+        for (int i = 0; i < def.components.Length; i++)
+            if (def.components[i] == key) return true;
+        return false;
     }
 
     private static List<string> Sorted(List<string> l)

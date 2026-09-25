@@ -140,7 +140,7 @@ public enum BuildingType
     Ruins,       // 遗迹
     Interactable,// 交互建筑（未来）
     // 功能
-    Rift,        // 裂隙（出怪口）
+    Rift,        // 1D 残留术语·废弃（组件与资产已删，D868）；保留 int 位，勿删项
     CastleCore,  // 主城
     // ===== 3.5.1 实体化（E-S7，末尾追加保持 int 稳定）=====
     VagrantCamp  // 流浪汉营地（3.5.1 §4.1：开局 2-3 个，近王国区块必有 1 个，禁落核心区块）

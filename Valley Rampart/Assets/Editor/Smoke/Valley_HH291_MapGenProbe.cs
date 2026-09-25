@@ -379,8 +379,12 @@ public static class Valley_HH291_MapGenProbe
                         $"（`!def.isResourceNode` 排除通用产能分支）**结构性不挂 `ProducerComponent`**；" +
                         $"副产链组件＝`MineByproductComponent`（`DZ-072a`/`D562`/`HH.107 件1`，`:316-319`）。");
         var mineDef = BuildingFactory.FindDefById("mine");
+        bool mineHasByprodKey = false;   // ⭐ M4-B／D868：副产布尔字段已删 ⇒ 改读数据行键
+        if (mineDef != null && mineDef.components != null)
+            for (int ci = 0; ci < mineDef.components.Length; ci++)
+                if (mineDef.components[ci] == BuildingComponentRegistry.MineByproduct) { mineHasByprodKey = true; break; }
         _log.AppendLine($"  [A6 资产面] mine.isResourceNode={(mineDef != null ? mineDef.isResourceNode : false)} " +
-                        $"isMineByproduct={(mineDef != null ? mineDef.isMineByproduct : false)} " +
+                        $"components含comp.mine_byproduct={(mineHasByprodKey ? "true" : "false")} " +
                         $"outputResource={(mineDef != null ? mineDef.outputResource.ToString() : "null")} " +
                         $"producer.rate={(mineDef != null ? mineDef.producer.rate : -1):0.###} kind={(mineDef != null ? mineDef.producer.kind.ToString() : "null")} " +
                         $"footprint={(mineDef != null ? mineDef.footprint.ToString() : "null")}");

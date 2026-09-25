@@ -97,7 +97,6 @@ public class BuildingDef : ScriptableObject
     public int unlockLevel = 1;
 
     [Header("交互与生命周期")]
-    public InteractableType interactableType;
     public bool isPlayerBuilt = true;  // false = 地图预置（不可拆/不可移）
     public bool isDestructible = true;
     [Tooltip("建筑 HP 统一入口（3.5.1 E-S10）：所有建筑 HP 基准值（再乘 gradeScale）。" +
@@ -128,10 +127,6 @@ public class BuildingDef : ScriptableObject
     public int raceId = -1;
     [Tooltip("每族限建 1（2_20.1 §三：全局效果防叠乘失控，Registry 查重）。true=同王国同 id 已建则拒建")]
     public bool uniquePerKingdom = false;
-
-    [Header("矿洞副产（DZ-072a，D562）")]
-    [Tooltip("矿洞副产（DZ-072a，D562）：true=挂 MineByproductComponent 恒产水晶/火油入建筑存储（mine 双身份=A2 变体：isResourceNode 采集点身份不动，另挂副产组件）")]
-    public bool isMineByproduct = false;
 
     /// <summary>按资源等级获取缩放系数。</summary>
     public float GetGradeScale(ResourceGrade grade)
@@ -176,5 +171,4 @@ public struct BuildingLevel
 // ===== 枚举 =====
 
 public enum ProduceKind { Resource, Unit }
-public enum InteractableType { Own, Enemy, Resource }
 public enum DamageType { Physical, Fire, Cold, Magic }

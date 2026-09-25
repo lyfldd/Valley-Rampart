@@ -7,7 +7,8 @@ using UnityEngine;
 /// BuildingFactory 按 BuildingDef 配置决定挂哪些组件；组件从 def 读配置，不自己持有持久状态。
 ///
 /// 本轮实现：ProducerComponent + StorageComponent（批次5）。
-/// 留接口空壳：Pickup/Spawner/Combat/Rift/CastleCore（定义类 + 挂载判断，具体逻辑后续阶段）。
+/// 留接口空壳：Pickup（定义类 + 挂载判断，具体逻辑后续阶段）；Spawner/Rift 两空壳已删（`HH.335`／`D867`）；
+/// Combat/CastleCore 已实现（战斗接入 / 主城装配）。
 /// </summary>
 public interface IBuildingComponent
 {
