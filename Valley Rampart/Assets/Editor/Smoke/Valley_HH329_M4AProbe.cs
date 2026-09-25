@@ -31,7 +31,6 @@ public static class Valley_HH329_M4AProbe
         { "comp.mine_byproduct",  "MineByproductComponent" },
         { "comp.combat",          "CombatComponent" },
         { "comp.pickup",          "PickupComponent" },
-        { "comp.rift",            "RiftComponent" },
         { "comp.castle_core",     "CastleCoreComponent" },
     };
 
@@ -189,12 +188,11 @@ public static class Valley_HH329_M4AProbe
         if (def.isMineByproduct) l.Add("MineByproductComponent");
         if (def.combat.attack > 0) l.Add("CombatComponent");
         if (def.isConsumable) l.Add("PickupComponent");
-        if (src == BuildingType.Rift) l.Add("RiftComponent");
         if (src == BuildingType.CastleCore) l.Add("CastleCoreComponent");
         return l;
     }
 
-    /// <summary>改后：由 `def.components` 数据行（＋ 两个来源守卫）推出的类型序列。</summary>
+    /// <summary>改后：由 `def.components` 数据行（＋ 来源守卫）推出的类型序列。</summary>
     private static List<string> RowTypes(BuildingDef def, BuildingType src, ref int unknownKey)
     {
         var l = new List<string>();
@@ -203,7 +201,6 @@ public static class Valley_HH329_M4AProbe
         {
             var k = def.components[i];
             if (string.IsNullOrEmpty(k)) continue;
-            if (k == BuildingComponentRegistry.Rift && src != BuildingType.Rift) continue;
             if (k == BuildingComponentRegistry.CastleCore && src != BuildingType.CastleCore) continue;
             if (KeyType.TryGetValue(k, out var t)) l.Add(t);
             else { l.Add("?未知键:" + k); unknownKey++; }
@@ -236,7 +233,6 @@ public static class Valley_HH329_M4AProbe
         if (def.isMineByproduct) b.gameObject.AddComponent<MineByproductComponent>()?.Init(b);
         if (def.combat.attack > 0) b.gameObject.AddComponent<CombatComponent>()?.Init(b);
         if (def.isConsumable) b.gameObject.AddComponent<PickupComponent>()?.Init(b);
-        if (src == BuildingType.Rift) b.gameObject.AddComponent<RiftComponent>()?.Init(b);
         if (src == BuildingType.CastleCore) b.gameObject.AddComponent<CastleCoreComponent>()?.Init(b);
 
         var list = Collect(go);

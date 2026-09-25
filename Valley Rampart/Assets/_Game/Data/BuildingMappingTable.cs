@@ -8,12 +8,12 @@ using UnityEngine;
 /// 转为运行时 Building 实例，查到对应 BuildingDef 后按 gradeScale 缩放属性。
 ///
 /// 配置资产放 Resources/Buildings/BuildingMappingTable.asset。
-/// 11 种 BuildingType 各对应一个 BuildingDef；grade 缩放由 BuildingDef.gradeScale 处理，无需每组合一个 asset。
+/// 8 条 BuildingType 各对应一个 BuildingDef；grade 缩放由 BuildingDef.gradeScale 处理，无需每组合一个 asset。
 /// </summary>
 [CreateAssetMenu(menuName = "ValleyRampart/BuildingMappingTable", fileName = "BuildingMappingTable")]
 public class BuildingMappingTable : ScriptableObject
 {
-    [Tooltip("11 种 BuildingType → BuildingDef 映射。未列出的类型 BuildingFactory 会跳过并警告。")]
+    [Tooltip("8 条 BuildingType → BuildingDef 映射。未列出的类型 BuildingFactory 会跳过并警告。")]
     public MappingEntry[] entries;
 
     private Dictionary<BuildingType, BuildingDef> _lookup;

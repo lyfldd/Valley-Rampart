@@ -32,12 +32,6 @@ public class PickupComponent : MonoBehaviour, IBuildingComponent
     public void Init(Building building) { }
 }
 
-/// <summary>产兵组件（兵营）。依赖：单位系统。后续阶段实现。</summary>
-public class SpawnerComponent : MonoBehaviour, IBuildingComponent
-{
-    public void Init(Building building) { }
-}
-
 /// <summary>战斗组件（箭塔/弩炮/魔法塔）。依赖：3.4 伤害管线 / 3.5 防御建筑。
 /// 2_12 步骤12（P1 接缝）：补全 2_5 射程圆 + 360° 瞄准 + 最近目标（2D 欧氏距离）→ DamageSystem.RegisterAttack。
 /// 工事/弹药/AOE 等细分工事规则归 2_5；本组件只做防御建筑"建筑层"战斗接入驱动。</summary>
@@ -158,12 +152,6 @@ public class CombatComponent : MonoBehaviour, IBuildingComponent
     }
 }
 
-/// <summary>裂隙组件（出怪口）。依赖：3.7 波次系统。后续阶段实现。</summary>
-public class RiftComponent : MonoBehaviour, IBuildingComponent
-{
-    public void Init(Building building) { }
-}
-
 /// <summary>主城核心组件（HQ 面板 / 科技解锁 / 失败条件）。批次7 做最小实现支撑主城流程。</summary>
 public class CastleCoreComponent : MonoBehaviour, IBuildingComponent
 {
@@ -199,7 +187,6 @@ public static class BuildingComponentRegistry
     public const string MineByproduct = "comp.mine_byproduct";
     public const string Combat        = "comp.combat";
     public const string Pickup        = "comp.pickup";
-    public const string Rift          = "comp.rift";
     public const string CastleCore    = "comp.castle_core";
 
     private static readonly Dictionary<string, Binder> _byKey = new Dictionary<string, Binder>();
@@ -213,12 +200,10 @@ public static class BuildingComponentRegistry
         Register(MineByproduct, Add<MineByproductComponent>);
         Register(Combat,        Add<CombatComponent>);
         Register(Pickup,        Add<PickupComponent>);
-        // ⚠️ 以下两个键**保「来源守卫」**（`M4-A` 等价要求）：改前这两项的判定读的是 **`b.sourceType`**
-        //   （运行时来源），而玩家建造路径（`Building.Init` ⇒ `sourceType = BuildingType.None`）与
-        //   调试路径（`AIDebugSpawnController` 传 `BuildingType.None`）都不是 def 的 sourceType
+        // ⚠️ 本键**保「来源守卫」**（`M4-A` 等价要求）：其判定读的是 **`b.sourceType`**（运行时来源），
+        //   而玩家建造路径（`Building.Init` ⇒ `sourceType = BuildingType.None`）与调试路径
+        //   （`AIDebugSpawnController` 传 `BuildingType.None`）都不是 def 的 sourceType
         //   ⇒ 若只看数据行，这两条路径会**多挂**组件（以 `castle` 为例）⇒ 守卫令其与改前零差异。
-        Register(Rift,          (go, b) => b != null && b.sourceType == BuildingType.Rift
-                                            ? Add<RiftComponent>(go, b) : true);
         Register(CastleCore,    (go, b) => b != null && b.sourceType == BuildingType.CastleCore
                                             ? Add<CastleCoreComponent>(go, b) : true);
     }
