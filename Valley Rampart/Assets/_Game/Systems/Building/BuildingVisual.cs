@@ -53,8 +53,6 @@ public static class BuildingVisual
                 case "CrossbowTower":  return "bld_crossbowtower";
                 case "MagicTower":     return "bld_magictower";
                 case "magic_tower":    return "bld_magictower";
-                case "portal":         return "bld_portal";
-                case "rift":           return "bld_portal";
                 case "VagrantCamp":    return "bld_vagrant_camp";
                 case "Granary":        return "bld_warehouse";       // 缺图面 → 就近占位（§七 缺图回退）
                 case "AdvancedStorage":return "bld_warehouse";
@@ -66,8 +64,6 @@ public static class BuildingVisual
                 case "ore_vein":       return "feat_orevein";
                 case "stone_pile":     return "feat_stone_pile";
                 case "wood_pile":      return "feat_deadwood";
-                case "ruins":          return "bld_ruins";
-                case "treasure_box":   return "feat_treasure_box";
             }
         }
         // 1. 地图预置建筑按 BuildingType 选
