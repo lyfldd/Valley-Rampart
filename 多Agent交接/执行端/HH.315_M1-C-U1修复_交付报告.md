@@ -34,12 +34,12 @@
 | 在投阶段**未付清**（`_awaitingMaterials`） | 该阶段「**金**」（下单即扣 · 金-A）＋ **工地仓已到料** `siteContents` |
 | 在投修复**已付清** | 修复费 ＝ 已完成阶段造价 × `ratio` |
 
-落点：[Building.cs:878-892](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L878-L892)（`BuildRefundPack`）＋ [`:894-940`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L894-L940)（`PaidStageCost`）＋ [`:942-948`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L942-L948)（`CurrentStageCost`）＋ [`:950-985`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L950-L985)（`InProgressStageIsBuild` ／ `SamePack` ／ `RepairCostRatio`）
+落点：[Building.cs:890](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L890)（`BuildRefundPack` · 文档 `:878-889`）／[:911](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L911)（`PaidStageCost`）／[:947](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L947)（`CurrentStageCost`）／[:966](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L966)（`InProgressStageIsBuild`）／[:975](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L975)（`SamePack`）／[:984](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L984)（`RepairCostRatio`）
 
 ⛔ **退役**：`invested × e.amount / baseSum`（累计投入 ÷ 基础造价占比摊）—— **不再读 `totalInvested`**。
-⛔ **不改签名**（`private ResourceList BuildRefundPack()`）；⛔ 掉箱 `Faction.None` 不变（[`:870-877`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L870-L877) 未动）。
+⛔ **不改签名**（`private ResourceList BuildRefundPack()`）；⛔ 掉箱 `Faction.None` 不变（[`:867`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L867) `FinishDemolish` 内 [:869-877](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L869-L877) 未动）。
 
-⭐ **防双重退还**：在投阶段只计「**已到料** `siteContents`」而非需求全额 —— 否则与 `DropSiteStoreToChest()`（[`:988-999`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L988-L999)）掉出的同一批料重复计入。
+⭐ **防双重退还**：在投阶段只计「**已到料** `siteContents`」而非需求全额 —— 否则与 `DropSiteStoreToChest()`（[`:991`](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L991)）掉出的同一批料重复计入。
 
 ### 1.2 ⭐ 落码中发现并处理的一处**读档失效**（→ §五 N-1）
 
@@ -62,7 +62,7 @@
 
 ## 二 · 件2 落码（`GetRepairCost` ⇒ 同法 ＋ U-3）
 
-[Building.cs:1136-1150](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1136-L1150)：
+[Building.cs:1148](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1148)（文档 `:1136-1147`）：
 
 ```csharp
 public ResourceList GetRepairCost()
@@ -141,9 +141,9 @@ public ResourceList GetRepairCost()
 |---|---|---|
 | 1 | [Building.cs:140-149](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L140-L149)（字段 ＋ Tooltip） | 根因留档：自 `D162` 起为「单一近似总量而非分资源账」⇒ 旧口径拿它当分子 ÷ `def.cost` 当分母**必致张冠李戴**；标注**备而未用** ＋ ⛔ 勿再作退还/修复基数 |
 | 2 | [Building.cs:436](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L436) | 「累计投入（修复成本基数 / 拆除返还基数）」⇒ 改为「累计投入件数（U-1 后备而未用）」 |
-| 3 | [Building.cs:862-864](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L862-L864) | `FinishDemolish`：「按 `def.cost` 全部资源**摊**」⇒ 「**逐阶段造价逐类型累加**」＋ 注明旧口径即 U-1 |
-| 4 | [Building.cs:878-892](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L878-L892) | `BuildRefundPack` 文档：旧「占比摊」口径的缺陷与退役原因（含实测对照） |
-| 5 | [Building.cs:977-982](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L977-L982)（`SumCostOf` 已删 段） | 补注：U-1 后**不再有 `costSum` 分母**（旧口径整体退役） |
+| 3 | [Building.cs:862-863](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L862-L863) | `FinishDemolish`：「按 `def.cost` 全部资源**摊**」⇒ 「**逐阶段造价逐类型累加**」＋ 注明旧口径即 U-1 |
+| 4 | [Building.cs:878-889](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L878-L889) | `BuildRefundPack` 文档：旧「占比摊」口径的缺陷与退役原因（含实测对照） |
+| 5 | [Building.cs:1004-1010](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1004-L1010)（`SumCostOf` 已删 段） | 补注：U-1 后**不再有 `costSum` 分母**（旧口径整体退役） |
 | 6 | [Building.cs:1093-1094](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1093-L1094)（`LoadState`） | 「与 `BuildRefundPack`/`GetRepairCost` 的 `costSum` 同源」⇒ 改为「备而未用 ⇒ 仅存档往返保真，⛔ 不入算式」 |
 | 7 | [BuildingSaveData.cs:44-46](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildingSaveData.cs#L44-L46) | 同上（档字段注释） |
 | 8 | [RulerController.cs:293-297](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Ruler/RulerController.cs#L293-L297) ＋ [KingdomState.cs:167-172](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Kingdom/KingdomState.cs#L167-L172) | 陈注释「拆除退款 ratio=0.5（等）」⇒ 勘正：拆除退款**已不由此路径**（改随本体掉箱）⇒ `ratio` 形参生产码只剩默认值 `1.0` 调用；形参去留归后续片（⛔ 本片不改签名） |
@@ -170,7 +170,7 @@ public ResourceList GetRepairCost()
 
 ### N-3 `Building.LoadState` 不恢复 `state`（**未改 · 潜在坑**）
 
-[Building.cs:1032-1043](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1032-L1043) 的 `LoadState` 不置 `state`，依赖真实路径 `BuildingFactory.SpawnFromSave:292/155` 在**创建时**置 `initialState`。⇒ 若将来出现「直接对已存在实例调 `LoadState`」的调用方，`state` 会静默退化为 `Active`（本片**未改**，仅列报）。
+[Building.cs:1064](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1064) 的 `LoadState` 不置 `state`，依赖真实路径 `BuildingFactory.SpawnFromSave:292/155` 在**创建时**置 `initialState`。⇒ 若将来出现「直接对已存在实例调 `LoadState`」的调用方，`state` 会静默退化为 `Active`（本片**未改**，仅列报）。
 
 ---
 

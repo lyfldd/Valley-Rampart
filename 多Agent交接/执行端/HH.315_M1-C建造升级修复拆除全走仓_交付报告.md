@@ -35,9 +35,10 @@
 | `IsValid` | [:163](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L163) | `_building != null && _building.IsSiteAwaitingMaterials && !IsSatisfied` |
 | `SourcePos` | [:166](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L166) | ＝ `_pickupPos`（**取料仓位置** ⇒ 第一段位移） |
 | `TryAdvertiseTask` | [:168](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L168) | 内部 `FindPickup` 走 `WarehouseRegistry.GatherActive(kingdomId)` 取**最近收该资源且有货**之仓 |
-| `Deposit` | [:112](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L112) | 阈值拦截 ＋ 工地已关守卫 ＋ `AddInvested` 逐笔记账 |
+| `Deposit` | [:129](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L129) | 阈值拦截（[:135](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L135) 工地已关守卫）＋ `AddInvested` 逐笔记账 |
+| `Contents` / `Clear` | [:113](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L113)／[:146](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L146) | 存档读口／料齐清账 |
 
-**裁决 1 加严项**「容器须自 `Constructing` 态起可写」：`Building.IsValid` 放行 `_awaitingMaterials`（[Building.cs:1257-1258](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1257-L1258)），`EnsureSiteStore` 在 `StartConstructing` 内即时创建（[Building.cs:534-538](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L534-L538)）⇒ 下单后**同帧**即注册为任务源。
+**裁决 1 加严项**「容器须自 `Constructing` 态起可写」：`Building.IsValid` 放行 `_awaitingMaterials`（[Building.cs:1257-1258](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1257-L1258)），`BeginMaterialPhase` 在下单（`StartConstructing`）内即时 `EnsureSiteStore()`（[Building.cs:524-539](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L524-L539) ＋ [:541-549](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L541-L549)）⇒ 下单后**同帧**即注册为任务源。
 
 ### 1(b) 投料态与进度门控（`Building`）
 
@@ -53,7 +54,7 @@
 
 ### 1(c) 搬料任务：语义可区分（裁决收口 1 · ⛔ 不新增枚举）
 
-[KingdomTask.cs:71-97](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/Tasks/KingdomTask.cs#L71-L97) 新增 `HaulToSiteArgs`（搬料）／`DemolishTaskArgs`（拆除）；**任务类型沿用 `KingdomTaskType.Build`**（原死值 · 生产码零调用方），**靠 args 类型区分语义**。
+[KingdomTask.cs:72-97](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/Tasks/KingdomTask.cs#L72-L97) 新增 `HaulToSiteArgs`（搬料）／`DemolishTaskArgs`（拆除）；**任务类型沿用 `KingdomTaskType.Build`**（原死值 · 生产码零调用方），**靠 args 类型区分语义**。
 
 [TaskScheduler.cs](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/AI/TaskScheduling/TaskScheduler.cs)：
 
@@ -66,7 +67,7 @@
 
 ### 1(d) 下单时点扣费：金-A ＋ AI-A
 
-[BuildController.cs:341-353](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L341-L353) 新增 `PayOrderCost`：
+[BuildController.cs:350-356](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L350-L356) 新增 `PayOrderCost`：
 
 ```csharp
 private static bool PayOrderCost(int kingdomId, ResourceList cost)
@@ -77,14 +78,14 @@ private static bool PayOrderCost(int kingdomId, ResourceList cost)
 }
 ```
 
-[BuildController.cs:288-295](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L288-L295)：
+[BuildController.cs:292](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L292)／[:295](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L295)：
 
 ```csharp
 b.StartConstructing(kingdomId <= 0 ? def.cost : ResourceList.Empty);   // 裁决 3 AI-A：AI 立即开工
 b.AddInvested(kingdomId <= 0 ? goldOnly.TotalCount : def.cost.TotalCount);
 ```
 
-⭐ **裁决 3 要求「须留含 `09#52` 编号注释标注『已知第二账』」已落**（`BuildController.cs:290-294` 与 `:347-349` 两处）。
+⭐ **裁决 3 要求「须留含 `09#52` 编号注释标注『已知第二账』」已落**（[BuildController.cs:251-252](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L251-L252) 与 [:289-290](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L289-L290)、[:348](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildController.cs#L348) 三处）。
 
 ---
 
@@ -103,10 +104,10 @@ b.AddInvested(kingdomId <= 0 ? goldOnly.TotalCount : def.cost.TotalCount);
 
 | # | 改前落点 | 改后处理 | 改后现行行 |
 |---|---|---|---|
-| 1 | `Building.cs:362` | 兜底改 `def.cost.TotalCount` | [:1004](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1004)（`LoadState` 兜底） |
+| 1 | `Building.cs:362`（`Initialize` 玩家建造首付预记） | 改为**从 0 起算**（投入＝实际投进去的量）＋ 金由 `BuildController.AddInvested` 在下单时记 | [:433-437](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L433-L437) |
 | 2 | `Building.cs:636` | 拆除入口改逐笔记账 `AddInvested` | [:244-247](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L244-L247) |
 | 3 | `Building.cs:658` | 退还基数改 `def.cost.TotalCount` | [:880](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L880) |
-| 4 | `Building.cs:775` | 兜底改 `def.cost.TotalCount` | [:1004](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1004) |
+| 4 | `Building.cs:775`（`LoadState` 兜底） | 兜底改 `def.cost.TotalCount` | [:1002-1004](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1002-L1004) |
 | 5 | `Building.cs:812` | 修复费基数改 `def.cost.TotalCount` | [:1058](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1058) |
 | 6 | `BuildingFactory.cs:349` | 兜底改 `def.cost.TotalCount` | [:349](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildingFactory.cs#L349) |
 
@@ -148,7 +149,7 @@ Die(DeathCause.Demolished);
 | 拆除任务广告 | [Building.cs:1275-1281](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1275-L1281) | 拆除中**只**广告 `DemolishTaskArgs`（⛔ 不再广告 Production/Transport/WaterHaul） |
 | `IsValid` 放行拆除态 | [Building.cs:1257-1258](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L1257-L1258) | `_demolishing` 也是合法任务源 |
 | 进度条显示拆除进度 | [Building.cs:648-650](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L648-L650) | `_demolishing` 走 `_demolishProgress` |
-| `BuildingPanel` 调用点 | [BuildingPanel.cs:395](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildingPanel.cs#L395) | 注释同步（只进拆除态） |
+| `BuildingPanel` 调用点 | [BuildingPanel.cs:395-397](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/BuildingPanel.cs#L395-L397) | 注释同步（只进拆除态） |
 
 ---
 
@@ -248,7 +249,7 @@ Die(DeathCause.Demolished);
 
 1. **`ConstructionSiteStore.Deposit` 缺「工地已关」守卫 ⇒ 重复接受 ＋ 重复累加 `totalInvested`**
    冒烟 §C 实测暴露：料齐 ⇒ `OnSiteMaterialsReady` 调 `Clear()` ⇒ `Remaining` 复归配方量 ⇒ 在途工人再卸一笔被静默吞掉并**重复记账**（拆除全退会多退）。
-   修复：`if (_building != null && !_building.IsSiteAwaitingMaterials) return 0;`（[ConstructionSiteStore.cs:112](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L112) 起 `Deposit` 内）。
+   修复：`if (_building != null && !_building.IsSiteAwaitingMaterials) return 0;`（[ConstructionSiteStore.cs:135](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L135)，位于 `Deposit` [:129](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs#L129) 内）。
    复测：判据 2「再 `Deposit(999)` ⇒ **0**」＋「是否超配方=**False**」。
 
 2. **搬料死循环（背包混装）**

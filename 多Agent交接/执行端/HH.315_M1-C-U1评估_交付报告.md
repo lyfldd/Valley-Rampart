@@ -15,7 +15,7 @@
 | **U-1 复核** | ✅ **成立**（落点 1／落点 2 皆坐实）；⭐ 本端**精确复现**验收端全部机械读数（含升级 12/28、均值 **7.28×**、峰值 **16.75×**@TrainingCamp、最低 **1.29×**@gate）；⚠️ **1 处勘正**（House 满级「应为」Wood **38** 非 54）＋ **2 处口径补强**（总量守恒／根因是 D162 的**标量近似**） |
 | **件1 三路线** | ⛔ **甲、乙 皆不可用**（二者数学上**是同一修法**，且退化为恒等式 ⇒ 变成"系统性少退"，张冠李戴照旧）；✅ **丙 方向正确但需加投料中态**⇒ 本端报 **丙′**（＝丙 ＋ 已完成阶段／在投阶段分流） |
 | **件2 判据 3′** | ✅ 已出读数（A/B/C 三组 · 身份可区分 · 含空对照）：**A 未升级 {Wood:4} ✅ ｜ B L1 现码退 {Wood:20}（应 {Wood:14,Stone:6}）❌ ｜ C 空对照 {Wood:4}**；另补 B2 满级、D 投料中、E/F Warehouse 多类型四组 |
-| **件3 L-45 回扫** | 同族算式全库**仅 2 处**（即 U-1 两落点）；⭐ 但回扫出 **U-2（新 · 阻塞候选）**：**金退还落箱后无仓可收 ＋ 箱无工人搬运链**（09#48 × 09#55 复合下游） |
+| **件3 L-45 回扫** | 同族算式全库**仅 2 处**（即 U-1 两落点）；⭐ 但回扫出 **U-2（新 · 阻塞候选）**：**退还物走箱后回收链两段皆未接通**（④ 无工人搬运链 ＋ ⑤ 玩家拾取丢内容物；⚠️ 本端原判「金无仓可收」**已自纠作废**） |
 
 ---
 
@@ -200,6 +200,7 @@
 | ⚠️ 未跑到的部分 | **未跑 `Demolish()` → `FinishDemolish()` → `SpawnChest` 全链**（需进局 ＋ 工人到场推进 ⇒ 属"开工"范畴，与硬约束冲突）。⚠️ 但 `FinishDemolish` 的掉箱入参**唯一来源就是 `BuildRefundPack()` 返回值**（[Building.cs:863-867](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L863-L867) 实读）⇒ **读数等价**；且上一轮判据 3／5 已在正门跑局中实测过该链（`{Wood:4}` 落箱） |
 | ⚠️ 环境瑕疵（已隔离） | Edit-mode 下 `OnConstructionComplete → UpdateVisual → KingdomRace.GetKingdomRace` 触碰 `KingdomRegistry` 单例 ⇒ 抛 `DontDestroyOnLoad 仅限 Play 模式`。该异常发生在 **`level++` 与 `state=Active` 之后** ⇒ **不影响本判据的两个输入（`level` / `totalInvested`）**；已在脚本内 try/catch 并逐组标注 |
 | ⛔ 生产值变更 | **零**（⛔ 未改任何 SO／代码／资产；⛔ 无临时开关；⛔ 无 `taskTimeout` 类取证放宽） |
+| ✅ 收尾三态（实测） | 残留 `U1_*` 对象 **0**（首跑异常遗留 3 个已 `DestroyImmediate` 清零）· `GameScene` `isDirty=False` · 根对象数 **53**（＝基线） ⇒ **⛔ 无场景残留** |
 
 ### 4.2 ⭐ A/B/C 三组读数（判据 3′ 主体）
 
@@ -274,25 +275,35 @@
 |---|---|---|---|
 | 1 | 落点 1（旧 `:667` 四资源） | 过滤退役 ⇒ 含 Metal／Ore | ✅ **已暴露且已修**（上一轮判据 4 实测 Ore True） |
 | 2 | 落点 2（旧 `:827` 五资源含 Metal 不含 Ore） | 同上 | ✅ 同上 |
-| 3 | ⭐ **金纳入退还范围** | 19/40 栋 `cost` 含金 ⇒ 金进入退还包 | 🔴 **U-2（新）** —— 见 5.4 |
+| 3 | ⭐ **金纳入退还范围** | 19/40 栋 `cost` 含金 ⇒ 金进入退还包 | ⚠️ **U-2 的 ① 段**（见 §5.4；⚠️ 本端原判「金无仓可收」**已自纠作废**，见 §5.4.1） |
 | 4 | 弹药 | 实读 40 栋造价**零弹药类型** | ✅ 不外溢（判据 4 的"弹药"担忧**不成立**） |
 
-### 5.4 🔴 U-2（新 · 阻塞候选）：金退还落箱后**无仓可收 ＋ 无工人搬运链**
+### 5.4 🔴 U-2（新 · 阻塞候选）：退还物**走箱后回收链两段皆未接通**
 
-**链条（三段全实读）**：
+> ⚠️ **本端自纠**：本端初判含「**金无仓可收**」一条，**经实测推翻、该条作废**（详见 5.4.1）。U-2 收敛为下述 ④⑤ 两段。
+
+**链条（逐段实读）**：
 
 | 段 | 事实 | 证据 |
 |---|---|---|
-| ① 金进入退还包 | 19/40 栋 `cost` 含 Gold（`IsRefundResource` 退役 ⇒ 金不再被过滤） | 本端机械扫描（`cost:Goldx19`） |
+| ① 退还物范围扩大 | `IsRefundResource` 退役 ⇒ 金／Metal／Ore 一并进入退还包（19/40 栋 `cost` 含金） | 本端机械扫描（`cost:Goldx19`）＋ 上一轮判据 4 实测 |
 | ② 退还改走**无主箱** | 09#55（件3）退役 `RulerController.Refund` ⇒ 改 `ChestManager.SpawnChest(coord, pack, Faction.None)` | [Building.cs:865-870](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L865-L870) |
-| ③ **无仓接受金** | 金路径 ＝ `res_currency.gold`；全库声明 `res_currency` 的仓**仅 `Well.asset:33`**，而 Well 是**死仓**（`ProducerComponent.cs:69-76` `_isWell` 早返回 ⇒ 不挂 `StorageComponent`）；国库 `TreasureVault.VaultPaths = {res_material, res_food}` **⛔ 不含金**（[TreasureVault.cs:19](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Kingdom/TreasureVault.cs#L19) 注释明写「故声明只写材料族＋粮族，⛔ 不含 `res_currency`/`res_ammo`」） | `git grep res_currency` ⇒ 3 命中 |
-| ④ **箱无工人搬运链** | `ChestEntity : MonoBehaviour, **IInteractable**`（⛔ 非 `ITaskSource`）；取回唯一路径 ＝ `ChestEntity.Interact → ChestManager.Pickup(chest, ctx)`（**玩家交互**）；`KingdomTaskType` 11 项**无"取箱"类**；`TaskScheduler` **零 `ChestManager` 引用** | [ChestEntity.cs:11](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/ChestEntity.cs#L11)／[ChestManager.cs:130-136](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/ChestManager.cs#L130-L136) |
+| ④ ⭐ **无工人搬运链** | `ChestEntity : MonoBehaviour, **IInteractable**`（⛔ 非 `ITaskSource`）；`KingdomTaskType` 11 项**无"取箱"类**；`TaskScheduler` **零 `ChestManager` 引用** ⇒ ⛔ **没有任何工人会去搬箱子** | [ChestEntity.cs:11](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/ChestEntity.cs#L11)／[TaskPriorityConfig.cs:32-47](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Data/TaskPriorityConfig.cs#L32-L47) |
+| ⑤ ⭐ **玩家拾取链丢内容物** | 唯一拾取入口 `ChestEntity.Interact → ChestManager.Instance.Pickup(this, ctx)` —— **返回值被丢弃**（[ChestEntity.cs:61](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/ChestEntity.cs#L61) 无赋值）；而 `Pickup` 内部**已 `Remove(chest)`**（销毁实体）⇒ **内容物直接消失**。`ChestManager.cs:127-128` 注释自承「背包落库链接由 8 调度/3.5 完成」＝**该链未实现** | [ChestManager.cs:126-136](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/World/ChestManager.cs#L126-L136)（全库 `Pickup(` 调用点 **仅此 1 处**，`git grep` 实读） |
 
-⇒ **后果**：含金建筑（19/40 栋）被拆 ⇒ 退还的金落进**无主箱**，**没有任何仓能收**、**没有工人会搬** ⇒ 金**卡死在箱里**（需玩家手动点开拾取，且拾取后是否入账仍取决于玩家侧背包→国库链）。
+⇒ **后果**：含金建筑（19/40 栋）或任何建筑被拆 ⇒ 退还物落进无主箱 ⇒ **工人不搬（④）＋ 玩家拾取即销毁（⑤）** ⇒ **退还物实质不可回收**。
+⚠️ **与 09 文档的偏差**：`09` §16.1-4 明写「拆房后退的材料落在箱子里，**要工人搬回**」⇒ 该链当前**不存在**。
+⚠️ **归属**：④⑤ 是**既有缺陷**（D146／D247 期遗留，`ChestManager` 注释自承未完成），**⛔ 非本片引入**；但 **09#55（件3）使其首次具备实际后果**（改前退还直入国库 ⇒ 不经过箱）⇒ 属 **L-45 型下游暴露**。
 
-⚠️ **与 09 文档的偏差**：`09` §16.1-4 明写「拆房后退的材料落在箱子里，**要工人搬回**」⇒ **"工人搬回"这条链当前不存在**（⛔ 不限于金：**任何**退还物都只能玩家手动拾取）。
+#### 5.4.1 ⚠️ 勘正：本端初判「金无仓可收」**作废**（实测推翻）
 
-⇒ **本端判定**：U-2 是 **09#48（金纳入）× 09#55（改掉箱）的复合下游**，且**同时暴露"工人搬回"整条链缺失**。**须裁**：① 是否本片修 ② 归 `M1-D`／`M1-E`（金走仓）③ "工人搬回"另立片。
+| 初判依据 | 实测结果 |
+|---|---|
+| 「金路径 `res_currency.gold`，全库仅 `Well` 声明，而 Well 是死仓」 | ❌ **两处皆错**：① `Well` **不是**死仓 —— 其实读 `producer.rate=4 / kind=Resource / isResourceNode=0` ⇒ 走 `StorageComponent + Producer` 分支，**真挂仓 = True**（`ProducerComponent` 的 `_isWell` 早返回只管**产水**，⛔ 不影响仓）② 匹配规则实读：`PathMatches("res", "res_currency.gold")` ＝ **true**（`StartsWith` 后下一字符为 `_`）⇒ **通用仓 `res` 亦收金** |
+| 实测读数 | `ResourceCatalog.Accepts(["res"], Gold)` ＝ **True**；`Accepts(["res_material","res_food"], Gold)` ＝ **False**（⇒ 国库确实不收金，与 `TreasureVault` 注释一致） |
+| 全库「真挂仓」清单（7 栋） | `AdvancedStorage`(wood)／`Blacksmith`(metal)／`farm`(grain)／`Granary`(grain)／`quarry`(stone)／`Warehouse`(wood)／**`Well`(`res_currency.gold`)** ⇒ **金有可收之仓** |
+| ⚠️ 但 | 金要搬得回去，仍需 **④ 工人搬运链** —— 该段缺失 ⇒ 结论**不变**（不可回收），只是**根因从"无仓"改为"无链"** |
+
 
 ---
 
@@ -303,7 +314,7 @@
 | **C-1** | U-1 修法选型 | ✅ **丙′**（丙 ＋ 投料中态分流）；⛔ 否决甲／乙（数学上同一修法且退化为恒等式） |
 | **C-2** | 丙′ 附带的「修复费不再复利」 | ⚠️ 请确认是否一并纳入（现码 C → 1.5C → 2.25C… 递增） |
 | **C-3** | 丙′ 后 `totalInvested` 零读点 | (a) 保留 ／ (b) 随 `M1-D` 退役（⚠️ (b) 动存档格式） |
-| **C-4** | **U-2**（金退还无仓可收 ＋ 箱无工人搬运链） | ⚠️ 请裁归属（本片 ／ `M1-D`／`M1-E` ／ 另立片）；⭐ 本端倾向：**另立片**（"箱 → 仓"搬运链 ＋ 金走仓同批），本片只留挂账 |
+| **C-4** | **U-2**（退还物走箱后回收链两段皆未接通：④ 无工人搬运链 ／ ⑤ 玩家拾取丢内容物） | ⚠️ 请裁归属（本片 ／ `M1-D`／`M1-E` ／ 另立片）；⭐ 本端倾向：**另立片**（"箱 → 仓"搬运链 ＋ 玩家拾取入账同批），本片只留挂账 |
 | **C-5** | 陈注释 6 处（§5.2 #2/#3/#5/#6 ＋ §5.3 ＋ [Building.cs:876](file:///c:/Users/trs/Desktop/Valley%20Rampart/Valley%20Rampart/Assets/_Game/Systems/Building/Building.cs#L876)） | ✅ 建议随 U-1 修法一并勘正（零行为） |
 | **C-6** | 勘正 1 处（House 满级"应为" Wood **38** 非 54） | ✅ 请回写验收记录 |
 
@@ -322,4 +333,4 @@
 3. `_策划教训库.md`：⭐ 建议新立 **L-46**（**"分母修"型修法须先验其是否退化为恒等式**：当候选分母与分子同源时，`× a / a ≡ 1` ⇒ 修法空转）＋ **L-45 实例入库**（09#54 ⇒ U-1）；
 4. `09_资源与仓库.md`：§16.1-4「要工人搬回」⇒ 标注**当前未实现**（U-2）；§16.2 补「退还量 ＝ **逐阶段造价累加**（⛔ 非"按占比摊"）」；
 5. `09` §十二：`#48`／`#54` 追加「⚠️ U-1 修复中（丙′）」；
-6. 新挂账：**U-2**（箱→仓搬运链 ＋ 金走仓）＋ `totalInvested` 退役（C-3）。
+6. 新挂账：**U-2**（箱→仓工人搬运链 ＋ 玩家拾取入账链）＋ `totalInvested` 退役（C-3）＋ 「修复费复利」（C-2）。
