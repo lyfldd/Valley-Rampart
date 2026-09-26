@@ -64,6 +64,13 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
     private TaskPriorityConfig _priorityConfig;
     private ResourceBiasConfig _biasConfig;   // 2_23 资源 P0 批B/R-B1（D529）：资源偏向活权重（SO 可配）
 
+    // ===== ⭐【HH.341 D1 首片】新任务协议生产接缝（并存链 · 旧内核不动）=====
+    //   持有者＝调度器（王国级门面）：`TaskProtocolRuntime` 缓存于此，⛔ 不新增全局主表、⛔ 不扩 `ITaskScheduler` 接口。
+    //   `_nextProtocolTaskId`：taskId 分配口径「归 M5-C」未裁 ⇒ 本片用**调度器内单调序列**（报告登记为临时实现）。
+    private TaskProtocolRuntime _protocolRuntime;
+    private long _nextProtocolTaskId = 1;
+    private bool _protocolRuntimeErrorLogged;
+
     // ===== 放弃原因（⭐ `U-16` 件2 · `D815` 裁定 §2.4／§四）=====
     /// <summary>任务放弃原因 —— **日志契约取值域（⭐ `M1-G-1` 起 8 值：新增 `DestFull`）**，`private`（`Abandon` 亦 private ⇒ 零跨文件面；
     /// 判据只从日志读，⛔ 不为此把枚举公开）。
@@ -99,6 +106,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // 2_8 步骤2：寻路失败 → 放弃当前任务（不改单位级），下 tick 换点位（R5）
         EventBus.Subscribe<PathFailedEvent>(OnPathFailed);
 
+        // ⭐【HH.341 D1】读档重建：整体重建新协议运行时（旧表随对象释放 ⇒ 无悬空、⛔ 不复用绝对 tick）。
+        EventBus.Subscribe<GameLoadedEvent>(OnGameLoadedProtocolReset);
+
         // 2026-08-07 修复：自动创建时补注册——若建筑 OnConstructionComplete 发生在本单例创建前
         // （HasInstance 当时为 false 被跳过），把已 Active 的建筑补纳入任务源，避免"任务永不派发"。
         if (BuildingRegistry.Instance != null && BuildingRegistry.Instance.Count > 0)
@@ -121,6 +131,7 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         base.OnDestroy();
         UnitController.OnUnitDied -= OnNpcDied;
         EventBus.Unsubscribe<PathFailedEvent>(OnPathFailed);
+        EventBus.Unsubscribe<GameLoadedEvent>(OnGameLoadedProtocolReset);
     }
 
     private void Update()
@@ -256,7 +267,15 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             ITaskSource[] snapshot = new ITaskSource[_sources.Count];
             _sources.CopyTo(snapshot);
             for (int i = 0; i < snapshot.Length; i++)
-                if (snapshot[i] == null || !snapshot[i].IsValid) _sources.Remove(snapshot[i]);
+            {
+                if (snapshot[i] == null || !snapshot[i].IsValid)
+                {
+                    // ⭐【HH.341 D1】接缝 D：源失效（完成/被清）⇒ 未终态则封口释放（配对/预定归零）。
+                    if (snapshot[i] is WorldGatherSource wgInvalid)
+                        wgInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
+                    _sources.Remove(snapshot[i]);
+                }
+            }
         }
 
         // ② 收集空闲 NPC 候选
@@ -400,6 +419,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         _taskStartTime[id] = Time.time;
         _workStartTime.Remove(id);
         _suspendStartTime.Remove(id);
+        // ⭐【HH.341 D1】接缝 A：WorldGatherSource 新协议配对建立（权威＝TaskBindingManager；镜像＝上方 _npcTaskMap）。
+        if (task.source is WorldGatherSource wgDispatch)
+            wgDispatch.OnProtocolDispatched(id, ProtocolTickNow);
         // ⭐ `U-16` 件1（`D815` 裁定 §2.5）：**任务在册 ⇒ 置让位标记**（`NPCBrain.TaskMoveYield` 的唯一输入）。
         //   置位点＝本处（`:362 _suspendStartTime.Remove` 之后、`InjectStimulus` 之前）；`DispatchExternal:329`
         //   亦经本方法 ⇒ 自动覆盖。⚠️ **复位点已全在**（`Complete`／`Abandon` ＋ `NPCBrain.ResetForReuse` 兜底）
@@ -510,6 +532,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                         {
                             _npcStateMap[id] = TaskState.Working;
                             _workStartTime[id] = Time.time;
+                            // ⭐【HH.341 D1】接缝 B：到达 ⇒ 新协议 Assigned→Executing。
+                            if (task.source is WorldGatherSource wgArrive)
+                                wgArrive.OnProtocolArrived(ProtocolTickNow);
                         }
                         else if (Time.time - _taskStartTime[id] > taskTimeout)
                         {
@@ -711,6 +736,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             if (task != null) brain.RemoveTaskStimulus(task.source);
         }
         ClearNpc(npcId);
+        // ⭐【HH.341 D1】接缝 C：WorldGatherSource 新协议解绑回待派（可重派）/ 尝试数达上限则终态封口。
+        //   ⚠️ 位置＝`ClearNpc` **之后**：镜像（_npcTaskMap 已移除）与配对表（下方释放）同时归零 ⇒ 逐次对拍一致。
+        if (task != null && task.source is WorldGatherSource wgAbandon)
+            wgAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
         // ⭐ 日志契约（`D815` §四 · 四要素 ＋ 容 null）：`task` 与 `brain` 均可能为 null（`:591` 处 `TryGetValue` 可失败）。
         Debug.Log($"[TaskScheduler] Abandon {task?.type} → npcId {npcId} reason={reason}");
     }
@@ -723,6 +752,59 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         _workStartTime.Remove(npcId);
         _taskStartTime.Remove(npcId);
         _suspendStartTime.Remove(npcId);
+    }
+
+    // ============================================================================
+    //  ⭐【HH.341 D1 首片】新协议接缝口（仅 `WorldGatherSource` 消费 · ⛔ 不扩 `ITaskScheduler` 接口）
+    //    · `ProtocolRuntime`：懒初始化（配置缺失/漂移 ⇒ 只记一条 error，⛔ 不刷屏、⛔ 不静默）
+    //    · `NextProtocolTaskId`：taskId 单调分配（口径未裁 · 临时实现）
+    //    · `ProtocolTickNow`：当前 tick（读档后按当前时钟重算 ⇒ ⛔ 不复用绝对 tick）
+    //    · `ResetProtocolRuntime`：读档重建（旧表随对象释放）
+    //    · `ProtocolMirrorConsistent`：过渡镜像逐次对拍（D875 §3）
+    // ============================================================================
+    public TaskProtocolRuntime ProtocolRuntime
+    {
+        get
+        {
+            EnsureProtocolRuntime();
+            return _protocolRuntime;
+        }
+    }
+
+    public long NextProtocolTaskId() { return _nextProtocolTaskId++; }
+
+    public long ProtocolTickNow
+    {
+        get { return (long)(Time.time / (tickInterval > 0f ? tickInterval : 1f)); }
+    }
+
+    private void EnsureProtocolRuntime()
+    {
+        if (_protocolRuntime != null) return;
+        try { _protocolRuntime = new TaskProtocolRuntime(); }
+        catch (System.Exception ex)
+        {
+            if (!_protocolRuntimeErrorLogged)
+            {
+                _protocolRuntimeErrorLogged = true;
+                Debug.LogError("[TaskScheduler] 新协议运行时初始化失败（政策配置缺失或漂移）：" + ex.Message);
+            }
+        }
+    }
+
+    public void ResetProtocolRuntime() { _protocolRuntime = null; }
+
+    private void OnGameLoadedProtocolReset(GameLoadedEvent evt) { ResetProtocolRuntime(); }
+
+    /// <summary>过渡镜像对拍（D875 §3）：`_npcTaskMap` 与配对表对「本工人/本卡」是否一致。
+    /// ⚠️ 语义：两表**同真同假** ⇒ true；任何单边残留 ⇒ false（由调用方记一条 error）。</summary>
+    public bool ProtocolMirrorConsistent(int npcId, long taskId)
+    {
+        if (_protocolRuntime == null) return false;
+        TaskPairRecord pair;
+        bool paired = _protocolRuntime.BindingManager.TryGetPair(taskId, out pair) && pair.workerId == npcId;
+        bool legacy = _npcTaskMap.ContainsKey(npcId);
+        return paired == legacy;
     }
 
     /// <summary>按任务类型执行完成动作（QQQ.2 §10.3；QQQ.4 需求5：Gather/Transport 入工人背包）。</summary>
