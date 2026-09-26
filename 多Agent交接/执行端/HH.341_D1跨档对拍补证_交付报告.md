@@ -196,3 +196,89 @@ HH.341 | 既有挂账复现（第 3 次） | 执行端 | 读档期 4 条 `[Build
 | `_npcTaskMap`（非生产对照） | `rg -n '_npcTaskMap' Assets/Editor --glob '*.cs'` | Editor/Smoke（⛔ 非生产基线） | 行 / 文件 | 10 行 / 2 文件 |
 | 新协议类型（生产域·排除 6 协议文件） | `rg -n '<9 类型名>' Assets/_Game --glob '!**/TaskScheduling/**'` | 生产域 | 行 / 文件 | **0 / 0** |
 | 全 Assets（`TaskScheduler.Instance\|HasInstance`） | `rg -n … Assets` | 全 Assets（含 `Editor/Smoke`） | 行 / 文件 | 149 / 27（⛔ **非生产基线**，仅历史对照） |
+
+
+## 十六、主策划端补落终裁（HH.341 D1 首片，2026-09-26）
+
+### 一、D1 首片放行结论：有条件放行
+
+**结论：允许进入 WorldGatherSource 首片施工；不直接判首片验收绿。**
+
+放行条件是硬条件，不是建议：
+
+1. 施工只覆盖 WorldGatherSource 与必要的兼容接缝；
+2. 生产面必须出现真实新协议实例，影子面只能作辅助诊断；
+3. 工人占用必须从旧 TaskScheduler._npcTaskMap 迁到 TaskBindingManager 的配对/预定表；
+4. 同帧配对必须用单调调用序或前后状态快照取证；
+5. 同目标连发必须按 taskId 聚合，满足最多 2 次尝试、释放后重派、终态封口、无重复活动卡；
+6. 首片切换后必须重跑生产面链路、旧链基线和跨档重建重验；
+7. Building、UnitController、ScheduleCenterStub._crewAssignments 不得混入首片改动面。
+
+### 二、首片施工后的生产复验
+
+首片切换完成后，必须在真实 WorldGatherSource 生产面取得：
+
+- 新 TaskCard 实例数大于 0；
+- Submit、Pair、Reservation、Move、Complete/Abort、Release 全链可追踪；
+- TaskBindingManager 配对与预定表在终态归零；
+- WorldGatherSource 的工人占用不再以 _npcTaskMap 作为权威；
+- 同一 taskId 的尝试数、retryConsumedCount、释放数和终态数可逐项对拍；
+- 读档后重建重新广告，且跨档绑定不悬空；
+- 旧生产源基线的变化逐项解释；
+- 影子面与生产面分列，禁止互相替代。
+
+### 三、Building.currentWorkers 定性
+
+**结论：定性为死载体；D1 不启用、不修复、不作为验收证据。**
+
+理由：
+
+- [实读] Building.cs:156 声明 currentWorkers；
+- [实读] Building.cs:1439、1444、1446-1448、1469 存在读写路径；
+- [实读] 进局运行期恒为 0；
+- [推断] 它没有承担当前工人占用的权威职责，空集对拍不具鉴别力。
+
+D1 不得为了让该组读数“变得有意义”而临时填充 currentWorkers。后续清理批次可在完成引用审计后删除该死载体；本片不改它。
+
+### 四、工人占用迁移：必须迁入 TaskBindingManager
+
+**结论：必须迁移，不能保留无载体状态。**
+
+对 WorldGatherSource：
+
+- TaskBindingManager 配对/预定表是新权威载体；
+- _npcTaskMap 不得再接收该源的新权威写入；
+- 若为过渡兼容保留镜像，必须逐次断言与 TaskBindingManager 一致，并在终态同时清理；
+- currentWorkers 不参与迁移，也不参与验收；
+- 终态、超时、读档重建三条路径都必须验证占用释放。
+
+这是首片必带项，不是可选项。
+
+### 五、currentWorkers 组对拍处置
+
+**结论：接受“无鉴别力”声明，不为该组重取释放结论。**
+
+第①组只能作为死载体诊断记录；不能证明释放正确、不能证明不悬空。首片结论改由：
+
+- TaskBindingManager 配对/预定生产读数；
+- NPCBrain.IsKingdomTaskWorker；
+- _npcTaskMap 的迁移前后对照；
+- 终态与读档重建后的四组占用读数
+
+共同承担。不得把第①组恒 0 写成通过证据。
+
+### 六、DZ-新修复批时序
+
+**结论：立即立修复批，首片正式进局回归前先修复并重新取基线。**
+
+原因：
+
+- SpawnFromSave 冲突已第 3 次逐字复现；
+- 四个坐标与 HH.314 完全一致；
+- 每次进局都会污染 Console 与存档对拍。
+
+修复批与 D1 任务分开，不混改、不共用提交面；D1 只在修复后重新完成一次生产基线和 Console 三段对照。事务端负责另立修复登记，本裁不自取 D 号。
+
+### 七、应登记项（供事务端落账）
+
+HH.341 | D1 首片 | 有条件放行 WorldGatherSource 施工；必须将工人占用迁入 TaskBindingManager，currentWorkers 定性为死载体并排除验收；生产面接线后须重跑配对、重派、终态、读档重建与旧链基线；DZ-新 立即立修复批并先于首片正式回归 | 不写 D 号
