@@ -307,6 +307,10 @@ public sealed class TaskCard
     public int workerId;               // 0 ＝ 未绑定（对齐现码 `npcId != 0` 口径）
     public float workProgress;         // 本次执行进度（语义由该交互的 `progressSpec` 定）
     public float deadline = float.PositiveInfinity; // ∞ ＝ 未设（`taskExpiry`／`taskTimeout` 预算由管理器给）
+    /// <summary>⭐【D1 补齐批 ⑤】**显式**「是否设了 deadline」载体（既定政策：`+∞` ⇒ 显式标记，⛔ 不用 `-1` 哨兵、
+    ///  ⛔ 不靠数值猜）。写入点＝`Assign`（与 `deadline` 同处赋值）；运行时判定（`SweepExpired` 等）**只读本字段**。
+    ///  ⛔ 不参与持久化（`TaskCard` 不入档 · 政策）。</summary>
+    public bool hasDeadline;
 
     // ── ⑦ 意外（`06 §三 :69`）──
     public int retryCount;         // 已用重试次数（现状 0）
@@ -356,7 +360,9 @@ public sealed class TaskCard
         TaskTransitionError e = Move(TaskLifecycleState.Assigned);
         if (e != TaskTransitionError.None) return e;
         this.workerId = workerId;
+        // ⭐【D1 补齐批 ⑤】显式载体与数值**同点写入**：非有限/非正的入参一律记「未设」（`hasDeadline=false`，`deadline=+∞`）。
         this.deadline = (float.IsNaN(deadline) || deadline <= 0f) ? float.PositiveInfinity : deadline;
+        this.hasDeadline = !(float.IsNaN(deadline) || deadline <= 0f || float.IsPositiveInfinity(deadline));
         this.workProgress = 0f;
         this.suspendReason = TaskSuspendReason.None;
         return TaskTransitionError.None;

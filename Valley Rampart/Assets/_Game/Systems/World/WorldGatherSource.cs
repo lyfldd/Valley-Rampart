@@ -181,26 +181,23 @@ public class WorldGatherSource : ITaskSource
         if (rt == null) return;
         try
         {
-            var card = new TaskCard();
-            card.taskId = TaskScheduler.Instance.NextProtocolTaskId();
-            card.kingdomId = KingdomId;
-            card.ability = "WorldGatherSource_Gather";
-            card.targetRef = new TaskTargetRef
-            {
-                kind = TaskTargetKind.WorldResource,
-                cellX = Cell.x,
-                cellY = Cell.y,
-                typeKey = (int)Feature
-            };
-            card.issuer = new TaskIssuerRef { kind = TaskIssuerKind.Kingdom, issuerId = KingdomId };
+            // ⭐【补齐批 ⑥】建卡**统一经 `TaskProtocolIssuer` 封装**（⛔ 不再自行 `new TaskCard()`）：
+            //   `Create` 写 `issuer` 与 `retryMax = Policy.defaultRetryMax`（根治 `RetryPolicyUnconfigured`）；
+            //   `Submit` 写 `basePriority` 并走 `Accept()`＋`Runtime.Submit`（预定表 ＋ 王国分桶）。
+            var issuerRef = new TaskIssuerRef { kind = TaskIssuerKind.Kingdom, issuerId = KingdomId };
+            var issuer = new TaskProtocolIssuer(rt, issuerRef);
+            var card = issuer.Create(TaskScheduler.Instance.NextProtocolTaskId(), KingdomId,
+                "WorldGatherSource_Gather", new TaskTargetRef
+                {
+                    kind = TaskTargetKind.WorldResource,
+                    cellX = Cell.x,
+                    cellY = Cell.y,
+                    typeKey = (int)Feature
+                });
             card.duration = _gatherSeconds;
-            card.basePriority = 0;
-            // ⚠️ 实读教训（复跑 4 条 `TryConsumeRetry(RetryPolicyUnconfigured)`）：`TaskCard.retryMax` 默认 -1
-            //   ⇒ 必须由造卡入口写入政策值（`TaskProtocolIssuer.Create` 同款行为）；⛔ 本片未走 Issuer 封装，等价自行填写。
-            card.retryMax = rt.Policy.defaultRetryMax;
-            var accepted = card.Accept();
-            if (accepted != TaskTransitionError.None) { LogProtocolOnce("Accept(" + accepted + ")", null); return; }
-            var submitted = rt.Submit(card, true, float.PositiveInfinity);
+            // `basePriority` 由上层写（政策：上层写基值 · 运行时只读算有效值）；本片写 0（未填）。
+            // `deadline` 传 `+∞` ⇒ ⑤ 的显式载体记 `hasDeadline=false`（未设 · ⛔ 不写 Infinity 入档）。
+            var submitted = issuer.Submit(card, 0, true, float.PositiveInfinity);
             if (submitted != TaskBindingResult.Ok && submitted != TaskBindingResult.AlreadyReserved)
             {
                 LogProtocolOnce("Submit(" + submitted + ")", null);

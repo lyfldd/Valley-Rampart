@@ -103,6 +103,9 @@ public struct TaskReservation
     public TaskTargetRef target;
     public string ability;      // 能力名（`05 §四 :79` 口径）；值标识，非对象引用
     public float deadline;      // +∞ ＝ 未设
+    /// <summary>⭐【D1 补齐批 ⑤】显式「是否设了 deadline」（与卡片侧同源语义）；`false` ⇒ `SweepExpired` **不回收**。
+    ///  ⛔ 不作 `-1` 哨兵、⛔ 不靠 `IsInfinity` 猜。</summary>
+    public bool hasDeadline;
     public bool multiAllowed;   // 对象侧「可多人」声明
     public bool restorePending; // 读档「待复验」标记（`EnterRestore` 置位 · `RestoreValidated` 清位）
 }

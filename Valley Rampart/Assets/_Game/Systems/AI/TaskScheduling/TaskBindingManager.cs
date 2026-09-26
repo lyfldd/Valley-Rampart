@@ -125,6 +125,7 @@ public sealed class TaskBindingManager
         row.target = card.targetRef;
         row.ability = card.ability;
         row.deadline = (float.IsNaN(deadline) || deadline <= 0f) ? float.PositiveInfinity : deadline;
+        row.hasDeadline = !(float.IsNaN(deadline) || deadline <= 0f || float.IsPositiveInfinity(deadline));   // ⭐⑤ 显式载体
         row.multiAllowed = targetAllowsMultiple;
         row.restorePending = false;
         _reservations[taskId] = row;
@@ -277,8 +278,8 @@ public sealed class TaskBindingManager
         _sweepBuf.Clear();
         foreach (KeyValuePair<long, TaskReservation> kv in _reservations)
         {
-            float d = kv.Value.deadline;
-            if (!float.IsInfinity(d) && d <= now) _sweepBuf.Add(kv.Key);
+            // ⭐【D1 补齐批 ⑤】超时回收**只读显式载体** `hasDeadline`（⛔ 不再用 `IsInfinity` 猜；未设 ⇒ 永不回收）。
+            if (kv.Value.hasDeadline && kv.Value.deadline <= now) _sweepBuf.Add(kv.Key);
         }
         for (int i = 0; i < _sweepBuf.Count; i++)
         {
