@@ -63,3 +63,11 @@ CODELY.md
 .com-unity-codely.json
 valley-rampart.code-workspace
 *.code-workspace
+
+# AI 助手 skill 英文译本（2026-09-23 加入 · ⚠️ **2026-09-26 已归档**至 .workbuddy/_archive_en_skills_20260926/）
+#   归档原因：① 不在 skill-governance 治理内、主本改动不会自动同步 ⇒ 与主本 **28/29 已漂移**（差异为语言：主本中文／译本英文）
+#             ② 执行端与策划端**实读中文主本**（.codely-cli/skills）③ 双语文档维护成本 > 收益
+#   中文主本 = .codely-cli/skills/（已忽略）；.trae/skills/ 与 .workbuddy/skills/ 为镜像（skill-governance §一）
+#   下列两条规则保留 = 防止将来误建同名目录被提交
+.cursor/skills/
+.agents/skills/
