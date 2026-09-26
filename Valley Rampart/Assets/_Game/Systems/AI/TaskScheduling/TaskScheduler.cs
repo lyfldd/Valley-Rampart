@@ -273,6 +273,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     // ⭐【HH.341 D1】接缝 D：源失效（完成/被清）⇒ 未终态则封口释放（配对/预定归零）。
                     if (snapshot[i] is WorldGatherSource wgInvalid)
                         wgInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
+                    // ⭐【HH.341 小源首源】接缝 D′：ConstructionSiteStore 源失效封口（同型接缝）。
+                    if (snapshot[i] is ConstructionSiteStore siteInvalid)
+                        siteInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
                     _sources.Remove(snapshot[i]);
                 }
             }
@@ -422,6 +425,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 D1】接缝 A：WorldGatherSource 新协议配对建立（权威＝TaskBindingManager；镜像＝上方 _npcTaskMap）。
         if (task.source is WorldGatherSource wgDispatch)
             wgDispatch.OnProtocolDispatched(id, ProtocolTickNow);
+        // ⭐【HH.341 小源首源】接缝 A′：ConstructionSiteStore 配对建立（同型接缝 · 各自独立回调）。
+        if (task.source is ConstructionSiteStore siteDispatch)
+            siteDispatch.OnProtocolDispatched(id, ProtocolTickNow);
         // ⭐ `U-16` 件1（`D815` 裁定 §2.5）：**任务在册 ⇒ 置让位标记**（`NPCBrain.TaskMoveYield` 的唯一输入）。
         //   置位点＝本处（`:362 _suspendStartTime.Remove` 之后、`InjectStimulus` 之前）；`DispatchExternal:329`
         //   亦经本方法 ⇒ 自动覆盖。⚠️ **复位点已全在**（`Complete`／`Abandon` ＋ `NPCBrain.ResetForReuse` 兜底）
@@ -535,6 +541,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             // ⭐【HH.341 D1】接缝 B：到达 ⇒ 新协议 Assigned→Executing。
                             if (task.source is WorldGatherSource wgArrive)
                                 wgArrive.OnProtocolArrived(ProtocolTickNow);
+                            // ⭐【HH.341 小源首源】接缝 B′：ConstructionSiteStore 到达（第一段：取料仓）。
+                            if (task.source is ConstructionSiteStore siteArrive)
+                                siteArrive.OnProtocolArrived(ProtocolTickNow);
                         }
                         else if (Time.time - _taskStartTime[id] > taskTimeout)
                         {
@@ -698,6 +707,11 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
             brain.RemoveTaskStimulus(task.source);
         }
         ClearNpc(npcId);
+        // ⭐【HH.341 小源首源】接缝 E：**一次搬料任务正常完成** ⇒ 源侧自决「回待派 / 终态」
+        //   （ConstructionSiteStore 一次投料期可被多次派工 ⇒ 不能把"任务完成"直接当"源终态"；
+        //     位置＝`ClearNpc` 之后 ⇒ 镜像已清、配对随源侧 `Replan` 释放 ⇒ 逐次对拍一致）。
+        if (task != null && task.source is ConstructionSiteStore siteDone)
+            siteDone.OnProtocolTaskCompleted(ProtocolTickNow);
         Debug.Log($"[TaskScheduler] 完成 {task.type} 任务 → npcId {npcId}");
     }
 
@@ -740,6 +754,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         //   ⚠️ 位置＝`ClearNpc` **之后**：镜像（_npcTaskMap 已移除）与配对表（下方释放）同时归零 ⇒ 逐次对拍一致。
         if (task != null && task.source is WorldGatherSource wgAbandon)
             wgAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
+        // ⭐【HH.341 小源首源】接缝 C′：ConstructionSiteStore 失败回待派/封口（同型接缝）。
+        if (task != null && task.source is ConstructionSiteStore siteAbandon)
+            siteAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
         // ⭐ 日志契约（`D815` §四 · 四要素 ＋ 容 null）：`task` 与 `brain` 均可能为 null（`:591` 处 `TryGetValue` 可失败）。
         Debug.Log($"[TaskScheduler] Abandon {task?.type} → npcId {npcId} reason={reason}");
     }

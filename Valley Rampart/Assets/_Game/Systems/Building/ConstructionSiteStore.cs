@@ -41,6 +41,27 @@ public class ConstructionSiteStore : MonoBehaviour, ITaskSource
     private Building _building;
     private Vector2 _pickupPos;
 
+    // ===== ⭐【HH.341 小源首源】新任务协议生产接缝（并存链 · 旧 KingdomTask(Build) 链不动）=====
+    //   权威 ＝ `TaskBindingManager` 配对/预定；`_npcTaskMap` 仅作镜像并逐次对拍。
+    //   形态 ＝ 一源一卡（`_card`）：本源在一次投料期内**可被多次派工**（逐资源搬料）——
+    //     · 一次搬料**正常完成**且仍有缺口 ⇒ 回待派（`Executing→Resolving→Pending` · `Replan`）· ⛔ 不计尝试；
+    //     · 料齐 / 源注销 ⇒ 终态 `Done`（释放配对与预定）；
+    //     · 失败回待派（Unreachable/Timeout/WorkerDied）⇒ **计尝试**；达上限 2 ⇒ `Aborted(RetryExhausted)` 封口。
+    private TaskCard _card;
+    private int _failAttempts;
+    private bool _protocolTerminal;
+    private int _lastWorkerId;
+    private bool _protocolErrorLogged;
+
+    /// <summary>⭐ 协议卡（诊断/验收只读口；未建卡 ⇒ null）。</summary>
+    public TaskCard ProtocolCard => _card;
+    /// <summary>⭐ 终态封口标记。</summary>
+    public bool ProtocolTerminal => _protocolTerminal;
+    /// <summary>⭐ **失败**尝试数（⛔ 不含"正常完成回待派"；上限 2 ＝ 初次 1 ＋ 重试 1）。</summary>
+    public int ProtocolFailAttempts => _failAttempts;
+    /// <summary>⭐ 最近绑定工人（值标识）。</summary>
+    public int ProtocolLastWorkerId => _lastWorkerId;
+
     /// <summary>所属建筑（工地）。</summary>
     public Building Owner => _building;
 
@@ -198,7 +219,14 @@ public class ConstructionSiteStore : MonoBehaviour, ITaskSource
     }
 
     public void OnRegister() { }
-    public void OnUnregister() { }
+
+    /// <summary>⭐【HH.341】源注销（料齐 ⇒ `Building.OnSiteMaterialsReady` 收口／死亡／拆除）⇒ 协议终态封口：
+    /// 未终态则收敛为 `Done`（仍有缺口时退化为 `TargetRemoved` 封口），⛔ 不留悬空配对/预定。</summary>
+    public void OnUnregister()
+    {
+        if (_protocolTerminal) return;
+        FinalizeProtocol(IsSatisfied ? TaskAbortReason.TargetExhausted : TaskAbortReason.TargetRemoved, "源注销");
+    }
 
     /// <summary>
     /// 取料仓解析：`WarehouseRegistry.GatherActive(kingdomId)`（同国 ＋ 有存量）中，
@@ -220,5 +248,188 @@ public class ConstructionSiteStore : MonoBehaviour, ITaskSource
             if (d < bestDist) { bestDist = d; best = s; }
         }
         return best;
+    }
+
+    // ============================================================================
+    //  ⭐【HH.341 小源首源】协议编排（全部由 `TaskScheduler` 侧回调驱动 · 零轮询）
+    //    ⛔ 不复制调度器内核职责；⛔ 不新增全局主表；卡引用只住本源（统计按单卡 · 政策）。
+    // ============================================================================
+
+    private TaskProtocolRuntime Rt()
+    {
+        if (!TaskScheduler.HasInstance) return null;
+        return TaskScheduler.Instance.ProtocolRuntime;
+    }
+
+    private void LogProtocolOnce(string what, System.Exception ex)
+    {
+        if (_protocolErrorLogged) return;
+        _protocolErrorLogged = true;
+        Debug.LogError($"[ConstructionSiteStore] 新协议接缝异常（{what}）owner={( _building != null && _building.def != null ? _building.def.id : "?")}"
+                       + " kingdom=" + (_building != null ? _building.kingdomId : -99)
+                       + "：" + (ex != null ? ex.ToString() : "见上一步返回码"));
+    }
+
+    /// <summary>建卡并提交（幂等 · 仅一次）：统一经 `TaskProtocolIssuer`（写 `issuer`／`retryMax`；`Submit` 写 `basePriority` 并准入）。
+    /// `deadline` 传 `+∞` ⇒ 显式载体记 `hasDeadline=false`（未设）。</summary>
+    private void EnsureCard()
+    {
+        if (_card != null || _protocolTerminal) return;
+        var rt = Rt();
+        if (rt == null) return;
+        try
+        {
+            var issuerRef = new TaskIssuerRef { kind = TaskIssuerKind.Kingdom, issuerId = _building != null ? _building.kingdomId : 0 };
+            var issuer = new TaskProtocolIssuer(rt, issuerRef);
+            var card = issuer.Create(TaskScheduler.Instance.NextProtocolTaskId(),
+                _building != null ? _building.kingdomId : 0,
+                "ConstructionSiteStore_HaulToSite",
+                new TaskTargetRef
+                {
+                    kind = TaskTargetKind.Building,
+                    cellX = _building != null ? _building.coord.x : 0,
+                    cellY = _building != null ? _building.coord.y : 0,
+                    typeKey = 0
+                });
+            card.duration = 0f;
+            var submitted = issuer.Submit(card, 0, true, float.PositiveInfinity);
+            if (submitted != TaskBindingResult.Ok && submitted != TaskBindingResult.AlreadyReserved)
+            {
+                LogProtocolOnce("Submit(" + submitted + ")", null);
+                return;
+            }
+            _card = card;
+        }
+        catch (System.Exception ex) { LogProtocolOnce("建卡/提交", ex); }
+    }
+
+    /// <summary>接缝 A：调度器派发成功 ⇒ 建立配对（不递增失败计数）。</summary>
+    public void OnProtocolDispatched(int workerId, long tick)
+    {
+        if (_protocolTerminal) return;
+        EnsureCard();
+        if (_card == null) return;
+        var rt = Rt();
+        if (rt == null) return;
+        try
+        {
+            if (_card.workerId != 0 && _card.workerId != workerId)
+                rt.Unassign(_card, TaskUnassignReason.Unreachable, tick);
+            var err = rt.Assign(_card, workerId, float.PositiveInfinity);
+            if (err != TaskTransitionError.None) LogProtocolOnce("Assign(" + err + ")", null);
+            else _lastWorkerId = workerId;
+        }
+        catch (System.Exception ex) { LogProtocolOnce("配对建立", ex); }
+        MirrorCheck(workerId);
+    }
+
+    /// <summary>接缝 B：调度器侧到达（第一段：取料仓）⇒ `Assigned→Executing`。</summary>
+    public void OnProtocolArrived(long tick)
+    {
+        if (_card == null || _protocolTerminal) return;
+        if (_card.state != TaskLifecycleState.Assigned) return;
+        var e = _card.Arrive();
+        if (e != TaskTransitionError.None) LogProtocolOnce("Arrive(" + e + ")", null);
+    }
+
+    /// <summary>接缝 E：**一次搬料任务正常完成**（调度器 `Complete` 后）——本源特有：
+    /// 料齐/源失效 ⇒ 终态 `Done`；仍有缺口 ⇒ 回待派（`Resolving --Replan--> Pending` · ⛔ 不计尝试）。</summary>
+    public void OnProtocolTaskCompleted(long tick)
+    {
+        if (_protocolTerminal || _card == null) return;
+        var rt = Rt();
+        if (rt == null) return;
+        if (IsSatisfied || !IsValid) { FinalizeProtocol(TaskAbortReason.TargetExhausted, "料齐"); return; }
+        try
+        {
+            if (_card.state == TaskLifecycleState.Assigned) _card.Arrive();
+            if (_card.state == TaskLifecycleState.Executing) _card.BeginResolve();
+            if (_card.state == TaskLifecycleState.Resolving)
+            {
+                var e = rt.Unassign(_card, TaskUnassignReason.Replan, tick);
+                if (e != TaskTransitionError.None) LogProtocolOnce("Replan 回待派(" + e + ")", null);
+            }
+            else LogProtocolOnce("搬料完成后阶段=" + _card.state, null);
+        }
+        catch (System.Exception ex) { LogProtocolOnce("搬料完成回待派", ex); }
+    }
+
+    /// <summary>接缝 C：调度器侧放弃（`ClearNpc` 后）⇒ 失败回待派并计尝试；达上限 2 ⇒ 封口。</summary>
+    public void OnProtocolAbandoned(int workerId, int legacyReason, long tick)
+    {
+        if (_protocolTerminal || _card == null) return;
+        if (_card.workerId != workerId) return;
+        var rt = Rt();
+        if (rt == null) return;
+        _failAttempts++;
+        try
+        {
+            var e = rt.Unassign(_card, MapUnassignReason(legacyReason, _card.state), tick);
+            if (e != TaskTransitionError.None)
+            {
+                LogProtocolOnce("Unassign(" + e + ")", null);
+                FinalizeProtocol(TaskAbortReason.TargetRemoved, "回待派非法 ⇒ 封口");
+                return;
+            }
+        }
+        catch (System.Exception ex) { LogProtocolOnce("释放配对", ex); return; }
+
+        if (_failAttempts >= 2) FinalizeProtocol(TaskAbortReason.RetryExhausted, "失败达上限");
+        else
+        {
+            var re = _card.TryConsumeRetry();
+            if (re != TaskTransitionError.None) LogProtocolOnce("TryConsumeRetry(" + re + ")", null);
+        }
+        MirrorCheck(workerId);
+    }
+
+    /// <summary>接缝 D：源失效（调度器 `Tick` 清理前）⇒ 未终态则封口。</summary>
+    public void OnProtocolSourceInvalidated(long tick)
+    {
+        if (_protocolTerminal) { return; }
+        if (_card == null) { _protocolTerminal = true; return; }
+        FinalizeProtocol(IsSatisfied ? TaskAbortReason.TargetExhausted : TaskAbortReason.TargetRemoved, "源失效");
+    }
+
+    /// <summary>按当前阶段收敛到终态（补齐合法边后 `Complete`／`Abort`），释放配对与预定。</summary>
+    private void FinalizeProtocol(TaskAbortReason abortReason, string why)
+    {
+        if (_protocolTerminal) return;
+        _protocolTerminal = true;
+        if (_card == null) return;
+        var rt = Rt();
+        if (rt == null) return;
+        try
+        {
+            if (_card.state == TaskLifecycleState.Assigned) _card.Arrive();
+            if (_card.state == TaskLifecycleState.Executing) _card.BeginResolve();
+            if (_card.state == TaskLifecycleState.Resolving)
+            {
+                var e = rt.Complete(_card);
+                if (e != TaskTransitionError.None) LogProtocolOnce("Complete(" + e + ")", null);
+            }
+            else if (!TaskLifecycleRules.IsTerminal(_card.state))
+            {
+                var e = rt.Abort(_card, abortReason);
+                if (e != TaskTransitionError.None) LogProtocolOnce("Abort(" + e + ") " + why, null);
+            }
+        }
+        catch (System.Exception ex) { LogProtocolOnce("终态封口 " + why, ex); }
+    }
+
+    /// <summary>过渡镜像逐次对拍：`_npcTaskMap` 与配对表对本卡/本工人是否同真同假。</summary>
+    private void MirrorCheck(int workerId)
+    {
+        if (_card == null || !TaskScheduler.HasInstance) return;
+        if (TaskScheduler.Instance.ProtocolMirrorConsistent(workerId, _card.taskId)) return;
+        LogProtocolOnce("过渡镜像不一致 workerId=" + workerId + " taskId=" + _card.taskId, null);
+    }
+
+    /// <summary>旧放弃原因 → 回待派原因（按卡阶段取合法值；⛔ `Replan` 仅 `Resolving` 合法 ⇒ 此处不用）。</summary>
+    private static TaskUnassignReason MapUnassignReason(int legacyReason, TaskLifecycleState st)
+    {
+        if (legacyReason == 4) return st == TaskLifecycleState.Executing ? TaskUnassignReason.Timeout : TaskUnassignReason.Unreachable;
+        if (legacyReason == 1) return TaskUnassignReason.WorkerDied;
+        return TaskUnassignReason.Unreachable;
     }
 }
