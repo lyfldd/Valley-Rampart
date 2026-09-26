@@ -264,6 +264,8 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         try { data = JsonUtility.FromJson<BuildingSaveData>(entry.json); }
         catch (System.Exception ex) { Debug.LogError($"[BuildingFactory] BuildingSaveData 反序列化失败: {ex}"); return; }
 
+        // ⭐【HH.342】读档重建计数（使「SpawnFromSave 调用数 ＝ 建筑 Scene 条目数」可复算；HH.342 §5.2）。
+        Debug.Log($"[BuildingFactory] SpawnFromSave 调用 saveId={entry.saveId} defId={data.defId}");
         var def = FindDefById(data.defId);
         if (def == null)
         {
@@ -294,20 +296,24 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         if (def.sourceType == BuildingType.CastleCore && state == BuildingState.Abandoned)
             state = BuildingState.Active;   // 主城修复后读档不应回到废墟（castoeLevel≥1）
 
-        // 响亮断言（读档建筑双份修复，替代"网格已有 occupant 则保留"方案）：
-        // 若目标格已有 Building 占用，说明 A(InstantiateFromMap) 与 B(SpawnFromSave) 双路径在此双份——
-        // 且该格上通常是 A 的新随机 GUID + 默认 kingdomId，保留它会静默数据腐坏（归属错 + 传送门排除集污染）。
-        // 此处不跳过、不吞，仅响亮报错把"存→读→再存→再读"的复合腐坏链暴露出来。
-        // 范围只查 Building，Portal/Chest 同为 IGridOccupant 但不在此列（防误报）。
-        if (GridSystem.Instance != null)
+        // ⭐【HH.342】双份判据勘正：原判据「目标格已有任意 Building」把 footprint 重叠误报为双路径双份。
+        //   实读铁证（`Logs/hh342_baseline/baseline_probe.txt`）：读档冲突四条 occupied 分别是
+        //   castle@(73,26)／House@(71,28)／castle@(44,109)／House@(42,111) —— 均为**邻接建筑**，
+        //   其 3×3／2×2 footprint 与本条目主格相交（如 castle 覆盖 (73..75, 26..28) ⊇ (75,28)），
+        //   且 occupied 的 saveId/defId 与本条目**不同** ⇒ 非同一建筑，不构成双份。
+        //   该「预置落点 footprint 允许重叠」为 `F-15`／`03 §6.5` 已认账事实 ⇒ 原判据每轮读档固定假 alarm 4 条。
+        //   ⭐ 真双份判据 ＝ **注册表中存在同主坐标（coord）的 Building**（同一条目被二次生成时主格必然相同）。
+        //   命中 ⇒ 响亮报错 ＋ **不创建第二份**（不产生第二份注册/占格/存档对象）；
+        //   未命中 ⇒ 正常重建（footprint 重叠按现行「后写者胜」语义，与建局路径一致）。
+        //   ⚠️ v2 读档路径下 A(InstantiateFromMap) 已门控（`WorldManager.LoadState` instantiateBuildings=false）
+        //      ⇒ 命中分支当前不可达，属防御性分支；⛔ 不得据此删除（防未来 A/B 双路径回归）。
+        var dupAtOrigin = FindRegisteredAtOrigin(coord);
+        if (dupAtOrigin != null)
         {
-            var occupied = GridSystem.Instance.GetOccupant(coord) as Building;
-            if (occupied != null)
-            {
-                Debug.LogError($"[BuildingFactory] SpawnFromSave 冲突：coord=({coord.x},{coord.y}) 已有 Building " +
-                               $"saveId={occupied.SaveId}（疑似路径 A 新随机 GUID+默认 kingdomId），" +
-                               $"存档侧 saveId={entry.saveId}，defId={data.defId}。双路径双份/复合腐坏风险——请核查读档建筑重建路径。");
-            }
+            Debug.LogError($"[BuildingFactory] SpawnFromSave 冲突：coord=({coord.x},{coord.y}) 已有**同主坐标** Building " +
+                           $"saveId={dupAtOrigin.SaveId}，存档侧 saveId={entry.saveId}，defId={data.defId}。" +
+                           $"判为重复生成 ⇒ 跳过本次创建（不产生第二份）。");
+            return;
         }
 
         bool ok = CreateBuildingInstance(def, (BuildingType)data.sourceType, coord, fp, worldPos,
@@ -348,6 +354,24 @@ public class BuildingFactory : Singleton<BuildingFactory>, ISaveableSpawner
         b.totalInvested = data.totalInvested > 0
             ? data.totalInvested
             : (b.def != null ? b.def.cost.TotalCount : 0);   // ⭐ M1-C 件2（裁决 4-a 同源化）：兜底改 def.cost.TotalCount（全部资源）
+    }
+
+    /// <summary>⭐【HH.342】按**主坐标**在 `BuildingRegistry` 中找同格建筑（读档双份判据）。
+    /// 与 `GridSystem.GetOccupant(coord)` 的「footprint 覆盖格」语义**刻意区分**：后者会把邻接建筑
+    /// 与本条目主格共享的格也判为占用 ⇒ 原冲突判据因此把「预置落点 footprint 允许重叠」误报为双路径双份
+    /// （`F-15`／`03 §6.5` 已认账：实盘预置建筑 footprint 相互重叠）。
+    /// 查无返回 null；`BuildingRegistry` 缺失返回 null。</summary>
+    private static Building FindRegisteredAtOrigin(GridCoord coord)
+    {
+        var reg = BuildingRegistry.Instance;
+        if (reg == null) return null;
+        var all = reg.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var b = all[i];
+            if (b != null && b.coord.x == coord.x && b.coord.y == coord.y) return b;
+        }
+        return null;
     }
 
     /// <summary>读档王国归属：自然建筑（OreVein/WoodPile/StonePile 一次性资源点）一律强制 -1（哨兵配套，
