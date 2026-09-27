@@ -74,7 +74,7 @@
 - `SRC.type`＝`Building=20｜MineByproductComponent=3｜ChestEntity=1`（**`ConstructionSiteStore=0｜WorldGatherSource=0｜Transport=0`**，分母 24）；`SRC.kingdom`＝`1=7｜2=7｜3=7｜-1=3｜0=0`（分母 24）；`SRC.valid`＝`True=24｜False=0`；`SRC.inFlight`＝`False=20｜True=4`；`SRC.anchorSrc`＝`1=1｜0=23`。
 - `BLD.state`＝`Active=20`（`Placing`／`Constructing`／`Dead`／`Abandoned`／`Ruined` 全 0）；**`BLD.awaiting`＝`False=20｜True=0`**；`BLD.def`＝`House=3｜Warehouse=3｜Well=3｜castle=3｜farm=3｜mine=3｜VagrantCamp=2`；`CHEST.total`＝`100=1`、`CHEST.empty`＝`False=1｜True=0`；`COMP.parent`＝`mine=3`。
 
-**证据链**：采样行在 `Valley Rampart/Logs/hh341_small_construction_site_dispatch.txt`（POOL 11–14｜POLL 16/50/（83.17 行 50）｜MIG 18/49/51/52｜SRC 22–45）；辅助原始日志 `…_dispatch.logs.txt`（238 行筛选自桥接 `capture_logs`，含锚点派发/Abandon 两行）；统计器 `…_dispatch_stat.py`（`FIELDS` ＋ `DOMAINS` 域表 ＋ `scan_field()`）。**复现命令**：
+**证据链**：采样行在 `Valley Rampart/Logs/hh341_small_construction_site_dispatch.txt`（POOL 11–14｜POLL 16/17/50｜MIG 18/49/51/52｜SRC 22–45）；辅助原始日志 `…_dispatch.logs.txt`（238 行筛选自桥接 `capture_logs`，含锚点派发/Abandon 两行）；统计器 `…_dispatch_stat.py`（`FIELDS` ＋ `DOMAINS` 域表 ＋ `scan_field()`）。**复现命令**：
 
 ```powershell
 python -X utf8 "Valley Rampart\Logs\hh341_small_construction_site_dispatch_stat.py" --out "Valley Rampart\Logs\hh341_small_construction_site_dispatch_stat_dry.txt" "Valley Rampart\Logs\hh341_small_construction_site_dispatch_stat_dry_in.txt"
