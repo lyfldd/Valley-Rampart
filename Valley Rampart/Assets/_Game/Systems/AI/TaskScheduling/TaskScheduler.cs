@@ -279,6 +279,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     // ⭐【HH.341 小源②】接缝 D″：ChestEntity 源失效封口（在途卡保留 · 同型接缝）。
                     if (snapshot[i] is ChestEntity chestInvalid)
                         chestInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
+                    // ⭐【HH.341 小源③】接缝 D‴：MineByproductComponent 源失效封口（无在途豁免 · 同型接缝）。
+                    if (snapshot[i] is MineByproductComponent mbInvalid)
+                        mbInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
                     _sources.Remove(snapshot[i]);
                 }
             }
@@ -434,6 +437,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 小源②】接缝 A″：ChestEntity 配对建立（一箱多卡 · 同型接缝）。
         if (task.source is ChestEntity chestDispatch)
             chestDispatch.OnProtocolDispatched(id, ProtocolTickNow);
+        // ⭐【HH.341 小源③】接缝 A‴：MineByproductComponent 配对建立（一源多卡 · 同型接缝）。
+        if (task.source is MineByproductComponent mbDispatch)
+            mbDispatch.OnProtocolDispatched(id, ProtocolTickNow);
         // ⭐ `U-16` 件1（`D815` 裁定 §2.5）：**任务在册 ⇒ 置让位标记**（`NPCBrain.TaskMoveYield` 的唯一输入）。
         //   置位点＝本处（`:362 _suspendStartTime.Remove` 之后、`InjectStimulus` 之前）；`DispatchExternal:329`
         //   亦经本方法 ⇒ 自动覆盖。⚠️ **复位点已全在**（`Complete`／`Abandon` ＋ `NPCBrain.ResetForReuse` 兜底）
@@ -553,6 +559,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             // ⭐【HH.341 小源②】接缝 B″：ChestEntity 到达（取货段 · 一箱多卡 ⇒ 带 workerId）。
                             if (task.source is ChestEntity chestArrive)
                                 chestArrive.OnProtocolArrived(id, ProtocolTickNow);
+                            // ⭐【HH.341 小源③】接缝 B‴：MineByproductComponent 到达（到岗/取货段 · 一源多卡 ⇒ 带 workerId）。
+                            if (task.source is MineByproductComponent mbArrive)
+                                mbArrive.OnProtocolArrived(id, ProtocolTickNow);
                         }
                         else if (Time.time - _taskStartTime[id] > taskTimeout)
                         {
@@ -724,6 +733,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 小源②】接缝 E′：ChestEntity 一趟搬运完成 ⇒ 收敛 Done（一箱多卡 ⇒ 带 workerId）。
         if (task != null && task.source is ChestEntity chestDone)
             chestDone.OnProtocolTaskCompleted(npcId, ProtocolTickNow);
+        // ⭐【HH.341 小源③】接缝 E″：MineByproductComponent 一趟任务完成 ⇒ 收敛 Done（一源多卡 ⇒ 带 workerId）。
+        if (task != null && task.source is MineByproductComponent mbDone)
+            mbDone.OnProtocolTaskCompleted(npcId, ProtocolTickNow);
         Debug.Log($"[TaskScheduler] 完成 {task.type} 任务 → npcId {npcId}");
     }
 
@@ -772,6 +784,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 小源②】接缝 C″：ChestEntity 失败回待派/封口（一箱多卡 ⇒ 带 workerId）。
         if (task != null && task.source is ChestEntity chestAbandon)
             chestAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
+        // ⭐【HH.341 小源③】接缝 C‴：MineByproductComponent 失败回待派/封口（一源多卡 ⇒ 带 workerId）。
+        if (task != null && task.source is MineByproductComponent mbAbandon)
+            mbAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
         // ⭐ 日志契约（`D815` §四 · 四要素 ＋ 容 null）：`task` 与 `brain` 均可能为 null（`:591` 处 `TryGetValue` 可失败）。
         Debug.Log($"[TaskScheduler] Abandon {task?.type} → npcId {npcId} reason={reason}");
     }
