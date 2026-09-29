@@ -97,3 +97,6 @@ _tmp_mcp.ps1
 _tmp_mcp2.ps1
 pyrightconfig.json
 .cursor/mcp.json
+
+# pixel-forge 一次性批处理脚本（文件名以 .tmp- 前缀自证，均为一次性产物）
+pixel-forge/server/.tmp-*
