@@ -130,6 +130,7 @@
 
 1. 当前施工源文件（首源只能是）：
    - Valley Rampart/Assets/_Game/Systems/Building/ConstructionSiteStore.cs
+   ⭐ **加注（`D914` 主策划裁定 · 2026-09-29 ·「一次性例外」放行）**：本条「**首源只能是 `ConstructionSiteStore.cs`**」的措辞已被 `D911` 一次性例外**放行** —— ⭐ **当前源 ＝ `ChestEntity.cs`（第 2 源 · `D914` 准开施工窗口）**；⚠️ ⛔ **不得把例外写成新的默认顺序规则**；⭐ **自第 3 源 `MineByproductComponent` 起，恢复「当前源判绿后才能申请下一源」的串行规则**（⛔ 例外**不得扩展到**五源阶段的其他源）。
 2. 后续按既定顺序各自单独开窗的源文件：
    - Valley Rampart/Assets/_Game/Systems/World/ChestEntity.cs
    - Valley Rampart/Assets/_Game/Systems/Building/MineByproductComponent.cs
