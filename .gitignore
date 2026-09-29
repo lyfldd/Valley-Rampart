@@ -68,6 +68,32 @@ valley-rampart.code-workspace
 #   归档原因：① 不在 skill-governance 治理内、主本改动不会自动同步 ⇒ 与主本 **28/29 已漂移**（差异为语言：主本中文／译本英文）
 #             ② 执行端与策划端**实读中文主本**（.codely-cli/skills）③ 双语文档维护成本 > 收益
 #   中文主本 = .codely-cli/skills/（已忽略）；.trae/skills/ 与 .workbuddy/skills/ 为镜像（skill-governance §一）
-#   下列两条规则保留 = 防止将来误建同名目录被提交
+#   ⚠️ **2026-09-29 勘正（事务端 · O-37）**：下列两条的 ignore **行为不变**，但**原注释理由已失效** ——
+#      `.cursor/skills/` 自 2026-09-29 起已是 **Cursor 端正式部署位置**（五工具拓扑 + check-skills-sync.ps1 当作第 5 端正经镜像），不再是“防误建”。
+#   继续 ignore 的真实理由：与主本 `.codely-cli/skills/` 同源、且含机器本地路径 ⇒ **不应入库**。
+#   ⛔ 副作用：**这批 skill 部署无 Git 指纹，回滚只能靠快照** ⇒ `pwsh -File Tools\check-skills-sync.ps1 -Snapshot`（默认保留最近 12 份）
+#   `.agents/skills/` ＝ 历史遗留目录，理由维持“防误建”。
 .cursor/skills/
 .agents/skills/
+
+# ===== 本地工具缓存 / 临时产物 / 本机配置（2026-09-29 事务端补 · O-36）=====
+# 补录原则：只补「本仓从未 tracked」的项；已 tracked 的一律不动。
+# ⛔ 已排除 `_art_rename/`（含 4 个已入库文件，ignore 会造成「已入库却被忽略」）。
+# ⛔ 已排除根目录 `AGENTS.md` —— 它是给各 AI 工具读的仓库协作规范，另行入库而非忽略。
+# ⚠️ 注意：gitignore 不支持行尾注释，`#` 只在行首有效 ⇒ 说明一律单独成行。
+.codebuddy/
+.codex/
+.commandcode/
+.oc_cache/
+.oc_data/
+Logs/
+Temp/
+Output/
+Medieval Kingdom/
+_mcp_probe3/
+Active
+_hh314_compile.log
+_tmp_mcp.ps1
+_tmp_mcp2.ps1
+pyrightconfig.json
+.cursor/mcp.json
