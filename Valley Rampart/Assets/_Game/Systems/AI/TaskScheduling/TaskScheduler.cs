@@ -282,6 +282,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                     // ⭐【HH.341 小源③】接缝 D‴：MineByproductComponent 源失效封口（无在途豁免 · 同型接缝）。
                     if (snapshot[i] is MineByproductComponent mbInvalid)
                         mbInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
+                    // ⭐【HH.344 小源④】接缝 D⁗：BlacksmithBuilding 源失效封口（无在途豁免 · 同型接缝）。
+                    //   ⚠️ 只在源真失效（建筑死亡/废弃/注销）时封卡；暂时没矿／满仓／本轮无产出**不走**本支（源照旧广告）。
+                    if (snapshot[i] is BlacksmithBuilding bsInvalid)
+                        bsInvalid.OnProtocolSourceInvalidated(ProtocolTickNow);
                     _sources.Remove(snapshot[i]);
                 }
             }
@@ -440,6 +444,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 小源③】接缝 A‴：MineByproductComponent 配对建立（一源多卡 · 同型接缝）。
         if (task.source is MineByproductComponent mbDispatch)
             mbDispatch.OnProtocolDispatched(id, ProtocolTickNow);
+        // ⭐【HH.344 小源④】接缝 A⁗：BlacksmithBuilding 配对建立（组件源＝本源；本体 Transport 源另属 `Building`，⛔ 不合并）。
+        if (task.source is BlacksmithBuilding bsDispatch)
+            bsDispatch.OnProtocolDispatched(id, ProtocolTickNow);
         // ⭐ `U-16` 件1（`D815` 裁定 §2.5）：**任务在册 ⇒ 置让位标记**（`NPCBrain.TaskMoveYield` 的唯一输入）。
         //   置位点＝本处（`:362 _suspendStartTime.Remove` 之后、`InjectStimulus` 之前）；`DispatchExternal:329`
         //   亦经本方法 ⇒ 自动覆盖。⚠️ **复位点已全在**（`Complete`／`Abandon` ＋ `NPCBrain.ResetForReuse` 兜底）
@@ -562,6 +569,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
                             // ⭐【HH.341 小源③】接缝 B‴：MineByproductComponent 到达（到岗/取货段 · 一源多卡 ⇒ 带 workerId）。
                             if (task.source is MineByproductComponent mbArrive)
                                 mbArrive.OnProtocolArrived(id, ProtocolTickNow);
+                            // ⭐【HH.344 小源④】接缝 B⁗：BlacksmithBuilding 到达 ⇒ Assigned→Executing
+                            //   （⛔ 到岗不等于产出、⛔ 不等于 Complete；产出承载＝ProductionSystem→Tick()）。
+                            if (task.source is BlacksmithBuilding bsArrive)
+                                bsArrive.OnProtocolArrived(id, ProtocolTickNow);
                         }
                         else if (Time.time - _taskStartTime[id] > taskTimeout)
                         {
@@ -736,6 +747,10 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 小源③】接缝 E″：MineByproductComponent 一趟任务完成 ⇒ 收敛 Done（一源多卡 ⇒ 带 workerId）。
         if (task != null && task.source is MineByproductComponent mbDone)
             mbDone.OnProtocolTaskCompleted(npcId, ProtocolTickNow);
+        // ⭐【HH.344 小源④】接缝 E‴：BlacksmithBuilding 单趟完成 ⇒ 只封这一张卡（Done），⛔ 不封源
+        //   （循环型常驻源：卡出池后本源照旧逐 tick 广告 · `D922` ②）。
+        if (task != null && task.source is BlacksmithBuilding bsDone)
+            bsDone.OnProtocolTaskCompleted(npcId, ProtocolTickNow);
         Debug.Log($"[TaskScheduler] 完成 {task.type} 任务 → npcId {npcId}");
     }
 
@@ -787,6 +802,9 @@ public class TaskScheduler : Singleton<TaskScheduler>, ITaskScheduler
         // ⭐【HH.341 小源③】接缝 C‴：MineByproductComponent 失败回待派/封口（一源多卡 ⇒ 带 workerId）。
         if (task != null && task.source is MineByproductComponent mbAbandon)
             mbAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
+        // ⭐【HH.344 小源④】接缝 C⁗：BlacksmithBuilding 失败回待派／封口（同型接缝 · 在途卡不豁免）。
+        if (task != null && task.source is BlacksmithBuilding bsAbandon)
+            bsAbandon.OnProtocolAbandoned(npcId, (int)reason, ProtocolTickNow);
         // ⭐ 日志契约（`D815` §四 · 四要素 ＋ 容 null）：`task` 与 `brain` 均可能为 null（`:591` 处 `TryGetValue` 可失败）。
         Debug.Log($"[TaskScheduler] Abandon {task?.type} → npcId {npcId} reason={reason}");
     }

@@ -94,6 +94,262 @@ public class BlacksmithBuilding : MonoBehaviour, ITickable, ITaskSource
         return true;
     }
 
+    // ============================================================================
+    //  ⭐【HH.344 小源④】新任务协议生产接缝（并存链 · 旧 `KingdomTask(Production)` 链不动）
+    //   权威＝`TaskBindingManager` 配对/预定；`_npcTaskMap` 仅作逐次对拍镜像。
+    //   形态＝**循环型常驻源 · 一源多卡**（`D922` ②）：完成或失败只收口**该卡**，⛔ 不封源；
+    //     源仍逐 tick 广告（`TryAdvertiseTask`），下一轮派发复用「回待派」卡或新建卡。
+    //     · A 派发 ⇒ 建卡＋配对（`Pending→Assigned`）；
+    //     · B 到达 ⇒ `Assigned→Executing`（⛔ 不等于产出、⛔ 不等于 `Complete`）；
+    //     · E 单趟完成（调度器 `Complete` 之后）⇒ 收敛 `Done` 并释放配对/预定，源继续广告；
+    //     · C 放弃 ⇒ 源仍可用则回待派计一次失败（上限＝`retryMax`＋初次 ⇒ 达上限 `Aborted`）；
+    //       源已失效/注销 ⇒ 封口 `TargetRemoved`（⛔ 无人再派却留预定）；
+    //     · D 源失效（建筑死亡/废弃/注销，调度器清无效源之前）⇒ 全部非终态卡封口 `TargetRemoved`
+    //       （⛔ 无在途豁免：旧链在途例外仅 `ChestEntity` 享有）；
+    //     · 组件销毁兜底 ⇒ ⛔ 不在已销毁对象上留残留。
+    //   ⚠️ 真实产出承载＝`ProductionSystem.cs:50 → Tick() → StorageComponent.Transform`
+    //     （`D922` ③ 双层判据）；调度器 `ExecuteCompletion` 的 Production 支取 `ProducerComponent`，
+    //     而本源数据行无 `comp.producer` ⇒ 对本源**空操作**，⛔ 不冒充产出、⛔ 不为本源新增专用副作用分支。
+    //   ⚠️ 双源并存：本源＝组件源，只广告 `Production`；本体 `Building` 源广告 `Transport`
+    //     （源对象不同 ⇒ 按对象身份＋`task.type` 分列取证，⛔ 不合并成一个源）。
+    // ============================================================================
+
+    /// <summary>一次派发的协议槽（一工人一派一卡 · 卡引用只住本源）。</summary>
+    private sealed class ProtocolSlot
+    {
+        public TaskCard card;
+        /// <summary>失败次数（⛔ 不含"正常完成"；达政策上限 ⇒ `RetryExhausted` 封口）。</summary>
+        public int failAttempts;
+    }
+
+    private readonly System.Collections.Generic.List<ProtocolSlot> _slots = new System.Collections.Generic.List<ProtocolSlot>();
+    /// <summary>源已失效/注销（接缝 D 置位）⇒ 放弃不再回待派（回待派将无人再派 ⇒ 预定残留）。</summary>
+    private bool _sourceInvalidated;
+    private int _lastWorkerId;
+    private int _totalCards;
+    private int _doneCards;
+    private int _abortedCards;
+    private bool _protocolErrorLogged;
+
+    /// <summary>⭐ 协议活卡数（非终态 · 诊断/验收只读口）。</summary>
+    public int ProtocolLiveCardCount => _slots.Count;
+    /// <summary>⭐ 累计建卡数（诊断只读口）。</summary>
+    public int ProtocolTotalCards => _totalCards;
+    /// <summary>⭐ 累计 `Done` 卡数（诊断只读口）。</summary>
+    public int ProtocolDoneCards => _doneCards;
+    /// <summary>⭐ 累计 `Aborted` 卡数（诊断只读口）。</summary>
+    public int ProtocolAbortedCards => _abortedCards;
+    /// <summary>⭐ 最近绑定工人（值标识 · 诊断只读口）。</summary>
+    public int ProtocolLastWorkerId => _lastWorkerId;
+
+    private TaskProtocolRuntime Rt()
+    {
+        if (!TaskScheduler.HasInstance) return null;
+        return TaskScheduler.Instance.ProtocolRuntime;
+    }
+
+    private void LogProtocolOnce(string what, System.Exception ex)
+    {
+        if (_protocolErrorLogged) return;
+        _protocolErrorLogged = true;
+        Debug.LogError($"[BlacksmithBuilding] 新协议接缝异常（{what}）owner={(_building != null && _building.def != null ? _building.def.id : "?")}"
+                       + " kingdom=" + (_building != null ? _building.kingdomId : -99)
+                       + "：" + (ex != null ? ex.ToString() : "见上一步返回码"));
+    }
+
+    /// <summary>建卡并提交（统一经 `TaskProtocolIssuer` · 每派一卡）。
+    /// 归属＝父建筑 `kingdomId`（对齐 `SourceKingdom` 的 Component 分支路由）；`deadline=+∞` ⇒ 显式载体记 `hasDeadline=false`。</summary>
+    private ProtocolSlot CreateSlot()
+    {
+        var rt = Rt();
+        if (rt == null) return null;
+        try
+        {
+            var issuerRef = new TaskIssuerRef { kind = TaskIssuerKind.Kingdom, issuerId = _building != null ? _building.kingdomId : 0 };
+            var issuer = new TaskProtocolIssuer(rt, issuerRef);
+            var card = issuer.Create(TaskScheduler.Instance.NextProtocolTaskId(),
+                _building != null ? _building.kingdomId : 0,
+                "BlacksmithBuilding_Task",
+                new TaskTargetRef
+                {
+                    kind = TaskTargetKind.Building,
+                    cellX = _building != null ? _building.coord.x : 0,
+                    cellY = _building != null ? _building.coord.y : 0,
+                    typeKey = 0
+                });
+            card.duration = 0f;
+            var submitted = issuer.Submit(card, 0, true, float.PositiveInfinity);
+            if (submitted != TaskBindingResult.Ok && submitted != TaskBindingResult.AlreadyReserved)
+            {
+                LogProtocolOnce("Submit(" + submitted + ")", null);
+                return null;
+            }
+            var slot = new ProtocolSlot { card = card };
+            _slots.Add(slot);
+            _totalCards++;
+            return slot;
+        }
+        catch (System.Exception ex) { LogProtocolOnce("建卡/提交", ex); return null; }
+    }
+
+    /// <summary>接缝 A：调度器派发成功 ⇒ 选卡（本工人绑定卡 → 回待派卡 → 新建）并建立配对。</summary>
+    public void OnProtocolDispatched(int workerId, long tick)
+    {
+        if (_sourceInvalidated) return;
+        if (FindSlotForWorker(workerId) != null) return;   // 幂等：本工人已有活动卡（旧链占用幂等应已拦下 · 防御）
+        var slot = FindPendingSlot() ?? CreateSlot();
+        if (slot == null) return;
+        var rt = Rt();
+        if (rt == null) return;
+        try
+        {
+            var err = rt.Assign(slot.card, workerId, float.PositiveInfinity);
+            if (err != TaskTransitionError.None) LogProtocolOnce("Assign(" + err + ")", null);
+            else _lastWorkerId = workerId;
+        }
+        catch (System.Exception ex) { LogProtocolOnce("配对建立", ex); }
+        MirrorCheck(workerId);
+    }
+
+    /// <summary>接缝 B：调度器侧到达 ⇒ `Assigned→Executing`（一源多卡 ⇒ 带 workerId 定位卡）。
+    /// ⚠️ 本回调只推进生命周期阶段，⛔ 不代表产出（产出＝`Tick()`）、⛔ 不代表 `Complete`。</summary>
+    public void OnProtocolArrived(int workerId, long tick)
+    {
+        var slot = FindSlotForWorker(workerId);
+        if (slot == null || slot.card.state != TaskLifecycleState.Assigned) return;
+        var e = slot.card.Arrive();
+        if (e != TaskTransitionError.None) LogProtocolOnce("Arrive(" + e + ")", null);
+    }
+
+    /// <summary>接缝 C：调度器侧放弃（`ClearNpc` 后）——源仍可用 ⇒ 失败回待派（计一次 · 可重派）；
+    /// 源已失效/注销 ⇒ **不回待派**（无人再派 ⇒ 封口 `TargetRemoved` · ⛔ 不留预定残留）。</summary>
+    public void OnProtocolAbandoned(int workerId, int legacyReason, long tick)
+    {
+        var slot = FindSlotForWorker(workerId);
+        if (slot == null) return;
+        var rt = Rt();
+        if (rt == null) return;
+        if (_sourceInvalidated || !IsValid)
+        {
+            FinalizeSlot(slot, TaskAbortReason.TargetRemoved, "源失效");
+            return;
+        }
+        slot.failAttempts++;
+        try
+        {
+            var e = rt.Unassign(slot.card, MapUnassignReason(legacyReason, slot.card.state), tick);
+            if (e != TaskTransitionError.None)
+            {
+                LogProtocolOnce("Unassign(" + e + ")", null);
+                FinalizeSlot(slot, TaskAbortReason.TargetRemoved, "回待派非法 ⇒ 封口");
+                return;
+            }
+        }
+        catch (System.Exception ex) { LogProtocolOnce("释放配对", ex); return; }
+
+        if (slot.failAttempts >= 2) FinalizeSlot(slot, TaskAbortReason.RetryExhausted, "失败达上限");
+        else
+        {
+            var re = slot.card.TryConsumeRetry();
+            if (re != TaskTransitionError.None) LogProtocolOnce("TryConsumeRetry(" + re + ")", null);
+        }
+        MirrorCheck(workerId);
+    }
+
+    /// <summary>接缝 D：源失效（调度器 `Tick` 清理无效源之前）⇒ **全部**非终态卡封口
+    /// （⛔ 无在途豁免：旧链在途例外仅 `ChestEntity` 享有 ⇒ 协议侧同收口）。
+    /// ⚠️ 「暂时没矿／满仓／本轮无产出」**不是**源失效 ⇒ 不走本接缝，源继续广告。</summary>
+    public void OnProtocolSourceInvalidated(long tick)
+    {
+        if (_sourceInvalidated) return;
+        _sourceInvalidated = true;
+        for (int i = _slots.Count - 1; i >= 0; i--)
+            FinalizeSlot(_slots[i], TaskAbortReason.TargetRemoved, "源失效");
+    }
+
+    /// <summary>接缝 E：一趟任务正常完成（调度器 `Complete` 后）⇒ 收敛 `Done` 并释放（配对/预定归零）。
+    /// ⭐ 循环型常驻源语义（`D922` ②）＝**只封这一张卡**，⛔ 不封源 ⇒ 卡出池后源照旧逐 tick 广告。</summary>
+    public void OnProtocolTaskCompleted(int workerId, long tick)
+    {
+        var slot = FindSlotForWorker(workerId);
+        if (slot == null) return;
+        var rt = Rt();
+        if (rt == null) return;
+        try
+        {
+            if (slot.card.state == TaskLifecycleState.Assigned) slot.card.Arrive();
+            if (slot.card.state == TaskLifecycleState.Executing) slot.card.BeginResolve();
+            if (slot.card.state == TaskLifecycleState.Resolving)
+            {
+                var e = rt.Complete(slot.card);
+                if (e != TaskTransitionError.None) LogProtocolOnce("Complete(" + e + ")", null);
+                else { _doneCards++; _slots.Remove(slot); }
+            }
+            else LogProtocolOnce("完成后阶段=" + slot.card.state, null);
+        }
+        catch (System.Exception ex) { LogProtocolOnce("完成收口", ex); }
+    }
+
+    /// <summary>组件销毁兜底：先置失效（随后 `Unregister` 触发的旧链放弃经接缝 C 直接封口），再收口全部未终态卡
+    /// ⇒ ⛔ 不留预定残留在已销毁对象上。</summary>
+    private void SealAllOnDestroy()
+    {
+        _sourceInvalidated = true;
+        for (int i = _slots.Count - 1; i >= 0; i--)
+            FinalizeSlot(_slots[i], TaskAbortReason.TargetRemoved, "实体销毁");
+    }
+
+    /// <summary>终态封口：`TargetRemoved` 对进行中四阶段均合法（`IsLegalAbort`）⇒ 无需补边，直接 `Abort`。</summary>
+    private void FinalizeSlot(ProtocolSlot slot, TaskAbortReason abortReason, string why)
+    {
+        if (slot == null) return;
+        if (slot.card == null) { _slots.Remove(slot); return; }
+        if (TaskLifecycleRules.IsTerminal(slot.card.state)) { _slots.Remove(slot); return; }
+        var rt = Rt();
+        if (rt == null) return;
+        try
+        {
+            var e = rt.Abort(slot.card, abortReason);
+            if (e != TaskTransitionError.None) LogProtocolOnce("Abort(" + e + ") " + why, null);
+            else { _abortedCards++; _slots.Remove(slot); }
+        }
+        catch (System.Exception ex) { LogProtocolOnce("终态封口 " + why, ex); }
+    }
+
+    private ProtocolSlot FindSlotForWorker(int workerId)
+    {
+        if (workerId == 0) return null;
+        for (int i = 0; i < _slots.Count; i++)
+            if (_slots[i].card != null && _slots[i].card.workerId == workerId) return _slots[i];
+        return null;
+    }
+
+    private ProtocolSlot FindPendingSlot()
+    {
+        for (int i = 0; i < _slots.Count; i++)
+            if (_slots[i].card != null && _slots[i].card.workerId == 0
+                && _slots[i].card.state == TaskLifecycleState.Pending) return _slots[i];
+        return null;
+    }
+
+    /// <summary>过渡镜像逐次对拍：`_npcTaskMap` 与配对表对本卡/本工人是否同真同假。</summary>
+    private void MirrorCheck(int workerId)
+    {
+        var slot = FindSlotForWorker(workerId);
+        if (slot == null || !TaskScheduler.HasInstance) return;
+        if (TaskScheduler.Instance.ProtocolMirrorConsistent(workerId, slot.card.taskId)) return;
+        LogProtocolOnce("过渡镜像不一致 workerId=" + workerId + " taskId=" + slot.card.taskId, null);
+    }
+
+    /// <summary>旧放弃原因 → 回待派原因（按卡阶段取合法值 · `IsLegalUnassign`）：
+    /// `Assigned` 只接受 `WorkerDied/Unreachable`；`Executing` 额外接受 `Timeout`。</summary>
+    private static TaskUnassignReason MapUnassignReason(int legacyReason, TaskLifecycleState st)
+    {
+        if (legacyReason == 4) return st == TaskLifecycleState.Executing ? TaskUnassignReason.Timeout : TaskUnassignReason.Unreachable;
+        if (legacyReason == 1) return TaskUnassignReason.WorkerDied;
+        return TaskUnassignReason.Unreachable;
+    }
+
     void LazyRegister()
     {
         if (_registered || !TaskScheduler.HasInstance) return;
@@ -103,6 +359,7 @@ public class BlacksmithBuilding : MonoBehaviour, ITickable, ITaskSource
 
     void OnDestroy()
     {
+        SealAllOnDestroy();   // ⭐【HH.344 小源④】先置失效＋收口协议卡（随后 Unregister 触发的旧链放弃经接缝 C 直接封口）
         if (_registered && TaskScheduler.HasInstance)
             TaskScheduler.Instance.Unregister(this);
     }
