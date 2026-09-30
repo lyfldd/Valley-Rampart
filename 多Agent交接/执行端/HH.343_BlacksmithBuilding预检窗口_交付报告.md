@@ -232,7 +232,7 @@
 | **2 磁盘重读** | 证据＋报告＋两件脚本 | 均以 `Path.read_bytes()/read_text()` 从磁盘重读（⛔ 未复用内存缓冲），行数／字符数／首尾锚点逐字登记（`## S GATE_FILE`／`## S GATE_REREAD`） |
 | **3 sha256＋长度** | 证据文件 | 盘值 `61880 B`；sha256 **两口径一致**：脚本自算 `710E50E8…0A53`（大写）＝ `certutil -hashfile … SHA256` 独立复算 `710e50e8…0a53`（小写）✓；行数 388，`## S` 计数行 371（末行 `EXIT_OK` 自报 370＝不含自身口径，两值并列） |
 | | 统计器／闸门脚本 | `24504 B / d86198547cb06118193fddc8b1054eb9e2d378fc213840cc5d523d33d2d96b70`；`12063 B / 34cbdf60c4e02c221846daefbcacc7563cd719c97551f7f98154c24b37533986` |
-| **4 `git show` vs `hash-object`** | 本报告（单文件 commit 后） | 于具名 commit 落地后复跑闸门脚本（`--commit <rev>`），比对 `git rev-parse <rev>:<path>` blob id 与 `git hash-object <path>`，结果登记于 gate 文件 `## S GATE_COMMIT`／`## S GATE_BLOB`（证据文件不入提交 ⇒ 不违反单文件提交约束） |
+| **4 提交 vs 磁盘一致性** | 本报告（单文件 commit 后） | 具名 commit＝`ff4c1e2fdd4aa9e75cb1b08ecd57376f1831517f`（`1 file changed, 268 insertions(+)`）；实测 `ls_tree_oid=f87e4a3d03d4d4ede73a009bc81dce6b07169d09` ＝ `disk_recomputed_git_blob_id=f87e4a3d03d4d4ede73a009bc81dce6b07169d09` ⇒ **blob_identical=TRUE**（同算法同口径）；`files_in_commit=1` `single_file=TRUE` ⇒ ⛔ 未混入源码／资产／场景／既有证据／`O-14`；结果行登记于 gate 文件 `## S GATE_COMMIT`／`## S GATE_COMMIT_CLOSURE`／`## S GATE_COMMIT_SCOPE`（证据文件不入提交 ⇒ 不违反单文件提交约束）。**⚠️ 自指口径**：本行写定后报告自身字节必变 ⇒ 上列 oid 对应「本行写入前盘态」；闭合复算以定稿后末次 gate 值为准（末次值随交付消息报出，⛔ 不在正文写死自身终值） |
 
 **自持值物理限制声明**：闸门输出文件 `hh341_small_blacksmith_precheck_gate.txt` 无法在自己的正文里预知自己的终值 hash，故其**末次实测值只在交付消息与报告写作时点的盘值中出现**；本报告正文 ⛔ 未写死 gate 文件的 hash／行数（防自指漂移，承上一轮 `_r2` 实证教训）。
 
@@ -252,6 +252,8 @@
 3. **零改动判据首版用「磁盘原始 sha256 vs `git show` 文本 sha256」直比**，在 `core.autocrlf=true` 下把 `BuildingFactory.cs` 误示为 `identical=FALSE`（换行转换被当成疑似差异）⇒ 已改为「`git diff` 空 ∧ `git rev-parse HEAD:path` blob id ＝ `git hash-object path`」双口径，并保留 CRLF 计数（406）作解释性证据。**此为本窗口自身的方法缺陷自纠，非源码问题。**
 4. **补充口径（`SUPP`）在报告写作前才追加**：导致证据文件在本窗口内被重写 2 次（末次 11:15:01.105）；未覆盖任何其他源或 D1 的证据文件（`L-68`），两次写盘均为本源自有产物的定稿过程，已如实登记 mtime 序列。
 5. 报告写作过程中未出现写工具静默失败（本窗口所有落盘均经脚本回报＋磁盘重读双验），⛔ 未使用估数／「≈」。
+6. **闸门第 4 步首版误报「提交不含报告」（工具层假阴性）**：以 `git show <rev>:<含中文路径>` 经 Windows `subprocess` 传参时，中文被 ANSI 代码页破坏 ⇒ `rc=128`，首版据此写出「该 commit 未含此文件」的**失实行**。已改为「`ls-tree` 取 oid ＋ 磁盘侧本地重算 git blob id ＋ `cat-file` 复核」全 ASCII 参数路径，并与 Shell 侧手工复算（同 oid `f87e4a3d…`）对撞定案；假阴性行已随 gate 复跑被真值行替换。**教训面**：跨工具端的「命令失败」须先排除**取数工具自身**故障，再判被测对象状态（`L-97` 第 5 项「未取得」三分归因中的**工具问题**实证）。
+7. **`## S` 计数首版单值报出掩盖自指口径**：证据文件末行 `EXIT_OK` 自报 370（不含自身）而脚本落盘回报 371（含自身），首版正文只写 371 ⇒ 与 gate 文件首尾锚点读数不一致。已改为两值并列登记并标明口径差异（同上一轮「描述计数的行本身被下一次计数计入」的自指族）。
 
 ## 12. 【请裁】（≤5 条）
 
