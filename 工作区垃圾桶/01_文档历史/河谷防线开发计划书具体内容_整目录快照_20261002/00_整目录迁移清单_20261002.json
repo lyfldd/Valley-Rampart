@@ -3,8 +3,8 @@
   "Date": "2026-10-02",
   "OriginalPath": "D:\\工作文件夹\\ValleyRampart-3B\\河谷防线开发计划书具体内容",
   "SnapshotPath": "D:\\工作文件夹\\ValleyRampart-3B\\工作区垃圾桶\\01_文档历史\\河谷防线开发计划书具体内容_整目录快照_20261002",
-  "FileCount": 180,
-  "MarkdownCount": 180,
+  "FileCount": 182,
+  "MarkdownCount": 182,
   "Files": [
     {
       "RelativePath": "_目录.md",
@@ -40,7 +40,7 @@
       "RelativePath": "2.3_加载系统设计.md",
       "Length": 29294,
       "SHA256": "0086AC2B3D98FABB20EEEF743C31D71C7523298D079CC5150295DDE52CE42DAF",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.0687540Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.068754Z"
     },
     {
       "RelativePath": "2.4_销毁系统设计.md",
@@ -154,7 +154,7 @@
       "RelativePath": "3.5.1_NPC实体循环与王国接入.md",
       "Length": 27255,
       "SHA256": "445B257EF68D1E32D4EB83DCFFDBD9CD047AD0D4CDBF6ADBDF05B7CB393318F1",
-      "LastWriteTimeUtc": "2026-10-02T09:44:33.9999670Z"
+      "LastWriteTimeUtc": "2026-10-02T09:44:33.999967Z"
     },
     {
       "RelativePath": "3.5.2_工人通用化设计.md",
@@ -202,7 +202,7 @@
       "RelativePath": "缺陷台账.md",
       "Length": 121209,
       "SHA256": "F7A1EC22B8467AC3EE2A4FB60E9D2B557C280F5CD54633385278DB04417D66B3",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.2802800Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.28028Z"
     },
     {
       "RelativePath": "设计方法论_生命周期工作流.md",
@@ -244,7 +244,7 @@
       "RelativePath": "QQQ.2_NPC任务修正以及一些小问题.md",
       "Length": 36890,
       "SHA256": "A8E718FE849813A22CC696761D07EFD2E52D7064FCE283400FB1340937FFD76E",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.0972240Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.097224Z"
     },
     {
       "RelativePath": "QQQ.3_兜底设计.md",
@@ -340,7 +340,7 @@
       "RelativePath": "_archive/1.6_摄像机跟随.md",
       "Length": 3591,
       "SHA256": "0F02CA32140FCAF109B05FEF3BFECC8A47B3AF51E01AABB1F5097D251DD54429",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.1165320Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.116532Z"
     },
     {
       "RelativePath": "_archive/1.7_基础UI.md",
@@ -412,7 +412,7 @@
       "RelativePath": "_archive/3.3.1_建造与交互系统_前置工作.md",
       "Length": 18472,
       "SHA256": "D9A1D5FB265DBE2964459D728D5D74ED0E6C8A9B61B9E56E8275F33BAB8AEF07",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.1286870Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.128687Z"
     },
     {
       "RelativePath": "_archive/3.3.2_建造与交互系统_后置工作.md",
@@ -472,7 +472,7 @@
       "RelativePath": "_archive/存档系统设计文档.md",
       "Length": 25140,
       "SHA256": "6073E37812923B9591E7E076DC9195D4196332249A76008F13699FD03108F75E",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.1424690Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.142469Z"
     },
     {
       "RelativePath": "_archive/阶段1_目录.md",
@@ -724,13 +724,13 @@
       "RelativePath": "改造计划/2_10_渲染与摄像机_实施计划.md",
       "Length": 37872,
       "SHA256": "994F97A41359C2CBFF8425D054BD8EDF65A7B44BF710E2F4D683073211C84060",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.1976340Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.197634Z"
     },
     {
       "RelativePath": "改造计划/2_10_渲染与摄像机.md",
       "Length": 21881,
       "SHA256": "DF25CDD4D497AFC89432F087F5E5FE9797AD7B39451E51EB7824BA482802ABD9",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.1976340Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.197634Z"
     },
     {
       "RelativePath": "改造计划/2_11_存档与迁移_实施计划.md",
@@ -742,13 +742,13 @@
       "RelativePath": "改造计划/2_11_存档与迁移.md",
       "Length": 20462,
       "SHA256": "DCB20874C95E99E8DDADEA5830CFF46F05EBDE73D93DAEFC53BA054EC5CCB1D7",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.1991750Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.199175Z"
     },
     {
       "RelativePath": "改造计划/2_12_王国建筑系统迁移_实施计划.md",
       "Length": 51943,
       "SHA256": "F7101503B5EB4643FF91167052EA03DD22CC7726EAD860AAC46A3B5183018E0E",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.2037250Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.203725Z"
     },
     {
       "RelativePath": "改造计划/2_12_王国建筑系统迁移.md",
@@ -766,7 +766,7 @@
       "RelativePath": "改造计划/2_13_交互输入与流程UI迁移.md",
       "Length": 19335,
       "SHA256": "D40C7B33E0FA8B0968BDD425C1AC86B1EF28EBB6A983A16902018EA7833B5F74",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.2037250Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.203725Z"
     },
     {
       "RelativePath": "改造计划/2_14_敌怪与传送门灾害_实施计划.md",
@@ -826,13 +826,13 @@
       "RelativePath": "改造计划/2_19_王国灭亡与遗产_实施计划.md",
       "Length": 19525,
       "SHA256": "455FAFFC4BDD76E94977A3A081EED53F5CA55C1F8F29406EB58EB04028AD251C",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.2160310Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.216031Z"
     },
     {
       "RelativePath": "改造计划/2_19_王国灭亡与遗产.md",
       "Length": 38280,
       "SHA256": "BB2F68804DDD4542B6733EF287AC0AD330AB14FCA25BF2A3B49A9C5221F1FF49",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.2160310Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.216031Z"
     },
     {
       "RelativePath": "改造计划/2_2_建筑与占格_实施计划.md",
@@ -994,7 +994,7 @@
       "RelativePath": "改造计划/2_9_模拟器与职业训练.md",
       "Length": 14637,
       "SHA256": "D43769839BC9197B6EC00BE1173D2BA1638CF18468B84EBCFFD3D94623DE85C1",
-      "LastWriteTimeUtc": "2026-10-01T14:44:05.2497070Z"
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.249707Z"
     },
     {
       "RelativePath": "改造计划/3.1_王国AI路线图.md",
@@ -1085,6 +1085,18 @@
       "Length": 13815,
       "SHA256": "BA8A1C52D39993493757C9CF492FC7FEFF40135611786372AFD54C47C2E24300",
       "LastWriteTimeUtc": "2026-10-01T14:44:05.2553996Z"
+    },
+    {
+      "RelativePath": "3.6.1_弹药消费清单.md",
+      "Length": 7718,
+      "SHA256": "192F66F5C6E6EA9293F6BAFC16586D6964C530C2825D474F05132582AA7C14D2",
+      "LastWriteTimeUtc": "2026-09-12T08:13:46.0000000Z"
+    },
+    {
+      "RelativePath": "3.8.1_音效播放器设计规格.md",
+      "Length": 24106,
+      "SHA256": "183C304B82A5CEA1E5A4632B09FF393E11B8031640C1050CE113513F4DA8416B",
+      "LastWriteTimeUtc": "2026-09-13T10:32:28.0000000Z"
     }
   ]
 }
