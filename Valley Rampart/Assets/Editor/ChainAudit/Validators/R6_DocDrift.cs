@@ -27,8 +27,8 @@ public static class R6_DocDrift
 {
     public const string Tag = "ChainAudit.R6";
 
-    private const string RegistryRel = "河谷防线开发计划书具体内容/改造计划/生命周期登记表.md";
-    private const string MappingTableRel = "河谷防线开发计划书具体内容/改造计划/美术资源接入映射表.md";
+    private const string RegistryRel = "最高优先级文档/05_流程与验收/生命周期登记表.md";
+    private const string MappingTableRel = "最高优先级文档/03_玩家分支/表现与资源接入/美术资源接入映射表.md";
 
     private static readonly ChainAuditCore.ExemptionTable Exempt
         = new ChainAuditCore.ExemptionTable("R6 漂移豁免", null, new Dictionary<string, string>());

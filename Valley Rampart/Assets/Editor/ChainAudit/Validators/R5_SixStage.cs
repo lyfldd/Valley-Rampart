@@ -39,7 +39,7 @@ public static class R5_SixStage
     public static bool SelfTestOk { get; private set; }
 
     /// <summary>声明面（登记表 §1）路径（R6 同源·只读）。</summary>
-    private const string RegistryRel = "河谷防线开发计划书具体内容/改造计划/生命周期登记表.md";
+    private const string RegistryRel = "最高优先级文档/05_流程与验收/生命周期登记表.md";
 
     /// <summary>⭐【HH.294 片 6-2 收尾·口径同步（`D779` 残余 `S1`）】**格表资源点（非实体出口）**：
     /// 经「格表 ＋ 门」（`MapGate`）进世界、采集走数据寻址 —— 旧口径「与 `BuildingFactory.FeatureToBuildingType`

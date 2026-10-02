@@ -18,7 +18,7 @@
 
 | # | 文档／实物 | 用处 |
 |---|---|---|
-| 1 | **台账 `DZ-097`**（`河谷防线开发计划书具体内容/缺陷台账.md` L150） | 本批主体：`UnitFactory.cs:65-69`（`prefab==null` 报错返回 null）／7 专属兵＋3 机器 prefab 缺／`SiegeProductionSystem.cs:170-177` 忽略返回值 |
+| 1 | **台账 `DZ-097`**（`最高优先级文档/05_流程与验收/缺陷台账.md` L150） | 本批主体：`UnitFactory.cs:65-69`（`prefab==null` 报错返回 null）／7 专属兵＋3 机器 prefab 缺／`SiegeProductionSystem.cs:170-177` 忽略返回值 |
 | 2 | `3.1_王国AI路线图` §六 `G2-2`＋§十 | Gate 归属与推进序 |
 | 3 | `Valley Rampart/Assets/Resources/UnitPrefabs/`（**现有模板**） | 参考 `Human_Player_{Worker,Warrior,Archer,HeavyWarrior}.prefab` 的结构 |
 | 4 | `Valley Rampart/Assets/Resources/UnitData/`（35 个 SO） | `prefab` 字段待填的 10 个 |

@@ -1,0 +1,1090 @@
+{
+  "Action": "MOVE_DIRECTORY_TO_TRASH",
+  "Date": "2026-10-02",
+  "OriginalPath": "D:\\工作文件夹\\ValleyRampart-3B\\河谷防线开发计划书具体内容",
+  "SnapshotPath": "D:\\工作文件夹\\ValleyRampart-3B\\工作区垃圾桶\\01_文档历史\\河谷防线开发计划书具体内容_整目录快照_20261002",
+  "FileCount": 180,
+  "MarkdownCount": 180,
+  "Files": [
+    {
+      "RelativePath": "_目录.md",
+      "Length": 73647,
+      "SHA256": "6A53679953876C3ED6BDACB60CADD1F65BA5162FAA8952CB5C993847A8A9C5DD",
+      "LastWriteTimeUtc": "2026-10-02T09:23:23.8515637Z"
+    },
+    {
+      "RelativePath": "1.1_项目设置.md",
+      "Length": 880,
+      "SHA256": "E18BEFFFCB44944FFA937AF01E2CB5908F77E1576E52C924FEBCA4B3B1B2B9A4",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0639752Z"
+    },
+    {
+      "RelativePath": "1.2_目录结构.md",
+      "Length": 8573,
+      "SHA256": "381776EE8908DC62F4FC4588012EC8FFFD761D4DFB150A206A646F4CEBE0E7C7",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0650973Z"
+    },
+    {
+      "RelativePath": "1.3_EventBus.md",
+      "Length": 6264,
+      "SHA256": "D4CB78087083A2009547F4983B3651F85180107A83C78CC2D34CDD9D28F91F35",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0661366Z"
+    },
+    {
+      "RelativePath": "2.2_世界系统设计.md",
+      "Length": 29678,
+      "SHA256": "E80CF262F9F340E372F1C99A406F780754019A4385115B15EA1AB0A59B803198",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0671807Z"
+    },
+    {
+      "RelativePath": "2.3_加载系统设计.md",
+      "Length": 29294,
+      "SHA256": "0086AC2B3D98FABB20EEEF743C31D71C7523298D079CC5150295DDE52CE42DAF",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0687540Z"
+    },
+    {
+      "RelativePath": "2.4_销毁系统设计.md",
+      "Length": 19765,
+      "SHA256": "847F6B643D8D1B547B18241D99B4BE2600CBC31AF967EEFE798C456DDFDB7AA1",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0697991Z"
+    },
+    {
+      "RelativePath": "3.0.1_1_输入输出因子与计算函数方案.md",
+      "Length": 14381,
+      "SHA256": "FB096A45D7E3CB10050130B603A20738A156CD31C80AC6FF3B2C7B5263522448",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0708371Z"
+    },
+    {
+      "RelativePath": "3.0.1_2_输入输出决定层设计.md",
+      "Length": 48180,
+      "SHA256": "FDE1EA3755A4F71C7A360AAE949BB84C022763C7EEDF8E379FCEA7E7A86BE2F2",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0729161Z"
+    },
+    {
+      "RelativePath": "3.0.1_2_AI调试可视化后端与UI接口规格.md",
+      "Length": 18346,
+      "SHA256": "4A3E3147BDA104F77C2D0A3CB28880FEA939C8B96564E591D999B73650B7D13E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0718742Z"
+    },
+    {
+      "RelativePath": "3.0.1_3_AI协作.md",
+      "Length": 40510,
+      "SHA256": "2CCA63A7A6427AE45A493BE6E802BED4F8705F36F8939FE7C54F78E0E0B0B0E8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0734288Z"
+    },
+    {
+      "RelativePath": "3.0.1_4_多因子决策与威胁溯源设计.md",
+      "Length": 28653,
+      "SHA256": "8C804C9FEBD7B6ECC3AB4DCF361524AE86B5F8077C73EC3BB38432C2D673A707",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0749416Z"
+    },
+    {
+      "RelativePath": "3.0.1_5_多将军协作与管理方向.md",
+      "Length": 8023,
+      "SHA256": "A92F9292FA873EDB8B5B15ED7437D7DFEBDD8857E38CC0668C6BA61998416A2F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0759709Z"
+    },
+    {
+      "RelativePath": "3.0.1_6_敌方AI差异化与敌方军队方向.md",
+      "Length": 7363,
+      "SHA256": "5F2599AB7EA0C1C49AF9A46D486568CFC84F21A70EDFE2F4F1743AE13C4BE073",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0759709Z"
+    },
+    {
+      "RelativePath": "3.0.1_8_综合因子分层仲裁设计.md",
+      "Length": 18860,
+      "SHA256": "EA8B81EB77FABFF5EA9C350B8CE84B1CD53F66BD6D89CD18523956FBA0EDEC5C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0774849Z"
+    },
+    {
+      "RelativePath": "3.0.1注意力机制与刺激源.md",
+      "Length": 36057,
+      "SHA256": "9936FE0B9CE61AEA0BC190B9813A41D2A419C5F6D00A8204DF379F2C5CA9C7FD",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0789982Z"
+    },
+    {
+      "RelativePath": "3.1.1_美术资源清单.md",
+      "Length": 41033,
+      "SHA256": "00AF92BD0A667A585AB6E5AD5E6741942A70BCC6A266E0AAA69DCBFE04D9EBB7",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0805098Z"
+    },
+    {
+      "RelativePath": "3.1.2_NPC美术资源清单.md",
+      "Length": 68765,
+      "SHA256": "31E6AA32E342262175D9ACBC05F2C52132F538A9A3888046BFBBC05786ACE220",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0820201Z"
+    },
+    {
+      "RelativePath": "3.1.3_美术资源生产排期.md",
+      "Length": 21340,
+      "SHA256": "628AF8D4027238285B0BDA3C6D375894446E850C0F3813EE1B77C222B9E2AB7E",
+      "LastWriteTimeUtc": "2026-10-02T09:44:33.9883174Z"
+    },
+    {
+      "RelativePath": "3.1.4_像素工坊_AI辅助像素图编辑器.md",
+      "Length": 22063,
+      "SHA256": "399BDCB0E21897FD7575FAEAC9A04459998A4EA26794B307C3AA9FFFFE250F91",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0845395Z"
+    },
+    {
+      "RelativePath": "3.1.4_执行清单.md",
+      "Length": 10160,
+      "SHA256": "22E6E7865C820C7F3E97A71E4D3F85C4D66C28073B6DBEBB4232D0CF2FAEA1F0",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0850449Z"
+    },
+    {
+      "RelativePath": "3.4_伤害管线设计.md",
+      "Length": 48669,
+      "SHA256": "CEB14DFC25A6C68B57A9CE663A96CBDAED8FF774E8684E5C3DD0A431E763C530",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0865567Z"
+    },
+    {
+      "RelativePath": "3.5_王国经营体系.md",
+      "Length": 61583,
+      "SHA256": "DC4A593D624BAD01050332DBDDEA9A0C531A849E95A12AE86D2F038D0954615C",
+      "LastWriteTimeUtc": "2026-10-02T09:44:33.9948636Z"
+    },
+    {
+      "RelativePath": "3.5_王国任务与AI决策支撑训练分析.md",
+      "Length": 7752,
+      "SHA256": "B0D7E339D031046175A82AEDB9C69B81EDB63E757043850A2E9C1573F6AA8758",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0895893Z"
+    },
+    {
+      "RelativePath": "3.5.1_NPC实体循环与王国接入.md",
+      "Length": 27255,
+      "SHA256": "445B257EF68D1E32D4EB83DCFFDBD9CD047AD0D4CDBF6ADBDF05B7CB393318F1",
+      "LastWriteTimeUtc": "2026-10-02T09:44:33.9999670Z"
+    },
+    {
+      "RelativePath": "3.5.2_工人通用化设计.md",
+      "Length": 6275,
+      "SHA256": "AAABA64546343906E5BBF36EEECB2A62E0EC51BB6AB884A481C58EE17282CFC1",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0880732Z"
+    },
+    {
+      "RelativePath": "3.5.4_建筑数据卡.md",
+      "Length": 18194,
+      "SHA256": "0C6F71441C5460477D7FDB7EB1D1BD34F52099B09630808409DCBF9574DA0953",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0895893Z"
+    },
+    {
+      "RelativePath": "3.6_军事统一管理.md",
+      "Length": 19646,
+      "SHA256": "447FBBEA5B7BF0B1D4EB900C1C07C9726B1D3C708A849FDA8C60F9C83E3BFC78",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0926264Z"
+    },
+    {
+      "RelativePath": "3.7_军事战斗完整落地与训练接入.md",
+      "Length": 17435,
+      "SHA256": "6C0AE1865017981FB324F5621246D48817193C3069CF7A4D0B87A7C4AF75CE6A",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0926264Z"
+    },
+    {
+      "RelativePath": "3.8_音效系统与缩放混音设计.md",
+      "Length": 29593,
+      "SHA256": "C6B13337B35E5534F2608FB4CF6E91EA69AC368950F3C9A0203A7BD864BB1E68",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0941402Z"
+    },
+    {
+      "RelativePath": "测试基线台账.md",
+      "Length": 1319311,
+      "SHA256": "B45345AB4B7C402F55B20BB7910C9F0B5EADE97EA29A68605952B5D8FA200581",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2787656Z"
+    },
+    {
+      "RelativePath": "存档系统设计文档_v2_ISaveable架构.md",
+      "Length": 40865,
+      "SHA256": "7B236AFE08119E5C7113C009FC8690B7F476987DA860A17D206888B77E80C655",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1512671Z"
+    },
+    {
+      "RelativePath": "缺陷台账.md",
+      "Length": 121209,
+      "SHA256": "F7A1EC22B8467AC3EE2A4FB60E9D2B557C280F5CD54633385278DB04417D66B3",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2802800Z"
+    },
+    {
+      "RelativePath": "设计方法论_生命周期工作流.md",
+      "Length": 23410,
+      "SHA256": "BB34B8C0DA306DA52ADD369FBA2B5534FD3CFE20BD6E153C4E3CC70D319037E8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2817927Z"
+    },
+    {
+      "RelativePath": "文档解耦与优化方案.md",
+      "Length": 4864,
+      "SHA256": "E0EA809C526BEEEFA0FF38B36588475742A54416881969F84882FCBCE60E0105",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2691264Z"
+    },
+    {
+      "RelativePath": "游戏流程与UI系统策划案.md",
+      "Length": 33501,
+      "SHA256": "4E2BA7D1DC70A9626AC1CD0DB2BDE3927BBF31056A6B290BF547CBD509337A20",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2787656Z"
+    },
+    {
+      "RelativePath": "QQQ.1_地图与NPC细节优化.md",
+      "Length": 20977,
+      "SHA256": "13DF388FE40866EE7B267AA3DD54709C0EF89A75B507664F64B269EB543E3FA4",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0957136Z"
+    },
+    {
+      "RelativePath": "QQQ.1_执行清单.md",
+      "Length": 7712,
+      "SHA256": "42931F7556C4BDE7628B815FB97BC5221147E8E760165AF3262604FD25058664",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0957136Z"
+    },
+    {
+      "RelativePath": "QQQ.2_执行清单.md",
+      "Length": 11575,
+      "SHA256": "1CE59E439C3D98EC6AB2CF788AF639EBD48006EE1AF0AB0E2EE0B5E2B9487AF8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0987372Z"
+    },
+    {
+      "RelativePath": "QQQ.2_NPC任务修正以及一些小问题.md",
+      "Length": 36890,
+      "SHA256": "A8E718FE849813A22CC696761D07EFD2E52D7064FCE283400FB1340937FFD76E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0972240Z"
+    },
+    {
+      "RelativePath": "QQQ.3_兜底设计.md",
+      "Length": 48494,
+      "SHA256": "D688CF20A2C102BF84FFA17F625A155A9565F1094700294CADF6698738DB2856",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.0987372Z"
+    },
+    {
+      "RelativePath": "QQQ.3_执行清单.md",
+      "Length": 39604,
+      "SHA256": "364712B427C38B85A1E18664F0D7DC4E00781DD02CB3A08417BD1591CCBDF46A",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1012584Z"
+    },
+    {
+      "RelativePath": "QQQ.4_任务系统与资源生命周期重构.md",
+      "Length": 15314,
+      "SHA256": "1CC1EF757CB44D3EDD51317D86E8A1EB1DED48EAFA390D19D78DFB08A57A008C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1012584Z"
+    },
+    {
+      "RelativePath": "QQQ.4_执行清单.md",
+      "Length": 4816,
+      "SHA256": "6F3E3CA1BAB48B77FCFEDB1C3A1F5EC0D85E81B31721BDFB554827C4B852CE72",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1031036Z"
+    },
+    {
+      "RelativePath": "QQQ.5_附录A_可生产职业全集初稿表.md",
+      "Length": 11577,
+      "SHA256": "9B7D2E1636E8304568CA149D7C3B582B06DC3A786A9C5DF2C5DAB3061714477F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1056463Z"
+    },
+    {
+      "RelativePath": "QQQ.5_附录B_goldenReplay协议.md",
+      "Length": 3074,
+      "SHA256": "307B4436DAD0A8C4ABB01327935B436FF117A0D1C2683343587C4AABBF57BF8B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1056463Z"
+    },
+    {
+      "RelativePath": "QQQ.5_附录C_D2动作与状态.md",
+      "Length": 3239,
+      "SHA256": "F9B6331C98CE9D3412F50F5B606A6B6C3DCDF6A1662B6DCD0C5A5F4940CC4D7C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1071613Z"
+    },
+    {
+      "RelativePath": "QQQ.5_全链路生产与战斗模拟器.md",
+      "Length": 60006,
+      "SHA256": "75536B73F751FD95265842D1C252A5AD140AE5224FAFA542BC3B6D5A821CEF5D",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1041328Z"
+    },
+    {
+      "RelativePath": "QQQ.6_执行清单.md",
+      "Length": 2811,
+      "SHA256": "2CE1AEAC999095EC481B04EAE97BC18C58ACE6D3C339D9D9919874C406D0CAA8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1081676Z"
+    },
+    {
+      "RelativePath": "QQQ.6_AI弹话文案族化与丰富化.md",
+      "Length": 14227,
+      "SHA256": "94416ECE6AD1CE2E1F37437627038858B8CD4F0DD96B395F8022CB4A59FF21FA",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1081676Z"
+    },
+    {
+      "RelativePath": "QQQ.7_小任务清理批.md",
+      "Length": 9114,
+      "SHA256": "4F69DB646C445F6392375F06C6C84112CB0406CD40A5816B3995FC7336685CBA",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1109755Z"
+    },
+    {
+      "RelativePath": "QQQ.7_执行清单.md",
+      "Length": 3536,
+      "SHA256": "2F27E8DC8D66C9D9C4EA3A18A45D512B3D1581F3861968081BDFFD0C6396D371",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1109755Z"
+    },
+    {
+      "RelativePath": "RD.1_用户反馈需求同步_执行清单.md",
+      "Length": 3231,
+      "SHA256": "952E76DCE1245A02A0D615FAB704D3D4FC0FE1BB07B413A7D28A55BA0111E015",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1129992Z"
+    },
+    {
+      "RelativePath": "_archive/1.4_Tilemap河谷地图.md",
+      "Length": 6609,
+      "SHA256": "E892CFFBCEEB08EAE815D7B745D032DD4D84E07EB08131A45831E27E067739BA",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1150195Z"
+    },
+    {
+      "RelativePath": "_archive/1.5_君主移动.md",
+      "Length": 2483,
+      "SHA256": "96803E3AB2CBB99F3D02A5AA330505D134FA9F3C73197DF392FA1A7DEFF10A8B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1150195Z"
+    },
+    {
+      "RelativePath": "_archive/1.6_摄像机跟随.md",
+      "Length": 3591,
+      "SHA256": "0F02CA32140FCAF109B05FEF3BFECC8A47B3AF51E01AABB1F5097D251DD54429",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1165320Z"
+    },
+    {
+      "RelativePath": "_archive/1.7_基础UI.md",
+      "Length": 2826,
+      "SHA256": "3FD3A0C5E321C1F5002C7A5BA5575D6375BE02EE555FE0D2A77BFC5BAFAED01B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1180465Z"
+    },
+    {
+      "RelativePath": "_archive/2.0_地图系统方案_v2.md",
+      "Length": 12882,
+      "SHA256": "5FA7AED455C6D5B9667BB44E7C2E804CD983460009B779832E031D8D564BBB1B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1180465Z"
+    },
+    {
+      "RelativePath": "_archive/2.1_难度系统设计_v3.md",
+      "Length": 24222,
+      "SHA256": "6CF5B9EDC91701235C60F5B24DFAD0CA48834A16BAAE6825527FC17DB491D4FB",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1195605Z"
+    },
+    {
+      "RelativePath": "_archive/3.0_战斗系统总览.md",
+      "Length": 11946,
+      "SHA256": "F3645151F890D3BA2477AEF0F7AF5136E88D3644AB4A4C9D28FF0E4F282D4CC5",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1225871Z"
+    },
+    {
+      "RelativePath": "_archive/3.0.1_7_离线AI训练与分层强化学习方向.md",
+      "Length": 7258,
+      "SHA256": "EAFFFF3820BF4FD88E0AE10587FD7CC120F8CAB81660E59020E36E7B729277F3",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1210743Z"
+    },
+    {
+      "RelativePath": "_archive/3.0.1_LOD性能架构.md",
+      "Length": 20827,
+      "SHA256": "B04D0465910684DBBA3221E25B78AD2EF79F1D42B595A524B12397A16DA8A94F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1225871Z"
+    },
+    {
+      "RelativePath": "_archive/3.1_美术占位方案.md",
+      "Length": 15535,
+      "SHA256": "DB0589CE1079195494C6F0E400FE2310652974549D4394A0D3CC7D2086A618FF",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1241009Z"
+    },
+    {
+      "RelativePath": "_archive/3.2_区块与地图生成系统设计.md",
+      "Length": 44124,
+      "SHA256": "B136FC03B88C7FAEFD20270C2B613E28B24C7D9F52BE328023D27B33A089EA0C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1271705Z"
+    },
+    {
+      "RelativePath": "_archive/3.2.1_地图生成约束规则与玩法保障.md",
+      "Length": 57659,
+      "SHA256": "47324342DDCCE88809291C9E608F0841D0327DEFC287A5FA670387E53F6CEC40",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1256157Z"
+    },
+    {
+      "RelativePath": "_archive/3.2.2_地图生成与各大系统对接契约.md",
+      "Length": 44259,
+      "SHA256": "4C062D419ECCE598143678D3A3BF5EFCD8D6E781A8BCE39B84C1A0BB8C6FB510",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1271705Z"
+    },
+    {
+      "RelativePath": "_archive/3.3_建造与交互系统设计.md",
+      "Length": 16157,
+      "SHA256": "AA9936319B0FFAD82F5972E4867C6F6D4CEC8870E34B445EF37978DA2935D66C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1347541Z"
+    },
+    {
+      "RelativePath": "_archive/3.3.1_建造与交互系统_前置工作.md",
+      "Length": 18472,
+      "SHA256": "D9A1D5FB265DBE2964459D728D5D74ED0E6C8A9B61B9E56E8275F33BAB8AEF07",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1286870Z"
+    },
+    {
+      "RelativePath": "_archive/3.3.2_建造与交互系统_后置工作.md",
+      "Length": 8411,
+      "SHA256": "FBE1070E928857D38ADE3B9B88E9183E9E16B7C01830DEBA5CF2A6C64F6710C2",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1302052Z"
+    },
+    {
+      "RelativePath": "_archive/3.3.4_建造系统审查问题与产能系统补全.md",
+      "Length": 45477,
+      "SHA256": "61681A7D23A8EC1378343B0565436BB97D1705F1F7FFE9FF8E70C93C997CBC11",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1302052Z"
+    },
+    {
+      "RelativePath": "_archive/3.3.4_需求补充清单.md",
+      "Length": 15490,
+      "SHA256": "E931BDB9081FA02065EEAFB534C8346AAD1F283AB3DE8ABCE72783B5370B2E82",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1317189Z"
+    },
+    {
+      "RelativePath": "_archive/3.3.5_资源流转与搬运系统.md",
+      "Length": 3913,
+      "SHA256": "B0C684C023B2A363EC4E5DEC455CAED3A9DA99A95E8829EB9F7DD48FD0E5224F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1332378Z"
+    },
+    {
+      "RelativePath": "_archive/3.5_存档接入设计_NPC任务与状态.md",
+      "Length": 8531,
+      "SHA256": "5ED95ACE56279F85F3C05E49299830AF92F19C3959892CF1B4C13878E62A0CDA",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1377803Z"
+    },
+    {
+      "RelativePath": "_archive/3.5_前置缺口与AI行为层分析.md",
+      "Length": 10384,
+      "SHA256": "5C505A9527EA9F0F1775524CBB2E3BF25AEB293615BE3F606F5D9835DD90C892",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1362661Z"
+    },
+    {
+      "RelativePath": "_archive/3.5_王国经营体系实施计划与存档接入.md",
+      "Length": 30945,
+      "SHA256": "5A922E1E5E1F32E78371E62D5CD092474C6F3EE0887061F17E8964B761751422",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1392999Z"
+    },
+    {
+      "RelativePath": "_archive/3.5.3_建筑功能审查与搬运链.md",
+      "Length": 18262,
+      "SHA256": "8FE77E2987D8DFB2739D74F37BCA9BB34889E38B94748115128301DD5DE3806D",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1362661Z"
+    },
+    {
+      "RelativePath": "_archive/存档系统改造清单.md",
+      "Length": 24818,
+      "SHA256": "2B2659D74D461FD5B46D10922CB0B8FF2A07B1D023CD30C45024BFD7AD5E185B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1414389Z"
+    },
+    {
+      "RelativePath": "_archive/存档系统设计文档.md",
+      "Length": 25140,
+      "SHA256": "6073E37812923B9591E7E076DC9195D4196332249A76008F13699FD03108F75E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1424690Z"
+    },
+    {
+      "RelativePath": "_archive/阶段1_目录.md",
+      "Length": 2313,
+      "SHA256": "EF9B5699FC8B1DFCE70A793D9B2D4049D39DA1DF8DEAFC3B3D04FA359FB6F931",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1481481Z"
+    },
+    {
+      "RelativePath": "_archive/开发计划书_1D横版四阶段正文_2026-07-08快照.md",
+      "Length": 16037,
+      "SHA256": "760F52DE892DBED06D05866EFBFAA06C658190E5F7BBD422A9952EAF2B470CCC",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1440151Z"
+    },
+    {
+      "RelativePath": "_archive/美术资源规格_地形大图.md",
+      "Length": 3293,
+      "SHA256": "057B6236499EF794FCFB74F584CA7A5B9B2E8B78B371396C3B51723EF5AF1163",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1471182Z"
+    },
+    {
+      "RelativePath": "_archive/实施计划_军事与王国体系.md",
+      "Length": 5640,
+      "SHA256": "CACC21F3F2FE3556DB8E7C353C901FD0072879C1DDFD80D51446BE792A5CA3CC",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1429812Z"
+    },
+    {
+      "RelativePath": "_archive/游戏流程与UI系统策划案_评审意见.md",
+      "Length": 17191,
+      "SHA256": "34F1ED9A0AD59D3AFC9BF54C824F4B05EEC909BB9B6AFE45CE1A0BC4A0896FA8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1466063Z"
+    },
+    {
+      "RelativePath": "_archive/执行情况全面核查_20260805.md",
+      "Length": 14509,
+      "SHA256": "9D2793D20A77A02164BE86520328202B629660526BA96BF618BCB5EAA2231330",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1455663Z"
+    },
+    {
+      "RelativePath": "_archive/AI编队等前置工作.md",
+      "Length": 13868,
+      "SHA256": "F39A79DA5B045C2A9643BDA60734585A82BBDB2E33F126F5D9DB685960CF5462",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1392999Z"
+    },
+    {
+      "RelativePath": "报告/总审查/矿山锚点与矿洞产链现状核查_2026-09-10.md",
+      "Length": 18049,
+      "SHA256": "85E514CFB36555233D8C839C64BB19046683D25751A0D38835C37180B5274DD9",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1568434Z"
+    },
+    {
+      "RelativePath": "报告/总审查/游戏流程与UI系统策划案_评审意见_加载系统更新影响评估.md",
+      "Length": 9155,
+      "SHA256": "F64D15801228B144C966C0009B03FBEE343086887715E51E3A6B2CC036784341",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1553276Z"
+    },
+    {
+      "RelativePath": "报告/总审查/游戏性总审查报告_2026-08-24.md",
+      "Length": 10645,
+      "SHA256": "2624D0637436735938117E0DC90F73A7CA090065005E7313BCA749E79E9BB658",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1538149Z"
+    },
+    {
+      "RelativePath": "报告/总审查/游戏性总审查报告2_L3内容层_2026-08-24.md",
+      "Length": 6534,
+      "SHA256": "7D52754176CB675AD5A6630E06FDA8EE2BDB322896DC6FD6C524D738A67BE037",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1523027Z"
+    },
+    {
+      "RelativePath": "报告/执行端/冒烟自动化与生命周期API化评估报告_2026-09-04.md",
+      "Length": 14207,
+      "SHA256": "7949FCFA0738A804294C3ED978F5D0CDB19A239123DD30596832D64756D274C6",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1590931Z"
+    },
+    {
+      "RelativePath": "报告/落实对账/1D残留文档清理对账_2026-08-30.md",
+      "Length": 6864,
+      "SHA256": "92607D01119804C9CA9D44F12F15C09DBEC06D8E579D1C20DB26219A321845E3",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1606553Z"
+    },
+    {
+      "RelativePath": "报告/落实对账/文档定点对账报告_2026-08-24.md",
+      "Length": 7080,
+      "SHA256": "0D9E87CD988B1A27289CFE75842BB66CCBE32B31258C8D22185801F36144AB1F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1616907Z"
+    },
+    {
+      "RelativePath": "报告/落实对账/文档定点对账报告_2026-09-11.md",
+      "Length": 6186,
+      "SHA256": "76750D650FCAD25FDFB8490194DDA2429A5D97DC1BEACD14185ECD5FD65E2F76",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1632393Z"
+    },
+    {
+      "RelativePath": "报告/落实对账/文档对账报告_2026-08-23.md",
+      "Length": 8132,
+      "SHA256": "FB22928D91CE38318DA9E6D34FEDBB06D90CF4C3659DAE6334BE96C9CEDA67B8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1642709Z"
+    },
+    {
+      "RelativePath": "报告/落实对账/文档落实对账报告_2026-08-28.md",
+      "Length": 18099,
+      "SHA256": "E76F1372E283BB26D4C9B566ABB97AEB928C21603F7E87E42C949765DFEEA00F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1653015Z"
+    },
+    {
+      "RelativePath": "报告/落实对账/文档落实对账报告_2026-08-29.md",
+      "Length": 31965,
+      "SHA256": "C52C09CF8199C691DABB4FFCDBDE9F7E6313A3337C202B2BF6F4EAA947BD7F50",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1663402Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/2_24_覆盖完整性审查_2026-09-12.md",
+      "Length": 35582,
+      "SHA256": "22F295097F826D6323B9946B9F3663CFD529B9EC6BC80055425F8EFBE61D243D",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1684231Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/概念定义域审查报告_2026-09-02.md",
+      "Length": 30616,
+      "SHA256": "FF7A8AAD5A605DB5B2B02BCE4B620872CA131090F7DC4D41BA4E235B066EC274",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1834488Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/基础系统依赖完整性审计_总纲_2026-09-06.md",
+      "Length": 10495,
+      "SHA256": "CD5AC027B7E7E768F5ABF2411395430E4F37F1BD0CB523C8CA59AB6134961916",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1758813Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/建筑功能全量审计_2026-09-06.md",
+      "Length": 23869,
+      "SHA256": "625632A4A2FDA089ABF485E6FA67E2E210DE59C9330E7843AA183CAC4625B39D",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1789089Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/军事期门槛诊断_2026-09-07.md",
+      "Length": 26330,
+      "SHA256": "7108A157D5D442A5D8E13308C23F052CC445936B52AB72DBC968F4322AFD8490",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1743662Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/嵌套循环视角_王国AI文档审查_2026-09-05.md",
+      "Length": 10064,
+      "SHA256": "2FD631CE03534B3DBE2F7B4E92DB570DCBA7BFFD9B1D14A2D40853115141C425",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1773958Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/全工程性能热点静态审计_2026-09-12.md",
+      "Length": 15411,
+      "SHA256": "A08DCE51E64465BBEF00D38E3A2B6F4325F393C14272814E6A28EA6A6BEFFD95",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1712623Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/全模块覆盖审计_模块注册底表_2026-09-06.md",
+      "Length": 18235,
+      "SHA256": "42C536DD7F6AFE63F31B0E3FF4EF4824E0F903369DEA81BA496180E1004F7B18",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1743662Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/全模块覆盖审计_P1文档推导层_2026-09-06.md",
+      "Length": 12708,
+      "SHA256": "1D922A4BB6E7FCAFA0BD3ED6A7E6B307F6BF9FC3A5A209D9E3C10A02C8A8C298",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1727747Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/全实体生命周期完整性审计_2026-09-08.md",
+      "Length": 24224,
+      "SHA256": "8079E3AD4BE76C7E82553730C32C46864CE2AF85CE43E920859CE954436F92DE",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1712623Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/人口系统依赖完整性审计_2026-09-06.md",
+      "Length": 11379,
+      "SHA256": "72BC7BC8544E950539DE546FDAF0155193BCCAA021400E13E411855D935C2428",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1694295Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/设计审查报告_同类扫描_2026-09-11.md",
+      "Length": 34232,
+      "SHA256": "5000CD6B50530ABEC1BFF028E16D5845CF6137190C3B5A73D964D8C611DEA9C8",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1834488Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/设计审查报告_玩家全流程走查_2026-09-11.md",
+      "Length": 46768,
+      "SHA256": "3EDB48FD44228CC3580B2C039E67DB99EA099D5F19224BA96597435B73160CE4",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1849662Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/文档设计缺陷核查_汇总总清单_2026-08-28.md",
+      "Length": 40268,
+      "SHA256": "4D97D92D6D742DBF6A16349F8381AE926A3219FE71E59A5CC936C7D0789ED52E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1819351Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/悬空锚点全库扫描报告_2026-09-08.md",
+      "Length": 7651,
+      "SHA256": "2ED1ED35B123A23F6BBA6C289B56645544B30DEAEEF84A8CE31FE575F250BDF3",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1789089Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/招工派工系统依赖完整性审计_2026-09-06.md",
+      "Length": 5965,
+      "SHA256": "F7CB67E666456A3B328CF5608129A1FC84C4B9B80B093B3C6265EFFAB267D924",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1804233Z"
+    },
+    {
+      "RelativePath": "报告/设计审查/资源经济系统依赖完整性审计_2026-09-06.md",
+      "Length": 7438,
+      "SHA256": "EDDBDD7B216BBE53CBCAB740AD51D24B96578049EF8700F19C6B40E94C979C9C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1864786Z"
+    },
+    {
+      "RelativePath": "改造计划/0_改造总计划.md",
+      "Length": 26235,
+      "SHA256": "E6641860A7A6B252A48C07D4648BE39B83E1BB6326714A6B00F31BF4516A60E9",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1951102Z"
+    },
+    {
+      "RelativePath": "改造计划/0.5_1D到2.5D迁移路线图.md",
+      "Length": 16560,
+      "SHA256": "73223A535828F6AA0A77A77CF6A4B395B3BFB500EE832E3C8C36B95EC7787CC1",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1879907Z"
+    },
+    {
+      "RelativePath": "改造计划/1_2D网格与空间层改造.md",
+      "Length": 36074,
+      "SHA256": "D71F95BE2DA0DE819C41D9853EA07B19A26F7294799630CDEC883E9EB71B169A",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1966284Z"
+    },
+    {
+      "RelativePath": "改造计划/2_1_2D地图生成.md",
+      "Length": 25235,
+      "SHA256": "B9294C23067F992AD8A6AF76E944761830DA6A06312A1AAD05C012FDB6410AC5",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2178222Z"
+    },
+    {
+      "RelativePath": "改造计划/2_1_实施计划.md",
+      "Length": 13158,
+      "SHA256": "351E81E91A2D5ED57CEFA898D33E9127EB896076AF14CF0C5B17FACC0342ACA7",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2215807Z"
+    },
+    {
+      "RelativePath": "改造计划/2_1_R1_地图生成重构方案（群系形状＋资源密度）.md",
+      "Length": 14404,
+      "SHA256": "027F697B0CDF139D08123DA06A713964DF49FA536DDA11AB5332417304B70A1F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2200278Z"
+    },
+    {
+      "RelativePath": "改造计划/2_10_渲染与摄像机_实施计划.md",
+      "Length": 37872,
+      "SHA256": "994F97A41359C2CBFF8425D054BD8EDF65A7B44BF710E2F4D683073211C84060",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1976340Z"
+    },
+    {
+      "RelativePath": "改造计划/2_10_渲染与摄像机.md",
+      "Length": 21881,
+      "SHA256": "DF25CDD4D497AFC89432F087F5E5FE9797AD7B39451E51EB7824BA482802ABD9",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1976340Z"
+    },
+    {
+      "RelativePath": "改造计划/2_11_存档与迁移_实施计划.md",
+      "Length": 24728,
+      "SHA256": "9A3C1AF87F822DD16F6ACBFB4117D8315D5A4DBE55306BC7FE12C65FC7CDE06F",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2006964Z"
+    },
+    {
+      "RelativePath": "改造计划/2_11_存档与迁移.md",
+      "Length": 20462,
+      "SHA256": "DCB20874C95E99E8DDADEA5830CFF46F05EBDE73D93DAEFC53BA054EC5CCB1D7",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.1991750Z"
+    },
+    {
+      "RelativePath": "改造计划/2_12_王国建筑系统迁移_实施计划.md",
+      "Length": 51943,
+      "SHA256": "F7101503B5EB4643FF91167052EA03DD22CC7726EAD860AAC46A3B5183018E0E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2037250Z"
+    },
+    {
+      "RelativePath": "改造计划/2_12_王国建筑系统迁移.md",
+      "Length": 41908,
+      "SHA256": "CABF15483D106B87BF20059A5DA352EBB4D4EB38FF7794BC99EF7CC2383EF9F5",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2022073Z"
+    },
+    {
+      "RelativePath": "改造计划/2_13_交互输入与流程UI迁移_实施计划.md",
+      "Length": 37530,
+      "SHA256": "5BAE2E570618B7D0654E1E8446AE9E5F2DB6A1917750AF3DEB7C9392D2670749",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2053083Z"
+    },
+    {
+      "RelativePath": "改造计划/2_13_交互输入与流程UI迁移.md",
+      "Length": 19335,
+      "SHA256": "D40C7B33E0FA8B0968BDD425C1AC86B1EF28EBB6A983A16902018EA7833B5F74",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2037250Z"
+    },
+    {
+      "RelativePath": "改造计划/2_14_敌怪与传送门灾害_实施计划.md",
+      "Length": 32854,
+      "SHA256": "1F7D0E766E69CBC6D34A8CD91EB0CCD2917E19357ED36550E937FA65A0217328",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2078264Z"
+    },
+    {
+      "RelativePath": "改造计划/2_14_敌怪与传送门灾害.md",
+      "Length": 20427,
+      "SHA256": "8C3BC547F200975AB3D48D45933EB46BBCC3EA494C0DA3A33C0CE1B09CF13CB0",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2053083Z"
+    },
+    {
+      "RelativePath": "改造计划/2_15_AI王国生命周期总纲.md",
+      "Length": 23912,
+      "SHA256": "45A44BE5B1EA73DF5FD99F704F20652E2111E0E0C3548A9CE0E1CCFDEB0DFD82",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2078264Z"
+    },
+    {
+      "RelativePath": "改造计划/2_16_AI王国出生与初始条件_实施计划.md",
+      "Length": 43752,
+      "SHA256": "9495C9F6E96271AD6D9BA7A9D8441FF157766E2D34DD2BDCCB2B257872E39CBC",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2094514Z"
+    },
+    {
+      "RelativePath": "改造计划/2_16_AI王国出生与初始条件.md",
+      "Length": 28785,
+      "SHA256": "73F3AE4C0A3EA206F7B8C9A1BFE050227AADAAB439B98C11CE2C3EB1553609C6",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2094514Z"
+    },
+    {
+      "RelativePath": "改造计划/2_17_AI王国脑与自主成长_实施计划.md",
+      "Length": 39091,
+      "SHA256": "FA9723FCA0E1F06A5AF32FACE163F543C8965F3D1CA2D8837EE59F3F9E289084",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2119912Z"
+    },
+    {
+      "RelativePath": "改造计划/2_17_AI王国脑与自主成长.md",
+      "Length": 39727,
+      "SHA256": "7334DC13814C5CDD932F06282AC47847A85565206252366A6196B618B9579F43",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2119912Z"
+    },
+    {
+      "RelativePath": "改造计划/2_18_多王国外交与战争_实施计划.md",
+      "Length": 15382,
+      "SHA256": "75D1B364FCEE5E723537D1332973B38A1FF4078EA3C417CEA9E830D89DFBF39A",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2150237Z"
+    },
+    {
+      "RelativePath": "改造计划/2_18_多王国外交与战争.md",
+      "Length": 39629,
+      "SHA256": "AD6CF6C38CD6746E1F22CDDEC44F09D822A5CDBD7856659EC1B66EBE973CA49B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2135096Z"
+    },
+    {
+      "RelativePath": "改造计划/2_19_王国灭亡与遗产_实施计划.md",
+      "Length": 19525,
+      "SHA256": "455FAFFC4BDD76E94977A3A081EED53F5CA55C1F8F29406EB58EB04028AD251C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2160310Z"
+    },
+    {
+      "RelativePath": "改造计划/2_19_王国灭亡与遗产.md",
+      "Length": 38280,
+      "SHA256": "BB2F68804DDD4542B6733EF287AC0AD330AB14FCA25BF2A3B49A9C5221F1FF49",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2160310Z"
+    },
+    {
+      "RelativePath": "改造计划/2_2_建筑与占格_实施计划.md",
+      "Length": 19815,
+      "SHA256": "3C60C4EEDED3CA46FC95366A06F6A92D757E6D735D426C749C3EB884E94B70B1",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2365015Z"
+    },
+    {
+      "RelativePath": "改造计划/2_2_建筑与占格.md",
+      "Length": 18234,
+      "SHA256": "947AD5627BFDA07BC2398C938473CEFCEB8A5CD4E3F1E24E5FFB91CBFDA69066",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2354711Z"
+    },
+    {
+      "RelativePath": "改造计划/2_20_四族种族体系_实施清单.md",
+      "Length": 29224,
+      "SHA256": "EABB0922E58FDFBE5488E0B6E333D0607F7C2FE11330A7B9889C90194DBB4D49",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2241899Z"
+    },
+    {
+      "RelativePath": "改造计划/2_20_四族种族体系总纲.md",
+      "Length": 37215,
+      "SHA256": "22AFCB6AF04D945A3CCED2918AF8B608C1446BA1ACF7B6366DAAFCD24B467DE7",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2252303Z"
+    },
+    {
+      "RelativePath": "改造计划/2_20.1_专属兵种行为与种族数值.md",
+      "Length": 30755,
+      "SHA256": "72202B1ABD1D223FEE44DD5C1721783EB5D0CD2C3C621934DE70FD90DD2A5484",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2226311Z"
+    },
+    {
+      "RelativePath": "改造计划/2_21_AI涌现范式升级.md",
+      "Length": 23685,
+      "SHA256": "33EE37F8FDDCB178643B0D8736E584BE1035BE5C4EE50EE30C457249C6A53E33",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2262674Z"
+    },
+    {
+      "RelativePath": "改造计划/2_22_AI王国脑全景补全_P0实施清单.md",
+      "Length": 28026,
+      "SHA256": "A310BAA115F02EA13E76DD12EC281E6DFCA7B3EBE42C03CE2F610941311E287A",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2288594Z"
+    },
+    {
+      "RelativePath": "改造计划/2_22_AI王国脑全景补全.md",
+      "Length": 31562,
+      "SHA256": "91F7E0A57D0B58223FDDDFA72DCAB5761FE66CE1EC7E630B17665290AF38B215",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2273035Z"
+    },
+    {
+      "RelativePath": "改造计划/2_23_AI王国脑总纲_资源第一性架构.md",
+      "Length": 22533,
+      "SHA256": "C044666C22FB2C0F9908CD767FDF89D2D4ED81D59682D1254B9758B3C6E269DC",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2304132Z"
+    },
+    {
+      "RelativePath": "改造计划/2_23_AI王国脑总纲_资源P0实施清单.md",
+      "Length": 12190,
+      "SHA256": "3E6BE0E870D76373C08C2FDD151789472B02915175FE06C0F4ECB45C6A1A0EBD",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2293877Z"
+    },
+    {
+      "RelativePath": "改造计划/2_24_基础服务主体对称_架构提案.md",
+      "Length": 34053,
+      "SHA256": "B600715D79AB815D891933532133E8D08CDC810B7F061FA93B4B4C50BBA9A5D4",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2339595Z"
+    },
+    {
+      "RelativePath": "改造计划/2_24_基础服务主体对称_实施计划.md",
+      "Length": 15730,
+      "SHA256": "5968448F70BE6E57A14046A99860763266D21223763AA328B886C36E14243B0B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2324478Z"
+    },
+    {
+      "RelativePath": "改造计划/2_24_前置_底层服务API缺口与需求决策.md",
+      "Length": 40481,
+      "SHA256": "DBA2CDB262F48F3E8EEA3673619F6DB101DE1D25CC48D27E209002348D675BF4",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2309285Z"
+    },
+    {
+      "RelativePath": "改造计划/2_3_空间与移动_实施计划.md",
+      "Length": 19150,
+      "SHA256": "64505012124D66614BF1C15676BBAD15CCB73A83F1A098952A105130D96AA78E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2380164Z"
+    },
+    {
+      "RelativePath": "改造计划/2_3_空间与移动.md",
+      "Length": 16344,
+      "SHA256": "42D5C2E5211D8BD73AA457B497A4054396DEDF632C997FC07F2EFEB1CE065F08",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2380164Z"
+    },
+    {
+      "RelativePath": "改造计划/2_4_LOD区块划分_实施计划.md",
+      "Length": 16478,
+      "SHA256": "20CCA93023A76C6D69D7DEC3CCCAAB10A85FB9CA507A0D804CB83D5806B9CBDC",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2405682Z"
+    },
+    {
+      "RelativePath": "改造计划/2_4_LOD区块划分.md",
+      "Length": 10786,
+      "SHA256": "922856DCC9BF54DAA4B838577472DE781B78CCD95272A348F128808FC1DDF548",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2400536Z"
+    },
+    {
+      "RelativePath": "改造计划/2_5_伤害管线与战斗_实施计划.md",
+      "Length": 17642,
+      "SHA256": "982138BE3F14C4E4D4BBFB9753B9EFB3C147B921340B08B61395B7A4BCAB88C0",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2431151Z"
+    },
+    {
+      "RelativePath": "改造计划/2_5_伤害管线与战斗.md",
+      "Length": 15929,
+      "SHA256": "195F5F40EC52DBC7DEDBFB7CB8CC077FAFDB088FC95E0B5840124449D462F4A1",
+      "LastWriteTimeUtc": "2026-10-02T09:44:34.0065943Z"
+    },
+    {
+      "RelativePath": "改造计划/2_6_寻路工具层_实施计划.md",
+      "Length": 18247,
+      "SHA256": "CC168A0401E510F59402236DA3F9722989CFDD2EA14E5D3031E100532AB6A729",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2446292Z"
+    },
+    {
+      "RelativePath": "改造计划/2_6_寻路工具层.md",
+      "Length": 13627,
+      "SHA256": "4085942999350ADC914C00F6629225BC07E88FE33E6753CBA111B80F18D53270",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2431151Z"
+    },
+    {
+      "RelativePath": "改造计划/2_7_AI决策核心层_实施计划.md",
+      "Length": 22931,
+      "SHA256": "A0CC6824DBC7071EA4D04C208F152A5CE52DE2296C2275D8972025A8C09BD16E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2461471Z"
+    },
+    {
+      "RelativePath": "改造计划/2_7_AI决策核心层.md",
+      "Length": 12157,
+      "SHA256": "14093D5A644E63FB052DAD64B3AE15BB3E856A17970BCE3C0A885EA3181D4E0E",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2461471Z"
+    },
+    {
+      "RelativePath": "改造计划/2_8_AI应用层_实施计划.md",
+      "Length": 21937,
+      "SHA256": "D15E58B9A18F581C0F6C0A2EF5F21BBEEF55B760D4E143DDCD96CD02923D44D3",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2491967Z"
+    },
+    {
+      "RelativePath": "改造计划/2_8_AI应用层.md",
+      "Length": 19988,
+      "SHA256": "37F4A2C6DC3ACDEDD08AB0648618F35125AE2CF20B6BD178D16B90BED20178DF",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2481789Z"
+    },
+    {
+      "RelativePath": "改造计划/2_9_模拟器与职业训练_实施计划.md",
+      "Length": 38881,
+      "SHA256": "E83361B3708D6ECFEBDFC32E9AA66664B1C2A58202BEC488484249E8FA8423D0",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2518521Z"
+    },
+    {
+      "RelativePath": "改造计划/2_9_模拟器与职业训练.md",
+      "Length": 14637,
+      "SHA256": "D43769839BC9197B6EC00BE1173D2BA1638CF18468B84EBCFFD3D94623DE85C1",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2497070Z"
+    },
+    {
+      "RelativePath": "改造计划/3.1_王国AI路线图.md",
+      "Length": 37244,
+      "SHA256": "9706967B7BC0C8F6D796135EC3755904EB585DEFFA545D09D8A989B900B85ABA",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2523689Z"
+    },
+    {
+      "RelativePath": "改造计划/断链校验台_设计稿.md",
+      "Length": 12716,
+      "SHA256": "E7B565DABBF92B1251A05B2FB5592C7A1DE5A79A07782F22F44D9C9CE07DD26C",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2599401Z"
+    },
+    {
+      "RelativePath": "改造计划/建筑功能与等级总表_v2.md",
+      "Length": 13121,
+      "SHA256": "2C0FF7B2F772A43C3094833F32593DD7BCB1FC2C6224BDECA1BC44AE4A4C3FFD",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2584252Z"
+    },
+    {
+      "RelativePath": "改造计划/建筑体系重构批_生命周期审计与实施计划.md",
+      "Length": 21850,
+      "SHA256": "14F889180DB51981BC3F619B4604317192152F44368B0F5ABD4C5CAC444915FD",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2584252Z"
+    },
+    {
+      "RelativePath": "改造计划/美术资源规范_等轴立方体瓦片.md",
+      "Length": 16761,
+      "SHA256": "566302D15F7F949FDDA9D4A099016DAC1141ECC5AEB9C1975049ED5A2B593ECE",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2660067Z"
+    },
+    {
+      "RelativePath": "改造计划/美术资源接入_SpriteAnimator播放器设计规格.md",
+      "Length": 14211,
+      "SHA256": "8353F9B59EE005DF0CDB810CCAA892D2A601A7FA27FD993E41E2D513CE6A72A5",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2614554Z"
+    },
+    {
+      "RelativePath": "改造计划/美术资源接入计划.md",
+      "Length": 22128,
+      "SHA256": "2782424F58E39C804A0294827D143C8D6A2519DF4F44126CAB8021262B0FC206",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2644881Z"
+    },
+    {
+      "RelativePath": "改造计划/美术资源接入映射表.md",
+      "Length": 21073,
+      "SHA256": "ACF123A5FC583E64BC75E006E51931221D3FBBC2432FCF1ABFB9FFE872C558AF",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2629688Z"
+    },
+    {
+      "RelativePath": "改造计划/评分面_保全式赢收益路径_设计稿.md",
+      "Length": 13239,
+      "SHA256": "9686CC16E93A9BD5EF88F7A8E866AEABCD4B71B88EA3B7E7BA54B1C6353BB962",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2660067Z"
+    },
+    {
+      "RelativePath": "改造计划/生命周期登记表.md",
+      "Length": 45489,
+      "SHA256": "F82011EC0B7186343E42F2408972F7B7373C916CBECE665E5245FC0F36AC34EB",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2614554Z"
+    },
+    {
+      "RelativePath": "改造计划/预解决总账.md",
+      "Length": 11439,
+      "SHA256": "E9830A9EB5DB0A17602930DE34473AC04031BC3BD911B4978361DBE6ABEB4419",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2676075Z"
+    },
+    {
+      "RelativePath": "改造计划/doc1_2D网格与空间层改造_实施计划.md",
+      "Length": 27538,
+      "SHA256": "37B596B3F530DF1C2F2EE6E0A3B39EA0E5AD6BAF8553D57D49AAE1A038FAA2D6",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2569139Z"
+    },
+    {
+      "RelativePath": "改造计划/P0_端到端调优_归拢清单.md",
+      "Length": 4565,
+      "SHA256": "4AD40D51B06CF0C4C9E08DEC6C16C532B94985F755A79E4F8F9A398598EEC687",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2538822Z"
+    },
+    {
+      "RelativePath": "改造计划/P0_端到端调优_实施清单.md",
+      "Length": 16854,
+      "SHA256": "13FB44EA0C1D15E985418A9A02E3E9C4683FC10635C46465E3B834F684F8919B",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2538822Z"
+    },
+    {
+      "RelativePath": "改造计划/P1_总验收观察清单.md",
+      "Length": 13815,
+      "SHA256": "BA8A1C52D39993493757C9CF492FC7FEFF40135611786372AFD54C47C2E24300",
+      "LastWriteTimeUtc": "2026-10-01T14:44:05.2553996Z"
+    }
+  ]
+}
